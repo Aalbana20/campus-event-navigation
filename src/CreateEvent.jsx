@@ -1,4 +1,4 @@
-import React from "react"
+import React, { useState } from "react"
 import "./CreateEvent.css"
 import { useEvents } from "./context/EventContext"
 
