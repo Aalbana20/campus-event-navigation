@@ -1,14 +1,16 @@
-# Campus Event & Navigation App
+# React + Vite
 
-## Problem
-Campus events are scattered across emails, flyers, and social media. New students and visitors struggle to discover relevant events and navigate to the correct building/room efficiently.
+This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
-## MVP Scope (13 weeks)
-- Events: central event feed, search/filters, RSVP
-- Navigation: building directory + map pins + walking directions (via map API)
-- AI: simple personalization for event recommendations + reminders with a measurable metric
+Currently, two official plugins are available:
 
-## Repo Structure
-- backend/ : API + DB logic
-- frontend/ : UI
-- docs/ : SCRUM, architecture, SRS, UML, testing
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+
+## React Compiler
+
+The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+
+## Expanding the ESLint configuration
+
+If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
