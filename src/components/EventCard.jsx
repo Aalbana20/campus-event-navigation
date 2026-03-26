@@ -1,4 +1,4 @@
-import { useState } from "react"
+import React, { useState } from "react"
 
 function EventCard({ event }) {
   const [flipped, setFlipped] = useState(false)
