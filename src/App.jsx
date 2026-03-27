@@ -18,6 +18,7 @@ function App() {
         <Link className="nav-item" to="/create">➕ Create Event</Link>
         <Link className="nav-item" to="/profile">👤 Profile</Link>
         <Link className="nav-item" to="/signup">Sign Up</Link>
+        <Link className="nav-item" to="/login">Login</Link>
       </nav>
 
       <Routes>
