@@ -29,6 +29,7 @@ function App() {
         <Route path="/create" element={<CreateEvent />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/signup" element={<SignUp />} />
+        <Route path="/login" element={<Login />} />
       </Routes>
     </div>
   )
