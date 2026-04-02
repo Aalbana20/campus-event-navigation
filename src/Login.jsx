@@ -15,6 +15,10 @@ function Login() {
 
     const data = await res.json();
 
+    if(!email || !password) {
+      alert("Please fill in all fields");
+      return;
+    }
     if (data.error) {
       alert(data.error);
     } else {
@@ -29,32 +33,20 @@ function Login() {
     <div>
       <h2>Login</h2>
 
-      <input placeholder="Email" onChange={(e) => setEmail(e.target.value)} />
-      <input type="password" placeholder="Password" onChange={(e) => setPassword(e.target.value)} />
+      <input
+        placeholder="Email"
+        onChange={(e) => setEmail(e.target.value)}
+      />
+
+      <input
+        type="password"
+        placeholder="Password"
+        onChange={(e) => setPassword(e.target.value)}
+      />
 
       <button onClick={handleLogin}>Login</button>
     </div>
   );
 }
-const handleLogin = async () => {
-    const response = await fetch("http://127.0.0.1:5000/login", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-            email: email,
-            password: password
-        })
-    });
-
-    const data = await response.json();
-
-    if (data.message) {
-        alert("Login successful");
-    } else {
-        alert(data.error);
-    }
-};
 
 export default Login;
