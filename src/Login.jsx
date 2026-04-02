@@ -3,29 +3,39 @@ import { useState } from "react";
 function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
 
+  
   const handleLogin = async () => {
-    const res = await fetch("http://localhost:5000/login", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ email, password })
-    });
-
-    const data = await res.json();
-
+    // Validate FIRST
     if(!email || !password) {
       alert("Please fill in all fields");
       return;
     }
-    if (data.error) {
-      alert(data.error);
-    } else {
-      alert(`Welcome ${data.username}`);
 
-      // store user
-      localStorage.setItem("user", JSON.stringify(data));
+    setLoading(true);
+    try {
+      const res = await fetch("http://localhost:5000/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ email, password })
+      });
+
+      const data = await res.json();
+
+      if (data.error) {
+        alert(data.error);
+      } else {
+        alert(`Welcome ${data.username}`);
+        localStorage.setItem("user", JSON.stringify(data));
+      }
+    } catch (error) {
+      alert("Connection error. Is the backend running on localhost:5000?");
+      console.error(error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -35,16 +45,22 @@ function Login() {
 
       <input
         placeholder="Email"
+        value={email}
         onChange={(e) => setEmail(e.target.value)}
+        disabled={loading}
       />
 
       <input
         type="password"
         placeholder="Password"
+        value={password}
         onChange={(e) => setPassword(e.target.value)}
+        disabled={loading}
       />
 
-      <button onClick={handleLogin}>Login</button>
+      <button onClick={handleLogin} disabled={loading}>
+        {loading ? "Logging in..." : "Login"}
+      </button>
     </div>
   );
 }
