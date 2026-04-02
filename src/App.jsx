@@ -7,7 +7,7 @@ import MapPage from "./pages/MapPage"
 import Profile from "./pages/Profile"
 import CreateEvent from "./CreateEvent"
 import SignUp from "./pages/SignUp"
-import Login from "./pages/Login"
+import Login from "./Login"
 
 function App() {
   return (
