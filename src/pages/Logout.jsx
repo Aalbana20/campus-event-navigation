@@ -1,28 +1,21 @@
-import { useEffect } from "react"
-import { Link, useNavigate } from "react-router-dom"
+import React, { useEffect } from "react"
+import { useNavigate } from "react-router-dom"
 
 function Logout() {
   const navigate = useNavigate()
 
   useEffect(() => {
+    // Clear user session
     localStorage.removeItem("user")
-  }, [])
+
+    // Redirect to login
+    navigate("/auth/login")
+  }, [navigate])
 
   return (
-    <main className="login-page">
-      <div className="login-card">
-        <h1>Signed Out</h1>
-        <p className="login-subtext">You have been logged out of your account.</p>
-        <div className="logout-actions">
-          <button className="login-btn" onClick={() => navigate("/auth/login")}>
-            Go To Login
-          </button>
-          <p className="login-footer">
-            Need a new account? <Link to="/auth/signup">Sign Up</Link>
-          </p>
-        </div>
-      </div>
-    </main>
+    <div style={{ textAlign: "center", marginTop: "100px" }}>
+      <h2>Logging you out...</h2>
+    </div>
   )
 }
 
