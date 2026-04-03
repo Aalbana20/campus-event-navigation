@@ -1,4 +1,4 @@
-import React, { useState } from "react"
+import React, { useEffect, useState } from "react"
 import "./CreateEvent.css"
 import { useEvents } from "./context/EventContext"
 
@@ -14,12 +14,46 @@ function CreateEvent() {
   const [capacity, setCapacity] = useState("")
   const [flyerPreview, setFlyerPreview] = useState("")
 
+  useEffect(() => {
+    return () => {
+      if (flyerPreview.startsWith("blob:")) {
+        URL.revokeObjectURL(flyerPreview)
+      }
+    }
+  }, [flyerPreview])
+
+  const formatDateFromInput = (rawDate) => {
+    if (!rawDate) return "April 30"
+
+    const [year, month, day] = rawDate.split("-")
+    if (!year || !month || !day) return "April 30"
+
+    const monthNames = [
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December",
+    ]
+
+    const monthLabel = monthNames[Number(month) - 1]
+    return monthLabel ? `${monthLabel} ${Number(day)}` : "April 30"
+  }
+
   const handlePublish = () => {
     const newEvent = {
       id: Date.now(),
       title: title || "New Campus Event",
       location: location || "UMES Campus",
-      date: date ? new Date(date).toLocaleDateString("en-US", { month: "long", day: "numeric" }) : "April 30",
+      date: formatDateFromInput(date),
+      eventDate: date || "",
       price: eventType === "Paid" ? "$10" : "Free",
       rsvp: "0 Going",
       image:
@@ -37,6 +71,9 @@ function CreateEvent() {
   const handleFlyerUpload = (e) => {
     const file = e.target.files[0]
     if (file) {
+      if (flyerPreview.startsWith("blob:")) {
+        URL.revokeObjectURL(flyerPreview)
+      }
       const imageUrl = URL.createObjectURL(file)
       setFlyerPreview(imageUrl)
     }

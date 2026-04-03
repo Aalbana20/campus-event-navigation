@@ -2,18 +2,71 @@ import React, { useState } from "react"
 import MyEventCard from "../components/MyEventCard"
 import { useEvents } from "../context/EventContext"
 
+const MONTH_NAMES = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+]
+
+const parseEventDate = (rawDate) => {
+  if (!rawDate || typeof rawDate !== "string") return null
+
+  const isoMatch = rawDate.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (isoMatch) {
+    return {
+      year: Number(isoMatch[1]),
+      month: Number(isoMatch[2]) - 1,
+      day: Number(isoMatch[3]),
+    }
+  }
+
+  const monthDayMatch = rawDate.match(/^([A-Za-z]+)\s+(\d{1,2})$/)
+  if (monthDayMatch) {
+    const month = MONTH_NAMES.findIndex((name) => name === monthDayMatch[1])
+    if (month === -1) return null
+    return {
+      year: new Date().getFullYear(),
+      month,
+      day: Number(monthDayMatch[2]),
+    }
+  }
+
+  return null
+}
+
 function MyEvents() {
   const [viewMode, setViewMode] = useState("cards")
   const [selectedCalendarEvent, setSelectedCalendarEvent] = useState(null)
   const { savedEvents } = useEvents()
 
+  const now = new Date()
+  const [calendarMonth] = useState(now.getMonth())
+  const [calendarYear] = useState(now.getFullYear())
+
   const getEventForDay = (day) => {
     return savedEvents.find((event) => {
-      const parts = event.date.split(" ")
-      const dayNumber = parseInt(parts[1], 10)
-      return dayNumber === day
+      const parsedDate = parseEventDate(event.eventDate || event.date)
+      if (!parsedDate) return false
+
+      return (
+        parsedDate.year === calendarYear &&
+        parsedDate.month === calendarMonth &&
+        parsedDate.day === day
+      )
     })
   }
+
+  const firstDayOffset = new Date(calendarYear, calendarMonth, 1).getDay()
+  const daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate()
 
   return (
     <main className="my-events-page">
@@ -49,7 +102,7 @@ function MyEvents() {
       ) : (
         <div className="calendar-view">
           <div className="calendar-box">
-            <h3>April 2026</h3>
+            <h3>{MONTH_NAMES[calendarMonth]} {calendarYear}</h3>
 
             <div className="calendar-grid">
               <div className="calendar-day header">Sun</div>
@@ -60,10 +113,11 @@ function MyEvents() {
               <div className="calendar-day header">Fri</div>
               <div className="calendar-day header">Sat</div>
 
-              <div className="calendar-day empty"></div>
-              <div className="calendar-day empty"></div>
+              {Array.from({ length: firstDayOffset }, (_, index) => (
+                <div key={`empty-${index}`} className="calendar-day empty"></div>
+              ))}
 
-              {Array.from({ length: 30 }, (_, index) => {
+              {Array.from({ length: daysInMonth }, (_, index) => {
                 const day = index + 1
                 const event = getEventForDay(day)
 
