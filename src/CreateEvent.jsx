@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react"
 import "./CreateEvent.css"
 import { useEvents } from "./context/EventContext"
+import { supabase } from "./supabaseClient"
 
 function CreateEvent() {
   const { createEvent } = useEvents()
@@ -70,7 +71,7 @@ function CreateEvent() {
     return `${displayHour}:${minutes} ${suffix}`
   }
 
-  const handlePublish = () => {
+  const handlePublish = async () => {
     const shortLocation = locationName.trim() || "UMES Campus"
     const fullAddress = locationAddress.trim() || shortLocation
     const cleanDescription =
@@ -103,6 +104,30 @@ function CreateEvent() {
       createdAt: new Date().toISOString(),
       attendees: [],
       goingCount: 0,
+    }
+
+    const { error } = await supabase.from("events").insert({
+      title: newEvent.title,
+      description: newEvent.description,
+      location: newEvent.location,
+      location_address: newEvent.locationAddress,
+      date: newEvent.date,
+      event_date: newEvent.eventDate || null,
+      start_time: newEvent.time,
+      price: newEvent.price,
+      capacity: newEvent.capacity ? parseInt(newEvent.capacity) : null,
+      organizer: newEvent.organizer,
+      dress_code: newEvent.dressCode,
+      image: newEvent.image,
+      tags: newEvent.tags,
+      created_by: JSON.parse(localStorage.getItem("user") || "{}").id || null,
+      creator_username: newEvent.creatorUsername,
+      going_count: 0,
+    })
+
+    if (error) {
+      alert("Failed to publish event: " + error.message)
+      return
     }
 
     createEvent(newEvent)

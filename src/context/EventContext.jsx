@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useMemo, useState } from "react"
+import React, { createContext, useContext, useEffect, useMemo, useState } from "react"
+import { supabase } from "../supabaseClient"
 
 const EventContext = createContext()
 
@@ -193,6 +194,39 @@ export function EventProvider({ children }) {
   const [allEvents, setAllEvents] = useState(createStarterEvents)
   const [followingList] = useState(defaultFollowing)
   const [followersList] = useState(defaultFollowers)
+
+  useEffect(() => {
+    supabase
+      .from("events")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .then(({ data, error }) => {
+        if (error) { console.error("Failed to load events:", error); return }
+        if (!data || data.length === 0) return
+        const normalized = data.map((e) =>
+          normalizeEventTimes({
+            id: e.id,
+            title: e.title,
+            description: e.description,
+            location: e.location,
+            locationAddress: e.location_address,
+            date: e.date,
+            eventDate: e.event_date,
+            startTime: e.start_time,
+            price: e.price,
+            organizer: e.organizer,
+            dressCode: e.dress_code,
+            image: e.image,
+            tags: e.tags || [],
+            creatorUsername: e.creator_username,
+            goingCount: e.going_count || 0,
+            rsvp: `${e.going_count || 0} Going`,
+            attendees: [],
+          })
+        )
+        setAllEvents(normalized)
+      })
+  }, [])
 
   const addEvent = (event, attendeeUser) => {
     const attendee = attendeeUser || currentUser
