@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from "react"
 import Cropper from "react-easy-crop"
 import { useNavigate } from "react-router-dom"
 import { useEvents } from "../context/EventContext"
+import { supabase } from "../supabaseClient"
 
 const createImage = (url) =>
   new Promise((resolve, reject) => {
@@ -156,7 +157,24 @@ function Profile() {
     return () => mediaQuery.removeListener(handleChange)
   }, [themeMode])
 
-  const handleSaveProfile = () => {
+  useEffect(() => {
+    const userId = JSON.parse(localStorage.getItem("user") || "{}").id
+    if (!userId) return
+
+    supabase
+      .from("profiles")
+      .select("name, username, bio")
+      .eq("id", userId)
+      .single()
+      .then(({ data, error }) => {
+        if (error || !data) return
+        if (data.name) setName(data.name)
+        if (data.username) setUsername(data.username)
+        if (data.bio) setBio(data.bio)
+      })
+  }, [])
+
+  const handleSaveProfile = async () => {
     setName(draftName)
     setUsername(draftUsername)
     setBio(draftBio)
@@ -170,6 +188,14 @@ function Profile() {
         image: draftProfileImage,
       })
     )
+
+    const userId = JSON.parse(localStorage.getItem("user") || "{}").id
+    if (userId) {
+      await supabase
+        .from("profiles")
+        .upsert({ id: userId, name: draftName, username: draftUsername, bio: draftBio, updated_at: new Date().toISOString() })
+    }
+
     setIsEditProfileOpen(false)
   }
 
