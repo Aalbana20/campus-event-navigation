@@ -15,6 +15,8 @@ function CreateEvent() {
   const [eventType, setEventType] = useState("Free")
   const [capacity, setCapacity] = useState("")
   const [flyerPreview, setFlyerPreview] = useState("")
+  const [flyerFile, setFlyerFile] = useState(null)
+  const [isUploading, setIsUploading] = useState(false)
   const [tagInput, setTagInput] = useState("")
   const [tags, setTags] = useState([])
   const [organizer, setOrganizer] = useState("")
@@ -26,7 +28,7 @@ function CreateEvent() {
 
   useEffect(() => {
     return () => {
-      if (flyerPreview.startsWith("blob:")) {
+      if (flyerPreview && flyerPreview.startsWith("blob:")) {
         URL.revokeObjectURL(flyerPreview)
       }
     }
@@ -71,96 +73,134 @@ function CreateEvent() {
     return `${displayHour}:${minutes} ${suffix}`
   }
 
+  const uploadFlyerToSupabase = async (file) => {
+    if (!file) return ""
+
+    const safeFileName = `${Date.now()}-${file.name.replace(/\s+/g, "-")}`
+    const filePath = `flyers/${safeFileName}`
+
+    const { error: uploadError } = await supabase.storage
+      .from("event-flyers")
+      .upload(filePath, file, {
+        cacheControl: "3600",
+        upsert: false,
+      })
+
+    if (uploadError) {
+      throw new Error(uploadError.message)
+    }
+
+    const { data: publicUrlData } = supabase.storage
+      .from("event-flyers")
+      .getPublicUrl(filePath)
+
+    return publicUrlData.publicUrl
+  }
+
   const handlePublish = async () => {
-    const shortLocation = locationName.trim() || "UMES Campus"
-    const fullAddress = locationAddress.trim() || shortLocation
-    const cleanDescription =
-      description.trim() || "No description available."
-    const cleanOrganizer =
-      organizer.trim() || creatorName || "Campus Organization"
-    const cleanDressCode = dressCode.trim() || "Open"
+    try {
+      setIsUploading(true)
 
-    const newEvent = {
-      id: Date.now(),
-      title: title.trim() || "New Campus Event",
-      location: shortLocation,
-      locationName: shortLocation,
-      locationAddress: fullAddress,
-      date: formatDateFromInput(date),
-      eventDate: date || "",
-      time: formatTimeFromInput(time),
-      price: eventType === "Paid" ? "$10" : "Free",
-      rsvp: "0 Going",
-      image:
-        flyerPreview ||
-        "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=900&q=80",
-      description: cleanDescription,
-      organizer: cleanOrganizer,
-      dressCode: cleanDressCode,
-      capacity,
-      tags,
-      createdBy: creatorUsername,
-      creatorUsername,
-      createdAt: new Date().toISOString(),
-      attendees: [],
-      goingCount: 0,
+      const shortLocation = locationName.trim() || "UMES Campus"
+      const fullAddress = locationAddress.trim() || shortLocation
+      const cleanDescription = description.trim() || "No description available."
+      const cleanOrganizer = organizer.trim() || creatorName || "Campus Organization"
+      const cleanDressCode = dressCode.trim() || "Open"
+
+      let uploadedImageUrl =
+        "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=900&q=80"
+
+      if (flyerFile) {
+        uploadedImageUrl = await uploadFlyerToSupabase(flyerFile)
+      }
+
+      const newEvent = {
+        id: Date.now(),
+        title: title.trim() || "New Campus Event",
+        location: shortLocation,
+        locationName: shortLocation,
+        locationAddress: fullAddress,
+        date: formatDateFromInput(date),
+        eventDate: date || "",
+        time: formatTimeFromInput(time),
+        price: eventType === "Paid" ? "$10" : "Free",
+        rsvp: "0 Going",
+        image: uploadedImageUrl,
+        description: cleanDescription,
+        organizer: cleanOrganizer,
+        dressCode: cleanDressCode,
+        capacity,
+        tags,
+        createdBy: creatorUsername,
+        creatorUsername,
+        createdAt: new Date().toISOString(),
+        attendees: [],
+        goingCount: 0,
+      }
+
+      const { data: insertedRows, error } = await supabase
+        .from("events")
+        .insert({
+          title: newEvent.title,
+          description: newEvent.description,
+          location: newEvent.location,
+          location_address: newEvent.locationAddress,
+          date: newEvent.date,
+          event_date: newEvent.eventDate || null,
+          start_time: newEvent.time,
+          price: newEvent.price,
+          capacity: newEvent.capacity ? parseInt(newEvent.capacity, 10) : null,
+          organizer: newEvent.organizer,
+          dress_code: newEvent.dressCode,
+          image: newEvent.image,
+          tags: newEvent.tags,
+          created_by: currentUser.id || null,
+          creator_username: newEvent.creatorUsername,
+          going_count: 0,
+        })
+        .select()
+
+      if (error) {
+        alert("Failed to publish event: " + error.message)
+        return
+      }
+
+      const realId = insertedRows?.[0]?.id || newEvent.id
+      createEvent({ ...newEvent, id: realId })
+
+      setTitle("")
+      setDescription("")
+      setDate("")
+      setTime("")
+      setLocationName("")
+      setLocationAddress("")
+      setEventType("Free")
+      setCapacity("")
+      setTagInput("")
+      setTags([])
+      setOrganizer("")
+      setDressCode("")
+      setFlyerPreview("")
+      setFlyerFile(null)
+
+      alert("Event published! Check Discover.")
+    } catch (error) {
+      alert("Failed to upload flyer or publish event: " + error.message)
+    } finally {
+      setIsUploading(false)
     }
-
-    const { data: insertedRows, error } = await supabase.from("events").insert({
-      title: newEvent.title,
-      description: newEvent.description,
-      location: newEvent.location,
-      location_address: newEvent.locationAddress,
-      date: newEvent.date,
-      event_date: newEvent.eventDate || null,
-      start_time: newEvent.time,
-      price: newEvent.price,
-      capacity: newEvent.capacity ? parseInt(newEvent.capacity) : null,
-      organizer: newEvent.organizer,
-      dress_code: newEvent.dressCode,
-      image: newEvent.image,
-      tags: newEvent.tags,
-      created_by: JSON.parse(localStorage.getItem("user") || "{}").id || null,
-      creator_username: newEvent.creatorUsername,
-      going_count: 0,
-    }).select()
-
-    if (error) {
-      alert("Failed to publish event: " + error.message)
-      return
-    }
-
-    const realId = insertedRows?.[0]?.id || newEvent.id
-    createEvent({ ...newEvent, id: realId })
-
-    setTitle("")
-    setDescription("")
-    setDate("")
-    setTime("")
-    setLocationName("")
-    setLocationAddress("")
-    setEventType("Free")
-    setCapacity("")
-    setTagInput("")
-    setTags([])
-    setOrganizer("")
-    setDressCode("")
-    setFlyerPreview("")
-
-    alert("Event published! Check Discover.")
   }
 
   const handleFlyerUpload = (e) => {
-    const file = e.target.files[0]
+    const file = e.target.files?.[0]
+    if (!file) return
 
-    if (file) {
-      if (flyerPreview.startsWith("blob:")) {
-        URL.revokeObjectURL(flyerPreview)
-      }
-
-      const imageUrl = URL.createObjectURL(file)
-      setFlyerPreview(imageUrl)
+    if (flyerPreview && flyerPreview.startsWith("blob:")) {
+      URL.revokeObjectURL(flyerPreview)
     }
+
+    setFlyerFile(file)
+    setFlyerPreview(URL.createObjectURL(file))
   }
 
   const handleGenerateWithAI = () => {
@@ -346,8 +386,12 @@ function CreateEvent() {
             </div>
           </div>
 
-          <button className="publish-btn" onClick={handlePublish}>
-            Publish Event
+          <button
+            className="publish-btn"
+            onClick={handlePublish}
+            disabled={isUploading}
+          >
+            {isUploading ? "Publishing..." : "Publish Event"}
           </button>
         </div>
 
