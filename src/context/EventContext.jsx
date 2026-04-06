@@ -196,40 +196,72 @@ export function EventProvider({ children }) {
   const [followersList] = useState(defaultFollowers)
 
   useEffect(() => {
-    supabase
-      .from("events")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .then(({ data, error }) => {
-        if (error) { console.error("Failed to load events:", error); return }
-        if (!data || data.length === 0) return
-        const normalized = data.map((e) =>
-          normalizeEventTimes({
-            id: e.id,
-            title: e.title,
-            description: e.description,
-            location: e.location,
-            locationAddress: e.location_address,
-            date: e.date,
-            eventDate: e.event_date,
-            startTime: e.start_time,
-            price: e.price,
-            organizer: e.organizer,
-            dressCode: e.dress_code,
-            image: e.image,
-            tags: e.tags || [],
-            creatorUsername: e.creator_username,
-            goingCount: e.going_count || 0,
-            rsvp: `${e.going_count || 0} Going`,
-            attendees: [],
-          })
-        )
-        setAllEvents(normalized)
-      })
+    const userId = JSON.parse(localStorage.getItem("user") || "{}").id
+
+    const loadData = async () => {
+      const [eventsResult, rsvpsResult] = await Promise.all([
+        supabase.from("events").select("*").order("created_at", { ascending: false }),
+        userId
+          ? supabase.from("rsvps").select("event_id").eq("user_id", userId)
+          : Promise.resolve({ data: [], error: null }),
+      ])
+
+      if (eventsResult.error) {
+        console.error("Failed to load events:", eventsResult.error)
+        return
+      }
+
+      const eventsData = eventsResult.data || []
+      if (eventsData.length === 0) return
+
+      const normalized = eventsData.map((e) =>
+        normalizeEventTimes({
+          id: e.id,
+          title: e.title,
+          description: e.description,
+          location: e.location,
+          locationAddress: e.location_address,
+          date: e.date,
+          eventDate: e.event_date,
+          startTime: e.start_time,
+          price: e.price,
+          organizer: e.organizer,
+          dressCode: e.dress_code,
+          image: e.image,
+          tags: e.tags || [],
+          creatorUsername: e.creator_username,
+          goingCount: e.going_count || 0,
+          rsvp: `${e.going_count || 0} Going`,
+          attendees: [],
+        })
+      )
+
+      setAllEvents(normalized)
+
+      if (!rsvpsResult.error && rsvpsResult.data && rsvpsResult.data.length > 0) {
+        const rsvpedIds = new Set(rsvpsResult.data.map((r) => r.event_id))
+        const matched = normalized.filter((e) => rsvpedIds.has(e.id))
+        if (matched.length > 0) setSavedEvents(matched)
+      }
+    }
+
+    loadData()
   }, [])
 
   const addEvent = (event, attendeeUser) => {
     const attendee = attendeeUser || currentUser
+
+    const userId = JSON.parse(localStorage.getItem("user") || "{}").id
+    if (userId && event.id) {
+      supabase
+        .from("rsvps")
+        .insert({ user_id: userId, event_id: event.id })
+        .then(({ error }) => {
+          if (error && error.code !== "23505") {
+            console.error("Failed to save RSVP:", error)
+          }
+        })
+    }
 
     setSavedEvents((prev) => {
       const exists = prev.find((e) => e.id === event.id)
