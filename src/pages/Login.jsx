@@ -2,11 +2,11 @@ import React, { useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
 
 function Login() {
-  const navigate = useNavigate()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [isLoggingIn, setIsLoggingIn] = useState(false)
   const [errorMessage, setErrorMessage] = useState("")
+  const navigate = useNavigate()
 
   const handleLogin = async (e) => {
     e.preventDefault()
@@ -19,24 +19,53 @@ function Login() {
 
     try {
       setIsLoggingIn(true)
-      const res = await fetch("http://localhost:5000/login", {
+
+      const res = await fetch("http://localhost:5050/api/auth/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ email: email.trim(), password }),
+        body: JSON.stringify({
+          email: email.trim(),
+          password,
+        }),
       })
 
       const data = await res.json()
 
-      if (!res.ok || data.error) {
-        setErrorMessage(data.error || "Login failed.")
+      if (!res.ok) {
+        setErrorMessage(data.message || data.error || "Login failed.")
         return
       }
 
-      localStorage.setItem("user", JSON.stringify(data))
-      navigate("/")
-    } catch {
+      // Support common API token response shapes from the backend.
+      const authHeader = res.headers.get("authorization") || res.headers.get("Authorization")
+      const token =
+        data.token ||
+        data.accessToken ||
+        data?.user?.token ||
+        data?.data?.token ||
+        data?.data?.accessToken ||
+        (authHeader?.startsWith("Bearer ") ? authHeader.replace("Bearer ", "") : "") ||
+        ""
+
+      if (token) {
+        localStorage.setItem("token", token)
+      } else {
+        setErrorMessage("Login succeeded but no token was provided.")
+        return
+      }
+
+      if (data.user) {
+        localStorage.setItem("user", JSON.stringify(data.user))
+      } else if (data?.data?.user) {
+        localStorage.setItem("user", JSON.stringify(data.data.user))
+      }
+
+      navigate("/discover", { replace: true })
+
+    } catch (error) {
+      console.error("LOGIN ERROR:", error)
       setErrorMessage("Unable to reach the server. Please try again.")
     } finally {
       setIsLoggingIn(false)

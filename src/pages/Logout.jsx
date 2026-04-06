@@ -1,22 +1,16 @@
 import React, { useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 
-function Logout() {
+const Logout = () => {
   const navigate = useNavigate()
 
   useEffect(() => {
-    // Clear user session
+    localStorage.removeItem("token")
     localStorage.removeItem("user")
-
-    // Redirect to login
-    navigate("/auth/login")
+    navigate("/auth/login", { replace: true })
   }, [navigate])
 
-  return (
-    <div style={{ textAlign: "center", marginTop: "100px" }}>
-      <h2>Logging you out...</h2>
-    </div>
-  )
+  return <div>Logging out...</div>
 }
 
 export default Logout

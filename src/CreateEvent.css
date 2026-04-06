@@ -1,15 +1,15 @@
 .create-page {
   min-height: calc(100vh - 82px);
-  padding: 40px 24px 60px;
+  padding: 24px 24px 52px;
 }
 
 .create-header {
   text-align: center;
-  margin-bottom: 28px;
+  margin-bottom: 20px;
 }
 
 .create-header p {
-  margin: 0 0 8px;
+  margin: 0 0 6px;
   color: #6e6e73;
   font-size: 18px;
 }
@@ -26,7 +26,7 @@
   margin: 0 auto;
   display: grid;
   grid-template-columns: 1.2fr 0.9fr;
-  gap: 28px;
+  gap: 26px;
   align-items: start;
 }
 
@@ -88,6 +88,57 @@
   box-shadow: 0 0 0 3px rgba(122, 167, 255, 0.18);
 }
 
+.create-event-tags-input-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.create-event-tags-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.create-event-tag-chip {
+  border: none;
+  background: #eef3ff;
+  color: #2457d6;
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.create-event-tag-chip span {
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.create-event-tag-entry {
+  display: flex;
+  gap: 10px;
+}
+
+.create-event-tag-entry input {
+  flex: 1;
+}
+
+.create-event-add-tag-btn {
+  border: none;
+  background: #1d1d1f;
+  color: #fff;
+  border-radius: 14px;
+  padding: 0 16px;
+  min-height: 48px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 .publish-btn {
   width: 100%;
   margin-top: 8px;
@@ -106,13 +157,14 @@
 }
 
 .flyer-preview {
-  height: 360px;
-  border-radius: 24px;
+  height: 560px;
+  border-radius: 32px;
   background: linear-gradient(180deg, #e9f5ff 0%, #edf7e8 100%);
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.12);
 }
 
 .flyer-preview p {
@@ -128,27 +180,30 @@
 }
 
 .flyer-actions {
-  margin-top: 18px;
+  margin-top: 16px;
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
 .upload-btn,
 .ai-btn {
   width: 100%;
-  padding: 15px;
+  min-height: 52px;
+  padding: 12px 15px;
   border: none;
-  border-radius: 14px;
+  border-radius: 16px;
   font-size: 16px;
   font-weight: 600;
   cursor: pointer;
 }
 
 .upload-btn {
-  background: #2f6df6;
+  background: linear-gradient(180deg, #2f7cff, #1f68eb);
   color: white;
   text-align: center;
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .ai-btn {
@@ -164,4 +219,82 @@
   .create-header h1 {
     font-size: 48px;
   }
+
+  .flyer-preview {
+    height: 500px;
+  }
+
+  .create-event-tag-entry {
+    flex-direction: column;
+  }
+
+  .create-event-add-tag-btn {
+    width: 100%;
+  }
+}
+
+body.theme-dark .create-page {
+  color: var(--text-main, #f5f7fb);
+}
+
+body.theme-dark .create-header h1 {
+  color: var(--text-strong, #ffffff);
+}
+
+body.theme-dark .create-header p {
+  color: var(--text-muted, #a3adba);
+}
+
+body.theme-dark .create-form-card,
+body.theme-dark .flyer-card {
+  background: var(--bg-elevated, #181c23);
+  border: 1px solid var(--border-soft, rgba(255, 255, 255, 0.08));
+  box-shadow: var(--shadow-soft, 0 18px 40px rgba(0, 0, 0, 0.28));
+}
+
+body.theme-dark .form-group label {
+  color: var(--text-main, #f5f7fb);
+}
+
+body.theme-dark .create-form-card input,
+body.theme-dark .create-form-card textarea,
+body.theme-dark .create-form-card select {
+  background: var(--bg-soft, #202631);
+  color: var(--text-main, #f5f7fb);
+  border: 1px solid var(--border-soft, rgba(255, 255, 255, 0.08));
+}
+
+body.theme-dark .create-form-card input::placeholder,
+body.theme-dark .create-form-card textarea::placeholder {
+  color: var(--text-muted, #a3adba);
+}
+
+body.theme-dark .create-form-card input:focus,
+body.theme-dark .create-form-card textarea:focus,
+body.theme-dark .create-form-card select:focus {
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.08);
+}
+
+body.theme-dark .flyer-preview {
+  background: linear-gradient(180deg, #1f2632 0%, #232d26 100%);
+}
+
+body.theme-dark .flyer-preview p {
+  color: var(--text-muted, #a3adba);
+}
+
+body.theme-dark .upload-btn {
+  background: linear-gradient(180deg, #4f8dff, #2f6de7);
+}
+
+body.theme-dark .ai-btn {
+  background: var(--bg-soft, #202631);
+  color: var(--text-main, #f5f7fb);
+  border: 1px solid var(--border-soft, rgba(255, 255, 255, 0.08));
+}
+
+body.theme-dark .create-event-tag-chip {
+  background: #2f3b53;
+  color: #d9e6ff;
 }

@@ -1,4 +1,4 @@
-import React, { useState } from "react"
+import React, { useRef, useState } from "react"
 import MyEventCard from "../components/MyEventCard"
 import { useEvents } from "../context/EventContext"
 
@@ -46,11 +46,66 @@ const parseEventDate = (rawDate) => {
 function MyEvents() {
   const [viewMode, setViewMode] = useState("cards")
   const [selectedCalendarEvent, setSelectedCalendarEvent] = useState(null)
+  const [isMonthPickerOpen, setIsMonthPickerOpen] = useState(false)
   const { savedEvents } = useEvents()
 
   const now = new Date()
-  const [calendarMonth] = useState(now.getMonth())
-  const [calendarYear] = useState(now.getFullYear())
+  const [currentMonth, setCurrentMonth] = useState(
+    () => new Date(now.getFullYear(), now.getMonth(), 1)
+  )
+  const touchStartXRef = useRef(null)
+  const mouseStartXRef = useRef(null)
+
+  const calendarMonth = currentMonth.getMonth()
+  const calendarYear = currentMonth.getFullYear()
+
+  const goToPrevMonth = () => {
+    setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))
+    setSelectedCalendarEvent(null)
+  }
+
+  const goToNextMonth = () => {
+    setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))
+    setSelectedCalendarEvent(null)
+  }
+
+  const handleMonthChange = (value) => {
+    if (!value) return
+    const [year, month] = value.split("-").map(Number)
+    if (!year || !month) return
+    setCurrentMonth(new Date(year, month - 1, 1))
+    setIsMonthPickerOpen(false)
+    setSelectedCalendarEvent(null)
+  }
+
+  const handleTouchStart = (event) => {
+    touchStartXRef.current = event.changedTouches[0].clientX
+  }
+
+  const handleTouchEnd = (event) => {
+    if (touchStartXRef.current === null) return
+    const endX = event.changedTouches[0].clientX
+    const deltaX = endX - touchStartXRef.current
+    touchStartXRef.current = null
+
+    if (Math.abs(deltaX) < 44) return
+    if (deltaX < 0) goToNextMonth()
+    else goToPrevMonth()
+  }
+
+  const handleMouseDown = (event) => {
+    mouseStartXRef.current = event.clientX
+  }
+
+  const handleMouseUp = (event) => {
+    if (mouseStartXRef.current === null) return
+    const deltaX = event.clientX - mouseStartXRef.current
+    mouseStartXRef.current = null
+
+    if (Math.abs(deltaX) < 56) return
+    if (deltaX < 0) goToNextMonth()
+    else goToPrevMonth()
+  }
 
   const getEventForDay = (day) => {
     return savedEvents.find((event) => {
@@ -67,6 +122,7 @@ function MyEvents() {
 
   const firstDayOffset = new Date(calendarYear, calendarMonth, 1).getDay()
   const daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate()
+  const monthInputValue = `${calendarYear}-${String(calendarMonth + 1).padStart(2, "0")}`
 
   return (
     <main className="my-events-page">
@@ -101,39 +157,79 @@ function MyEvents() {
         </div>
       ) : (
         <div className="calendar-view">
-          <div className="calendar-box">
-            <h3>{MONTH_NAMES[calendarMonth]} {calendarYear}</h3>
-
-            <div className="calendar-grid">
-              <div className="calendar-day header">Sun</div>
-              <div className="calendar-day header">Mon</div>
-              <div className="calendar-day header">Tue</div>
-              <div className="calendar-day header">Wed</div>
-              <div className="calendar-day header">Thu</div>
-              <div className="calendar-day header">Fri</div>
-              <div className="calendar-day header">Sat</div>
-
-              {Array.from({ length: firstDayOffset }, (_, index) => (
-                <div key={`empty-${index}`} className="calendar-day empty"></div>
-              ))}
-
-              {Array.from({ length: daysInMonth }, (_, index) => {
-                const day = index + 1
-                const event = getEventForDay(day)
-
-                return (
-                  <div
-                    key={day}
-                    className={`calendar-day ${event ? "has-event clickable" : ""}`}
-                    onClick={() => event && setSelectedCalendarEvent(event)}
+          <div
+            className="calendar-swipe-zone"
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+            onMouseDown={handleMouseDown}
+            onMouseUp={handleMouseUp}
+          >
+            <div className="calendar-box">
+              <div className="calendar-header">
+                <div className="calendar-month-nav">
+                  <button
+                    className="calendar-arrow-btn"
+                    onClick={goToPrevMonth}
+                    aria-label="Previous month"
                   >
-                    <span>{day}</span>
-                    {event && (
-                      <span className="calendar-event">{event.title}</span>
-                    )}
-                  </div>
-                )
-              })}
+                    ←
+                  </button>
+                  <button
+                    className="calendar-month-btn"
+                    onClick={() => setIsMonthPickerOpen((prev) => !prev)}
+                  >
+                    {MONTH_NAMES[calendarMonth]} {calendarYear}
+                  </button>
+                  <button
+                    className="calendar-arrow-btn"
+                    onClick={goToNextMonth}
+                    aria-label="Next month"
+                  >
+                    →
+                  </button>
+                </div>
+
+                {isMonthPickerOpen && (
+                  <input
+                    type="month"
+                    className="calendar-month-picker"
+                    value={monthInputValue}
+                    onChange={(e) => handleMonthChange(e.target.value)}
+                  />
+                )}
+              </div>
+
+              <div className="calendar-grid">
+                <div className="calendar-day header">Sun</div>
+                <div className="calendar-day header">Mon</div>
+                <div className="calendar-day header">Tue</div>
+                <div className="calendar-day header">Wed</div>
+                <div className="calendar-day header">Thu</div>
+                <div className="calendar-day header">Fri</div>
+                <div className="calendar-day header">Sat</div>
+
+                {Array.from({ length: firstDayOffset }, (_, index) => (
+                  <div key={`empty-${index}`} className="calendar-day empty"></div>
+                ))}
+
+                {Array.from({ length: daysInMonth }, (_, index) => {
+                  const day = index + 1
+                  const event = getEventForDay(day)
+
+                  return (
+                    <div
+                      key={day}
+                      className={`calendar-day ${event ? "has-event clickable" : ""}`}
+                      onClick={() => event && setSelectedCalendarEvent(event)}
+                    >
+                      <span>{day}</span>
+                      {event && (
+                        <span className="calendar-event">{event.title}</span>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
             </div>
           </div>
 

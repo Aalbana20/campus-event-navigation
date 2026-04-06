@@ -9,10 +9,15 @@ function CreateEvent() {
   const [description, setDescription] = useState("")
   const [date, setDate] = useState("")
   const [time, setTime] = useState("")
-  const [location, setLocation] = useState("")
+  const [locationName, setLocationName] = useState("")
+  const [locationAddress, setLocationAddress] = useState("")
   const [eventType, setEventType] = useState("Free")
   const [capacity, setCapacity] = useState("")
   const [flyerPreview, setFlyerPreview] = useState("")
+  const [tagInput, setTagInput] = useState("")
+  const [tags, setTags] = useState([])
+  const currentUser = JSON.parse(localStorage.getItem("user") || "{}")
+  const creatorUsername = currentUser.username || "itzmesuccess1"
 
   useEffect(() => {
     return () => {
@@ -48,10 +53,15 @@ function CreateEvent() {
   }
 
   const handlePublish = () => {
+    const shortLocation = locationName || "UMES Campus"
+    const fullAddress = locationAddress || shortLocation
+
     const newEvent = {
       id: Date.now(),
       title: title || "New Campus Event",
-      location: location || "UMES Campus",
+      location: shortLocation,
+      locationName: shortLocation,
+      locationAddress: fullAddress,
       date: formatDateFromInput(date),
       eventDate: date || "",
       price: eventType === "Paid" ? "$10" : "Free",
@@ -62,9 +72,15 @@ function CreateEvent() {
       description,
       time,
       capacity,
+      tags,
+      createdBy: creatorUsername,
+      creatorUsername,
+      createdAt: new Date().toISOString(),
     }
 
     createEvent(newEvent)
+    setTags([])
+    setTagInput("")
     alert("Event published! Check Discover.")
   }
 
@@ -76,6 +92,38 @@ function CreateEvent() {
       }
       const imageUrl = URL.createObjectURL(file)
       setFlyerPreview(imageUrl)
+    }
+  }
+
+  const handleGenerateWithAI = () => {
+    console.log("Generate with AI coming soon")
+  }
+
+  const handleAddTag = () => {
+    const cleanTag = tagInput.trim().toLowerCase()
+    if (!cleanTag) return
+
+    if (tags.includes(cleanTag)) {
+      setTagInput("")
+      return
+    }
+
+    setTags((prev) => [...prev, cleanTag])
+    setTagInput("")
+  }
+
+  const handleRemoveTag = (tagToRemove) => {
+    setTags((prev) => prev.filter((tag) => tag !== tagToRemove))
+  }
+
+  const handleTagKeyDown = (e) => {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault()
+      handleAddTag()
+    }
+
+    if (e.key === "Backspace" && !tagInput && tags.length > 0) {
+      setTags((prev) => prev.slice(0, -1))
     }
   }
 
@@ -108,6 +156,42 @@ function CreateEvent() {
             />
           </div>
 
+          <div className="form-group">
+            <label>Tags</label>
+            <div className="create-event-tags-input-wrap">
+              <div className="create-event-tags-list">
+                {tags.map((tag) => (
+                  <button
+                    type="button"
+                    key={tag}
+                    className="create-event-tag-chip"
+                    onClick={() => handleRemoveTag(tag)}
+                    aria-label={`Remove ${tag}`}
+                  >
+                    #{tag} <span>×</span>
+                  </button>
+                ))}
+              </div>
+
+              <div className="create-event-tag-entry">
+                <input
+                  type="text"
+                  value={tagInput}
+                  onChange={(e) => setTagInput(e.target.value)}
+                  onKeyDown={handleTagKeyDown}
+                  placeholder="Add tags like sports, basketball, movie..."
+                />
+                <button
+                  type="button"
+                  className="create-event-add-tag-btn"
+                  onClick={handleAddTag}
+                >
+                  Add
+                </button>
+              </div>
+            </div>
+          </div>
+
           <div className="form-row">
             <div className="form-group">
               <label>Date</label>
@@ -129,12 +213,22 @@ function CreateEvent() {
           </div>
 
           <div className="form-group">
-            <label>Location</label>
+            <label>Location Name</label>
             <input
               type="text"
               placeholder="Student Center Ballroom"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
+              value={locationName}
+              onChange={(e) => setLocationName(e.target.value)}
+            />
+          </div>
+
+          <div className="form-group">
+            <label>Address</label>
+            <input
+              type="text"
+              placeholder="30665 Student Services Center, Princess Anne, MD 21853"
+              value={locationAddress}
+              onChange={(e) => setLocationAddress(e.target.value)}
             />
           </div>
 
@@ -186,7 +280,9 @@ function CreateEvent() {
               />
             </label>
 
-            <button className="ai-btn">Generate with AI ✨</button>
+            <button className="ai-btn" type="button" onClick={handleGenerateWithAI}>
+              Generate with AI ✨
+            </button>
           </div>
         </div>
       </div>

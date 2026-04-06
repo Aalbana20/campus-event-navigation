@@ -3,7 +3,7 @@ import EventCard from "../components/EventCard"
 import { useEvents } from "../context/EventContext"
 
 function Discover() {
-  const { addEvent, allEvents } = useEvents()
+  const { addEvent, allEvents, currentUser } = useEvents()
 
   const [currentIndex, setCurrentIndex] = useState(0)
   const [swipeDirection, setSwipeDirection] = useState("")
@@ -47,7 +47,11 @@ function Discover() {
   }, [allEvents.length])
 
   const handleAccept = useCallback(() => {
-    addEvent(allEvents[currentIndex])
+    const currentEvent = allEvents[currentIndex]
+    addEvent({
+      ...currentEvent,
+      rsvpDate: new Date().toISOString(),
+    }, currentUser)
     setButtonFlash("flash-accept")
     setSwipeDirection("swipe-right")
 
@@ -59,7 +63,7 @@ function Discover() {
       showNextEvent()
       setButtonFlash("")
     }, 300)
-  }, [addEvent, allEvents, currentIndex, showNextEvent])
+  }, [addEvent, allEvents, currentIndex, currentUser, showNextEvent])
 
   const handleReject = useCallback(() => {
     setButtonFlash("flash-reject")
@@ -99,7 +103,7 @@ function Discover() {
   return (
     <main className="discover">
       <p className="eyebrow">Find your next event</p>
-      <h1>Discover</h1>
+      <h1 className="discover-title">Discover</h1>
 
       <div className="discover-tip">Use ← and → on your keyboard too</div>
 

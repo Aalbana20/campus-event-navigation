@@ -1,6 +1,9 @@
 import React, { useState } from "react"
 function MyEventCard({ event }) {
   const [flipped, setFlipped] = useState(false)
+  const displayLocation = event.locationName || event.location || "No location"
+  const mapsQuery = encodeURIComponent(event.locationAddress || event.location || "")
+  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${mapsQuery}`
 
   return (
     <div className="my-flip-card" onClick={() => setFlipped(!flipped)}>
@@ -16,14 +19,14 @@ function MyEventCard({ event }) {
         <div className="my-flip-card-back">
           <h3>{event.title}</h3>
           <p><strong>Date:</strong> {event.date}</p>
-          <p><strong>Location:</strong> {event.location}</p>
+          <p><strong>Location:</strong> {displayLocation}</p>
           <p><strong>Price:</strong> {event.price}</p>
           <p><strong>Status:</strong> Going</p>
           <button 
             className="map-btn"
             onClick={(e) => {
               e.stopPropagation()
-              window.open(`https://www.google.com/maps/search/?api=1&query=${event.location}`)
+              window.open(mapsUrl)
             }}
           >
             📍 View Map
