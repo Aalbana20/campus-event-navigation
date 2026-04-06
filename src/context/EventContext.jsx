@@ -196,60 +196,56 @@ export function EventProvider({ children }) {
   const [followersList] = useState(defaultFollowers)
 
   useEffect(() => {
-    supabase
-      .from("events")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .then(({ data, error }) => {
-        if (error) { console.error("Failed to load events:", error); return }
-        if (!data || data.length === 0) return
-        const normalized = data.map((e) =>
-          normalizeEventTimes({
-            id: e.id,
-            title: e.title,
-            description: e.description,
-            location: e.location,
-            locationAddress: e.location_address,
-            date: e.date,
-            eventDate: e.event_date,
-            startTime: e.start_time,
-            price: e.price,
-            organizer: e.organizer,
-            dressCode: e.dress_code,
-            image: e.image,
-            tags: e.tags || [],
-            creatorUsername: e.creator_username,
-            goingCount: e.going_count || 0,
-            rsvp: `${e.going_count || 0} Going`,
-            attendees: [],
-          })
-        )
-        setAllEvents(normalized)
-      })
-  }, [])
-
-  useEffect(() => {
     const userId = JSON.parse(localStorage.getItem("user") || "{}").id
-    if (!userId) return
 
-    supabase
-      .from("rsvps")
-      .select("event_id, rsvp_date")
-      .eq("user_id", userId)
-      .then(({ data, error }) => {
-        if (error) { console.error("Failed to load rsvps:", error); return }
-        if (!data || data.length === 0) return
+    const loadData = async () => {
+      const [eventsResult, rsvpsResult] = await Promise.all([
+        supabase.from("events").select("*").order("created_at", { ascending: false }),
+        userId
+          ? supabase.from("rsvps").select("event_id").eq("user_id", userId)
+          : Promise.resolve({ data: [], error: null }),
+      ])
 
-        const rsvpedIds = new Set(data.map((r) => r.event_id))
+      if (eventsResult.error) {
+        console.error("Failed to load events:", eventsResult.error)
+        return
+      }
 
-        setAllEvents((prev) => {
-          const matched = prev.filter((e) => rsvpedIds.has(e.id))
-          if (matched.length > 0) {
-            setSavedEvents(matched)
-          }
-          return prev
+      const eventsData = eventsResult.data || []
+      if (eventsData.length === 0) return
+
+      const normalized = eventsData.map((e) =>
+        normalizeEventTimes({
+          id: e.id,
+          title: e.title,
+          description: e.description,
+          location: e.location,
+          locationAddress: e.location_address,
+          date: e.date,
+          eventDate: e.event_date,
+          startTime: e.start_time,
+          price: e.price,
+          organizer: e.organizer,
+          dressCode: e.dress_code,
+          image: e.image,
+          tags: e.tags || [],
+          creatorUsername: e.creator_username,
+          goingCount: e.going_count || 0,
+          rsvp: `${e.going_count || 0} Going`,
+          attendees: [],
         })
-      })
+      )
+
+      setAllEvents(normalized)
+
+      if (!rsvpsResult.error && rsvpsResult.data && rsvpsResult.data.length > 0) {
+        const rsvpedIds = new Set(rsvpsResult.data.map((r) => r.event_id))
+        const matched = normalized.filter((e) => rsvpedIds.has(e.id))
+        if (matched.length > 0) setSavedEvents(matched)
+      }
+    }
+
+    loadData()
   }, [])
 
   const addEvent = (event, attendeeUser) => {
