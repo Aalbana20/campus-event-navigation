@@ -252,7 +252,8 @@ export function EventProvider({ children }) {
     const attendee = attendeeUser || currentUser
 
     const userId = JSON.parse(localStorage.getItem("user") || "{}").id
-    if (userId && event.id) {
+    const isRealEvent = userId && event.id && typeof event.id === "string" && event.id.includes("-")
+    if (isRealEvent) {
       supabase
         .from("rsvps")
         .insert({ user_id: userId, event_id: event.id })
@@ -287,12 +288,13 @@ export function EventProvider({ children }) {
         if (alreadyGoing) return existingEvent
 
         const nextAttendees = [...attendees, attendee]
+        const nextCount = (existingEvent.goingCount || 0) + 1
 
         return {
           ...existingEvent,
           attendees: nextAttendees,
-          goingCount: nextAttendees.length,
-          rsvp: `${nextAttendees.length} Going`,
+          goingCount: nextCount,
+          rsvp: `${nextCount} Going`,
         }
       })
     )

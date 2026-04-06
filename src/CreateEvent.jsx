@@ -106,7 +106,7 @@ function CreateEvent() {
       goingCount: 0,
     }
 
-    const { error } = await supabase.from("events").insert({
+    const { data: insertedRows, error } = await supabase.from("events").insert({
       title: newEvent.title,
       description: newEvent.description,
       location: newEvent.location,
@@ -123,14 +123,15 @@ function CreateEvent() {
       created_by: JSON.parse(localStorage.getItem("user") || "{}").id || null,
       creator_username: newEvent.creatorUsername,
       going_count: 0,
-    })
+    }).select()
 
     if (error) {
       alert("Failed to publish event: " + error.message)
       return
     }
 
-    createEvent(newEvent)
+    const realId = insertedRows?.[0]?.id || newEvent.id
+    createEvent({ ...newEvent, id: realId })
 
     setTitle("")
     setDescription("")
