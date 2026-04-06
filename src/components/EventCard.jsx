@@ -12,26 +12,26 @@ function EventCard({ event }) {
   const { mutualUsers } = useEvents()
   const [flipped, setFlipped] = useState(false)
   const [isMutualsOpen, setIsMutualsOpen] = useState(false)
+
   const displayLocation = event.locationName || event.location || "No location"
   const mapsQuery = encodeURIComponent(event.locationAddress || event.location || "")
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${mapsQuery}`
-  const attendeeUsers =
-    event?.attendees ||
-    event?.rsvpUsers ||
-    event?.goingUsers ||
-    []
+
+  const attendeeUsers = event?.attendees || event?.rsvpUsers || event?.goingUsers || []
+
   const parsedRsvpCount = Number.parseInt(String(event?.rsvp || "").replace(/\D/g, ""), 10)
+
   const goingCount =
     event?.rsvpCount ??
     event?.goingCount ??
     attendeeUsers.length ??
     (Number.isFinite(parsedRsvpCount) ? parsedRsvpCount : 24)
+
   const mutualAttendees = (mutualUsers || []).filter((mutualUser) =>
     attendeeUsers.some((attendee) => usersMatch(attendee, mutualUser))
   )
-  const mutualCount =
-    event?.mutualCount ??
-    mutualAttendees.length
+
+  const mutualCount = event?.mutualCount ?? mutualAttendees.length
 
   const openMutuals = (e) => {
     e.stopPropagation()
@@ -79,9 +79,7 @@ function EventCard({ event }) {
                   ))}
                 </div>
 
-                <span className="event-card-mutual-text">
-                  {mutualCount} mutuals
-                </span>
+                <span className="event-card-mutual-text">{mutualCount} mutuals</span>
               </button>
             </div>
           </div>
@@ -90,13 +88,18 @@ function EventCard({ event }) {
             <h2>{event.title}</h2>
             <p><strong>Location:</strong> {displayLocation}</p>
             <p><strong>Date:</strong> {event.date}</p>
+            <p><strong>Time:</strong> {event.time || "TBA"}</p>
             <p><strong>Price:</strong> {event.price}</p>
-            <p><strong>RSVP:</strong> {event.rsvp}</p>
+            <p><strong>RSVP:</strong> {event.rsvp || `${goingCount} Going`}</p>
+            <p><strong>Organizer:</strong> {event.organizer || "Campus Organization"}</p>
+            <p><strong>Dress Code:</strong> {event.dressCode || "Open"}</p>
+            <p><strong>About:</strong> {event.description || "No description available."}</p>
+
             <button
               className="map-btn"
               onClick={(e) => {
                 e.stopPropagation()
-                window.open(mapsUrl)
+                window.open(mapsUrl, "_blank")
               }}
             >
               📍 View Map
