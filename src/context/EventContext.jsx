@@ -228,8 +228,44 @@ export function EventProvider({ children }) {
       })
   }, [])
 
+  useEffect(() => {
+    const userId = JSON.parse(localStorage.getItem("user") || "{}").id
+    if (!userId) return
+
+    supabase
+      .from("rsvps")
+      .select("event_id, rsvp_date")
+      .eq("user_id", userId)
+      .then(({ data, error }) => {
+        if (error) { console.error("Failed to load rsvps:", error); return }
+        if (!data || data.length === 0) return
+
+        const rsvpedIds = new Set(data.map((r) => r.event_id))
+
+        setAllEvents((prev) => {
+          const matched = prev.filter((e) => rsvpedIds.has(e.id))
+          if (matched.length > 0) {
+            setSavedEvents(matched)
+          }
+          return prev
+        })
+      })
+  }, [])
+
   const addEvent = (event, attendeeUser) => {
     const attendee = attendeeUser || currentUser
+
+    const userId = JSON.parse(localStorage.getItem("user") || "{}").id
+    if (userId && event.id) {
+      supabase
+        .from("rsvps")
+        .insert({ user_id: userId, event_id: event.id })
+        .then(({ error }) => {
+          if (error && error.code !== "23505") {
+            console.error("Failed to save RSVP:", error)
+          }
+        })
+    }
 
     setSavedEvents((prev) => {
       const exists = prev.find((e) => e.id === event.id)
