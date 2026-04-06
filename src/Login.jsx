@@ -1,40 +1,13 @@
-import { useState } from "react";
+import React from "react"
 
 function Login() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-
-  const handleLogin = async () => {
-    const res = await fetch("http://localhost:5000/login", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ email, password })
-    });
-
-    const data = await res.json();
-
-    if (data.error) {
-      alert(data.error);
-    } else {
-      alert(`Welcome ${data.username}`);
-
-      // store user
-      localStorage.setItem("user", JSON.stringify(data));
-    }
-  };
+  console.log("Login page loaded")
 
   return (
-    <div>
-      <h2>Login</h2>
-
-      <input placeholder="Email" onChange={(e) => setEmail(e.target.value)} />
-      <input type="password" placeholder="Password" onChange={(e) => setPassword(e.target.value)} />
-
-      <button onClick={handleLogin}>Login</button>
+    <div style={{ padding: "80px", fontSize: "32px", color: "black", background: "white" }}>
+      LOGIN PAGE WORKING
     </div>
-  );
+  )
 }
 
-export default Login;
+export default Login

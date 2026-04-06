@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react"
+import React, { useCallback, useEffect, useRef, useState } from "react"
 import EventCard from "../components/EventCard"
 import { useEvents } from "../context/EventContext"
 
@@ -9,6 +9,8 @@ function Discover() {
   const [swipeDirection, setSwipeDirection] = useState("")
   const [buttonFlash, setButtonFlash] = useState("")
   const [cardEntering, setCardEntering] = useState(false)
+  const enterTimeoutRef = useRef(null)
+  const swipeTimeoutRef = useRef(null)
 
   useEffect(() => {
     if (currentIndex >= allEvents.length) {
@@ -28,36 +30,50 @@ function Discover() {
 
   const nextIndex = (currentIndex + 1) % allEvents.length
 
-  const showNextEvent = () => {
+  const showNextEvent = useCallback(() => {
+    if (allEvents.length === 0) return
+
     setCurrentIndex((prevIndex) => (prevIndex + 1) % allEvents.length)
     setSwipeDirection("")
     setCardEntering(true)
 
-    setTimeout(() => {
+    if (enterTimeoutRef.current) {
+      clearTimeout(enterTimeoutRef.current)
+    }
+
+    enterTimeoutRef.current = setTimeout(() => {
       setCardEntering(false)
     }, 260)
-  }
+  }, [allEvents.length])
 
-  const handleAccept = () => {
+  const handleAccept = useCallback(() => {
     addEvent(allEvents[currentIndex])
     setButtonFlash("flash-accept")
     setSwipeDirection("swipe-right")
 
-    setTimeout(() => {
+    if (swipeTimeoutRef.current) {
+      clearTimeout(swipeTimeoutRef.current)
+    }
+
+    swipeTimeoutRef.current = setTimeout(() => {
       showNextEvent()
       setButtonFlash("")
     }, 300)
-  }
+  }, [addEvent, allEvents, currentIndex, showNextEvent])
 
-  const handleReject = () => {
+  const handleReject = useCallback(() => {
     setButtonFlash("flash-reject")
     setSwipeDirection("swipe-left")
 
-    setTimeout(() => {
+    if (swipeTimeoutRef.current) {
+      clearTimeout(swipeTimeoutRef.current)
+    }
+
+    swipeTimeoutRef.current = setTimeout(() => {
       showNextEvent()
       setButtonFlash("")
     }, 300)
-  }
+  }, [showNextEvent])
 
   useEffect(() => {
     const handleKeyDown = (event) => {
@@ -67,7 +83,18 @@ function Discover() {
 
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  })
+  }, [handleAccept, handleReject])
+
+  useEffect(() => {
+    return () => {
+      if (enterTimeoutRef.current) {
+        clearTimeout(enterTimeoutRef.current)
+      }
+      if (swipeTimeoutRef.current) {
+        clearTimeout(swipeTimeoutRef.current)
+      }
+    }
+  }, [])
 
   return (
     <main className="discover">

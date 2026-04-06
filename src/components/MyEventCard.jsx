@@ -19,6 +19,15 @@ function MyEventCard({ event }) {
           <p><strong>Location:</strong> {event.location}</p>
           <p><strong>Price:</strong> {event.price}</p>
           <p><strong>Status:</strong> Going</p>
+          <button 
+            className="map-btn"
+            onClick={(e) => {
+              e.stopPropagation()
+              window.open(`https://www.google.com/maps/search/?api=1&query=${event.location}`)
+            }}
+          >
+            📍 View Map
+          </button>
         </div>
       </div>
     </div>

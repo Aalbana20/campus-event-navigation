@@ -1,3 +1,7 @@
+/* =========================================================
+   GLOBAL RESET
+   - Basic reset so spacing is predictable everywhere
+========================================================= */
 * {
   box-sizing: border-box;
 }
@@ -11,6 +15,9 @@ body,
   min-height: 100%;
 }
 
+/* =========================================================
+   APP BACKGROUND + GLOBAL FONT
+========================================================= */
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   background: linear-gradient(to bottom, #f7f7f8, #ececf0);
@@ -22,33 +29,83 @@ body {
   min-height: 100vh;
 }
 
-.navbar {
+/* =========================================================
+   NEW TOP BAR
+   - Small Apple-style navigation at the top
+   - 5 main tabs on the left
+   - Gear + red logout on the right
+========================================================= */
+.topbar {
   width: 100%;
-  height: 82px;
-  background: rgba(255, 255, 255, 0.72);
+  height: 64px;
+  background: rgba(255, 255, 255, 0.86);
   backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+
+  padding: 0 28px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.topbar-left {
   display: flex;
   align-items: center;
-  justify-content: space-around;
-  padding: 0 28px;
+  justify-content: center;
+  gap: 26px;
+  grid-column: 2;
 }
 
-.nav-item {
-  font-size: 17px;
-  color: #444;
-  cursor: pointer;
+.topbar-item {
   text-decoration: none;
-  transition: color 0.2s ease, transform 0.2s ease;
+  color: #6e6e73;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  transition: color 0.2s ease;
 }
 
-.nav-item:hover {
-  color: #000;
-  transform: translateY(-1px);
+.topbar-item:hover {
+  color: #111;
 }
 
+.topbar-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+  grid-column: 3;
+}
+
+.gear-btn {
+  background: transparent;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px 6px;
+}
+
+.logout-link {
+  text-decoration: none;
+  color: #d93025;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.logout-link:hover {
+  opacity: 0.8;
+}
+
+/* =========================================================
+   DISCOVER PAGE
+========================================================= */
 .discover {
-  min-height: calc(100vh - 82px);
+  min-height: calc(100vh - 64px);
   width: 100%;
   display: flex;
   flex-direction: column;
@@ -70,6 +127,15 @@ body {
   letter-spacing: -1.5px;
 }
 
+.discover-tip {
+  margin-bottom: 22px;
+  font-size: 14px;
+  color: #8a8a90;
+}
+
+/* =========================================================
+   DISCOVER SWIPE AREA
+========================================================= */
 .swipe-area {
   width: 100%;
   display: flex;
@@ -78,31 +144,112 @@ body {
   gap: 60px;
 }
 
+.discover-stack {
+  position: relative;
+  width: 380px;
+  height: 560px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.next-card-preview {
+  position: absolute;
+  inset: 0;
+  transform: scale(0.96) translateY(14px);
+  opacity: 0.45;
+  filter: blur(1px);
+  pointer-events: none;
+}
+
+.discover-card-wrap {
+  position: relative;
+  z-index: 2;
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.discover-card-wrap.swipe-left {
+  transform: translateX(-180px) rotate(-10deg);
+  opacity: 0;
+}
+
+.discover-card-wrap.swipe-right {
+  transform: translateX(180px) rotate(10deg);
+  opacity: 0;
+}
+
+.discover-card-wrap.card-enter {
+  animation: cardBounceIn 0.26s ease;
+}
+
+@keyframes cardBounceIn {
+  0% {
+    transform: scale(0.96) translateY(10px);
+    opacity: 0.75;
+  }
+  60% {
+    transform: scale(1.02) translateY(-4px);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+}
+
+/* =========================================================
+   SWIPE BUTTONS
+========================================================= */
+.swipe-buttons {
+  display: flex;
+  gap: 40px;
+  margin-top: 30px;
+}
+
 .swipe-btn {
-  width: 120px;
-  height: 120px;
-  border: none;
-  border-radius: 999px;
-  font-size: 48px;
-  color: white;
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  border: 2px solid #d2d2d7;
+  background: white;
+  font-size: 36px;
+  font-weight: 600;
+  color: #6e6e73;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
-  box-shadow: 0 16px 35px rgba(0, 0, 0, 0.16);
-  transition: transform 0.2s ease, filter 0.2s ease;
+  transition: all 0.25s ease;
 }
 
 .swipe-btn:hover {
-  transform: scale(1.06);
-  filter: brightness(1.03);
+  transform: scale(1.12) rotate(15deg);
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.15);
 }
 
 .reject {
-  background: linear-gradient(135deg, #ff5f57, #ff2d20);
+  color: #d78672;
 }
 
 .accept {
-  background: linear-gradient(135deg, #34c759, #1faa4a);
+  color: #34c759;
 }
 
+.swipe-btn.active-flash-accept {
+  box-shadow: 0 0 0 10px rgba(52, 199, 89, 0.12),
+    0 18px 40px rgba(52, 199, 89, 0.28);
+  border-color: rgba(52, 199, 89, 0.45);
+}
+
+.swipe-btn.active-flash-reject {
+  box-shadow: 0 0 0 10px rgba(110, 110, 115, 0.1),
+    0 18px 40px rgba(110, 110, 115, 0.22);
+  border-color: rgba(110, 110, 115, 0.35);
+}
+
+/* =========================================================
+   FLIP CARD (DISCOVER EVENT CARD)
+========================================================= */
 .flip-card {
   width: 380px;
   height: 560px;
@@ -170,63 +317,11 @@ body {
   line-height: 1.4;
 }
 
-@media (max-width: 1100px) {
-  .discover h1 {
-    font-size: 56px;
-  }
-
-  .swipe-area {
-    gap: 32px;
-  }
-
-  .swipe-btn {
-    width: 96px;
-    height: 96px;
-    font-size: 38px;
-  }
-
-  .flip-card {
-    width: 330px;
-    height: 500px;
-  }
-}
-
-@media (max-width: 768px) {
-  .navbar {
-    padding: 0 12px;
-    gap: 14px;
-    overflow-x: auto;
-    justify-content: flex-start;
-  }
-
-  .discover {
-    padding: 24px 16px 32px;
-  }
-
-  .discover h1 {
-    font-size: 44px;
-    margin-bottom: 24px;
-  }
-
-  .swipe-area {
-    flex-direction: column;
-    gap: 20px;
-  }
-
-  .flip-card {
-    width: min(92vw, 360px);
-    height: 500px;
-  }
-
-  .swipe-btn {
-    width: 88px;
-    height: 88px;
-    font-size: 34px;
-  }
-}
-
+/* =========================================================
+   MY EVENTS PAGE
+========================================================= */
 .my-events-page {
-  min-height: calc(100vh - 82px);
+  min-height: calc(100vh - 64px);
   width: 100%;
   display: flex;
   flex-direction: column;
@@ -265,6 +360,9 @@ body {
   color: white;
 }
 
+/* =========================================================
+   MY EVENTS - HORIZONTAL SCROLL
+========================================================= */
 .cards-scroll {
   width: 100%;
   display: flex;
@@ -283,153 +381,9 @@ body {
   border-radius: 999px;
 }
 
-.my-event-card {
-  min-width: 280px;
-  max-width: 280px;
-  background: white;
-  border-radius: 24px;
-  overflow: hidden;
-  box-shadow: 0 18px 40px rgba(0,0,0,0.1);
-  text-align: left;
-  flex-shrink: 0;
-
-  transition: transform 0.25s ease, box-shadow 0.25s ease;
-}
-
-.my-event-card:hover {
-  transform: translateY(-12px) scale(1.03);
-  box-shadow: 0 25px 60px rgba(0,0,0,0.18);
-}
-
-.my-event-image {
-  width: 100%;
-  height: 220px;
-  object-fit: cover;
-}
-
-.my-event-info {
-  padding: 18px;
-}
-
-.my-event-info h3 {
-  margin: 0 0 10px;
-  font-size: 24px;
-}
-
-.my-event-info p {
-  margin: 0 0 8px;
-  color: #5d5d63;
-  font-size: 15px;
-}
-
-.my-event-badges {
-  display: flex;
-  gap: 10px;
-  margin-top: 12px;
-  flex-wrap: wrap;
-}
-
-.my-badge {
-  padding: 8px 14px;
-  border-radius: 999px;
-  background: #eef0f6;
-  color: #1d1d1f;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.my-badge.going {
-  background: #e8fff0;
-  color: #188038;
-}
-
-.calendar-view {
-  width: 100%;
-  max-width: 1000px;
-}
-
-.calendar-box {
-  background: white;
-  border-radius: 28px;
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.1);
-  padding: 28px;
-  text-align: left;
-}
-
-.calendar-box h3 {
-  margin: 0 0 18px;
-  font-size: 28px;
-}
-
-.calendar-grid {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 12px;
-}
-
-.calendar-day {
-  min-height: 95px;
-  background: #f7f7fa;
-  border-radius: 18px;
-  padding: 10px;
-  font-size: 15px;
-  font-weight: 600;
-  color: #1d1d1f;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.calendar-day.header {
-  min-height: auto;
-  background: transparent;
-  padding: 0 0 8px;
-  border-radius: 0;
-  color: #6e6e73;
-}
-
-.calendar-day.empty {
-  background: transparent;
-}
-
-.calendar-day.has-event {
-  background: #eef4ff;
-}
-
-.calendar-event {
-  display: inline-block;
-  padding: 6px 10px;
-  border-radius: 12px;
-  background: #0071e3;
-  color: white;
-  font-size: 12px;
-  font-weight: 600;
-  width: fit-content;
-}
-
-@media (max-width: 768px) {
-  .my-events-page h1 {
-    font-size: 44px;
-  }
-
-  .calendar-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  .calendar-day.header {
-    display: none;
-  }
-}
-
-.my-event-card {
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.my-event-card:hover {
-  transform: translateY(-6px);
-  box-shadow: 0 20px 40px rgba(0,0,0,0.15);
-}
-
+/* =========================================================
+   MY EVENTS - FLIP CARD
+========================================================= */
 .my-flip-card {
   min-width: 280px;
   max-width: 280px;
@@ -437,16 +391,17 @@ body {
   perspective: 1000px;
   flex-shrink: 0;
   cursor: pointer;
-
   transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1),
-              box-shadow 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+    box-shadow 0.45s cubic-bezier(0.22, 1, 0.36, 1);
 }
+
 .my-flip-card:hover {
   transform: translateY(-6px) scale(1.015);
 }
+
 .my-flip-card:hover .my-flip-card-front,
 .my-flip-card:hover .my-flip-card-back {
-  box-shadow: 0 28px 60px rgba(0,0,0,0.18);
+  box-shadow: 0 28px 60px rgba(0, 0, 0, 0.18);
 }
 
 .my-flip-card-inner {
@@ -500,17 +455,9 @@ body {
   line-height: 1.4;
 }
 
-.my-event-card,
-.my-event-image,
-.my-event-info,
-.my-event-info h3,
-.my-event-info p,
-.my-event-badges,
-.my-badge,
-.my-badge.going {
-  all: unset;
-}
-
+/* =========================================================
+   MY EVENTS - IMAGE + TEXT
+========================================================= */
 .my-event-image {
   display: block;
   width: 100%;
@@ -538,9 +485,66 @@ body {
   font-size: 15px;
 }
 
+/* =========================================================
+   CALENDAR
+========================================================= */
+.calendar-view {
+  width: 100%;
+  max-width: 1000px;
+}
+
+.calendar-box {
+  background: white;
+  border-radius: 28px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.1);
+  padding: 28px;
+  text-align: left;
+}
+
+.calendar-box h3 {
+  margin: 0 0 18px;
+  font-size: 28px;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 12px;
+}
+
+.calendar-day {
+  min-height: 95px;
+  background: #f7f7fa;
+  border-radius: 18px;
+  padding: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1d1d1f;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.calendar-day.header {
+  min-height: auto;
+  background: transparent;
+  padding: 0 0 8px;
+  border-radius: 0;
+  color: #6e6e73;
+}
+
+.calendar-day.empty {
+  background: transparent;
+}
+
+.calendar-day.has-event {
+  background: #eef4ff;
+}
+
 .calendar-day.clickable {
   cursor: pointer;
-  transition: transform 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
+  transition: transform 0.25s ease, box-shadow 0.25s ease,
+    background 0.25s ease;
 }
 
 .calendar-day.clickable:hover {
@@ -549,6 +553,20 @@ body {
   background: #e7f0ff;
 }
 
+.calendar-event {
+  display: inline-block;
+  padding: 6px 10px;
+  border-radius: 12px;
+  background: #0071e3;
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
+  width: fit-content;
+}
+
+/* =========================================================
+   CALENDAR MODAL
+========================================================= */
 .calendar-modal-overlay {
   position: fixed;
   inset: 0;
@@ -566,13 +584,6 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.calendar-modal-card {
-  animation: popCard 0.28s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.calendar-modal-card {
   animation: popCard 0.4s ease-out;
 }
 
@@ -587,134 +598,11 @@ body {
   }
 }
 
-.swipe-buttons{
-  display:flex;
-  gap:40px;
-  margin-top:30px;
-}
-.swipe-btn{
-  width:90px;
-  height:90px;
-  border-radius:50%;
-
-  border:2px solid #d2d2d7;
-  background:white;
-
-  font-size:36px;
-  font-weight:600;
-  color:#6e6e73;
-
-  display:flex;
-  align-items:center;
-  justify-content:center;
-
-  cursor:pointer;
-
-  transition:all .25s ease;
-}
-.swipe-btn:hover{
-  transform:scale(1.12);
-  box-shadow:0 15px 35px rgba(0,0,0,.15);
-}
-
-
-.reject{
-  color:#d78672;
-}
-
-.accept{
-  color:#34c759;
-}
-
-.swipe-btn:hover{
-  transform:scale(1.12) rotate(15deg);
-}
-
-.discover-card-wrap {
-  transition: transform 0.3s ease, opacity 0.3s ease;
-}
-
-.discover-card-wrap.swipe-left {
-  transform: translateX(-180px) rotate(-10deg);
-  opacity: 0;
-}
-
-.discover-card-wrap.swipe-right {
-  transform: translateX(180px) rotate(10deg);
-  opacity: 0;
-}
-
-.discover-tip {
-  margin-bottom: 22px;
-  font-size: 14px;
-  color: #8a8a90;
-}
-
-.discover-stack {
-  position: relative;
-  width: 380px;
-  height: 560px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.next-card-preview {
-  position: absolute;
-  inset: 0;
-  transform: scale(0.96) translateY(14px);
-  opacity: 0.45;
-  filter: blur(1px);
-  pointer-events: none;
-}
-
-.discover-card-wrap {
-  position: relative;
-  z-index: 2;
-  transition: transform 0.3s ease, opacity 0.3s ease;
-}
-
-.discover-card-wrap.swipe-left {
-  transform: translateX(-180px) rotate(-10deg);
-  opacity: 0;
-}
-
-.discover-card-wrap.swipe-right {
-  transform: translateX(180px) rotate(10deg);
-  opacity: 0;
-}
-
-.discover-card-wrap.card-enter {
-  animation: cardBounceIn 0.26s ease;
-}
-
-@keyframes cardBounceIn {
-  0% {
-    transform: scale(0.96) translateY(10px);
-    opacity: 0.75;
-  }
-  60% {
-    transform: scale(1.02) translateY(-4px);
-    opacity: 1;
-  }
-  100% {
-    transform: scale(1) translateY(0);
-    opacity: 1;
-  }
-}
-
-.swipe-btn.active-flash-accept {
-  box-shadow: 0 0 0 10px rgba(52, 199, 89, 0.12), 0 18px 40px rgba(52, 199, 89, 0.28);
-  border-color: rgba(52, 199, 89, 0.45);
-}
-
-.swipe-btn.active-flash-reject {
-  box-shadow: 0 0 0 10px rgba(110, 110, 115, 0.10), 0 18px 40px rgba(110, 110, 115, 0.22);
-  border-color: rgba(110, 110, 115, 0.35);
-}
-
+/* =========================================================
+   PROFILE PAGE
+========================================================= */
 .profile-page {
-  min-height: calc(100vh - 82px);
+  min-height: calc(100vh - 64px);
   width: 100%;
   display: flex;
   justify-content: center;
@@ -742,8 +630,8 @@ body {
 }
 
 .profile-avatar {
-  width: 170px;
-  height: 170px;
+  width: 120px;
+  height: 120px;
   border-radius: 999px;
   object-fit: cover;
   border: 4px solid white;
@@ -812,7 +700,8 @@ body {
   font-size: 15px;
   font-weight: 600;
   cursor: pointer;
-  transition: transform 0.25s ease, box-shadow 0.25s ease, opacity 0.25s ease;
+  transition: transform 0.25s ease, box-shadow 0.25s ease,
+    opacity 0.25s ease;
 }
 
 .profile-btn:hover {
@@ -844,6 +733,9 @@ body {
   line-height: 1.5;
 }
 
+/* =========================================================
+   PROFILE MODAL
+========================================================= */
 .profile-modal-overlay {
   position: fixed;
   inset: 0;
@@ -929,35 +821,11 @@ body {
   word-break: break-all;
 }
 
-@media (max-width: 768px) {
-  .profile-top {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .profile-avatar {
-    width: 130px;
-    height: 130px;
-  }
-
-  .profile-name-row h1 {
-    font-size: 34px;
-  }
-
-  .profile-stats {
-    gap: 18px;
-  }
-}
-
-.profile-avatar {
-  width: 120px;
-  height: 120px;
-  border-radius: 50%;
-  object-fit: cover;
-}
-
+/* =========================================================
+   SIGNUP PAGE
+========================================================= */
 .signup-page {
-  min-height: calc(100vh - 82px);
+  min-height: 100vh;
   display: flex;
   justify-content: center;
   align-items: flex-start;
@@ -1047,6 +915,12 @@ body {
   opacity: 0.94;
 }
 
+.signup-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+  transform: none;
+}
+
 .signup-footer {
   margin: 24px 0 0;
   text-align: center;
@@ -1054,9 +928,262 @@ body {
   color: #6e6e73;
 }
 
-.signup-footer span {
+.signup-footer a {
   color: #0066cc;
   font-weight: 600;
+  text-decoration: none;
+}
+
+.signup-footer a:hover {
+  text-decoration: underline;
+}
+
+/* =========================================================
+   PASSWORD STRENGTH
+========================================================= */
+.password-strength-wrap {
+  margin-top: 6px;
+  background: #f7f8fb;
+  border: 1px solid #e1e3ea;
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+
+.password-strength-label {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.password-strength-label.strength-weak {
+  color: #b42318;
+}
+
+.password-strength-label.strength-medium {
+  color: #b54708;
+}
+
+.password-strength-label.strength-strong {
+  color: #027a48;
+}
+
+.password-rule-list {
+  display: grid;
+  gap: 5px;
+}
+
+.password-rule {
+  margin: 0;
+  font-size: 13px;
+}
+
+.password-rule.pending {
+  color: #667085;
+}
+
+.password-rule.passed {
+  color: #027a48;
+}
+
+/* =========================================================
+   LOGIN PAGE
+========================================================= */
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 48px 24px 70px;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 520px;
+}
+
+.login-card h1 {
+  margin: 0 0 14px;
+  text-align: center;
+  font-size: 56px;
+  line-height: 1.05;
+  font-weight: 700;
+  color: #1d1d1f;
+}
+
+.login-subtext {
+  margin: 0 0 28px;
+  text-align: center;
+  font-size: 18px;
+  color: #6e6e73;
+  line-height: 1.45;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.login-form input {
+  width: 100%;
+  border: 1px solid #c9c9ce;
+  border-radius: 18px;
+  padding: 18px 20px;
+  font-size: 18px;
+  font-family: inherit;
+  background: white;
+  color: #1d1d1f;
+  outline: none;
+}
+
+.login-form input:focus {
+  border-color: #7aa7ff;
+  box-shadow: 0 0 0 3px rgba(122, 167, 255, 0.18);
+}
+
+.auth-error {
+  margin: 0;
+  color: #b42318;
+  background: #fef3f2;
+  border: 1px solid #fecdca;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 14px;
+}
+
+.login-btn {
+  margin-top: 2px;
+  border: none;
+  border-radius: 18px;
+  padding: 18px;
+  background: #1d1d1f;
+  color: white;
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.25s ease, opacity 0.25s ease;
+}
+
+.login-btn:hover {
+  transform: translateY(-2px);
+  opacity: 0.94;
+}
+
+.login-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+  transform: none;
+}
+
+.login-footer {
+  margin: 24px 0 0;
+  text-align: center;
+  font-size: 16px;
+  color: #6e6e73;
+}
+
+.login-footer a {
+  color: #0066cc;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.login-footer a:hover {
+  text-decoration: underline;
+}
+
+/* =========================================================
+   LOGOUT
+========================================================= */
+.logout-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* =========================================================
+   RESPONSIVE STYLES
+========================================================= */
+@media (max-width: 1100px) {
+  .discover h1 {
+    font-size: 56px;
+  }
+
+  .swipe-area {
+    gap: 32px;
+  }
+
+  .swipe-btn {
+    width: 96px;
+    height: 96px;
+    font-size: 38px;
+  }
+
+  .flip-card {
+    width: 330px;
+    height: 500px;
+  }
+}
+
+@media (max-width: 768px) {
+  .topbar {
+    padding: 0 14px;
+    gap: 12px;
+    overflow-x: auto;
+  }
+
+  .topbar-left {
+    gap: 16px;
+  }
+
+  .topbar-item {
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .discover {
+    padding: 24px 16px 32px;
+  }
+
+  .discover h1 {
+    font-size: 44px;
+    margin-bottom: 24px;
+  }
+
+  .swipe-area {
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .flip-card {
+    width: min(92vw, 360px);
+    height: 500px;
+  }
+
+  .my-events-page h1 {
+    font-size: 44px;
+  }
+
+  .calendar-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .calendar-day.header {
+    display: none;
+  }
+
+  .profile-top {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .profile-name-row h1 {
+    font-size: 34px;
+  }
+
+  .profile-stats {
+    gap: 18px;
+  }
 }
 
 @media (max-width: 700px) {
@@ -1064,7 +1191,29 @@ body {
     font-size: 46px;
   }
 
+  .login-card h1 {
+    font-size: 42px;
+  }
+
   .signup-row {
     grid-template-columns: 1fr;
   }
+}
+/* =========================================================
+   map 
+========================================================= */
+.map-btn {
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: none;
+  background: #f2f2f7;
+  color: #007aff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.map-btn:hover {
+  background: #e5e5ea;
 }
