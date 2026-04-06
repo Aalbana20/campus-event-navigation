@@ -16,8 +16,12 @@ function CreateEvent() {
   const [flyerPreview, setFlyerPreview] = useState("")
   const [tagInput, setTagInput] = useState("")
   const [tags, setTags] = useState([])
+  const [organizer, setOrganizer] = useState("")
+  const [dressCode, setDressCode] = useState("")
+
   const currentUser = JSON.parse(localStorage.getItem("user") || "{}")
   const creatorUsername = currentUser.username || "itzmesuccess1"
+  const creatorName = currentUser.name || "Campus Organization"
 
   useEffect(() => {
     return () => {
@@ -52,44 +56,82 @@ function CreateEvent() {
     return monthLabel ? `${monthLabel} ${Number(day)}` : "April 30"
   }
 
+  const formatTimeFromInput = (rawTime) => {
+    if (!rawTime) return "TBA"
+
+    const [hoursString, minutes] = rawTime.split(":")
+    const hours = Number(hoursString)
+
+    if (Number.isNaN(hours) || !minutes) return "TBA"
+
+    const suffix = hours >= 12 ? "PM" : "AM"
+    const displayHour = hours % 12 || 12
+
+    return `${displayHour}:${minutes} ${suffix}`
+  }
+
   const handlePublish = () => {
-    const shortLocation = locationName || "UMES Campus"
-    const fullAddress = locationAddress || shortLocation
+    const shortLocation = locationName.trim() || "UMES Campus"
+    const fullAddress = locationAddress.trim() || shortLocation
+    const cleanDescription =
+      description.trim() || "No description available."
+    const cleanOrganizer =
+      organizer.trim() || creatorName || "Campus Organization"
+    const cleanDressCode = dressCode.trim() || "Open"
 
     const newEvent = {
       id: Date.now(),
-      title: title || "New Campus Event",
+      title: title.trim() || "New Campus Event",
       location: shortLocation,
       locationName: shortLocation,
       locationAddress: fullAddress,
       date: formatDateFromInput(date),
       eventDate: date || "",
+      time: formatTimeFromInput(time),
       price: eventType === "Paid" ? "$10" : "Free",
       rsvp: "0 Going",
       image:
         flyerPreview ||
         "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=900&q=80",
-      description,
-      time,
+      description: cleanDescription,
+      organizer: cleanOrganizer,
+      dressCode: cleanDressCode,
       capacity,
       tags,
       createdBy: creatorUsername,
       creatorUsername,
       createdAt: new Date().toISOString(),
+      attendees: [],
+      goingCount: 0,
     }
 
     createEvent(newEvent)
-    setTags([])
+
+    setTitle("")
+    setDescription("")
+    setDate("")
+    setTime("")
+    setLocationName("")
+    setLocationAddress("")
+    setEventType("Free")
+    setCapacity("")
     setTagInput("")
+    setTags([])
+    setOrganizer("")
+    setDressCode("")
+    setFlyerPreview("")
+
     alert("Event published! Check Discover.")
   }
 
   const handleFlyerUpload = (e) => {
     const file = e.target.files[0]
+
     if (file) {
       if (flyerPreview.startsWith("blob:")) {
         URL.revokeObjectURL(flyerPreview)
       }
+
       const imageUrl = URL.createObjectURL(file)
       setFlyerPreview(imageUrl)
     }
@@ -101,6 +143,7 @@ function CreateEvent() {
 
   const handleAddTag = () => {
     const cleanTag = tagInput.trim().toLowerCase()
+
     if (!cleanTag) return
 
     if (tags.includes(cleanTag)) {
@@ -230,6 +273,28 @@ function CreateEvent() {
               value={locationAddress}
               onChange={(e) => setLocationAddress(e.target.value)}
             />
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label>Organizer</label>
+              <input
+                type="text"
+                placeholder="Student Activities Board"
+                value={organizer}
+                onChange={(e) => setOrganizer(e.target.value)}
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Dress Code</label>
+              <input
+                type="text"
+                placeholder="Casual"
+                value={dressCode}
+                onChange={(e) => setDressCode(e.target.value)}
+              />
+            </div>
           </div>
 
           <div className="form-row">
