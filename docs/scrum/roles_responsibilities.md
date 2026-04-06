@@ -1,21 +1,18 @@
-# Roles & Responsibilities (Draft)
-
-## Product Owner (PO)
-- Prioritizes backlog, defines acceptance criteria
-
-## Scrum Master (SM)
-- Facilitates ceremonies, removes blockers, tracks progress
-
-## Backend 
-- API contract + DB schema
-- Auth + Events + RSVP endpoints
-- Integration tests (Postman) and backend unit tests later
+# Roles and Responsibilities
 
 ## Frontend
-- Event feed UI, filters/search, RSVP UI
-- Map UI (pins + directions)
 
-## Navigation/AI/Integration
-- Building dataset and map provider setup
-- Recommendation logic + reminders
-- End-to-end integration support
+- React UI and routing
+- Supabase auth integration
+- Event browsing, saved events, and profile flows
+
+## Product / Planning
+
+- Prioritize feature work
+- Define acceptance criteria
+- Review UX polish and release readiness
+
+## Future Integration
+
+- Plan persisted event storage if the project moves beyond local UI state
+- Define any future Supabase database tables and policies

@@ -1,29 +1,22 @@
-# Testing Strategy (Draft)
+# Testing Strategy
 
-## Objectives
-- Verify core functional requirements: events, RSVP, buildings
-- Verify key non-functional needs: auth security basics and acceptable response time
+## Current Priorities
 
-## Tools
-- Postman (API testing + evidence screenshots/logs)
-- Later: Jest/Supertest (Node) or PyTest (Python) for automation
+- Verify Supabase auth flows
+- Verify protected route behavior
+- Verify event discovery and saved event interactions
+- Verify profile and event creation screens still render correctly
 
-## Testing Levels (All explained; at least one executed)
-1. Unit Testing (planned)
-- RSVP capacity logic
-- auth validation
-2. Integration Testing (planned)
-- API endpoints + database operations
-3. System Testing (planned)
-- End-to-end: organizer creates event -> student finds event -> student RSVPs
-4. Acceptance Testing (will execute)
-- PO acceptance using user stories + PASS/FAIL
-5. Non-functional (explained)
-- Performance: basic response time check
-- Security: auth/authorization + input validation checks
-- Usability: feedback from team testers
+## Manual Checks
 
-## Evidence to Save (Appendix)
-- Postman screenshots / response logs
-- Test case table with PASS/FAIL
-- Traceability: requirement -> endpoint -> test case
+1. Sign up with a new account
+2. Log in with that account
+3. Refresh on a protected route and confirm the session persists
+4. Log out and confirm redirect to `#/auth/login`
+5. Create and save events to confirm `EventContext` still behaves correctly
+
+## Automation Targets
+
+- Add React component tests for auth pages
+- Add route guard tests
+- Add context tests for saved events and created events

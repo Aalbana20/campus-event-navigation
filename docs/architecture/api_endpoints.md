@@ -1,37 +1,25 @@
-# API Endpoints (Draft)
+# Client Routes and Auth Flow
 
-## Authentication
+This project is currently frontend-only for authentication.
 
-- POST /auth/signup
-- POST /auth/login
+## Client Routes
 
-## Events
+- `#/auth/login`
+- `#/auth/signup`
+- `#/auth/logout`
+- `#/discover`
+- `#/events`
+- `#/create`
+- `#/profile`
 
-- GET /events
-- GET /events/:id
-- POST /events
-- PUT /events/:id
-- DELETE /events/:id
+## Auth Actions
 
-## RSVP
+- Signup: `supabase.auth.signUp(...)`
+- Login: `supabase.auth.signInWithPassword(...)`
+- Logout: `supabase.auth.signOut(...)`
 
-- POST /events/:id/rsvp
-- DELETE /events/:id/rsvp
+## Notes
 
-## Categories
-
-- GET /categories
-
-## Buildings
-
-- GET /buildings
-- GET /buildings/:id
-
-## Event Preferences
-
-- POST /events/:id/preference
-- DELETE /events/:id/preference
-
-## Recommendations
-
-- GET /users/:id/recommendations
+- There is no active custom backend API in the current app
+- Route protection is based on the active Supabase session
+- A lightweight `localStorage` `user` object is still kept for existing UI state

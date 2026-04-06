@@ -1,14 +1,21 @@
 import React, { useEffect } from "react"
-import { useNavigate } from "react-router-dom"
+import { supabase } from "../supabaseClient"
 
-const Logout = () => {
-  const navigate = useNavigate()
-
+function Logout() {
   useEffect(() => {
-    localStorage.removeItem("token")
-    localStorage.removeItem("user")
-    navigate("/auth/login", { replace: true })
-  }, [navigate])
+    ;(async () => {
+      try {
+        await supabase.auth.signOut()
+      } catch (error) {
+        console.error("Logout error:", error)
+      }
+
+      localStorage.removeItem("user")
+      sessionStorage.removeItem("authMessage")
+      window.location.hash = "#/auth/login"
+      window.location.reload()
+    })()
+  }, [])
 
   return <div>Logging out...</div>
 }

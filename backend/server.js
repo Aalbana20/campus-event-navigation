@@ -19,7 +19,7 @@ const authRoutes = require("./routes/authRoutes");
 const protect = require("./config/authMiddleware");
 
 // Load environment variables
-dotenv.config();
+dotenv.config({ path: "./.env" });
 
 // Connect to database
 connectDB();

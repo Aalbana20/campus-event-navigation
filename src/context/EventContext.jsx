@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState } from "react"
+import React, { createContext, useContext, useMemo, useState } from "react"
 
 const EventContext = createContext()
 
@@ -38,6 +38,8 @@ const starterEvents = [
     location: "Student Center Ballroom",
     locationAddress: "Student Center Ballroom, UMES, Princess Anne, MD",
     date: "April 10",
+    startTime: "8:00 PM",
+    endTime: "11:00 PM",
     time: "8:00 PM - 11:00 PM",
     price: "Free",
     rsvp: "42 Going",
@@ -54,6 +56,8 @@ const starterEvents = [
     location: "Engineering Building",
     locationAddress: "Engineering Building, UMES, Princess Anne, MD",
     date: "April 15",
+    startTime: "6:00 PM",
+    endTime: "12:00 AM",
     time: "6:00 PM - 12:00 AM",
     price: "Free",
     rsvp: "85 Going",
@@ -70,6 +74,8 @@ const starterEvents = [
     location: "UMES Arena",
     locationAddress: "UMES Arena, Princess Anne, MD",
     date: "April 20",
+    startTime: "7:00 PM",
+    endTime: "",
     time: "7:00 PM",
     price: "$10",
     rsvp: "120 Going",
@@ -86,6 +92,8 @@ const starterEvents = [
     location: "Student Union",
     locationAddress: "Student Union, UMES, Princess Anne, MD",
     date: "April 25",
+    startTime: "5:30 PM",
+    endTime: "8:30 PM",
     time: "5:30 PM - 8:30 PM",
     price: "Free",
     rsvp: "60 Going",
@@ -98,19 +106,6 @@ const starterEvents = [
   },
 ]
 
-const createStarterEvents = () =>
-  starterEvents.map((event) => {
-    const attendees = defaultAttendeesByEventId[event.id] || []
-    return {
-      ...event,
-      attendees,
-      goingCount:
-        attendees.length ||
-        Number.parseInt(String(event.rsvp).replace(/\D/g, ""), 10) ||
-        0,
-    }
-  })
-
 const usersMatch = (a, b) => {
   if (!a || !b) return false
   if (a.id && b.id) return a.id === b.id
@@ -118,9 +113,74 @@ const usersMatch = (a, b) => {
   return false
 }
 
+const formatTimeToAmPm = (rawTime) => {
+  if (!rawTime) return ""
+
+  const trimmed = String(rawTime).trim()
+
+  if (!trimmed) return ""
+
+  if (/[AaPp][Mm]/.test(trimmed)) {
+    return trimmed.toUpperCase().replace(/\s+/g, " ")
+  }
+
+  const parts = trimmed.split(":")
+  if (parts.length < 2) return trimmed
+
+  let hours = Number(parts[0])
+  const minutes = parts[1]
+
+  if (Number.isNaN(hours)) return trimmed
+
+  const suffix = hours >= 12 ? "PM" : "AM"
+  hours = hours % 12 || 12
+
+  return `${hours}:${minutes} ${suffix}`
+}
+
+const buildTimeLabel = (startTime, endTime) => {
+  const formattedStart = formatTimeToAmPm(startTime)
+  const formattedEnd = formatTimeToAmPm(endTime)
+
+  if (formattedStart && formattedEnd) return `${formattedStart} - ${formattedEnd}`
+  if (formattedStart) return formattedStart
+  if (formattedEnd) return formattedEnd
+  return ""
+}
+
+const normalizeEventTimes = (event) => {
+  const startTime = formatTimeToAmPm(event.startTime || event.timeStart || "")
+  const endTime = formatTimeToAmPm(event.endTime || event.timeEnd || "")
+  const fallbackTime = event.time && !startTime && !endTime ? event.time : ""
+  const time = buildTimeLabel(startTime, endTime) || fallbackTime
+
+  return {
+    ...event,
+    startTime,
+    endTime,
+    time,
+  }
+}
+
+const createStarterEvents = () =>
+  starterEvents.map((event) => {
+    const attendees = defaultAttendeesByEventId[event.id] || []
+    const normalizedEvent = normalizeEventTimes(event)
+
+    return {
+      ...normalizedEvent,
+      attendees,
+      goingCount:
+        attendees.length ||
+        Number.parseInt(String(normalizedEvent.rsvp).replace(/\D/g, ""), 10) ||
+        0,
+    }
+  })
+
 export function EventProvider({ children }) {
   const [currentUser] = useState(() => {
     const stored = JSON.parse(localStorage.getItem("user") || "{}")
+
     return {
       id: stored.id || "current-user",
       username: stored.username || "itzmesuccess1",
@@ -141,11 +201,13 @@ export function EventProvider({ children }) {
       const exists = prev.find((e) => e.id === event.id)
       if (exists) return prev
 
+      const normalizedEvent = normalizeEventTimes(event)
+
       return [
         ...prev,
         {
-          ...event,
-          attendees: [...(event.attendees || []), attendee],
+          ...normalizedEvent,
+          attendees: [...(normalizedEvent.attendees || []), attendee],
         },
       ]
     })
@@ -171,18 +233,24 @@ export function EventProvider({ children }) {
   }
 
   const createEvent = (event) => {
+    const normalizedEvent = normalizeEventTimes(event)
+
     setAllEvents((prev) => [
       {
-        ...event,
-        attendees: event.attendees || [],
-        goingCount: event.goingCount || 0,
+        ...normalizedEvent,
+        attendees: normalizedEvent.attendees || [],
+        goingCount: normalizedEvent.goingCount || 0,
       },
       ...prev,
     ])
   }
 
-  const mutualUsers = followingList.filter((followingPerson) =>
-    followersList.some((followerPerson) => usersMatch(followerPerson, followingPerson))
+  const mutualUsers = useMemo(
+    () =>
+      followingList.filter((followingPerson) =>
+        followersList.some((followerPerson) => usersMatch(followerPerson, followingPerson))
+      ),
+    [followersList, followingList]
   )
 
   return (

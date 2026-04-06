@@ -9,6 +9,7 @@ import SignUp from "./pages/SignUp"
 import Login from "./pages/Login"
 import Logout from "./pages/Logout"
 import { useEvents } from "./context/EventContext"
+import { supabase } from "./supabaseClient"
 
 const MONTH_NAMES = [
   "January",
@@ -66,6 +67,43 @@ const parseEventDate = (event) => {
   }
 
   return null
+}
+
+const createStoredUser = (user) => {
+  if (!user) return null
+
+  const email = user.email || ""
+  const fallbackUsername = email.includes("@") ? email.split("@")[0] : "campus-user"
+  const username =
+    user.user_metadata?.username ||
+    user.user_metadata?.user_name ||
+    user.user_metadata?.name ||
+    fallbackUsername
+
+  return {
+    id: user.id,
+    email,
+    name:
+      user.user_metadata?.name ||
+      user.user_metadata?.full_name ||
+      user.user_metadata?.username ||
+      username,
+    username,
+    image:
+      user.user_metadata?.avatar_url ||
+      user.user_metadata?.picture ||
+      user.user_metadata?.image ||
+      "",
+  }
+}
+
+const syncStoredUser = (session) => {
+  if (session?.user) {
+    localStorage.setItem("user", JSON.stringify(createStoredUser(session.user)))
+    return
+  }
+
+  localStorage.removeItem("user")
 }
 
 function MainLayout() {
@@ -564,82 +602,111 @@ function AuthLayout() {
   return <Outlet />
 }
 
-// Auth check evaluated at render-time for dynamic route guards.
-const checkAuth = () => {
-  const rawToken = localStorage.getItem("token")
-
-  return !!(
-    rawToken &&
-    rawToken !== "undefined" &&
-    rawToken !== "null" &&
-    rawToken !== "session-active" &&
-    !rawToken.startsWith("local-session-")
-  )
+function ProtectedRoute({ children, session }) {
+  return session ? children : <Navigate to="/auth/login" replace />
 }
 
-function ProtectedRoute({ children }) {
-  return checkAuth() ? children : <Navigate to="/auth/login" replace />
+function PublicRoute({ children, session }) {
+  return session ? <Navigate to="/discover" replace /> : children
 }
 
-function PublicRoute({ children }) {
-  return checkAuth() ? <Navigate to="/discover" replace /> : children
-}
-
-function RootRedirect() {
-  return <Navigate to={checkAuth() ? "/discover" : "/auth/login"} replace />
+function RootRedirect({ session }) {
+  return <Navigate to={session ? "/discover" : "/auth/login"} replace />
 }
 
 function App() {
+  const [session, setSession] = useState(null)
+  const [isInitializing, setIsInitializing] = useState(true)
+
+  useEffect(() => {
+    let isMounted = true
+
+    const initializeSession = async () => {
+      try {
+        const {
+          data: { session: restoredSession },
+        } = await supabase.auth.getSession()
+
+        if (!isMounted) return
+
+        setSession(restoredSession)
+        syncStoredUser(restoredSession)
+      } catch (error) {
+        if (!isMounted) return
+
+        console.error("Unable to restore Supabase session:", error)
+        setSession(null)
+        syncStoredUser(null)
+      } finally {
+        if (isMounted) {
+          setIsInitializing(false)
+        }
+      }
+    }
+
+    initializeSession()
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession)
+      syncStoredUser(nextSession)
+    })
+
+    return () => {
+      isMounted = false
+      subscription.unsubscribe()
+    }
+  }, [])
+
+  if (isInitializing) {
+    return <div className="loading-screen">Loading...</div>
+  }
+
   return (
     <div className="app">
       <Routes>
-        <Route path="/" element={<RootRedirect />} />
+        <Route path="/" element={<RootRedirect session={session} />} />
 
-        {/* Main app pages that show the top navigation */}
-        <Route element={<MainLayout />}>
-          {/* Discover guard:
-              if no token, send user to auth flow */}
-          <Route
-            path="/discover"
-            element={<ProtectedRoute><Discover /></ProtectedRoute>}
-          />
-          <Route
-            path="/events"
-            element={<ProtectedRoute><MyEvents /></ProtectedRoute>}
-          />
-          <Route
-            path="/create"
-            element={<ProtectedRoute><CreateEvent /></ProtectedRoute>}
-          />
-          <Route
-            path="/profile"
-            element={<ProtectedRoute><Profile /></ProtectedRoute>}
-          />
+        <Route
+          element={
+            <ProtectedRoute session={session}>
+              <MainLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route path="/discover" element={<Discover />} />
+          <Route path="/events" element={<MyEvents />} />
+          <Route path="/create" element={<CreateEvent />} />
+          <Route path="/profile" element={<Profile />} />
         </Route>
 
-        {/* Authentication pages (signup/login/logout) */}
         <Route path="/auth" element={<AuthLayout />}>
-          <Route index element={<RootRedirect />} />
-          {/* Auth page guards:
-              if already logged in, do not show login/signup pages */}
+          <Route index element={<RootRedirect session={session} />} />
           <Route
             path="login"
-            element={<PublicRoute><Login /></PublicRoute>}
+            element={
+              <PublicRoute session={session}>
+                <Login />
+              </PublicRoute>
+            }
           />
           <Route
             path="signup"
-            element={<PublicRoute><SignUp /></PublicRoute>}
+            element={
+              <PublicRoute session={session}>
+                <SignUp />
+              </PublicRoute>
+            }
           />
           <Route path="logout" element={<Logout />} />
         </Route>
 
-        {/* Friendly shortcut redirects */}
         <Route path="/login" element={<Navigate to="/auth/login" replace />} />
         <Route path="/signup" element={<Navigate to="/auth/signup" replace />} />
         <Route path="/logout" element={<Navigate to="/auth/logout" replace />} />
 
-        {/* Fallback for unknown routes */}
-        <Route path="*" element={<RootRedirect />} />
+        <Route path="*" element={<RootRedirect session={session} />} />
       </Routes>
     </div>
   )
