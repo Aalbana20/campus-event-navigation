@@ -3,6 +3,7 @@ import Cropper from "react-easy-crop"
 import { useNavigate } from "react-router-dom"
 import { useEvents } from "../context/EventContext"
 import { supabase } from "../supabaseClient"
+import "./Profile.css"
 
 const createImage = (url) =>
   new Promise((resolve, reject) => {
@@ -42,7 +43,15 @@ async function getCroppedImg(imageSrc, pixelCrop) {
 
 function Profile() {
   const navigate = useNavigate()
-  const { savedEvents, allEvents, followingList, followersList } = useEvents()
+  const {
+    currentUser,
+    savedEvents,
+    allEvents,
+    followingList,
+    followersList,
+    cancelRSVP,
+    deleteEvent,
+  } = useEvents()
   const [name, setName] = useState("Success Myers")
   const [username, setUsername] = useState("itzmesuccess1")
   const [bio, setBio] = useState("UMES student • Event lover • Front-end builder")
@@ -66,6 +75,12 @@ function Profile() {
   const [privateProfile, setPrivateProfile] = useState(false)
   const [showActivityStatus, setShowActivityStatus] = useState(true)
   const [followersOnlyDms, setFollowersOnlyDms] = useState(false)
+  const [confirmModal, setConfirmModal] = useState({
+    open: false,
+    type: "",
+    event: null,
+  })
+  const [isConfirmingAction, setIsConfirmingAction] = useState(false)
 
   const defaultAvatar = "/default-avatar.png"
   const storedUser = JSON.parse(localStorage.getItem("user") || "{}")
@@ -252,6 +267,84 @@ function Profile() {
     navigate("/auth/logout")
   }
 
+  const openDeleteModal = (event) => {
+    setConfirmModal({ open: true, type: "delete", event })
+  }
+
+  const openCancelRsvpModal = (event) => {
+    setConfirmModal({ open: true, type: "cancel-rsvp", event })
+  }
+
+  const closeConfirmModal = () => {
+    setConfirmModal({ open: false, type: "", event: null })
+  }
+
+  const handleConfirmAction = async () => {
+    const event = confirmModal.event
+    if (!event || isConfirmingAction) return
+
+    try {
+      setIsConfirmingAction(true)
+
+      if (confirmModal.type === "cancel-rsvp") {
+        const { error: rsvpError } = await supabase
+          .from("rsvps")
+          .delete()
+          .eq("event_id", event.id)
+          .eq("user_id", currentUser.id)
+
+        if (rsvpError) {
+          alert(rsvpError.message)
+          return
+        }
+
+        const nextGoingCount = Math.max((event.goingCount || 1) - 1, 0)
+
+        const { error: eventUpdateError } = await supabase
+          .from("events")
+          .update({ going_count: nextGoingCount })
+          .eq("id", event.id)
+
+        if (eventUpdateError) {
+          alert(eventUpdateError.message)
+          return
+        }
+
+        cancelRSVP(event.id)
+      }
+
+      if (confirmModal.type === "delete") {
+        const { error: rsvpsDeleteError } = await supabase
+          .from("rsvps")
+          .delete()
+          .eq("event_id", event.id)
+
+        if (rsvpsDeleteError) {
+          alert(rsvpsDeleteError.message)
+          return
+        }
+
+        const { error: eventDeleteError } = await supabase
+          .from("events")
+          .delete()
+          .eq("id", event.id)
+
+        if (eventDeleteError) {
+          alert(eventDeleteError.message)
+          return
+        }
+
+        deleteEvent(event.id)
+      }
+
+      closeConfirmModal()
+    } catch (error) {
+      alert(error.message || "Something went wrong.")
+    } finally {
+      setIsConfirmingAction(false)
+    }
+  }
+
   return (
     <main className="profile-page">
       <div className="profile-card">
@@ -338,24 +431,29 @@ function Profile() {
 
               {createdEvents.length > 0 ? (
                 <div className="profile-created-list">
-                  {createdEvents.slice(0, 5).map((event, index) => (
-                    <div className="profile-created-card compact" key={event.id || index}>
-                      <div className="profile-created-card-content">
-                        <div className="profile-created-main">
-                          <span className="profile-created-title">
-                            {event.title || event.name || "Untitled Event"}
-                          </span>
-
-                          {(event.date || event.time || event.locationName || event.location) && (
-                            <span className="profile-created-meta">
-                              {[event.date, event.time, event.locationName || event.location]
-                                .filter(Boolean)
-                                .join(" • ")}
-                            </span>
-                          )}
+                  {createdEvents.slice(0, 5).map((event) => (
+                    <div className="profile-created-event-card" key={event.id}>
+                      <div className="profile-created-event-content">
+                        <div className="profile-created-event-main">
+                          <h4>{event.title || event.name || "Untitled Event"}</h4>
+                          <p>
+                            {[
+                              event.date,
+                              event.time || "TBA",
+                              event.locationName || event.location || "No location",
+                            ].join(" · ")}
+                          </p>
                         </div>
 
-                        <span className="profile-created-badge">Created</span>
+                        <div className="profile-created-event-actions">
+                          <button
+                            type="button"
+                            className="profile-delete-btn"
+                            onClick={() => openDeleteModal(event)}
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -375,26 +473,26 @@ function Profile() {
 
               {recentRsvpEvents.length > 0 ? (
                 <div className="profile-rsvp-list">
-                  {recentRsvpEvents.map((event, index) => (
-                    <div className="profile-rsvp-card compact" key={event.id || index}>
-                      <div className="profile-rsvp-card-content">
-                        <div className="profile-rsvp-main">
-                          <span className="profile-rsvp-title">
-                            {event.title || event.name || "Untitled Event"}
-                          </span>
-
-                          {(event.date || event.time || event.locationName || event.location) && (
-                            <span className="profile-rsvp-meta">
-                              {[event.date, event.time, event.locationName || event.location]
-                                .filter(Boolean)
-                                .join(" • ")}
-                            </span>
-                          )}
-                        </div>
-
-                        <span className="rsvp-dot" aria-label="RSVP confirmed" />
+                  {recentRsvpEvents.map((event) => (
+                    <button
+                      key={event.id}
+                      type="button"
+                      className="profile-rsvp-item"
+                      onClick={() => openCancelRsvpModal(event)}
+                    >
+                      <div className="profile-rsvp-item-main">
+                        <strong>{event.title || event.name || "Untitled Event"}</strong>
+                        <p>
+                          {[
+                            event.date,
+                            event.time || "TBA",
+                            event.locationName || event.location || "No location",
+                          ].join(" · ")}
+                        </p>
+                        <span className="profile-rsvp-hint">Click to cancel RSVP</span>
                       </div>
-                    </div>
+                      <span className="profile-rsvp-dot" />
+                    </button>
                   ))}
                 </div>
               ) : (
@@ -923,6 +1021,43 @@ function Profile() {
                   </p>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmModal.open && (
+        <div className="profile-confirm-overlay" onClick={closeConfirmModal}>
+          <div className="profile-confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>
+              {confirmModal.type === "delete" ? "Delete event?" : "Cancel RSVP?"}
+            </h3>
+            <p>
+              {confirmModal.type === "delete"
+                ? `Delete "${confirmModal.event?.title}" everywhere? This cannot be undone.`
+                : `Cancel RSVP for "${confirmModal.event?.title}"?`}
+            </p>
+            <div className="profile-confirm-actions">
+              <button
+                type="button"
+                className="profile-confirm-cancel-btn"
+                onClick={closeConfirmModal}
+                disabled={isConfirmingAction}
+              >
+                Keep
+              </button>
+              <button
+                type="button"
+                className="profile-confirm-delete-btn"
+                onClick={handleConfirmAction}
+                disabled={isConfirmingAction}
+              >
+                {isConfirmingAction
+                  ? "Working..."
+                  : confirmModal.type === "delete"
+                    ? "Delete"
+                    : "Cancel RSVP"}
+              </button>
             </div>
           </div>
         </div>

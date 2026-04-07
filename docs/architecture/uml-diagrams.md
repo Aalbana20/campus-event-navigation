@@ -372,3 +372,4 @@ classDiagram
     AuthRoutes --> AuthMiddleware
     AuthController --> UserModel
 ```
+
