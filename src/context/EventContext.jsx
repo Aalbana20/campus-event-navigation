@@ -17,96 +17,6 @@ const defaultFollowers = [
   { id: "u-quinn", username: "quinn", name: "Quinn", image: "/default-avatar.png" },
 ]
 
-const defaultAttendeesByEventId = {
-  1: [
-    { id: "u-taylor", username: "taylor", name: "Taylor", image: "/default-avatar.png" },
-    { id: "u-riley", username: "riley", name: "Riley", image: "/default-avatar.png" },
-  ],
-  2: [
-    { id: "u-morgan", username: "morgan", name: "Morgan", image: "/default-avatar.png" },
-    { id: "u-cameron", username: "cameron", name: "Cameron", image: "/default-avatar.png" },
-  ],
-  3: [
-    { id: "u-alex", username: "alex", name: "Alex", image: "/default-avatar.png" },
-  ],
-  4: [],
-}
-
-const starterEvents = [
-  {
-    id: 1,
-    title: "Campus Party",
-    location: "Student Center Ballroom",
-    locationAddress: "Student Center Ballroom, UMES, Princess Anne, MD",
-    date: "April 10",
-    startTime: "8:00 PM",
-    endTime: "11:00 PM",
-    time: "8:00 PM - 11:00 PM",
-    price: "Free",
-    rsvp: "42 Going",
-    description:
-      "A fun campus party with music, food, and student activities. Come meet new people and enjoy the night.",
-    organizer: "Student Activities Board",
-    dressCode: "Casual",
-    image:
-      "https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?auto=format&fit=crop&w=900&q=80",
-  },
-  {
-    id: 2,
-    title: "Hackathon Night",
-    location: "Engineering Building",
-    locationAddress: "Engineering Building, UMES, Princess Anne, MD",
-    date: "April 15",
-    startTime: "6:00 PM",
-    endTime: "12:00 AM",
-    time: "6:00 PM - 12:00 AM",
-    price: "Free",
-    rsvp: "85 Going",
-    description:
-      "Join other students for a late-night coding event with team challenges, problem solving, and prizes.",
-    organizer: "Computer Science Club",
-    dressCode: "Comfortable",
-    image:
-      "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=900&q=80",
-  },
-  {
-    id: 3,
-    title: "Basketball Game",
-    location: "UMES Arena",
-    locationAddress: "UMES Arena, Princess Anne, MD",
-    date: "April 20",
-    startTime: "7:00 PM",
-    endTime: "",
-    time: "7:00 PM",
-    price: "$10",
-    rsvp: "120 Going",
-    description:
-      "Come support the team and enjoy a high-energy basketball game with the campus community.",
-    organizer: "UMES Athletics",
-    dressCode: "School Spirit Wear",
-    image:
-      "https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&w=900&q=80",
-  },
-  {
-    id: 4,
-    title: "Spring Mixer",
-    location: "Student Union",
-    locationAddress: "Student Union, UMES, Princess Anne, MD",
-    date: "April 25",
-    startTime: "5:30 PM",
-    endTime: "8:30 PM",
-    time: "5:30 PM - 8:30 PM",
-    price: "Free",
-    rsvp: "60 Going",
-    description:
-      "Relax, connect, and enjoy music and refreshments at this spring social mixer.",
-    organizer: "Campus Life Office",
-    dressCode: "Smart Casual",
-    image:
-      "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=900&q=80",
-  },
-]
-
 const usersMatch = (a, b) => {
   if (!a || !b) return false
   if (a.id && b.id) return a.id === b.id
@@ -163,21 +73,6 @@ const normalizeEventTimes = (event) => {
   }
 }
 
-const createStarterEvents = () =>
-  starterEvents.map((event) => {
-    const attendees = defaultAttendeesByEventId[event.id] || []
-    const normalizedEvent = normalizeEventTimes(event)
-
-    return {
-      ...normalizedEvent,
-      attendees,
-      goingCount:
-        attendees.length ||
-        Number.parseInt(String(normalizedEvent.rsvp).replace(/\D/g, ""), 10) ||
-        0,
-    }
-  })
-
 export function EventProvider({ children }) {
   const [currentUser] = useState(() => {
     const stored = JSON.parse(localStorage.getItem("user") || "{}")
@@ -191,7 +86,7 @@ export function EventProvider({ children }) {
   })
 
   const [savedEvents, setSavedEvents] = useState([])
-  const [allEvents, setAllEvents] = useState(createStarterEvents)
+  const [allEvents, setAllEvents] = useState([])
   const [followingList] = useState(defaultFollowing)
   const [followersList] = useState(defaultFollowers)
 
@@ -199,49 +94,70 @@ export function EventProvider({ children }) {
     const userId = JSON.parse(localStorage.getItem("user") || "{}").id
 
     const loadData = async () => {
-      const [eventsResult, rsvpsResult] = await Promise.all([
-        supabase.from("events").select("*").order("created_at", { ascending: false }),
-        userId
-          ? supabase.from("rsvps").select("event_id").eq("user_id", userId)
-          : Promise.resolve({ data: [], error: null }),
-      ])
+      try {
+        const [eventsResult, rsvpsResult] = await Promise.all([
+          supabase.from("events").select("*").order("created_at", { ascending: false }),
+          userId
+            ? supabase.from("rsvps").select("event_id").eq("user_id", userId)
+            : Promise.resolve({ data: [], error: null }),
+        ])
 
-      if (eventsResult.error) {
-        console.error("Failed to load events:", eventsResult.error)
-        return
-      }
+        if (eventsResult.error) {
+          console.error("Failed to load events:", eventsResult.error)
+          setAllEvents([])
+          setSavedEvents([])
+          return
+        }
 
-      const eventsData = eventsResult.data || []
-      if (eventsData.length === 0) return
+        const eventsData = eventsResult.data || []
 
-      const normalized = eventsData.map((e) =>
-        normalizeEventTimes({
-          id: e.id,
-          title: e.title,
-          description: e.description,
-          location: e.location,
-          locationAddress: e.location_address,
-          date: e.date,
-          eventDate: e.event_date,
-          startTime: e.start_time,
-          price: e.price,
-          organizer: e.organizer,
-          dressCode: e.dress_code,
-          image: e.image,
-          tags: e.tags || [],
-          creatorUsername: e.creator_username,
-          goingCount: e.going_count || 0,
-          rsvp: `${e.going_count || 0} Going`,
-          attendees: [],
-        })
-      )
+        if (eventsData.length === 0) {
+          setAllEvents([])
+          setSavedEvents([])
+          return
+        }
 
-      setAllEvents(normalized)
+        const normalized = eventsData.map((e) =>
+          normalizeEventTimes({
+            id: e.id,
+            title: e.title,
+            description: e.description,
+            location: e.location,
+            locationAddress: e.location_address,
+            date: e.date,
+            eventDate: e.event_date,
+            startTime: e.start_time,
+            endTime: e.end_time,
+            price: e.price,
+            organizer: e.organizer,
+            dressCode: e.dress_code,
+            image: e.image,
+            tags: e.tags || [],
+            createdBy: e.created_by,
+            created_by: e.created_by,
+            creatorUsername: e.creator_username,
+            goingCount: e.going_count || 0,
+            rsvp: `${e.going_count || 0} Going`,
+            attendees: [],
+          })
+        )
 
-      if (!rsvpsResult.error && rsvpsResult.data && rsvpsResult.data.length > 0) {
-        const rsvpedIds = new Set(rsvpsResult.data.map((r) => r.event_id))
+        setAllEvents(normalized)
+
+        if (rsvpsResult.error) {
+          console.error("Failed to load RSVPs:", rsvpsResult.error)
+          setSavedEvents([])
+          return
+        }
+
+        const rsvpedIds = new Set((rsvpsResult.data || []).map((r) => r.event_id))
         const matched = normalized.filter((e) => rsvpedIds.has(e.id))
-        if (matched.length > 0) setSavedEvents(matched)
+
+        setSavedEvents(matched)
+      } catch (error) {
+        console.error("Failed to load event context:", error)
+        setAllEvents([])
+        setSavedEvents([])
       }
     }
 
@@ -252,8 +168,7 @@ export function EventProvider({ children }) {
     const attendee = attendeeUser || currentUser
 
     const userId = JSON.parse(localStorage.getItem("user") || "{}").id
-    const isRealEvent = userId && event.id && typeof event.id === "string" && event.id.includes("-")
-    if (isRealEvent) {
+    if (userId && event.id) {
       supabase
         .from("rsvps")
         .insert({ user_id: userId, event_id: event.id })
@@ -265,7 +180,7 @@ export function EventProvider({ children }) {
     }
 
     setSavedEvents((prev) => {
-      const exists = prev.find((e) => e.id === event.id)
+      const exists = prev.find((e) => String(e.id) === String(event.id))
       if (exists) return prev
 
       const normalizedEvent = normalizeEventTimes(event)
@@ -281,7 +196,7 @@ export function EventProvider({ children }) {
 
     setAllEvents((prev) =>
       prev.map((existingEvent) => {
-        if (existingEvent.id !== event.id) return existingEvent
+        if (String(existingEvent.id) !== String(event.id)) return existingEvent
 
         const attendees = existingEvent.attendees || []
         const alreadyGoing = attendees.some((person) => usersMatch(person, attendee))
@@ -303,14 +218,45 @@ export function EventProvider({ children }) {
   const createEvent = (event) => {
     const normalizedEvent = normalizeEventTimes(event)
 
-    setAllEvents((prev) => [
-      {
-        ...normalizedEvent,
-        attendees: normalizedEvent.attendees || [],
-        goingCount: normalizedEvent.goingCount || 0,
-      },
-      ...prev,
-    ])
+    setAllEvents((prev) => {
+      const exists = prev.some(
+        (existingEvent) => String(existingEvent.id) === String(normalizedEvent.id)
+      )
+
+      if (exists) return prev
+
+      return [
+        {
+          ...normalizedEvent,
+          attendees: normalizedEvent.attendees || [],
+          goingCount: normalizedEvent.goingCount || 0,
+        },
+        ...prev,
+      ]
+    })
+  }
+
+  const cancelRSVP = (eventId) => {
+    setSavedEvents((prev) => prev.filter((event) => String(event.id) !== String(eventId)))
+
+    setAllEvents((prev) =>
+      prev.map((event) => {
+        if (String(event.id) !== String(eventId)) return event
+
+        const nextGoingCount = Math.max((event.goingCount || 1) - 1, 0)
+
+        return {
+          ...event,
+          goingCount: nextGoingCount,
+          rsvp: `${nextGoingCount} Going`,
+        }
+      })
+    )
+  }
+
+  const deleteEvent = (eventId) => {
+    setAllEvents((prev) => prev.filter((event) => String(event.id) !== String(eventId)))
+    setSavedEvents((prev) => prev.filter((event) => String(event.id) !== String(eventId)))
   }
 
   const mutualUsers = useMemo(
@@ -332,6 +278,8 @@ export function EventProvider({ children }) {
         addEvent,
         allEvents,
         createEvent,
+        cancelRSVP,
+        deleteEvent,
       }}
     >
       {children}

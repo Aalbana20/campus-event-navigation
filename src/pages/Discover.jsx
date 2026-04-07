@@ -17,18 +17,7 @@ function Discover() {
       setCurrentIndex(0)
     }
   }, [allEvents, currentIndex])
-
-  if (allEvents.length === 0) {
-    return (
-      <main className="discover">
-        <p className="eyebrow">Find your next event</p>
-        <h1>Discover</h1>
-        <p>No events available yet.</p>
-      </main>
-    )
-  }
-
-  const nextIndex = (currentIndex + 1) % allEvents.length
+  const nextIndex = allEvents.length > 0 ? (currentIndex + 1) % allEvents.length : 0
 
   const showNextEvent = useCallback(() => {
     if (allEvents.length === 0) return
@@ -99,6 +88,16 @@ function Discover() {
       }
     }
   }, [])
+
+  if (allEvents.length === 0) {
+    return (
+      <main className="discover">
+        <p className="eyebrow">Find your next event</p>
+        <h1>Discover</h1>
+        <p>No events available yet.</p>
+      </main>
+    )
+  }
 
   return (
     <main className="discover">
