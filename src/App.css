@@ -450,6 +450,108 @@ body {
   color: #777;
 }
 
+button.inbox-item {
+  width: 100%;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+button.inbox-item:hover {
+  background: var(--bg-soft-2, #eef1f6);
+}
+
+.dm-chat-view {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.dm-chat-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 2px 2px 10px;
+  border-bottom: 1px solid rgba(17, 17, 17, 0.08);
+}
+
+.dm-chat-back-btn {
+  border: none;
+  background: #f3f3f5;
+  color: #111;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  font-size: 1rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.dm-chat-messages {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.dm-chat-bubble {
+  max-width: 85%;
+  padding: 11px 14px;
+  border-radius: 18px;
+  font-size: 0.92rem;
+  line-height: 1.45;
+  box-shadow: 0 8px 18px rgba(17, 17, 17, 0.06);
+}
+
+.dm-chat-bubble.me {
+  align-self: flex-end;
+  background: #111318;
+  color: #fff;
+  border-bottom-right-radius: 8px;
+}
+
+.dm-chat-bubble.them {
+  align-self: flex-start;
+  background: #f3f3f5;
+  color: #111318;
+  border-bottom-left-radius: 8px;
+}
+
+.dm-chat-input-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(17, 17, 17, 0.08);
+}
+
+.dm-chat-input-row input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid rgba(17, 17, 17, 0.08);
+  border-radius: 999px;
+  padding: 12px 14px;
+  background: #fff;
+  color: #111;
+}
+
+.dm-chat-input-row button {
+  border: none;
+  border-radius: 999px;
+  background: #111318;
+  color: #fff;
+  padding: 12px 18px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
 /* =========================================================
    DISCOVER PAGE
 ========================================================= */
@@ -3053,6 +3155,51 @@ body.theme-dark .notification-more-btn {
 body.theme-dark .notification-more-btn:hover {
   background: var(--bg-soft);
   color: var(--text-main);
+}
+
+body.theme-dark button.inbox-item:hover {
+  background: #2b3341;
+}
+
+body.theme-dark .dm-chat-header,
+body.theme-dark .dm-chat-input-row {
+  border-color: var(--border-soft);
+}
+
+body.theme-dark .dm-chat-back-btn {
+  background: var(--bg-soft);
+  color: var(--text-main);
+  border: 1px solid var(--border-soft);
+}
+
+body.theme-dark .dm-chat-bubble {
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+}
+
+body.theme-dark .dm-chat-bubble.me {
+  background: var(--text-strong);
+  color: #111318;
+}
+
+body.theme-dark .dm-chat-bubble.them {
+  background: var(--bg-soft);
+  color: var(--text-main);
+  border: 1px solid var(--border-soft);
+}
+
+body.theme-dark .dm-chat-input-row input {
+  background: var(--bg-soft);
+  color: var(--text-main);
+  border: 1px solid var(--border-soft);
+}
+
+body.theme-dark .dm-chat-input-row input::placeholder {
+  color: var(--text-muted);
+}
+
+body.theme-dark .dm-chat-input-row button {
+  background: var(--text-strong);
+  color: #111318;
 }
 
 body.theme-dark .notification-more-menu {
