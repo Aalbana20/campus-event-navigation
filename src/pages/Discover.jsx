@@ -1,42 +1,79 @@
-import React, { useCallback, useEffect, useRef, useState } from "react"
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import EventCard from "../components/EventCard"
 import { useEvents } from "../context/EventContext"
 
 function Discover() {
-  const { addEvent, allEvents, currentUser } = useEvents()
+  const { addEvent, allEvents, currentUser, savedEvents } = useEvents()
 
   const [currentIndex, setCurrentIndex] = useState(0)
   const [swipeDirection, setSwipeDirection] = useState("")
   const [buttonFlash, setButtonFlash] = useState("")
   const [cardEntering, setCardEntering] = useState(false)
+  const [dismissedEventIds, setDismissedEventIds] = useState([])
+  const [isActionLocked, setIsActionLocked] = useState(false)
   const enterTimeoutRef = useRef(null)
   const swipeTimeoutRef = useRef(null)
 
-  const safeCurrentIndex = allEvents.length > 0 ? Math.min(currentIndex, allEvents.length - 1) : 0
-  const nextIndex = allEvents.length > 0 ? (safeCurrentIndex + 1) % allEvents.length : 0
+  const savedEventIds = useMemo(
+    () => new Set((savedEvents || []).map((event) => String(event.id))),
+    [savedEvents]
+  )
 
-  const showNextEvent = useCallback(() => {
-    if (allEvents.length === 0) return
+  const dismissedEventIdSet = useMemo(
+    () => new Set(dismissedEventIds.map((eventId) => String(eventId))),
+    [dismissedEventIds]
+  )
 
-    setCurrentIndex((prevIndex) => (prevIndex + 1) % allEvents.length)
-    setSwipeDirection("")
-    setCardEntering(true)
+  const discoverEvents = useMemo(
+    () =>
+      (allEvents || []).filter((event) => {
+        const eventId = String(event.id)
+        return !savedEventIds.has(eventId) && !dismissedEventIdSet.has(eventId)
+      }),
+    [allEvents, dismissedEventIdSet, savedEventIds]
+  )
+
+  useEffect(() => {
+    if (currentIndex >= discoverEvents.length) {
+      setCurrentIndex(Math.max(discoverEvents.length - 1, 0))
+    }
+  }, [currentIndex, discoverEvents.length])
+
+  const safeCurrentIndex =
+    discoverEvents.length > 0 ? Math.min(currentIndex, discoverEvents.length - 1) : 0
+  const currentEvent = discoverEvents[safeCurrentIndex] || null
+  const nextIndex =
+    discoverEvents.length > safeCurrentIndex + 1 ? safeCurrentIndex + 1 : null
+  const nextEvent = nextIndex !== null ? discoverEvents[nextIndex] : null
+
+  const prepareNextCard = useCallback((removedIndex, previousLength) => {
+    const remainingLength = Math.max(previousLength - 1, 0)
 
     if (enterTimeoutRef.current) {
       clearTimeout(enterTimeoutRef.current)
     }
 
-    enterTimeoutRef.current = setTimeout(() => {
-      setCardEntering(false)
-    }, 260)
-  }, [allEvents.length])
+    setCurrentIndex(remainingLength === 0 ? 0 : Math.min(removedIndex, remainingLength - 1))
+    setSwipeDirection("")
+    setCardEntering(remainingLength > 0)
+
+    if (remainingLength > 0) {
+      enterTimeoutRef.current = setTimeout(() => {
+        setCardEntering(false)
+      }, 260)
+      return
+    }
+
+    setCardEntering(false)
+  }, [])
 
   const handleAccept = useCallback(() => {
-    const currentEvent = allEvents[safeCurrentIndex]
-    addEvent({
-      ...currentEvent,
-      rsvpDate: new Date().toISOString(),
-    }, currentUser)
+    if (!currentEvent || isActionLocked) return
+
+    const removedIndex = safeCurrentIndex
+    const previousLength = discoverEvents.length
+
+    setIsActionLocked(true)
     setButtonFlash("flash-accept")
     setSwipeDirection("swipe-right")
 
@@ -45,12 +82,36 @@ function Discover() {
     }
 
     swipeTimeoutRef.current = setTimeout(() => {
-      showNextEvent()
+      addEvent(
+        {
+          ...currentEvent,
+          rsvpDate: new Date().toISOString(),
+        },
+        currentUser
+      )
+
+      prepareNextCard(removedIndex, previousLength)
       setButtonFlash("")
+      setIsActionLocked(false)
     }, 300)
-  }, [addEvent, allEvents, safeCurrentIndex, currentUser, showNextEvent])
+  }, [
+    addEvent,
+    currentEvent,
+    currentUser,
+    discoverEvents.length,
+    isActionLocked,
+    prepareNextCard,
+    safeCurrentIndex,
+  ])
 
   const handleReject = useCallback(() => {
+    if (!currentEvent || isActionLocked) return
+
+    const removedIndex = safeCurrentIndex
+    const previousLength = discoverEvents.length
+    const rejectedEventId = String(currentEvent.id)
+
+    setIsActionLocked(true)
     setButtonFlash("flash-reject")
     setSwipeDirection("swipe-left")
 
@@ -59,10 +120,15 @@ function Discover() {
     }
 
     swipeTimeoutRef.current = setTimeout(() => {
-      showNextEvent()
+      setDismissedEventIds((prev) =>
+        prev.includes(rejectedEventId) ? prev : [...prev, rejectedEventId]
+      )
+
+      prepareNextCard(removedIndex, previousLength)
       setButtonFlash("")
+      setIsActionLocked(false)
     }, 300)
-  }, [showNextEvent])
+  }, [currentEvent, discoverEvents.length, isActionLocked, prepareNextCard, safeCurrentIndex])
 
   useEffect(() => {
     const handleKeyDown = (event) => {
@@ -85,16 +151,6 @@ function Discover() {
     }
   }, [])
 
-  if (allEvents.length === 0) {
-    return (
-      <main className="discover">
-        <p className="eyebrow">Find your next event</p>
-        <h1>Discover</h1>
-        <p>No events available yet.</p>
-      </main>
-    )
-  }
-
   return (
     <main className="discover">
       <p className="eyebrow">Find your next event</p>
@@ -106,23 +162,40 @@ function Discover() {
         <button
           className={`swipe-btn reject ${buttonFlash === "flash-reject" ? "active-flash-reject" : ""}`}
           onClick={handleReject}
+          disabled={!currentEvent || isActionLocked}
+          aria-label="Skip current event"
         >
           ↺
         </button>
 
         <div className="discover-stack">
-          <div className="next-card-preview">
-            <EventCard event={allEvents[nextIndex]} />
-          </div>
+          {currentEvent ? (
+            <>
+              {nextEvent && (
+                <div className="next-card-preview">
+                  <EventCard event={nextEvent} />
+                </div>
+              )}
 
-          <div className={`discover-card-wrap ${swipeDirection} ${cardEntering ? "card-enter" : ""}`}>
-            <EventCard event={allEvents[safeCurrentIndex]} />
-          </div>
+              <div className={`discover-card-wrap ${swipeDirection} ${cardEntering ? "card-enter" : ""}`}>
+                <EventCard event={currentEvent} />
+              </div>
+            </>
+          ) : (
+            <div className="discover-end-card">
+              <div className="discover-end-kicker">Stack cleared</div>
+              <h2>You made it to the end.</h2>
+              <p>No more events right now.</p>
+              <p>Come back later or make one.</p>
+            </div>
+          )}
         </div>
 
         <button
           className={`swipe-btn accept ${buttonFlash === "flash-accept" ? "active-flash-accept" : ""}`}
           onClick={handleAccept}
+          disabled={!currentEvent || isActionLocked}
+          aria-label="Accept current event"
         >
           ↻
         </button>
