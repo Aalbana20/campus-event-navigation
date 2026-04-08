@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react"
 import Cropper from "react-easy-crop"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useParams } from "react-router-dom"
 import { useEvents } from "../context/EventContext"
 import { supabase } from "../supabaseClient"
 import "./Profile.css"
@@ -43,6 +43,7 @@ async function getCroppedImg(imageSrc, pixelCrop) {
 
 function Profile() {
   const navigate = useNavigate()
+  const { username: viewedUsername } = useParams()
   const {
     currentUser,
     savedEvents,
@@ -54,6 +55,32 @@ function Profile() {
     follow,
     unfollow,
   } = useEvents()
+
+  const storedUsername = JSON.parse(localStorage.getItem("user") || "{}").username
+  const isViewingOtherUser =
+    viewedUsername && viewedUsername !== storedUsername && viewedUsername !== currentUser?.username
+
+  const [otherUser, setOtherUser] = useState(null)
+  const [otherUserLoading, setOtherUserLoading] = useState(isViewingOtherUser)
+
+  useEffect(() => {
+    if (!isViewingOtherUser) return
+
+    supabase
+      .from("profiles")
+      .select("id, name, username, bio, avatar_url")
+      .eq("username", viewedUsername)
+      .single()
+      .then(({ data }) => {
+        setOtherUser(data || { username: viewedUsername, name: viewedUsername })
+        setOtherUserLoading(false)
+      })
+  }, [isViewingOtherUser, viewedUsername])
+
+  const isFollowingOtherUser = otherUser
+    ? followingList.some((f) => f.id === otherUser.id || f.username === otherUser.username)
+    : false
+
   const [name, setName] = useState("Success Myers")
   const [username, setUsername] = useState("itzmesuccess1")
   const [bio, setBio] = useState("UMES student • Event lover • Front-end builder")
@@ -210,7 +237,7 @@ function Profile() {
     if (userId) {
       await supabase
         .from("profiles")
-        .upsert({ id: userId, name: draftName, username: draftUsername, bio: draftBio, updated_at: new Date().toISOString() })
+        .upsert({ id: userId, name: draftName, username: draftUsername, bio: draftBio, avatar_url: draftProfileImage, updated_at: new Date().toISOString() })
     }
 
     setIsEditProfileOpen(false)
@@ -236,6 +263,26 @@ function Profile() {
 
     try {
       const croppedImageUrl = await getCroppedImg(rawSelectedImage, croppedAreaPixels)
+
+      const userId = JSON.parse(localStorage.getItem("user") || "{}").id
+      if (userId) {
+        const response = await fetch(croppedImageUrl)
+        const blob = await response.blob()
+        const filePath = `avatars/${userId}-${Date.now()}.jpg`
+
+        const { error: uploadError } = await supabase.storage
+          .from("profile-images")
+          .upload(filePath, blob, { contentType: "image/jpeg", upsert: true })
+
+        if (!uploadError) {
+          const { data } = supabase.storage.from("profile-images").getPublicUrl(filePath)
+          setDraftProfileImage(data.publicUrl)
+          setIsCropModalOpen(false)
+          setRawSelectedImage(null)
+          return
+        }
+      }
+
       setDraftProfileImage(croppedImageUrl)
       setIsCropModalOpen(false)
       setRawSelectedImage(null)
@@ -345,6 +392,90 @@ function Profile() {
     } finally {
       setIsConfirmingAction(false)
     }
+  }
+
+  if (isViewingOtherUser) {
+    if (otherUserLoading) {
+      return (
+        <main className="profile-page">
+          <div className="profile-card">
+            <p style={{ textAlign: "center", padding: "2rem" }}>Loading profile...</p>
+          </div>
+        </main>
+      )
+    }
+
+    if (!otherUser) {
+      return (
+        <main className="profile-page">
+          <div className="profile-card">
+            <p style={{ textAlign: "center", padding: "2rem" }}>User not found.</p>
+          </div>
+        </main>
+      )
+    }
+
+    const otherUserEvents = allEvents.filter(
+      (e) => e.creatorUsername === otherUser.username || e.createdBy === otherUser.id
+    )
+
+    return (
+      <main className="profile-page">
+        <div className="profile-card">
+          <div className="profile-header">
+            <div className="profile-avatar-wrap">
+              <img
+                className="profile-avatar"
+                src={otherUser.avatar_url || defaultAvatar}
+                alt={otherUser.name || otherUser.username}
+                onError={(e) => { e.currentTarget.src = defaultAvatar }}
+              />
+            </div>
+            <div className="profile-info">
+              <h1 className="username">@{otherUser.username}</h1>
+              <h2 className="real-name">{otherUser.name}</h2>
+              {otherUser.bio && <p className="bio">{otherUser.bio}</p>}
+              <div className="profile-stats">
+                <div className="profile-stat-card">
+                  <span className="profile-stat-number">{otherUserEvents.length}</span>
+                  <span className="profile-stat-label">Events Created</span>
+                </div>
+              </div>
+              <div className="profile-action-row">
+                <button
+                  type="button"
+                  className="profile-edit-btn"
+                  onClick={() => otherUser.id && (isFollowingOtherUser ? unfollow(otherUser.id) : follow(otherUser.id))}
+                >
+                  {isFollowingOtherUser ? "Unfollow" : "Follow"}
+                </button>
+                <button
+                  type="button"
+                  className="profile-share-btn"
+                  onClick={() => navigate(-1)}
+                >
+                  Back
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {otherUserEvents.length > 0 && (
+            <div className="profile-activity-section">
+              <h3 className="profile-activity-title">Events by @{otherUser.username}</h3>
+              <div className="profile-list">
+                {otherUserEvents.map((event) => (
+                  <div className="profile-list-item" key={event.id}>
+                    <span className="profile-list-name">{event.title}</span>
+                    <span className="profile-list-meta">{event.date}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </main>
+    )
   }
 
   return (
