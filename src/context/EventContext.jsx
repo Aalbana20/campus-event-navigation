@@ -153,7 +153,7 @@ export function EventProvider({ children }) {
             id: p.id,
             name: p.name || p.username || "User",
             username: p.username || "",
-            image: "/default-avatar.png",
+            image: p.avatar_url || "/default-avatar.png",
           }))
 
         const followingIds = (followingResult.data || []).map((f) => f.following_id)
@@ -162,7 +162,7 @@ export function EventProvider({ children }) {
         if (followingIds.length > 0) {
           const { data: followingProfiles } = await supabase
             .from("profiles")
-            .select("id, name, username")
+            .select("id, name, username, avatar_url")
             .in("id", followingIds)
           setFollowingList(toUserList(followingProfiles))
         }
@@ -170,7 +170,7 @@ export function EventProvider({ children }) {
         if (followerIds.length > 0) {
           const { data: followerProfiles } = await supabase
             .from("profiles")
-            .select("id, name, username")
+            .select("id, name, username, avatar_url")
             .in("id", followerIds)
           setFollowersList(toUserList(followerProfiles))
         }
