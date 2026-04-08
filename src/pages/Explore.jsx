@@ -1,6 +1,7 @@
-import React, { useMemo, useState } from "react"
+import React, { useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { useEvents } from "../context/EventContext"
+import { supabase } from "../supabaseClient"
 
 const suggestedPeopleSeed = [
   {
@@ -90,6 +91,7 @@ function Explore() {
   const [searchQuery, setSearchQuery] = useState("")
   const [activeFilter, setActiveFilter] = useState("all")
   const [followOverrides, setFollowOverrides] = useState({})
+  const [searchedProfiles, setSearchedProfiles] = useState([])
 
   const people = useMemo(() => {
     const fromContext = [...followingList, ...followersList].map((person, index) =>
@@ -131,6 +133,25 @@ function Explore() {
   const showEvents = activeFilter === "all" || activeFilter === "events"
   const showPeople = activeFilter === "all" || activeFilter === "people"
 
+  useEffect(() => {
+    if (!trimmedQuery) {
+      setSearchedProfiles([])
+      return
+    }
+
+    supabase
+      .from("profiles")
+      .select("id, name, username, bio")
+      .or(`username.ilike.%${trimmedQuery}%,name.ilike.%${trimmedQuery}%`)
+      .neq("id", currentUser?.id || "")
+      .limit(10)
+      .then(({ data }) => {
+        setSearchedProfiles(
+          (data || []).map((p) => normalizePerson({ ...p, image: "/default-avatar.png" }, 0, true))
+        )
+      })
+  }, [trimmedQuery, currentUser?.id])
+
   const savedEventIds = useMemo(
     () => new Set((savedEvents || []).map((event) => String(event.id))),
     [savedEvents]
@@ -154,8 +175,11 @@ function Explore() {
 
   const filteredPeople = useMemo(() => {
     if (!trimmedQuery) return []
-    return people.filter((person) => personSearchFields(person).includes(trimmedQuery))
-  }, [people, trimmedQuery])
+    const localMatches = people.filter((person) => personSearchFields(person).includes(trimmedQuery))
+    const localIds = new Set(localMatches.map(getPersonKey))
+    const remoteOnly = searchedProfiles.filter((p) => !localIds.has(getPersonKey(p)))
+    return [...localMatches, ...remoteOnly]
+  }, [people, searchedProfiles, trimmedQuery])
 
   const suggestedEvents = useMemo(() => allEvents.slice(0, 6), [allEvents])
   const suggestedPeople = useMemo(() => people.slice(0, 6), [people])

@@ -12,12 +12,8 @@ function Discover() {
   const enterTimeoutRef = useRef(null)
   const swipeTimeoutRef = useRef(null)
 
-  useEffect(() => {
-    if (currentIndex >= allEvents.length) {
-      setCurrentIndex(0)
-    }
-  }, [allEvents, currentIndex])
-  const nextIndex = allEvents.length > 0 ? (currentIndex + 1) % allEvents.length : 0
+  const safeCurrentIndex = allEvents.length > 0 ? Math.min(currentIndex, allEvents.length - 1) : 0
+  const nextIndex = allEvents.length > 0 ? (safeCurrentIndex + 1) % allEvents.length : 0
 
   const showNextEvent = useCallback(() => {
     if (allEvents.length === 0) return
@@ -36,7 +32,7 @@ function Discover() {
   }, [allEvents.length])
 
   const handleAccept = useCallback(() => {
-    const currentEvent = allEvents[currentIndex]
+    const currentEvent = allEvents[safeCurrentIndex]
     addEvent({
       ...currentEvent,
       rsvpDate: new Date().toISOString(),
@@ -52,7 +48,7 @@ function Discover() {
       showNextEvent()
       setButtonFlash("")
     }, 300)
-  }, [addEvent, allEvents, currentIndex, currentUser, showNextEvent])
+  }, [addEvent, allEvents, safeCurrentIndex, currentUser, showNextEvent])
 
   const handleReject = useCallback(() => {
     setButtonFlash("flash-reject")
@@ -120,7 +116,7 @@ function Discover() {
           </div>
 
           <div className={`discover-card-wrap ${swipeDirection} ${cardEntering ? "card-enter" : ""}`}>
-            <EventCard event={allEvents[currentIndex]} />
+            <EventCard event={allEvents[safeCurrentIndex]} />
           </div>
         </div>
 
