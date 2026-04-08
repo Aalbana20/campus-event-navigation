@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react"
 import "./App.css"
-import { Routes, Route, Link, Navigate, Outlet } from "react-router-dom"
+import { Routes, Route, Link, Navigate, Outlet, useSearchParams } from "react-router-dom"
 import Discover from "./pages/Discover"
 import Explore from "./pages/Explore"
 import MyEvents from "./pages/MyEvents"
@@ -107,39 +107,161 @@ const syncStoredUser = (session) => {
   localStorage.removeItem("user")
 }
 
-const createDmMessageSeed = (thread) => [
-  {
-    id: `${thread.id}-1`,
-    sender: "them",
-    text: thread.preview || "You still going to the event?",
-  },
-  {
-    id: `${thread.id}-2`,
-    sender: "me",
-    text: "Yeah, I am. I was planning to be there.",
-  },
-  {
-    id: `${thread.id}-3`,
-    sender: "them",
-    text: "Perfect. Want to meet up before it starts?",
-  },
-  {
-    id: `${thread.id}-4`,
-    sender: "me",
-    text: "That works for me. Send me the spot when you get there.",
-  },
-]
 
 function MainLayout() {
   const { savedEvents, allEvents, followingList, followersList } = useEvents()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [isInboxOpen, setIsInboxOpen] = useState(false)
   const [activeInboxTab, setActiveInboxTab] = useState("notifications")
   const [notificationFilter, setNotificationFilter] = useState("all")
   const [openNotificationMenuId, setOpenNotificationMenuId] = useState(null)
   const [activeDmThreadId, setActiveDmThreadId] = useState(null)
   const [dmDraftMessage, setDmDraftMessage] = useState("")
-  const [dmExtraMessagesByThread, setDmExtraMessagesByThread] = useState({})
+  const [dmThreads, setDmThreads] = useState([])
+  const [dmMessagesByThread, setDmMessagesByThread] = useState({})
   const defaultAvatar = "/default-avatar.png"
+  const currentUserId = JSON.parse(localStorage.getItem("user") || "{}").id
+
+  // Open DM panel when ?dm=userId is in the URL
+  useEffect(() => {
+    const dmUserId = searchParams.get("dm")
+    if (!dmUserId || !currentUserId) return
+
+    const openWithUser = async () => {
+      // Fetch their profile so we have a name to display
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("id, name, username")
+        .eq("id", dmUserId)
+        .single()
+
+      const thread = {
+        id: dmUserId,
+        name: profile?.name || profile?.username || "User",
+        username: profile?.username || "",
+        preview: "",
+        time: "",
+        image: defaultAvatar,
+      }
+
+      setDmThreads((prev) =>
+        prev.some((t) => t.id === dmUserId) ? prev : [thread, ...prev]
+      )
+      setActiveDmThreadId(dmUserId)
+      setActiveInboxTab("dms")
+      setIsInboxOpen(true)
+
+      // Clear the query param so refreshing doesn't re-open it
+      setSearchParams({}, { replace: true })
+    }
+
+    openWithUser()
+  }, [searchParams, currentUserId, defaultAvatar, setSearchParams])
+
+  // Load DM threads — all users the current user has messaged or been messaged by
+  useEffect(() => {
+    if (!currentUserId) return
+
+    const loadThreads = async () => {
+      const { data: msgs } = await supabase
+        .from("messages")
+        .select("sender_id, recipient_id")
+        .or(`sender_id.eq.${currentUserId},recipient_id.eq.${currentUserId}`)
+
+      if (!msgs || msgs.length === 0) return
+
+      const otherIds = [...new Set(
+        msgs.map((m) => m.sender_id === currentUserId ? m.recipient_id : m.sender_id)
+      )]
+
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, name, username")
+        .in("id", otherIds)
+
+      setDmThreads(
+        (profiles || []).map((p) => ({
+          id: p.id,
+          name: p.name || p.username || "User",
+          username: p.username,
+          preview: "Tap to view conversation",
+          time: "",
+          image: defaultAvatar,
+        }))
+      )
+    }
+
+    loadThreads()
+  }, [currentUserId, defaultAvatar])
+
+  // Load messages when a thread is opened
+  useEffect(() => {
+    if (!activeDmThreadId || !currentUserId) return
+
+    supabase
+      .from("messages")
+      .select("id, sender_id, content, created_at")
+      .or(
+        `and(sender_id.eq.${currentUserId},recipient_id.eq.${activeDmThreadId}),and(sender_id.eq.${activeDmThreadId},recipient_id.eq.${currentUserId})`
+      )
+      .order("created_at", { ascending: true })
+      .then(({ data }) => {
+        const formatted = (data || []).map((m) => ({
+          id: m.id,
+          sender: m.sender_id === currentUserId ? "me" : "them",
+          text: m.content,
+        }))
+
+        setDmMessagesByThread((prev) => ({ ...prev, [activeDmThreadId]: formatted }))
+      })
+  }, [activeDmThreadId, currentUserId])
+
+  // Realtime — receive incoming messages live
+  useEffect(() => {
+    if (!currentUserId) return
+
+    const channel = supabase
+      .channel("incoming-messages")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+          filter: `recipient_id=eq.${currentUserId}`,
+        },
+        (payload) => {
+          const msg = payload.new
+          const threadId = msg.sender_id
+
+          setDmMessagesByThread((prev) => ({
+            ...prev,
+            [threadId]: [
+              ...(prev[threadId] || []),
+              { id: msg.id, sender: "them", text: msg.content },
+            ],
+          }))
+
+          // Add thread if it doesn't exist yet
+          setDmThreads((prev) => {
+            if (prev.some((t) => t.id === threadId)) return prev
+            return [
+              ...prev,
+              {
+                id: threadId,
+                name: "New message",
+                preview: msg.content,
+                time: "now",
+                image: defaultAvatar,
+              },
+            ]
+          })
+        }
+      )
+      .subscribe()
+
+    return () => supabase.removeChannel(channel)
+  }, [currentUserId, defaultAvatar])
 
   const mutualUsers = useMemo(
     () =>
@@ -337,63 +459,6 @@ function MainLayout() {
     return notifications.filter((item) => item.category === notificationFilter)
   }, [notificationFilter, notifications])
 
-  const dmThreads = useMemo(() => {
-    const liveFromFollowers = followersList.slice(0, 3).map((person, index) => ({
-      id: person.id || person.username || `f-${index}`,
-      name: person.name || person.username || "Campus Friend",
-      preview: "You still going to the event?",
-      time: "recent",
-      image: person.image || person.avatar || defaultAvatar,
-    }))
-
-    if (liveFromFollowers.length > 0) {
-      return liveFromFollowers
-    }
-
-    return [
-      {
-        id: "dm-1",
-        name: "Jordan",
-        preview: "You still going to the event?",
-        time: "2m",
-        image: defaultAvatar,
-      },
-      {
-        id: "dm-2",
-        name: "Taylor",
-        preview: "I RSVP’d already",
-        time: "1h",
-        image: defaultAvatar,
-      },
-      {
-        id: "dm-3",
-        name: "Morgan",
-        preview: "Send me the flyer",
-        time: "5h",
-        image: defaultAvatar,
-      },
-    ]
-  }, [defaultAvatar, followersList])
-
-  const dmMessageSeed = useMemo(
-    () =>
-      Object.fromEntries(
-        dmThreads.map((thread) => [thread.id, createDmMessageSeed(thread)])
-      ),
-    [dmThreads]
-  )
-
-  const dmMessagesByThread = useMemo(
-    () =>
-      Object.fromEntries(
-        dmThreads.map((thread) => [
-          thread.id,
-          [...(dmMessageSeed[thread.id] || []), ...(dmExtraMessagesByThread[thread.id] || [])],
-        ])
-      ),
-    [dmExtraMessagesByThread, dmMessageSeed, dmThreads]
-  )
-
   const activeDmThread = useMemo(
     () => dmThreads.find((t) => String(t.id) === String(activeDmThreadId)) ?? null,
     [activeDmThreadId, dmThreads]
@@ -431,25 +496,39 @@ function MainLayout() {
     setDmDraftMessage("")
   }
 
-  const handleSendDmMessage = (event) => {
+  const handleSendDmMessage = async (event) => {
     event.preventDefault()
 
     const trimmedMessage = dmDraftMessage.trim()
-    if (!trimmedMessage || !selectedDmThread) return
+    if (!trimmedMessage || !selectedDmThread || !currentUserId) return
 
-    setDmExtraMessagesByThread((prev) => ({
+    // Optimistically add to local state immediately
+    const tempId = `temp-${Date.now()}`
+    setDmMessagesByThread((prev) => ({
       ...prev,
       [selectedDmThread.id]: [
         ...(prev[selectedDmThread.id] || []),
-        {
-          id: `${selectedDmThread.id}-${Date.now()}`,
-          sender: "me",
-          text: trimmedMessage,
-        },
+        { id: tempId, sender: "me", text: trimmedMessage },
       ],
     }))
-
     setDmDraftMessage("")
+
+    // Persist to Supabase
+    const { data, error } = await supabase
+      .from("messages")
+      .insert({ sender_id: currentUserId, recipient_id: selectedDmThread.id, content: trimmedMessage })
+      .select("id")
+      .single()
+
+    // Replace temp id with real id from database
+    if (!error && data) {
+      setDmMessagesByThread((prev) => ({
+        ...prev,
+        [selectedDmThread.id]: (prev[selectedDmThread.id] || []).map((m) =>
+          m.id === tempId ? { ...m, id: data.id } : m
+        ),
+      }))
+    }
   }
 
   const openInbox = () => setIsInboxOpen(true)

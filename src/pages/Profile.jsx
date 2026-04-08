@@ -66,15 +66,20 @@ function Profile() {
   useEffect(() => {
     if (!isViewingOtherUser) return
 
-    supabase
+    // viewedUsername could be a username string or a UUID
+    const isUUID = /^[0-9a-f-]{36}$/i.test(viewedUsername)
+    const query = supabase
       .from("profiles")
       .select("id, name, username, bio, avatar_url")
-      .eq("username", viewedUsername)
-      .single()
-      .then(({ data }) => {
-        setOtherUser(data || { username: viewedUsername, name: viewedUsername })
-        setOtherUserLoading(false)
-      })
+
+    const resolvedQuery = isUUID
+      ? query.eq("id", viewedUsername)
+      : query.eq("username", viewedUsername)
+
+    resolvedQuery.single().then(({ data }) => {
+      setOtherUser(data || { username: viewedUsername, name: viewedUsername })
+      setOtherUserLoading(false)
+    })
   }, [isViewingOtherUser, viewedUsername])
 
   const isFollowingOtherUser = otherUser
@@ -207,7 +212,7 @@ function Profile() {
 
     supabase
       .from("profiles")
-      .select("name, username, bio")
+      .select("name, username, bio, avatar_url")
       .eq("id", userId)
       .single()
       .then(({ data, error }) => {
@@ -215,6 +220,10 @@ function Profile() {
         if (data.name) setName(data.name)
         if (data.username) setUsername(data.username)
         if (data.bio) setBio(data.bio)
+        if (data.avatar_url) {
+          setProfileImage(data.avatar_url)
+          localStorage.setItem("profileImage", data.avatar_url)
+        }
       })
   }, [])
 
@@ -449,6 +458,15 @@ function Profile() {
                 >
                   {isFollowingOtherUser ? "Unfollow" : "Follow"}
                 </button>
+                {otherUser.id && (
+                  <button
+                    type="button"
+                    className="profile-share-btn"
+                    onClick={() => navigate(`/discover?dm=${otherUser.id}`)}
+                  >
+                    Message
+                  </button>
+                )}
                 <button
                   type="button"
                   className="profile-share-btn"
