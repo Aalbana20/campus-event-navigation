@@ -106,12 +106,38 @@ const syncStoredUser = (session) => {
   localStorage.removeItem("user")
 }
 
+const createDmMessageSeed = (thread) => [
+  {
+    id: `${thread.id}-1`,
+    sender: "them",
+    text: thread.preview || "You still going to the event?",
+  },
+  {
+    id: `${thread.id}-2`,
+    sender: "me",
+    text: "Yeah, I am. I was planning to be there.",
+  },
+  {
+    id: `${thread.id}-3`,
+    sender: "them",
+    text: "Perfect. Want to meet up before it starts?",
+  },
+  {
+    id: `${thread.id}-4`,
+    sender: "me",
+    text: "That works for me. Send me the spot when you get there.",
+  },
+]
+
 function MainLayout() {
   const { savedEvents, allEvents, followingList, followersList } = useEvents()
   const [isInboxOpen, setIsInboxOpen] = useState(false)
   const [activeInboxTab, setActiveInboxTab] = useState("notifications")
   const [notificationFilter, setNotificationFilter] = useState("all")
   const [openNotificationMenuId, setOpenNotificationMenuId] = useState(null)
+  const [activeDmThread, setActiveDmThread] = useState(null)
+  const [dmDraftMessage, setDmDraftMessage] = useState("")
+  const [dmMessagesByThread, setDmMessagesByThread] = useState({})
   const defaultAvatar = "/default-avatar.png"
 
   const mutualUsers = useMemo(
@@ -357,10 +383,100 @@ function MainLayout() {
     ]
   }, [defaultAvatar, followersList])
 
+  const dmMessageSeed = useMemo(
+    () =>
+      Object.fromEntries(
+        dmThreads.map((thread) => [thread.id, createDmMessageSeed(thread)])
+      ),
+    [dmThreads]
+  )
+
+  useEffect(() => {
+    setDmMessagesByThread((prev) => {
+      const next = { ...prev }
+      let changed = false
+
+      dmThreads.forEach((thread) => {
+        if (!next[thread.id]) {
+          next[thread.id] = dmMessageSeed[thread.id] || []
+          changed = true
+        }
+      })
+
+      return changed ? next : prev
+    })
+  }, [dmMessageSeed, dmThreads])
+
+  useEffect(() => {
+    if (
+      activeDmThread &&
+      !dmThreads.some((thread) => String(thread.id) === String(activeDmThread.id))
+    ) {
+      setActiveDmThread(null)
+      setDmDraftMessage("")
+    }
+  }, [activeDmThread, dmThreads])
+
+  const displayDmThreads = useMemo(
+    () =>
+      dmThreads.map((thread) => {
+        const messages = dmMessagesByThread[thread.id] || []
+        const latestMessage = messages[messages.length - 1]
+
+        if (!latestMessage) return thread
+
+        return {
+          ...thread,
+          preview: latestMessage.text,
+          time: latestMessage.sender === "me" ? "now" : thread.time,
+        }
+      }),
+    [dmMessagesByThread, dmThreads]
+  )
+
+  const selectedDmThread = activeDmThread
+    ? displayDmThreads.find(
+        (thread) => String(thread.id) === String(activeDmThread.id)
+      ) || activeDmThread
+    : null
+
+  const openDmThread = (thread) => {
+    setActiveDmThread(thread)
+    setDmDraftMessage("")
+  }
+
+  const closeDmThread = () => {
+    setActiveDmThread(null)
+    setDmDraftMessage("")
+  }
+
+  const handleSendDmMessage = (event) => {
+    event.preventDefault()
+
+    const trimmedMessage = dmDraftMessage.trim()
+    if (!trimmedMessage || !selectedDmThread) return
+
+    setDmMessagesByThread((prev) => ({
+      ...prev,
+      [selectedDmThread.id]: [
+        ...(prev[selectedDmThread.id] || []),
+        {
+          id: `${selectedDmThread.id}-${Date.now()}`,
+          sender: "me",
+          text: trimmedMessage,
+        },
+      ],
+    }))
+
+    setDmDraftMessage("")
+  }
+
   const openInbox = () => setIsInboxOpen(true)
   const closeInbox = () => {
     setIsInboxOpen(false)
     setOpenNotificationMenuId(null)
+    setActiveDmThread(null)
+    setDmDraftMessage("")
   }
 
   return (
@@ -568,25 +684,70 @@ function MainLayout() {
               )}
 
               {activeInboxTab === "dms" && (
-                <div className="inbox-list">
-                  {dmThreads.map((thread) => (
-                    <div className="inbox-item" key={thread.id}>
-                      <img
-                        className="inbox-item-avatar"
-                        src={thread.image || defaultAvatar}
-                        alt=""
-                        onError={(e) => {
-                          e.currentTarget.src = defaultAvatar
-                        }}
-                      />
+                activeDmThread ? (
+                  <div className="dm-chat-view">
+                    <div className="dm-chat-header">
+                      <button
+                        type="button"
+                        className="dm-chat-back-btn"
+                        onClick={closeDmThread}
+                        aria-label="Back to messages"
+                      >
+                        ←
+                      </button>
                       <div className="inbox-item-main">
-                        <span className="inbox-item-text">{thread.name}</span>
-                        <span className="inbox-item-preview">{thread.preview}</span>
-                        <span className="inbox-item-time">{thread.time}</span>
+                        <span className="inbox-item-text">{selectedDmThread?.name}</span>
+                        <span className="inbox-item-time">Direct messages</span>
                       </div>
                     </div>
-                  ))}
-                </div>
+
+                    <div className="dm-chat-messages">
+                      {(dmMessagesByThread[selectedDmThread?.id] || []).map((message) => (
+                        <div
+                          className={`dm-chat-bubble ${message.sender}`}
+                          key={message.id}
+                        >
+                          {message.text}
+                        </div>
+                      ))}
+                    </div>
+
+                    <form className="dm-chat-input-row" onSubmit={handleSendDmMessage}>
+                      <input
+                        type="text"
+                        value={dmDraftMessage}
+                        onChange={(event) => setDmDraftMessage(event.target.value)}
+                        placeholder={`Message ${selectedDmThread?.name || "your friend"}`}
+                      />
+                      <button type="submit">Send</button>
+                    </form>
+                  </div>
+                ) : (
+                  <div className="inbox-list">
+                    {displayDmThreads.map((thread) => (
+                      <button
+                        type="button"
+                        className="inbox-item"
+                        key={thread.id}
+                        onClick={() => openDmThread(thread)}
+                      >
+                        <img
+                          className="inbox-item-avatar"
+                          src={thread.image || defaultAvatar}
+                          alt=""
+                          onError={(e) => {
+                            e.currentTarget.src = defaultAvatar
+                          }}
+                        />
+                        <div className="inbox-item-main">
+                          <span className="inbox-item-text">{thread.name}</span>
+                          <span className="inbox-item-preview">{thread.preview}</span>
+                          <span className="inbox-item-time">{thread.time}</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )
               )}
             </div>
           </aside>
