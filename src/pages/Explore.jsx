@@ -211,9 +211,13 @@ function Explore() {
     navigate(`/events/${eventId}`)
   }
 
-  const handleOpenPerson = (username) => {
-    if (!username) return
-    navigate(`/profile/${username}`)
+  const handleOpenPerson = (person) => {
+    const target =
+      person.username && !person.username.startsWith("guest-")
+        ? person.username
+        : person.id
+    if (!target) return
+    navigate(`/profile/${target}`)
   }
 
   const handleEventAction = (event, selectedEvent) => {
@@ -311,7 +315,7 @@ function Explore() {
         <button
           type="button"
           className="explore-card-main explore-person-main"
-          onClick={() => handleOpenPerson(person.username)}
+          onClick={() => handleOpenPerson(person)}
         >
           <div className="explore-person-top">
             <div className="explore-person-identity">
