@@ -118,10 +118,7 @@ function Profile() {
 
   const defaultAvatar = "/default-avatar.png"
   const storedUser = JSON.parse(localStorage.getItem("user") || "{}")
-  const savedImage = localStorage.getItem("profileImage")
-  const [profileImage, setProfileImage] = useState(
-    savedImage || storedUser.image || storedUser.avatar || ""
-  )
+  const [profileImage, setProfileImage] = useState("")
   const [draftName, setDraftName] = useState(name)
   const [draftUsername, setDraftUsername] = useState(username)
   const [draftBio, setDraftBio] = useState(bio)
@@ -282,6 +279,10 @@ function Profile() {
         const { error: uploadError } = await supabase.storage
           .from("profile-images")
           .upload(filePath, blob, { contentType: "image/jpeg", upsert: true })
+
+        if (uploadError) {
+          console.error("Supabase upload error:", uploadError)
+        }
 
         if (!uploadError) {
           const { data } = supabase.storage.from("profile-images").getPublicUrl(filePath)
@@ -467,13 +468,6 @@ function Profile() {
                     Message
                   </button>
                 )}
-                <button
-                  type="button"
-                  className="profile-share-btn"
-                  onClick={() => navigate(-1)}
-                >
-                  Back
-                </button>
               </div>
             </div>
           </div>
@@ -679,12 +673,22 @@ function Profile() {
                   <div className="profile-list">
                     {followingList.map((person) => (
                       <div className="profile-list-item" key={person.id}>
-                        <span className="profile-list-name">
-                          {person.name || person.username || "Unknown user"}
-                        </span>
                         <button
                           type="button"
-                          className="profile-list-action-btn"
+                          className="profile-list-identity-btn"
+                          onClick={() => { closePanel(); navigate(`/profile/${person.username || person.id}`) }}
+                        >
+                          <img
+                            className="profile-list-avatar"
+                            src={person.image || defaultAvatar}
+                            alt={person.name}
+                            onError={(e) => { e.currentTarget.src = defaultAvatar }}
+                          />
+                          <span className="profile-list-name">{person.name || person.username || "Unknown user"}</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="profile-list-action-btn unfollow"
                           onClick={() => unfollow(person.id)}
                         >
                           Unfollow
@@ -702,13 +706,23 @@ function Profile() {
                   <div className="profile-list">
                     {followersList.map((person) => (
                       <div className="profile-list-item" key={person.id}>
-                        <span className="profile-list-name">
-                          {person.name || person.username || "Unknown user"}
-                        </span>
+                        <button
+                          type="button"
+                          className="profile-list-identity-btn"
+                          onClick={() => { closePanel(); navigate(`/profile/${person.username || person.id}`) }}
+                        >
+                          <img
+                            className="profile-list-avatar"
+                            src={person.image || defaultAvatar}
+                            alt={person.name}
+                            onError={(e) => { e.currentTarget.src = defaultAvatar }}
+                          />
+                          <span className="profile-list-name">{person.name || person.username || "Unknown user"}</span>
+                        </button>
                         {!followingList.some((f) => f.id === person.id) && (
                           <button
                             type="button"
-                            className="profile-list-action-btn"
+                            className="profile-list-action-btn follow-back"
                             onClick={() => follow(person.id)}
                           >
                             Follow back

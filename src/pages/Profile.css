@@ -309,3 +309,76 @@ body.theme-dark .profile-confirm-delete-btn:hover {
     justify-content: center;
   }
 }
+
+.profile-list-name-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.profile-list-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+}
+
+.profile-list-identity-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.profile-list-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.profile-list-name {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: inherit;
+}
+
+.profile-list-action-btn {
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  white-space: nowrap;
+}
+
+.profile-list-action-btn.unfollow {
+  background: #f0f0f0;
+  color: #333;
+}
+
+.profile-list-action-btn.unfollow:hover {
+  background: #e0e0e0;
+}
+
+.profile-list-action-btn.follow-back {
+  background: #4f46e5;
+  color: #fff;
+}
+
+.profile-list-action-btn.follow-back:hover {
+  background: #4338ca;
+}

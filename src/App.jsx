@@ -119,6 +119,7 @@ function MainLayout() {
   const [dmDraftMessage, setDmDraftMessage] = useState("")
   const [dmThreads, setDmThreads] = useState([])
   const [dmMessagesByThread, setDmMessagesByThread] = useState({})
+  const [unreadDmThreadIds, setUnreadDmThreadIds] = useState(new Set())
   const defaultAvatar = "/default-avatar.png"
   const currentUserId = JSON.parse(localStorage.getItem("user") || "{}").id
 
@@ -241,6 +242,9 @@ function MainLayout() {
               { id: msg.id, sender: "them", text: msg.content },
             ],
           }))
+
+          // Mark thread as unread
+          setUnreadDmThreadIds((prev) => new Set([...prev, threadId]))
 
           // Add thread if it doesn't exist yet
           setDmThreads((prev) => {
@@ -489,6 +493,11 @@ function MainLayout() {
   const openDmThread = (thread) => {
     setActiveDmThreadId(thread.id)
     setDmDraftMessage("")
+    setUnreadDmThreadIds((prev) => {
+      const next = new Set(prev)
+      next.delete(thread.id)
+      return next
+    })
   }
 
   const closeDmThread = () => {
@@ -580,8 +589,8 @@ function MainLayout() {
                 strokeLinejoin="round"
               />
             </svg>
-            {unreadNotificationCount > 0 && (
-              <span className="navbar-bell-badge">{unreadNotificationCount}</span>
+            {(unreadNotificationCount + unreadDmThreadIds.size) > 0 && (
+              <span className="navbar-bell-badge">{unreadNotificationCount + unreadDmThreadIds.size}</span>
             )}
           </button>
         </div>
@@ -788,7 +797,7 @@ function MainLayout() {
                     {displayDmThreads.map((thread) => (
                       <button
                         type="button"
-                        className="inbox-item"
+                        className={`inbox-item ${unreadDmThreadIds.has(thread.id) ? "inbox-item-unread" : ""}`}
                         key={thread.id}
                         onClick={() => openDmThread(thread)}
                       >
@@ -805,6 +814,9 @@ function MainLayout() {
                           <span className="inbox-item-preview">{thread.preview}</span>
                           <span className="inbox-item-time">{thread.time}</span>
                         </div>
+                        {unreadDmThreadIds.has(thread.id) && (
+                          <span className="inbox-item-unread-dot" />
+                        )}
                       </button>
                     ))}
                   </div>
