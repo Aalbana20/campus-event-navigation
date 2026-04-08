@@ -3,19 +3,6 @@ import { supabase } from "../supabaseClient"
 
 const EventContext = createContext()
 
-const defaultFollowing = [
-  { id: "u-jordan", username: "jordan", name: "Jordan", image: "/default-avatar.png" },
-  { id: "u-taylor", username: "taylor", name: "Taylor", image: "/default-avatar.png" },
-  { id: "u-morgan", username: "morgan", name: "Morgan", image: "/default-avatar.png" },
-  { id: "u-alex", username: "alex", name: "Alex", image: "/default-avatar.png" },
-]
-
-const defaultFollowers = [
-  { id: "u-taylor", username: "taylor", name: "Taylor", image: "/default-avatar.png" },
-  { id: "u-morgan", username: "morgan", name: "Morgan", image: "/default-avatar.png" },
-  { id: "u-riley", username: "riley", name: "Riley", image: "/default-avatar.png" },
-  { id: "u-quinn", username: "quinn", name: "Quinn", image: "/default-avatar.png" },
-]
 
 const usersMatch = (a, b) => {
   if (!a || !b) return false
@@ -87,18 +74,24 @@ export function EventProvider({ children }) {
 
   const [savedEvents, setSavedEvents] = useState([])
   const [allEvents, setAllEvents] = useState([])
-  const [followingList] = useState(defaultFollowing)
-  const [followersList] = useState(defaultFollowers)
+  const [followingList, setFollowingList] = useState([])
+  const [followersList, setFollowersList] = useState([])
 
   useEffect(() => {
     const userId = JSON.parse(localStorage.getItem("user") || "{}").id
 
     const loadData = async () => {
       try {
-        const [eventsResult, rsvpsResult] = await Promise.all([
+        const [eventsResult, rsvpsResult, followingResult, followersResult] = await Promise.all([
           supabase.from("events").select("*").order("created_at", { ascending: false }),
           userId
             ? supabase.from("rsvps").select("event_id").eq("user_id", userId)
+            : Promise.resolve({ data: [], error: null }),
+          userId
+            ? supabase.from("follows").select("following_id").eq("follower_id", userId)
+            : Promise.resolve({ data: [], error: null }),
+          userId
+            ? supabase.from("follows").select("follower_id").eq("following_id", userId)
             : Promise.resolve({ data: [], error: null }),
         ])
 
@@ -154,6 +147,33 @@ export function EventProvider({ children }) {
         const matched = normalized.filter((e) => rsvpedIds.has(e.id))
 
         setSavedEvents(matched)
+
+        const toUserList = (profiles) =>
+          (profiles || []).map((p) => ({
+            id: p.id,
+            name: p.name || p.username || "User",
+            username: p.username || "",
+            image: "/default-avatar.png",
+          }))
+
+        const followingIds = (followingResult.data || []).map((f) => f.following_id)
+        const followerIds = (followersResult.data || []).map((f) => f.follower_id)
+
+        if (followingIds.length > 0) {
+          const { data: followingProfiles } = await supabase
+            .from("profiles")
+            .select("id, name, username")
+            .in("id", followingIds)
+          setFollowingList(toUserList(followingProfiles))
+        }
+
+        if (followerIds.length > 0) {
+          const { data: followerProfiles } = await supabase
+            .from("profiles")
+            .select("id, name, username")
+            .in("id", followerIds)
+          setFollowersList(toUserList(followerProfiles))
+        }
       } catch (error) {
         console.error("Failed to load event context:", error)
         setAllEvents([])
@@ -259,6 +279,50 @@ export function EventProvider({ children }) {
     setSavedEvents((prev) => prev.filter((event) => String(event.id) !== String(eventId)))
   }
 
+  const follow = async (targetUserId) => {
+    const userId = JSON.parse(localStorage.getItem("user") || "{}").id
+    if (!userId) return
+
+    const { error } = await supabase
+      .from("follows")
+      .insert({ follower_id: userId, following_id: targetUserId })
+
+    if (!error) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("id, name, username")
+        .eq("id", targetUserId)
+        .single()
+
+      if (profile) {
+        setFollowingList((prev) => [
+          ...prev,
+          {
+            id: profile.id,
+            name: profile.name || profile.username || "User",
+            username: profile.username || "",
+            image: "/default-avatar.png",
+          },
+        ])
+      }
+    }
+  }
+
+  const unfollow = async (targetUserId) => {
+    const userId = JSON.parse(localStorage.getItem("user") || "{}").id
+    if (!userId) return
+
+    const { error } = await supabase
+      .from("follows")
+      .delete()
+      .eq("follower_id", userId)
+      .eq("following_id", targetUserId)
+
+    if (!error) {
+      setFollowingList((prev) => prev.filter((p) => p.id !== targetUserId))
+    }
+  }
+
   const mutualUsers = useMemo(
     () =>
       followingList.filter((followingPerson) =>
@@ -280,6 +344,8 @@ export function EventProvider({ children }) {
         createEvent,
         cancelRSVP,
         deleteEvent,
+        follow,
+        unfollow,
       }}
     >
       {children}

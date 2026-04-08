@@ -135,9 +135,9 @@ function MainLayout() {
   const [activeInboxTab, setActiveInboxTab] = useState("notifications")
   const [notificationFilter, setNotificationFilter] = useState("all")
   const [openNotificationMenuId, setOpenNotificationMenuId] = useState(null)
-  const [activeDmThread, setActiveDmThread] = useState(null)
+  const [activeDmThreadId, setActiveDmThreadId] = useState(null)
   const [dmDraftMessage, setDmDraftMessage] = useState("")
-  const [dmMessagesByThread, setDmMessagesByThread] = useState({})
+  const [dmExtraMessagesByThread, setDmExtraMessagesByThread] = useState({})
   const defaultAvatar = "/default-avatar.png"
 
   const mutualUsers = useMemo(
@@ -286,38 +286,29 @@ function MainLayout() {
     return [...mergedReal, ...missing].slice(0, 8).map((item) => ({ ...item, read: false }))
   }, [eventUpdateNotifications, followNotifications, mockNotifications, upcomingEventNotifications])
 
-  const [notifications, setNotifications] = useState(notificationSeed)
+  const [readIds, setReadIds] = useState(new Set())
+  const [deletedIds, setDeletedIds] = useState(new Set())
 
-  useEffect(() => {
-    setNotifications((prev) =>
-      notificationSeed.map((item) => {
-        const existing = prev.find((prevItem) => prevItem.id === item.id)
-        return existing ? { ...item, read: existing.read } : item
-      })
-    )
-  }, [notificationSeed])
+  const notifications = useMemo(
+    () =>
+      notificationSeed
+        .filter((item) => !deletedIds.has(item.id))
+        .map((item) => ({ ...item, read: readIds.has(item.id) })),
+    [notificationSeed, readIds, deletedIds]
+  )
 
   const clearAllNotifications = () => {
-    setNotifications((prev) =>
-      prev.map((item) => ({
-        ...item,
-        read: true,
-      }))
-    )
+    setReadIds(new Set(notificationSeed.map((item) => item.id)))
   }
 
   const markNotificationRead = (id) => {
-    setNotifications((prev) =>
-      prev.map((item) =>
-        item.id === id ? { ...item, read: true } : item
-      )
-    )
+    setReadIds((prev) => new Set([...prev, id]))
   }
 
   const unreadNotificationCount = notifications.filter((item) => !item.read).length
 
   const deleteNotification = (id) => {
-    setNotifications((prev) => prev.filter((item) => item.id !== id))
+    setDeletedIds((prev) => new Set([...prev, id]))
     setOpenNotificationMenuId((prev) => (prev === id ? null : prev))
   }
 
@@ -391,31 +382,21 @@ function MainLayout() {
     [dmThreads]
   )
 
-  useEffect(() => {
-    setDmMessagesByThread((prev) => {
-      const next = { ...prev }
-      let changed = false
+  const dmMessagesByThread = useMemo(
+    () =>
+      Object.fromEntries(
+        dmThreads.map((thread) => [
+          thread.id,
+          [...(dmMessageSeed[thread.id] || []), ...(dmExtraMessagesByThread[thread.id] || [])],
+        ])
+      ),
+    [dmExtraMessagesByThread, dmMessageSeed, dmThreads]
+  )
 
-      dmThreads.forEach((thread) => {
-        if (!next[thread.id]) {
-          next[thread.id] = dmMessageSeed[thread.id] || []
-          changed = true
-        }
-      })
-
-      return changed ? next : prev
-    })
-  }, [dmMessageSeed, dmThreads])
-
-  useEffect(() => {
-    if (
-      activeDmThread &&
-      !dmThreads.some((thread) => String(thread.id) === String(activeDmThread.id))
-    ) {
-      setActiveDmThread(null)
-      setDmDraftMessage("")
-    }
-  }, [activeDmThread, dmThreads])
+  const activeDmThread = useMemo(
+    () => dmThreads.find((t) => String(t.id) === String(activeDmThreadId)) ?? null,
+    [activeDmThreadId, dmThreads]
+  )
 
   const displayDmThreads = useMemo(
     () =>
@@ -435,18 +416,17 @@ function MainLayout() {
   )
 
   const selectedDmThread = activeDmThread
-    ? displayDmThreads.find(
-        (thread) => String(thread.id) === String(activeDmThread.id)
-      ) || activeDmThread
+    ? displayDmThreads.find((thread) => String(thread.id) === String(activeDmThread.id)) ||
+      activeDmThread
     : null
 
   const openDmThread = (thread) => {
-    setActiveDmThread(thread)
+    setActiveDmThreadId(thread.id)
     setDmDraftMessage("")
   }
 
   const closeDmThread = () => {
-    setActiveDmThread(null)
+    setActiveDmThreadId(null)
     setDmDraftMessage("")
   }
 
@@ -456,7 +436,7 @@ function MainLayout() {
     const trimmedMessage = dmDraftMessage.trim()
     if (!trimmedMessage || !selectedDmThread) return
 
-    setDmMessagesByThread((prev) => ({
+    setDmExtraMessagesByThread((prev) => ({
       ...prev,
       [selectedDmThread.id]: [
         ...(prev[selectedDmThread.id] || []),
@@ -475,7 +455,7 @@ function MainLayout() {
   const closeInbox = () => {
     setIsInboxOpen(false)
     setOpenNotificationMenuId(null)
-    setActiveDmThread(null)
+    setActiveDmThreadId(null)
     setDmDraftMessage("")
   }
 

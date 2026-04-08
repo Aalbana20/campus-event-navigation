@@ -1,6 +1,6 @@
 # Campus Event Navigation — UML Diagrams
 
-> **How to view:** Install the [Markdown Preview Mermaid Support](https://marketplace.visualstudio.com/items?itemName=bierner.markdown-mermaid) VS Code extension, open this file, and press `Ctrl+Shift+V`.
+> Render these diagrams with the [Mermaid VS Code extension](https://marketplace.visualstudio.com/items?itemName=bierner.markdown-mermaid) or view on GitHub.
 
 ---
 
@@ -8,57 +8,56 @@
 
 ```mermaid
 graph TB
-    subgraph Browser["Browser (React SPA — Vite)"]
-        main["main.jsx\nHashRouter + EventProvider"]
-        App["App.jsx\nAuth Guard + Router"]
-        Layout["MainLayout\nNav + Notification Inbox"]
+    subgraph Browser["Browser (Client)"]
+        subgraph React["React SPA (Vite)"]
+            main["main.jsx\nHashRouter + EventProvider"]
+            App["App.jsx\nRouter + Auth Guard"]
+            Layout["MainLayout\nNav + Inbox"]
+            
+            subgraph Pages
+                Discover["Discover.jsx"]
+                MyEvents["MyEvents.jsx"]
+                Profile["Profile.jsx"]
+                CreateEvent["CreateEvent.jsx"]
+                Login["Login.jsx"]
+                SignUp["SignUp.jsx"]
+            end
 
-        subgraph Pages["Pages"]
-            Discover["Discover"]
-            MyEvents["MyEvents"]
-            Profile["Profile"]
-            CreateEvent["CreateEvent"]
-            Login["Login"]
-            SignUp["SignUp"]
+            subgraph Components
+                EventCard["EventCard.jsx"]
+                MyEventCard["MyEventCard.jsx"]
+            end
+
+            subgraph State["Global State"]
+                EventContext["EventContext\nuseEvents()"]
+            end
         end
 
-        subgraph Components["Reusable Components"]
-            EventCard["EventCard"]
-            MyEventCard["MyEventCard"]
-        end
-
-        EventContext["EventContext\n(Global State)"]
-        LS["localStorage\nuser · profileImage · themeMode"]
+        LS["localStorage\n(user, profileImage, themeMode)"]
     end
 
-    subgraph Supabase["Supabase (Cloud Backend)"]
-        Auth["Auth\nemail/password sessions"]
+    subgraph Supabase["Supabase (Cloud)"]
+        Auth["Supabase Auth\nemail/password sessions"]
         DB[("PostgreSQL\nevents · rsvps · profiles")]
         Storage["Storage\nevent-flyers bucket"]
     end
 
-    main --> App
-    App --> Layout
-    Layout --> Discover
-    Layout --> MyEvents
-    Layout --> Profile
-    Layout --> CreateEvent
-    App --> Login
-    App --> SignUp
-
-    Discover --> EventCard
-    MyEvents --> MyEventCard
+    subgraph Backend["Express Backend (Unused in prod)"]
+        Express["server.js"]
+        Mongo[("MongoDB")]
+    end
 
     Pages --> EventContext
     Components --> EventContext
-
     EventContext --> DB
+    EventContext --> Auth
     App --> Auth
+    CreateEvent --> Storage
     Login --> Auth
     SignUp --> Auth
-    CreateEvent --> Storage
-    Profile --> LS
     App --> LS
+    Profile --> LS
+    Express --> Mongo
 ```
 
 ---
@@ -67,14 +66,14 @@ graph TB
 
 ```mermaid
 graph TD
-    main["main.jsx\nHashRouter"] --> EventProvider["EventProvider"]
-    EventProvider --> AppRoot["App\nsession state · auth guard"]
+    main["main.jsx\nHashRouter"] --> EventProvider
+    EventProvider --> AppRoot["App (root)\nsession state"]
 
-    AppRoot -->|public| Login
-    AppRoot -->|public| SignUp
-    AppRoot -->|public| Logout
+    AppRoot -->|"public routes"| Login
+    AppRoot -->|"public routes"| SignUp
+    AppRoot -->|"public routes"| Logout
 
-    AppRoot -->|protected| MainLayout["MainLayout\ntop nav + notification inbox"]
+    AppRoot -->|"protected routes"| MainLayout["MainLayout\ntop nav + notification inbox"]
 
     MainLayout --> Discover
     MainLayout --> MyEvents
@@ -83,10 +82,10 @@ graph TD
 
     Discover --> EventCard
     MyEvents --> MyEventCard
-    MyEvents --> CalendarView["Calendar View"]
+    MyEvents --> Calendar["Calendar View\n(inline JSX)"]
 
-    Profile --> EditProfile["EditProfile Modal"]
-    Profile --> CropModal["CropModal\nreact-easy-crop"]
+    Profile --> EditProfileModal["EditProfile Modal"]
+    Profile --> CropModal["CropModal\n(react-easy-crop)"]
     Profile --> SettingsModal["Settings Modal"]
     Profile --> FollowersModal["Followers Modal"]
     Profile --> FollowingModal["Following Modal"]
@@ -95,7 +94,7 @@ graph TD
 
 ---
 
-## 3. Database Schema (ER Diagram)
+## 3. Data Model (ER Diagram)
 
 ```mermaid
 erDiagram
@@ -107,7 +106,7 @@ erDiagram
     }
 
     PROFILES {
-        uuid id PK
+        uuid id PK_FK
         string name
         string username
         string bio
@@ -128,7 +127,7 @@ erDiagram
         string organizer
         string dress_code
         string image
-        string tags
+        string[] tags
         uuid created_by FK
         string creator_username
         int going_count
@@ -151,49 +150,45 @@ erDiagram
 
 ---
 
-## 4. Key Data Flows (Sequence Diagram)
+## 4. State & Data Flow
 
 ```mermaid
 sequenceDiagram
     participant User
     participant App
-    participant SupabaseAuth
+    participant Supabase Auth
     participant EventContext
-    participant SupabaseDB
+    participant Supabase DB
 
     User->>App: Opens app
-    App->>SupabaseAuth: getSession()
-    SupabaseAuth-->>App: session | null
-    App->>App: redirect → /discover or /auth/login
+    App->>Supabase Auth: getSession()
+    Supabase Auth-->>App: session | null
+    App->>App: Redirect → /discover or /auth/login
 
-    Note over EventContext,SupabaseDB: App mount — load data
-    EventContext->>SupabaseDB: SELECT * FROM events ORDER BY created_at DESC
-    SupabaseDB-->>EventContext: events[]
-    EventContext->>SupabaseDB: SELECT * FROM rsvps WHERE user_id = currentUser.id
-    SupabaseDB-->>EventContext: rsvps[]
-    EventContext->>EventContext: savedEvents = events filtered by rsvps
+    Note over EventContext, Supabase DB: On mount
+    EventContext->>Supabase DB: SELECT * FROM events ORDER BY created_at DESC
+    Supabase DB-->>EventContext: events[]
+    EventContext->>Supabase DB: SELECT * FROM rsvps WHERE user_id = ?
+    Supabase DB-->>EventContext: rsvps[]
+    EventContext->>EventContext: savedEvents = events matching rsvps
 
-    User->>Discover: Swipes right on event
-    Discover->>EventContext: addEvent(event)
-    EventContext->>SupabaseDB: INSERT INTO rsvps (user_id, event_id)
+    User->>App: Swipes right on event (Discover)
+    App->>EventContext: addEvent(event, user)
+    EventContext->>Supabase DB: INSERT INTO rsvps (user_id, event_id)
     EventContext->>EventContext: savedEvents.push(event)
     EventContext->>EventContext: allEvents[i].goingCount++
 
-    User->>CreateEvent: Fills form + uploads flyer
-    CreateEvent->>SupabaseStorage: upload flyer image
-    SupabaseStorage-->>CreateEvent: public image URL
-    CreateEvent->>SupabaseDB: INSERT INTO events (...)
-    CreateEvent->>EventContext: createEvent(newEvent)
+    User->>App: Creates new event (CreateEvent)
+    App->>Supabase DB: UPLOAD flyer to storage
+    Supabase DB-->>App: public image URL
+    App->>Supabase DB: INSERT INTO events (...)
+    App->>EventContext: createEvent(newEvent)
     EventContext->>EventContext: allEvents.unshift(newEvent)
-
-    User->>Profile: Saves profile edits
-    Profile->>SupabaseDB: UPSERT INTO profiles (id, name, username, bio)
-    Profile->>localStorage: update cached user object
 ```
 
 ---
 
-## 5. Class Diagram
+## 5. Class Diagram (Frontend)
 
 ```mermaid
 classDiagram
@@ -261,7 +256,9 @@ classDiagram
         -string time
         -string locationName
         -string locationAddress
+        -string eventType
         -int capacity
+        -string flyerPreview
         -File flyerFile
         -bool isUploading
         -string[] tags
@@ -281,6 +278,28 @@ classDiagram
         -bool flipped
         +render()
     }
+
+    class SupabaseClient {
+        +auth
+        +from(table)
+        +storage
+    }
+
+    App --> MainLayout
+    MainLayout --> Discover
+    MainLayout --> MyEvents
+    MainLayout --> Profile
+    MainLayout --> CreateEvent
+    Discover --> EventCard
+    MyEvents --> MyEventCard
+    Discover --> EventContext
+    MyEvents --> EventContext
+    Profile --> EventContext
+    CreateEvent --> EventContext
+    App --> EventContext
+    EventContext --> SupabaseClient
+    CreateEvent --> SupabaseClient
+    App --> SupabaseClient
 
     class Event {
         +string id
@@ -308,19 +327,49 @@ classDiagram
         +string image
     }
 
-    App --> MainLayout
-    App --> EventContext
-    MainLayout --> Discover
-    MainLayout --> MyEvents
-    MainLayout --> Profile
-    MainLayout --> CreateEvent
-    Discover --> EventCard
-    MyEvents --> MyEventCard
-    Discover --> EventContext
-    MyEvents --> EventContext
-    Profile --> EventContext
-    CreateEvent --> EventContext
-    EventContext "1" --> "*" Event
-    EventContext "1" --> "*" User
+    EventContext "1" --> "*" Event : manages
+    EventContext "1" --> "*" User : manages
+```
+
+---
+
+## 6. Backend (Express — Auth Fallback)
+
+```mermaid
+classDiagram
+    class Server {
+        +express app
+        +connectDB()
+        +listen(PORT)
+    }
+
+    class AuthRoutes {
+        +POST /api/auth/register
+        +POST /api/auth/login
+        +GET  /api/protected
+    }
+
+    class AuthController {
+        +registerUser(req, res)
+        +loginUser(req, res)
+    }
+
+    class AuthMiddleware {
+        +protect(req, res, next)
+        +verifyJWT(token)
+    }
+
+    class UserModel {
+        +String name
+        +String email
+        +String password
+        +timestamps createdAt
+        +timestamps updatedAt
+    }
+
+    Server --> AuthRoutes
+    AuthRoutes --> AuthController
+    AuthRoutes --> AuthMiddleware
+    AuthController --> UserModel
 ```
 
