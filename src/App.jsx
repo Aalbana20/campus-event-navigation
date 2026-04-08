@@ -5,6 +5,7 @@ import Discover from "./pages/Discover"
 import Explore from "./pages/Explore"
 import MyEvents from "./pages/MyEvents"
 import Profile from "./pages/Profile"
+import PublicProfile from "./pages/PublicProfile"
 import CreateEvent from "./CreateEvent"
 import SignUp from "./pages/SignUp"
 import Login from "./pages/Login"
@@ -915,7 +916,7 @@ function App() {
           <Route path="/events/:eventId" element={<MyEvents />} />
           <Route path="/create" element={<CreateEvent />} />
           <Route path="/profile" element={<Profile />} />
-          <Route path="/profile/:username" element={<Profile />} />
+          <Route path="/profile/:username" element={<PublicProfile />} />
         </Route>
 
         <Route path="/auth" element={<AuthLayout />}>

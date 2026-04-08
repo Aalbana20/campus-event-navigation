@@ -1,5 +1,6 @@
 import React, { useState } from "react"
 import { useEvents } from "../context/EventContext"
+import "../pages/Profile.css"
 
 const usersMatch = (a, b) => {
   if (!a || !b) return false
@@ -12,10 +13,12 @@ function EventCard({ event }) {
   const { mutualUsers } = useEvents()
   const [flipped, setFlipped] = useState(false)
   const [isMutualsOpen, setIsMutualsOpen] = useState(false)
+  const [shareEvent, setShareEvent] = useState(null)
 
   const displayLocation = event.locationName || event.location || "No location"
   const mapsQuery = encodeURIComponent(event.locationAddress || event.location || "")
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${mapsQuery}`
+  const shareLink = `${window.location.origin}/event/${shareEvent?.id || event?.id || ""}`
 
   const attendeeUsers = event?.attendees || event?.rsvpUsers || event?.goingUsers || []
 
@@ -40,6 +43,48 @@ function EventCard({ event }) {
 
   const closeMutuals = () => {
     setIsMutualsOpen(false)
+  }
+
+  const handleShareEvent = (e) => {
+    e.stopPropagation()
+    setShareEvent(event)
+  }
+
+  const closeShare = () => {
+    setShareEvent(null)
+  }
+
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(shareLink)
+      closeShare()
+    } catch {
+      window.prompt("Copy event link:", shareLink)
+      closeShare()
+    }
+  }
+
+  const handleNativeShare = async () => {
+    if (!navigator.share) {
+      await handleCopyLink()
+      return
+    }
+
+    try {
+      await navigator.share({
+        title: shareEvent?.title || event?.title || "Campus Event",
+        text: shareEvent?.description || event?.description || "Check out this event.",
+        url: shareLink,
+      })
+      closeShare()
+    } catch (error) {
+      if (error?.name === "AbortError") {
+        closeShare()
+        return
+      }
+
+      await handleCopyLink()
+    }
   }
 
   return (
@@ -95,15 +140,25 @@ function EventCard({ event }) {
             <p><strong>Dress Code:</strong> {event.dressCode || "Open"}</p>
             <p><strong>About:</strong> {event.description || "No description available."}</p>
 
-            <button
-              className="map-btn"
-              onClick={(e) => {
-                e.stopPropagation()
-                window.open(mapsUrl, "_blank")
-              }}
-            >
-              📍 View Map
-            </button>
+            <div className="event-card-actions-row">
+              <button
+                className="map-btn"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  window.open(mapsUrl, "_blank")
+                }}
+              >
+                View Map
+              </button>
+
+              <button
+                type="button"
+                className="event-share-btn"
+                onClick={handleShareEvent}
+              >
+                Share
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -151,6 +206,38 @@ function EventCard({ event }) {
                   None of your mutuals are going to this event yet.
                 </p>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {shareEvent && (
+        <div className="share-overlay" onClick={closeShare}>
+          <div className="share-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="share-actions">
+              <button
+                type="button"
+                className="share-action-btn"
+                onClick={handleCopyLink}
+              >
+                Copy Link
+              </button>
+
+              <button
+                type="button"
+                className="share-action-btn"
+                onClick={handleNativeShare}
+              >
+                Native Share
+              </button>
+
+              <button
+                type="button"
+                className="share-action-btn cancel"
+                onClick={closeShare}
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>

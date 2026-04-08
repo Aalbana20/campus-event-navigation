@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react"
 import Cropper from "react-easy-crop"
-import { useNavigate, useParams } from "react-router-dom"
+import { useNavigate } from "react-router-dom"
 import { useEvents } from "../context/EventContext"
 import { supabase } from "../supabaseClient"
 import "./Profile.css"
@@ -43,7 +43,6 @@ async function getCroppedImg(imageSrc, pixelCrop) {
 
 function Profile() {
   const navigate = useNavigate()
-  const { username: viewedUsername } = useParams()
   const {
     currentUser,
     savedEvents,
@@ -55,36 +54,6 @@ function Profile() {
     follow,
     unfollow,
   } = useEvents()
-
-  const storedUsername = JSON.parse(localStorage.getItem("user") || "{}").username
-  const isViewingOtherUser =
-    viewedUsername && viewedUsername !== storedUsername && viewedUsername !== currentUser?.username
-
-  const [otherUser, setOtherUser] = useState(null)
-  const [otherUserLoading, setOtherUserLoading] = useState(isViewingOtherUser)
-
-  useEffect(() => {
-    if (!isViewingOtherUser) return
-
-    // viewedUsername could be a username string or a UUID
-    const isUUID = /^[0-9a-f-]{36}$/i.test(viewedUsername)
-    const query = supabase
-      .from("profiles")
-      .select("id, name, username, bio, avatar_url")
-
-    const resolvedQuery = isUUID
-      ? query.eq("id", viewedUsername)
-      : query.eq("username", viewedUsername)
-
-    resolvedQuery.single().then(({ data }) => {
-      setOtherUser(data || { username: viewedUsername, name: viewedUsername })
-      setOtherUserLoading(false)
-    })
-  }, [isViewingOtherUser, viewedUsername])
-
-  const isFollowingOtherUser = otherUser
-    ? followingList.some((f) => f.id === otherUser.id || f.username === otherUser.username)
-    : false
 
   const [name, setName] = useState("Success Myers")
   const [username, setUsername] = useState("itzmesuccess1")
@@ -127,6 +96,7 @@ function Profile() {
   const [zoom, setZoom] = useState(1)
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null)
   const [rawSelectedImage, setRawSelectedImage] = useState(null)
+  const ownerId = storedUser.id || currentUser?.id
   const ownerUsername = storedUser.username || username
   const currentProfileImage =
     profileImage ||
@@ -136,6 +106,8 @@ function Profile() {
 
   const createdEvents = allEvents.filter(
     (event) =>
+      String(event.createdBy) === String(ownerId) ||
+      String(event.created_by) === String(ownerId) ||
       event.createdBy === ownerUsername ||
       event.creatorUsername === ownerUsername
   )
@@ -402,92 +374,6 @@ function Profile() {
     } finally {
       setIsConfirmingAction(false)
     }
-  }
-
-  if (isViewingOtherUser) {
-    if (otherUserLoading) {
-      return (
-        <main className="profile-page">
-          <div className="profile-card">
-            <p style={{ textAlign: "center", padding: "2rem" }}>Loading profile...</p>
-          </div>
-        </main>
-      )
-    }
-
-    if (!otherUser) {
-      return (
-        <main className="profile-page">
-          <div className="profile-card">
-            <p style={{ textAlign: "center", padding: "2rem" }}>User not found.</p>
-          </div>
-        </main>
-      )
-    }
-
-    const otherUserEvents = allEvents.filter(
-      (e) => e.creatorUsername === otherUser.username || e.createdBy === otherUser.id
-    )
-
-    return (
-      <main className="profile-page">
-        <div className="profile-card">
-          <div className="profile-header">
-            <div className="profile-avatar-wrap">
-              <img
-                className="profile-avatar"
-                src={otherUser.avatar_url || defaultAvatar}
-                alt={otherUser.name || otherUser.username}
-                onError={(e) => { e.currentTarget.src = defaultAvatar }}
-              />
-            </div>
-            <div className="profile-info">
-              <h1 className="username">@{otherUser.username}</h1>
-              <h2 className="real-name">{otherUser.name}</h2>
-              {otherUser.bio && <p className="bio">{otherUser.bio}</p>}
-              <div className="profile-stats">
-                <div className="profile-stat-card">
-                  <span className="profile-stat-number">{otherUserEvents.length}</span>
-                  <span className="profile-stat-label">Events Created</span>
-                </div>
-              </div>
-              <div className="profile-action-row">
-                <button
-                  type="button"
-                  className="profile-edit-btn"
-                  onClick={() => otherUser.id && (isFollowingOtherUser ? unfollow(otherUser.id) : follow(otherUser.id))}
-                >
-                  {isFollowingOtherUser ? "Unfollow" : "Follow"}
-                </button>
-                {otherUser.id && (
-                  <button
-                    type="button"
-                    className="profile-share-btn"
-                    onClick={() => navigate(`/discover?dm=${otherUser.id}`)}
-                  >
-                    Message
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {otherUserEvents.length > 0 && (
-            <div className="profile-activity-section">
-              <h3 className="profile-activity-title">Events by @{otherUser.username}</h3>
-              <div className="profile-list">
-                {otherUserEvents.map((event) => (
-                  <div className="profile-list-item" key={event.id}>
-                    <span className="profile-list-name">{event.title}</span>
-                    <span className="profile-list-meta">{event.date}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      </main>
-    )
   }
 
   return (
