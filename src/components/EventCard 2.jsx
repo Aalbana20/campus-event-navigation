@@ -1,6 +1,5 @@
 import React, { useState } from "react"
 import { useEvents } from "../context/EventContext"
-import EventActionControl from "./EventActionControl"
 
 const usersMatch = (a, b) => {
   if (!a || !b) return false
@@ -14,7 +13,6 @@ function EventCard({ event }) {
   const [flipped, setFlipped] = useState(false)
   const [isMutualsOpen, setIsMutualsOpen] = useState(false)
 
-  const eventTitle = event?.title || event?.name || "Untitled Event"
   const displayLocation = event.locationName || event.location || "No location"
   const mapsQuery = encodeURIComponent(event.locationAddress || event.location || "")
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${mapsQuery}`
@@ -35,8 +33,8 @@ function EventCard({ event }) {
 
   const mutualCount = event?.mutualCount ?? mutualAttendees.length
 
-  const openMutuals = (eventClick) => {
-    eventClick.stopPropagation()
+  const openMutuals = (e) => {
+    e.stopPropagation()
     setIsMutualsOpen(true)
   }
 
@@ -47,13 +45,11 @@ function EventCard({ event }) {
   return (
     <>
       <div className="flip-card event-card-shell" onClick={() => setFlipped(!flipped)}>
-        <EventActionControl event={event} />
-
         <div className={`flip-card-inner ${flipped ? "flipped" : ""}`}>
           <div className="flip-card-front">
             <img
               src={event.image}
-              alt={eventTitle}
+              alt={event.title}
               className="event-image"
               draggable={false}
             />
@@ -76,8 +72,8 @@ function EventCard({ event }) {
                       src={person.image || person.avatar || "/default-avatar.png"}
                       alt={person.name || "Mutual attendee"}
                       className="event-card-mutual-avatar"
-                      onError={(eventClick) => {
-                        eventClick.currentTarget.src = "/default-avatar.png"
+                      onError={(e) => {
+                        e.currentTarget.src = "/default-avatar.png"
                       }}
                     />
                   ))}
@@ -89,7 +85,7 @@ function EventCard({ event }) {
           </div>
 
           <div className="flip-card-back">
-            <h2>{eventTitle}</h2>
+            <h2>{event.title}</h2>
             <p><strong>Location:</strong> {displayLocation}</p>
             <p><strong>Date:</strong> {event.date}</p>
             <p><strong>Time:</strong> {event.time || "TBA"}</p>
@@ -99,17 +95,15 @@ function EventCard({ event }) {
             <p><strong>Dress Code:</strong> {event.dressCode || "Open"}</p>
             <p><strong>About:</strong> {event.description || "No description available."}</p>
 
-            <div className="event-card-actions-row">
-              <button
-                className="map-btn"
-                onClick={(eventClick) => {
-                  eventClick.stopPropagation()
-                  window.open(mapsUrl, "_blank")
-                }}
-              >
-                View Map
-              </button>
-            </div>
+            <button
+              className="map-btn"
+              onClick={(e) => {
+                e.stopPropagation()
+                window.open(mapsUrl, "_blank")
+              }}
+            >
+              📍 View Map
+            </button>
           </div>
         </div>
       </div>
@@ -118,7 +112,7 @@ function EventCard({ event }) {
         <div className="event-mutuals-overlay" onClick={closeMutuals}>
           <div
             className="event-mutuals-modal"
-            onClick={(eventClick) => eventClick.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
           >
             <div className="event-mutuals-header">
               <h3>People Going</h3>
@@ -143,8 +137,8 @@ function EventCard({ event }) {
                       src={person.image || person.avatar || "/default-avatar.png"}
                       alt={person.name || person.username || "Attendee"}
                       className="event-mutuals-item-avatar"
-                      onError={(eventClick) => {
-                        eventClick.currentTarget.src = "/default-avatar.png"
+                      onError={(e) => {
+                        e.currentTarget.src = "/default-avatar.png"
                       }}
                     />
                     <span className="event-mutuals-item-name">

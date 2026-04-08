@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
+import EventActionControl from "../components/EventActionControl"
 import { useEvents } from "../context/EventContext"
 import { supabase } from "../supabaseClient"
 
@@ -262,7 +263,9 @@ function Explore() {
     const eventTitle = event?.title || "Untitled Event"
 
     return (
-      <article key={event.id} className="explore-card explore-event-card">
+      <article key={event.id} className="explore-card explore-event-card event-card-shell">
+        <EventActionControl event={event} />
+
         <button
           type="button"
           className="explore-card-main explore-event-main"
@@ -358,12 +361,6 @@ function Explore() {
   return (
     <main className="explore-page">
       <div className="explore-shell">
-        <p className="eyebrow">Find what is happening beyond your usual circle</p>
-        <h1 className="explore-title">Explore</h1>
-        <p className="explore-subtitle">
-          Discover events in other cities and people worth following next.
-        </p>
-
         <div className="explore-search-wrap">
           <span aria-hidden="true" className="explore-search-icon">⌕</span>
           <input

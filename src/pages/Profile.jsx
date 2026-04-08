@@ -41,6 +41,48 @@ async function getCroppedImg(imageSrc, pixelCrop) {
   })
 }
 
+function ProfileTabIcon({ type }) {
+  if (type === "grid") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="3.5" y="3.5" width="7" height="7" rx="1.5" />
+        <rect x="13.5" y="3.5" width="7" height="7" rx="1.5" />
+        <rect x="3.5" y="13.5" width="7" height="7" rx="1.5" />
+        <rect x="13.5" y="13.5" width="7" height="7" rx="1.5" />
+      </svg>
+    )
+  }
+
+  if (type === "reposts") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4.75 8H14.5" />
+        <path d="M12.25 5.5L15.75 8L12.25 10.5" />
+        <path d="M18 8V9.25C18 11.873 15.873 14 13.25 14H5.75" />
+        <path d="M19.25 16H9.5" />
+        <path d="M11.75 13.5L8.25 16L11.75 18.5" />
+        <path d="M6 16V14.75C6 12.127 8.127 10 10.75 10H18.25" />
+      </svg>
+    )
+  }
+
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M8 6.5A2.5 2.5 0 1 1 8 11.5A2.5 2.5 0 0 1 8 6.5Z" />
+      <path d="M16 4.5A2.5 2.5 0 1 1 16 9.5A2.5 2.5 0 0 1 16 4.5Z" />
+      <path d="M14.5 18.5A3.5 3.5 0 1 1 14.5 11.5A3.5 3.5 0 0 1 14.5 18.5Z" />
+      <path d="M10 9.5L13 11.5" />
+      <path d="M9 14L11.5 15" />
+    </svg>
+  )
+}
+
+const buildProfileEventImageStyle = (event) => ({
+  backgroundImage: event?.image
+    ? `linear-gradient(180deg, rgba(15, 23, 42, 0.08), rgba(15, 23, 42, 0.72)), url(${event.image})`
+    : "linear-gradient(135deg, rgba(17, 24, 39, 0.96), rgba(37, 99, 235, 0.82), rgba(236, 72, 153, 0.64))",
+})
+
 function Profile() {
   const navigate = useNavigate()
   const {
@@ -84,6 +126,7 @@ function Profile() {
     event: null,
   })
   const [isConfirmingAction, setIsConfirmingAction] = useState(false)
+  const [activeProfileTab, setActiveProfileTab] = useState("grid")
 
   const defaultAvatar = "/default-avatar.png"
   const storedUser = JSON.parse(localStorage.getItem("user") || "{}")
@@ -111,7 +154,19 @@ function Profile() {
       event.createdBy === ownerUsername ||
       event.creatorUsername === ownerUsername
   )
-  const recentRsvpEvents = (savedEvents || []).slice(0, 5)
+  const rsvpGridEvents = savedEvents || []
+  const repostedEvents = allEvents.filter((event) => {
+    const repostedByIds = Array.isArray(event.repostedByIds) ? event.repostedByIds : []
+    const repostedByUsernames = Array.isArray(event.repostedByUsernames)
+      ? event.repostedByUsernames
+      : []
+
+    return (
+      repostedByIds.some((id) => String(id) === String(ownerId)) ||
+      repostedByUsernames.some((handle) => handle === ownerUsername)
+    )
+  })
+  const taggedMoments = []
 
   const openPanel = (panelName) => {
     setActivePanel(panelName)
@@ -453,81 +508,124 @@ function Profile() {
           </div>
         </div>
 
-        <div className="profile-bottom-grid">
-          <div className="profile-section">
-            <div className="profile-created-section">
-              <div className="profile-section-header">
-                <h3>Created Events</h3>
-              </div>
+        <div className="profile-content-stack">
+          <div className="profile-section profile-tabbed-section">
+            <div className="profile-tab-bar" role="tablist" aria-label="Profile tabs">
+              <button
+                type="button"
+                className={`profile-tab-btn ${activeProfileTab === "grid" ? "active" : ""}`}
+                onClick={() => setActiveProfileTab("grid")}
+                aria-label="Going events"
+                aria-selected={activeProfileTab === "grid"}
+                role="tab"
+              >
+                <ProfileTabIcon type="grid" />
+              </button>
 
-              {createdEvents.length > 0 ? (
-                <div className="profile-created-list">
-                  {createdEvents.slice(0, 5).map((event) => (
-                    <div className="profile-created-event-card" key={event.id}>
-                      <div className="profile-created-event-content">
-                        <div className="profile-created-event-main">
-                          <h4>{event.title || event.name || "Untitled Event"}</h4>
-                          <p>
+              <button
+                type="button"
+                className={`profile-tab-btn ${activeProfileTab === "reposts" ? "active" : ""}`}
+                onClick={() => setActiveProfileTab("reposts")}
+                aria-label="Reposted events"
+                aria-selected={activeProfileTab === "reposts"}
+                role="tab"
+              >
+                <ProfileTabIcon type="reposts" />
+              </button>
+
+              <button
+                type="button"
+                className={`profile-tab-btn ${activeProfileTab === "tagged" ? "active" : ""}`}
+                onClick={() => setActiveProfileTab("tagged")}
+                aria-label="Tagged moments"
+                aria-selected={activeProfileTab === "tagged"}
+                role="tab"
+              >
+                <ProfileTabIcon type="tagged" />
+              </button>
+            </div>
+
+            <div className="profile-tab-panel">
+              {activeProfileTab === "grid" && (
+                rsvpGridEvents.length > 0 ? (
+                  <div className="profile-tab-event-grid">
+                    {rsvpGridEvents.map((event) => (
+                      <button
+                        key={event.id}
+                        type="button"
+                        className="profile-tab-event-card"
+                        onClick={() => openCancelRsvpModal(event)}
+                      >
+                        <div
+                          className="profile-tab-event-image"
+                          style={buildProfileEventImageStyle(event)}
+                        >
+                          <span className="profile-tab-event-pill">Going</span>
+                        </div>
+
+                        <div className="profile-tab-event-body">
+                          <strong>{event.title || event.name || "Untitled Event"}</strong>
+                          <span>
                             {[
                               event.date,
                               event.time || "TBA",
-                              event.locationName || event.location || "No location",
-                            ].join(" · ")}
-                          </p>
+                            ].filter(Boolean).join(" · ")}
+                          </span>
+                          <span>{event.locationName || event.location || "No location"}</span>
                         </div>
-
-                        <div className="profile-created-event-actions">
-                          <button
-                            type="button"
-                            className="profile-delete-btn"
-                            onClick={() => openDeleteModal(event)}
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="profile-created-empty">No events created yet.</p>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="profile-tab-empty-state">
+                    <h3>Your grid is open.</h3>
+                    <p>Events you RSVP to will show up here first.</p>
+                  </div>
+                )
               )}
-            </div>
-          </div>
 
-          <div className="profile-section">
-            <h3>RSVP Activity</h3>
-            <div className="profile-rsvp-section">
-              <div className="profile-section-header">
-                <h3>Recent</h3>
-              </div>
+              {activeProfileTab === "reposts" && (
+                repostedEvents.length > 0 ? (
+                  <div className="profile-tab-event-grid">
+                    {repostedEvents.map((event) => (
+                      <div className="profile-tab-event-card static" key={event.id}>
+                        <div
+                          className="profile-tab-event-image"
+                          style={buildProfileEventImageStyle(event)}
+                        >
+                          <span className="profile-tab-event-pill">Reposted</span>
+                        </div>
 
-              {recentRsvpEvents.length > 0 ? (
-                <div className="profile-rsvp-list">
-                  {recentRsvpEvents.map((event) => (
-                    <button
-                      key={event.id}
-                      type="button"
-                      className="profile-rsvp-item"
-                      onClick={() => openCancelRsvpModal(event)}
-                    >
-                      <div className="profile-rsvp-item-main">
-                        <strong>{event.title || event.name || "Untitled Event"}</strong>
-                        <p>
-                          {[
-                            event.date,
-                            event.time || "TBA",
-                            event.locationName || event.location || "No location",
-                          ].join(" · ")}
-                        </p>
-                        <span className="profile-rsvp-hint">Click to cancel RSVP</span>
+                        <div className="profile-tab-event-body">
+                          <strong>{event.title || event.name || "Untitled Event"}</strong>
+                          <span>
+                            {[
+                              event.date,
+                              event.time || "TBA",
+                            ].filter(Boolean).join(" · ")}
+                          </span>
+                          <span>{event.locationName || event.location || "No location"}</span>
+                        </div>
                       </div>
-                      <span className="profile-rsvp-dot" />
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <p className="profile-rsvp-empty">No RSVP activity yet.</p>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="profile-tab-empty-state">
+                    <h3>Nothing reposted yet.</h3>
+                    <p>Events you repost will show up here.</p>
+                  </div>
+                )
+              )}
+
+              {activeProfileTab === "tagged" && (
+                taggedMoments.length > 0 ? (
+                  <div className="profile-tagged-grid" />
+                ) : (
+                  <div className="profile-tab-empty-state">
+                    <h3>Tagged moments will land here.</h3>
+                    <p>Photos and videos from events you attend will appear here.</p>
+                  </div>
+                )
               )}
             </div>
           </div>
@@ -624,18 +722,30 @@ function Profile() {
 
               {activePanel === "events" && (
                 createdEvents.length > 0 ? (
-                  <div className="profile-list">
+                  <div className="profile-created-list">
                     {createdEvents.map((event, index) => (
-                      <div className="profile-list-item" key={event.id || index}>
-                        <div className="profile-event-info">
-                          <span className="profile-list-name">
-                            {event.title || event.name || "Untitled Event"}
-                          </span>
-                          {(event.date || event.time) && (
-                            <span className="profile-event-meta">
-                              {[event.date, event.time].filter(Boolean).join(" • ")}
-                            </span>
-                          )}
+                      <div className="profile-created-event-card" key={event.id || index}>
+                        <div className="profile-created-event-content">
+                          <div className="profile-created-event-main">
+                            <h4>{event.title || event.name || "Untitled Event"}</h4>
+                            <p>
+                              {[
+                                event.date,
+                                event.time || "TBA",
+                                event.locationName || event.location || "No location",
+                              ].join(" · ")}
+                            </p>
+                          </div>
+
+                          <div className="profile-created-event-actions">
+                            <button
+                              type="button"
+                              className="profile-delete-btn"
+                              onClick={() => openDeleteModal(event)}
+                            >
+                              Delete
+                            </button>
+                          </div>
                         </div>
                       </div>
                     ))}

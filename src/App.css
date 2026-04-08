@@ -571,7 +571,7 @@ button.inbox-item:hover {
 .explore-page {
   min-height: calc(100vh - 64px);
   width: 100%;
-  padding: 28px 24px 48px;
+  padding: 16px 24px 40px;
   background: var(--explore-page-bg);
 }
 
@@ -602,7 +602,7 @@ button.inbox-item:hover {
   align-items: center;
   gap: 12px;
   padding: 14px 16px;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
   border-radius: 22px;
   border: 1px solid var(--explore-card-border);
   background: var(--explore-search-bg);
@@ -644,7 +644,7 @@ body.theme-dark .explore-search-wrap .explore-search-input::placeholder {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
-  margin-bottom: 26px;
+  margin-bottom: 18px;
 }
 
 .explore-chip {
@@ -670,7 +670,7 @@ body.theme-dark .explore-search-wrap .explore-search-input::placeholder {
 }
 
 .explore-section {
-  margin-top: 26px;
+  margin-top: 18px;
 }
 
 .explore-results-group + .explore-results-group {
@@ -935,7 +935,7 @@ body.theme-dark .explore-search-wrap .explore-search-input::placeholder {
 
 @media (max-width: 720px) {
   .explore-page {
-    padding: 24px 18px 40px;
+    padding: 14px 18px 32px;
   }
 
   .explore-section-header {
