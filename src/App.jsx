@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react"
 import "./App.css"
 import { Routes, Route, Link, Navigate, Outlet } from "react-router-dom"
 import Discover from "./pages/Discover"
+import Explore from "./pages/Explore"
 import MyEvents from "./pages/MyEvents"
 import Profile from "./pages/Profile"
 import CreateEvent from "./CreateEvent"
@@ -464,6 +465,7 @@ function MainLayout() {
       <nav className="topbar">
         <div className="topbar-left">
           <Link className="topbar-item" to="/discover">Discover</Link>
+          <Link className="topbar-item" to="/explore">Explore</Link>
           <Link className="topbar-item" to="/events">My Events</Link>
           <Link className="topbar-item" to="/create">Create Event</Link>
           <Link className="topbar-item" to="/profile">Profile</Link>
@@ -817,9 +819,12 @@ function App() {
           }
         >
           <Route path="/discover" element={<Discover />} />
+          <Route path="/explore" element={<Explore />} />
           <Route path="/events" element={<MyEvents />} />
+          <Route path="/events/:eventId" element={<MyEvents />} />
           <Route path="/create" element={<CreateEvent />} />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/profile/:username" element={<Profile />} />
         </Route>
 
         <Route path="/auth" element={<AuthLayout />}>
