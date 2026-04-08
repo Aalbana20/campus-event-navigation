@@ -51,6 +51,8 @@ function Profile() {
     followersList,
     cancelRSVP,
     deleteEvent,
+    follow,
+    unfollow,
   } = useEvents()
   const [name, setName] = useState("Success Myers")
   const [username, setUsername] = useState("itzmesuccess1")
@@ -531,6 +533,13 @@ function Profile() {
                         <span className="profile-list-name">
                           {person.name || person.username || "Unknown user"}
                         </span>
+                        <button
+                          type="button"
+                          className="profile-list-action-btn"
+                          onClick={() => unfollow(person.id)}
+                        >
+                          Unfollow
+                        </button>
                       </div>
                     ))}
                   </div>
@@ -547,6 +556,15 @@ function Profile() {
                         <span className="profile-list-name">
                           {person.name || person.username || "Unknown user"}
                         </span>
+                        {!followingList.some((f) => f.id === person.id) && (
+                          <button
+                            type="button"
+                            className="profile-list-action-btn"
+                            onClick={() => follow(person.id)}
+                          >
+                            Follow back
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>
