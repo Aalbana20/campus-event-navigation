@@ -698,36 +698,51 @@ body.theme-dark .explore-search-wrap .explore-search-input::placeholder {
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 }
 
-.explore-card-button {
-  appearance: none;
+.explore-card {
   width: 100%;
-  padding: 0;
   border: 1px solid var(--explore-card-border);
   border-radius: 24px;
   background: var(--explore-card-bg);
   box-shadow: var(--explore-card-shadow);
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
   overflow: hidden;
   transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
-.explore-card-button:hover {
+.explore-card:hover {
   transform: translateY(-4px);
   box-shadow: var(--explore-card-shadow-hover);
   border-color: var(--explore-card-border-hover);
 }
 
-.explore-card-button:focus-visible,
+.explore-card-main {
+  appearance: none;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.explore-card-main:focus-visible,
+.explore-action-btn:focus-visible,
 .explore-chip:focus-visible,
 .explore-search-input:focus-visible {
   outline: 2px solid #7aa7ff;
   outline-offset: 2px;
 }
 
-.explore-event-card {
+.explore-event-card,
+.explore-person-card {
   display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.explore-event-main {
+  display: flex;
+  flex: 1;
   flex-direction: column;
 }
 
@@ -752,8 +767,44 @@ body.theme-dark .explore-search-wrap .explore-search-input::placeholder {
 .explore-event-body {
   padding: 16px;
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: 10px;
+}
+
+.explore-card-footer {
+  padding: 0 16px 16px;
+}
+
+.explore-action-btn {
+  width: 100%;
+  border: 1px solid var(--explore-action-btn-border);
+  border-radius: 999px;
+  background: var(--explore-action-btn-bg);
+  color: var(--explore-action-btn-text);
+  padding: 12px 16px;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease,
+    box-shadow 0.18s ease, color 0.18s ease;
+}
+
+.explore-action-btn:hover {
+  transform: translateY(-1px);
+  background: var(--explore-action-btn-hover-bg);
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.12);
+}
+
+.explore-action-btn:active {
+  transform: translateY(0);
+}
+
+.explore-action-btn.active {
+  background: var(--explore-action-btn-active-bg);
+  color: var(--explore-action-btn-active-text);
+  border-color: var(--explore-action-btn-active-border);
 }
 
 .explore-event-meta,
@@ -798,11 +849,12 @@ body.theme-dark .explore-search-wrap .explore-search-input::placeholder {
   font-weight: 700;
 }
 
-.explore-person-card {
-  padding: 18px;
+.explore-person-main {
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: 14px;
+  padding: 18px 18px 0;
 }
 
 .explore-person-top {
@@ -3209,6 +3261,13 @@ body.theme-light {
   --explore-tag-text: #3730a3;
   --explore-person-badge-bg: #111827;
   --explore-person-badge-text: #ffffff;
+  --explore-action-btn-bg: #f5f6f8;
+  --explore-action-btn-text: #101828;
+  --explore-action-btn-border: rgba(15, 23, 42, 0.08);
+  --explore-action-btn-hover-bg: #eef1f6;
+  --explore-action-btn-active-bg: #111827;
+  --explore-action-btn-active-text: #ffffff;
+  --explore-action-btn-active-border: #111827;
   --explore-event-fallback:
     linear-gradient(135deg, rgba(17, 24, 39, 0.96), rgba(37, 99, 235, 0.82), rgba(236, 72, 153, 0.64));
 }
@@ -3242,6 +3301,13 @@ body.theme-dark {
   --explore-tag-text: #d9e8ff;
   --explore-person-badge-bg: #f5f7fb;
   --explore-person-badge-text: #111318;
+  --explore-action-btn-bg: rgba(32, 38, 49, 0.96);
+  --explore-action-btn-text: #f5f7fb;
+  --explore-action-btn-border: rgba(255, 255, 255, 0.08);
+  --explore-action-btn-hover-bg: rgba(38, 45, 57, 1);
+  --explore-action-btn-active-bg: #f5f7fb;
+  --explore-action-btn-active-text: #111318;
+  --explore-action-btn-active-border: #f5f7fb;
   --explore-event-fallback:
     linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(37, 99, 235, 0.76), rgba(217, 70, 239, 0.56));
 }

@@ -55,7 +55,9 @@ const personSearchFields = (person) =>
     .join(" ")
     .toLowerCase()
 
-const normalizePerson = (person, index) => ({
+const getPersonKey = (person) => String(person?.id || person?.username || "")
+
+const normalizePerson = (person, index, supportsFollowAction) => ({
   id: person.id || person.username || `person-${index}`,
   username: person.username || `guest-${index}`,
   name: person.name || person.username || "Campus User",
@@ -64,6 +66,7 @@ const normalizePerson = (person, index) => ({
     "Exploring concerts, parties, pop-ups, and new people outside the usual circle.",
   location: person.location || "New city nearby",
   image: person.image || person.avatar || "/default-avatar.png",
+  supportsFollowAction,
 })
 
 const buildEventImageStyle = (event) => ({
@@ -74,9 +77,19 @@ const buildEventImageStyle = (event) => ({
 
 function Explore() {
   const navigate = useNavigate()
-  const { allEvents, followingList, followersList, currentUser } = useEvents()
+  const {
+    allEvents,
+    followingList,
+    followersList,
+    currentUser,
+    savedEvents,
+    addEvent,
+    follow,
+    unfollow,
+  } = useEvents()
   const [searchQuery, setSearchQuery] = useState("")
   const [activeFilter, setActiveFilter] = useState("all")
+  const [followOverrides, setFollowOverrides] = useState({})
 
   const people = useMemo(() => {
     const fromContext = [...followingList, ...followersList].map((person, index) =>
@@ -89,19 +102,20 @@ function Explore() {
           location:
             person.location || (index % 2 === 0 ? "Baltimore, MD" : "Washington, DC"),
         },
-        index
+        index,
+        true
       )
     )
 
     const extraPeople = suggestedPeopleSeed.map((person, index) =>
-      normalizePerson(person, fromContext.length + index)
+      normalizePerson(person, fromContext.length + index, false)
     )
 
     const mergedPeople = [...fromContext, ...extraPeople]
     const seen = new Set()
 
     return mergedPeople.filter((person) => {
-      const key = String(person.id || person.username)
+      const key = getPersonKey(person)
       const isCurrentUser =
         (currentUser?.id && String(currentUser.id) === key) ||
         (currentUser?.username && currentUser.username === person.username)
@@ -117,6 +131,22 @@ function Explore() {
   const showEvents = activeFilter === "all" || activeFilter === "events"
   const showPeople = activeFilter === "all" || activeFilter === "people"
 
+  const savedEventIds = useMemo(
+    () => new Set((savedEvents || []).map((event) => String(event.id))),
+    [savedEvents]
+  )
+
+  const followingKeys = useMemo(() => {
+    const keys = new Set()
+
+    followingList.forEach((person) => {
+      if (person?.id) keys.add(String(person.id))
+      if (person?.username) keys.add(person.username)
+    })
+
+    return keys
+  }, [followingList])
+
   const filteredEvents = useMemo(() => {
     if (!trimmedQuery) return []
     return allEvents.filter((event) => eventSearchFields(event).includes(trimmedQuery))
@@ -130,6 +160,28 @@ function Explore() {
   const suggestedEvents = useMemo(() => allEvents.slice(0, 6), [allEvents])
   const suggestedPeople = useMemo(() => people.slice(0, 6), [people])
 
+  const isEventSaved = (eventId) => savedEventIds.has(String(eventId))
+
+  const isFollowingPerson = (person) => {
+    const personKey = getPersonKey(person)
+
+    if (Object.prototype.hasOwnProperty.call(followOverrides, personKey)) {
+      return followOverrides[personKey]
+    }
+
+    if (person?.id && followingKeys.has(String(person.id))) return true
+    if (person?.username && followingKeys.has(person.username)) return true
+    return false
+  }
+
+  const getEventActionLabel = (event) => {
+    if (isEventSaved(event.id)) {
+      return (event.goingCount || 0) > 0 ? "Going" : "Added"
+    }
+
+    return (event.goingCount || 0) > 0 ? "RSVP" : "Add Event"
+  }
+
   const handleOpenEvent = (eventId) => {
     if (!eventId) return
     navigate(`/events/${eventId}`)
@@ -140,74 +192,140 @@ function Explore() {
     navigate(`/profile/${username}`)
   }
 
-  const renderEventCard = (event) => {
-    const eventTitle = event?.title || "Untitled Event"
+  const handleEventAction = (event, selectedEvent) => {
+    event.stopPropagation()
 
-    return (
-      <button
-        key={event.id}
-        type="button"
-        className="explore-card-button explore-event-card"
-        onClick={() => handleOpenEvent(event.id)}
-      >
-        <div className="explore-event-image" style={buildEventImageStyle(event)}>
-          <span className="explore-event-image-label">{eventTitle}</span>
-        </div>
+    if (isEventSaved(selectedEvent.id)) return
 
-        <div className="explore-event-body">
-          <div className="explore-event-meta">
-            {[event.date, event.location || event.locationAddress, event.organizer]
-              .filter(Boolean)
-              .join(" · ")}
-          </div>
-
-          <p className="explore-event-description">
-            {event.description || "A standout event worth discovering outside your usual circle."}
-          </p>
-
-          <div className="explore-tag-row">
-            {(event.tags?.length ? event.tags.slice(0, 3) : ["Explore"]).map((tag) => (
-              <span key={`${event.id}-${tag}`} className="explore-tag">
-                {tag}
-              </span>
-            ))}
-          </div>
-        </div>
-      </button>
+    addEvent(
+      {
+        ...selectedEvent,
+        rsvpDate: new Date().toISOString(),
+      },
+      currentUser
     )
   }
 
-  const renderPersonCard = (person) => (
-    <button
-      key={person.id}
-      type="button"
-      className="explore-card-button explore-person-card"
-      onClick={() => handleOpenPerson(person.username)}
-    >
-      <div className="explore-person-top">
-        <div className="explore-person-identity">
-          <img
-            src={person.image}
-            alt={person.name}
-            className="explore-avatar"
-            onError={(event) => {
-              event.currentTarget.src = "/default-avatar.png"
-            }}
-          />
+  const handleFollowToggle = async (event, person) => {
+    event.stopPropagation()
 
-          <div className="explore-person-name-wrap">
-            <h3 className="explore-person-name">{person.name}</h3>
-            <p className="explore-person-username">@{person.username}</p>
+    const personKey = getPersonKey(person)
+    if (!personKey) return
+
+    const nextIsFollowing = !isFollowingPerson(person)
+
+    setFollowOverrides((prev) => ({
+      ...prev,
+      [personKey]: nextIsFollowing,
+    }))
+
+    if (!person.supportsFollowAction || !person.id) return
+
+    if (nextIsFollowing) {
+      await follow(person.id)
+      return
+    }
+
+    await unfollow(person.id)
+  }
+
+  const renderEventCard = (event) => {
+    const isSaved = isEventSaved(event.id)
+    const eventTitle = event?.title || "Untitled Event"
+
+    return (
+      <article key={event.id} className="explore-card explore-event-card">
+        <button
+          type="button"
+          className="explore-card-main explore-event-main"
+          onClick={() => handleOpenEvent(event.id)}
+        >
+          <div className="explore-event-image" style={buildEventImageStyle(event)}>
+            <span className="explore-event-image-label">{eventTitle}</span>
           </div>
+
+          <div className="explore-event-body">
+            <div className="explore-event-meta">
+              {[event.date, event.location || event.locationAddress, event.organizer]
+                .filter(Boolean)
+                .join(" · ")}
+            </div>
+
+            <p className="explore-event-description">
+              {event.description || "A standout event worth discovering outside your usual circle."}
+            </p>
+
+            <div className="explore-tag-row">
+              {(event.tags?.length ? event.tags.slice(0, 3) : ["Explore"]).map((tag) => (
+                <span key={`${event.id}-${tag}`} className="explore-tag">
+                  {tag}
+                </span>
+              ))}
+            </div>
+          </div>
+        </button>
+
+        <div className="explore-card-footer">
+          <button
+            type="button"
+            className={`explore-action-btn ${isSaved ? "active" : ""}`}
+            onClick={(clickEvent) => handleEventAction(clickEvent, event)}
+            aria-pressed={isSaved}
+          >
+            {getEventActionLabel(event)}
+          </button>
         </div>
+      </article>
+    )
+  }
 
-        <span className="explore-person-badge">Suggested</span>
-      </div>
+  const renderPersonCard = (person) => {
+    const isFollowing = isFollowingPerson(person)
 
-      <p className="explore-person-bio">{person.bio}</p>
-      <span className="explore-person-location">{person.location}</span>
-    </button>
-  )
+    return (
+      <article key={person.id} className="explore-card explore-person-card">
+        <button
+          type="button"
+          className="explore-card-main explore-person-main"
+          onClick={() => handleOpenPerson(person.username)}
+        >
+          <div className="explore-person-top">
+            <div className="explore-person-identity">
+              <img
+                src={person.image}
+                alt={person.name}
+                className="explore-avatar"
+                onError={(event) => {
+                  event.currentTarget.src = "/default-avatar.png"
+                }}
+              />
+
+              <div className="explore-person-name-wrap">
+                <h3 className="explore-person-name">{person.name}</h3>
+                <p className="explore-person-username">@{person.username}</p>
+              </div>
+            </div>
+
+            <span className="explore-person-badge">Suggested</span>
+          </div>
+
+          <p className="explore-person-bio">{person.bio}</p>
+          <span className="explore-person-location">{person.location}</span>
+        </button>
+
+        <div className="explore-card-footer">
+          <button
+            type="button"
+            className={`explore-action-btn ${isFollowing ? "active" : ""}`}
+            onClick={(clickEvent) => handleFollowToggle(clickEvent, person)}
+            aria-pressed={isFollowing}
+          >
+            {isFollowing ? "Unfollow" : "Follow"}
+          </button>
+        </div>
+      </article>
+    )
+  }
 
   return (
     <main className="explore-page">
