@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useMemo, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
@@ -41,14 +42,75 @@ const initialSettings: MobileSettingsState = {
 };
 
 const MobileSettingsContext = createContext<MobileSettingsContextValue | null>(null);
+const SETTINGS_STORAGE_KEY = 'mobileSettings';
+const THEME_MODE_STORAGE_KEY = 'mobileThemeMode';
+const isThemeMode = (value: unknown): value is ThemeMode =>
+  value === 'light' || value === 'dark' || value === 'device';
 
 export function MobileSettingsProvider({ children }: { children: React.ReactNode }) {
   const deviceColorScheme = useColorScheme();
   const [settings, setSettings] = useState<MobileSettingsState>(initialSettings);
   const [themeMode, setThemeMode] = useState<ThemeMode>('device');
+  const hasLoadedPersistedState = useRef(false);
 
   const resolvedThemeMode =
     themeMode === 'device' ? (deviceColorScheme === 'light' ? 'light' : 'dark') : themeMode;
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const hydrateSettings = async () => {
+      try {
+        const [storedSettings, storedThemeMode] = await Promise.all([
+          AsyncStorage.getItem(SETTINGS_STORAGE_KEY),
+          AsyncStorage.getItem(THEME_MODE_STORAGE_KEY),
+        ]);
+
+        if (!isMounted) return;
+
+        if (storedSettings) {
+          const parsedSettings = JSON.parse(storedSettings) as Partial<MobileSettingsState>;
+
+          setSettings((currentSettings) => ({
+            ...currentSettings,
+            ...parsedSettings,
+          }));
+        }
+
+        if (isThemeMode(storedThemeMode)) {
+          setThemeMode(storedThemeMode);
+        }
+      } catch (error) {
+        console.error('Unable to restore mobile settings:', error);
+      } finally {
+        if (isMounted) {
+          hasLoadedPersistedState.current = true;
+        }
+      }
+    };
+
+    void hydrateSettings();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!hasLoadedPersistedState.current) return;
+
+    void AsyncStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings)).catch((error) => {
+      console.error('Unable to persist mobile settings:', error);
+    });
+  }, [settings]);
+
+  useEffect(() => {
+    if (!hasLoadedPersistedState.current) return;
+
+    void AsyncStorage.setItem(THEME_MODE_STORAGE_KEY, themeMode).catch((error) => {
+      console.error('Unable to persist mobile theme mode:', error);
+    });
+  }, [themeMode]);
 
   const updateSetting = (key: MobileSettingsKey, value: boolean) => {
     setSettings((currentSettings) => ({
