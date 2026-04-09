@@ -75,18 +75,14 @@ body {
 }
 
 .topbar-right {
-  width: 174px;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: 42px;
+  display: flex;
   align-items: center;
   justify-content: flex-end;
   grid-column: 3;
-  gap: 10px;
   justify-self: end;
 }
 
-.navbar-profile-btn,
-.navbar-dm-btn,
 .navbar-bell-btn {
   position: relative;
   width: 100%;
@@ -136,6 +132,7 @@ body {
 }
 
 .inbox-panel {
+  position: relative;
   width: min(420px, 100%);
   height: 100vh;
   background: rgba(255, 255, 255, 0.96);
@@ -152,19 +149,13 @@ body {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 16px;
+  padding-right: 48px;
 }
 
 .inbox-header h3 {
   margin: 0;
   font-size: 1.2rem;
   color: #111;
-}
-
-.inbox-subtitle {
-  margin: 6px 0 0;
-  color: #667085;
-  font-size: 0.88rem;
-  line-height: 1.45;
 }
 
 .inbox-close-btn {
@@ -176,6 +167,12 @@ body {
   border-radius: 999px;
   font-size: 1.2rem;
   cursor: pointer;
+}
+
+.inbox-close-floating {
+  position: absolute;
+  top: 22px;
+  right: 18px;
 }
 
 .inbox-tabs {
@@ -1924,15 +1921,11 @@ body.theme-dark .topbar {
 }
 
 body.theme-dark .topbar-item,
-body.theme-dark .navbar-profile-btn,
-body.theme-dark .navbar-dm-btn,
 body.theme-dark .navbar-bell-btn {
   color: #d9e0ec;
 }
 
 body.theme-dark .topbar-item:hover,
-body.theme-dark .navbar-profile-btn:hover,
-body.theme-dark .navbar-dm-btn:hover,
 body.theme-dark .navbar-bell-btn:hover {
   color: #f5f7fb;
   background: rgba(255, 255, 255, 0.08);
@@ -3888,8 +3881,6 @@ body.theme-dark .topbar {
 }
 
 body.theme-dark .topbar-item,
-body.theme-dark .navbar-profile-btn,
-body.theme-dark .navbar-dm-btn,
 body.theme-dark .navbar-bell-btn,
 body.theme-dark h1,
 body.theme-dark h2,

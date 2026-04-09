@@ -72,18 +72,6 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="explore 2"
-        options={{
-          href: null,
-        }}
-      />
-      <Tabs.Screen
-        name="events 3"
-        options={{
-          href: null,
-        }}
-      />
-      <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',

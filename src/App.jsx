@@ -528,8 +528,6 @@ function MainLayout() {
       activeDmThread
     : null
 
-  const unreadDmCount = unreadDmThreadIds.size
-
   const openDmThread = (thread) => {
     setActiveDmThreadId(thread.id)
     setDmDraftMessage("")
@@ -642,6 +640,7 @@ function MainLayout() {
         <div className="topbar-left">
           <Link className="topbar-item" to="/discover">Discover</Link>
           <Link className="topbar-item" to="/explore">Explore</Link>
+          <Link className="topbar-item" to="/messages">DMs</Link>
           <Link className="topbar-item" to="/events">Events</Link>
           <Link className="topbar-item" to="/profile">Profile</Link>
         </div>
@@ -680,77 +679,6 @@ function MainLayout() {
               <span className="navbar-bell-badge">{unreadNotificationCount}</span>
             )}
           </button>
-
-          <button
-            type="button"
-            className="navbar-dm-btn"
-            aria-label="Open direct messages"
-            onClick={() => navigate("/messages")}
-          >
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              aria-hidden="true"
-            >
-              <path
-                d="M22 2 11 13"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <path
-                d="M22 2 15 22l-4-9-9-4 20-7Z"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <path
-                d="M11 13 15 22"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-            {unreadDmCount > 0 && (
-              <span className="navbar-bell-badge">{unreadDmCount}</span>
-            )}
-          </button>
-
-          <Link
-            className="navbar-profile-btn"
-            to="/profile"
-            aria-label="Open profile"
-          >
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              aria-hidden="true"
-            >
-              <path
-                d="M12 11.25a3.75 3.75 0 1 0 0-7.5 3.75 3.75 0 0 0 0 7.5Z"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <path
-                d="M5.5 20.25a6.5 6.5 0 0 1 13 0"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </Link>
         </div>
       </nav>
 
@@ -758,21 +686,7 @@ function MainLayout() {
         <div className="inbox-overlay" onClick={closeInbox}>
           <aside className="inbox-panel" onClick={(e) => e.stopPropagation()}>
             <div className="inbox-header">
-              <div>
-                <h3>Notifications</h3>
-                <p className="inbox-subtitle">Fresh updates from people and events land here.</p>
-              </div>
-              <button
-                type="button"
-                className="inbox-close-btn"
-                onClick={closeInbox}
-                aria-label="Close activity panel"
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="activity-top-row">
+              <h3>Notifications</h3>
               <button
                 type="button"
                 className="activity-clear-all-btn"
@@ -782,6 +696,15 @@ function MainLayout() {
                 Clear all
               </button>
             </div>
+
+            <button
+              type="button"
+              className="inbox-close-btn inbox-close-floating"
+              onClick={closeInbox}
+              aria-label="Close activity panel"
+            >
+              ×
+            </button>
 
             <div className="inbox-body">
               <div className="notification-filters">
