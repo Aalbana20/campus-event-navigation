@@ -33,12 +33,6 @@ function Discover() {
     [allEvents, dismissedEventIdSet, savedEventIds]
   )
 
-  useEffect(() => {
-    if (currentIndex >= discoverEvents.length) {
-      setCurrentIndex(Math.max(discoverEvents.length - 1, 0))
-    }
-  }, [currentIndex, discoverEvents.length])
-
   const safeCurrentIndex =
     discoverEvents.length > 0 ? Math.min(currentIndex, discoverEvents.length - 1) : 0
   const currentEvent = discoverEvents[safeCurrentIndex] || null

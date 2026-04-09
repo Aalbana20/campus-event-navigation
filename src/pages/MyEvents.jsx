@@ -1,4 +1,6 @@
 import React, { useRef, useState } from "react"
+import { useSearchParams } from "react-router-dom"
+import CreateEvent from "../CreateEvent"
 import MyEventCard from "../components/MyEventCard"
 import { useEvents } from "../context/EventContext"
 
@@ -16,6 +18,10 @@ const MONTH_NAMES = [
   "November",
   "December",
 ]
+
+const EVENT_TABS = ["my-events", "calendar", "create"]
+
+const normalizeTab = (value) => (EVENT_TABS.includes(value) ? value : "my-events")
 
 const parseEventDate = (rawDate) => {
   if (!rawDate || typeof rawDate !== "string") return null
@@ -44,10 +50,10 @@ const parseEventDate = (rawDate) => {
 }
 
 function MyEvents() {
-  const [viewMode, setViewMode] = useState("cards")
+  const { savedEvents } = useEvents()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [selectedCalendarEvent, setSelectedCalendarEvent] = useState(null)
   const [isMonthPickerOpen, setIsMonthPickerOpen] = useState(false)
-  const { savedEvents } = useEvents()
 
   const now = new Date()
   const [currentMonth, setCurrentMonth] = useState(
@@ -55,6 +61,21 @@ function MyEvents() {
   )
   const touchStartXRef = useRef(null)
   const mouseStartXRef = useRef(null)
+
+  const activeTab = normalizeTab(searchParams.get("tab"))
+
+  const changeTab = (nextTab) => {
+    const normalizedTab = normalizeTab(nextTab)
+
+    const nextParams = new URLSearchParams(searchParams)
+    if (normalizedTab === "my-events") {
+      nextParams.delete("tab")
+    } else {
+      nextParams.set("tab", normalizedTab)
+    }
+
+    setSearchParams(nextParams, { replace: true })
+  }
 
   const calendarMonth = currentMonth.getMonth()
   const calendarYear = currentMonth.getFullYear()
@@ -107,8 +128,8 @@ function MyEvents() {
     else goToPrevMonth()
   }
 
-  const getEventForDay = (day) => {
-    return savedEvents.find((event) => {
+  const getEventForDay = (day) =>
+    savedEvents.find((event) => {
       const parsedDate = parseEventDate(event.eventDate || event.date)
       if (!parsedDate) return false
 
@@ -118,7 +139,6 @@ function MyEvents() {
         parsedDate.day === day
       )
     })
-  }
 
   const firstDayOffset = new Date(calendarYear, calendarMonth, 1).getDay()
   const daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate()
@@ -126,128 +146,181 @@ function MyEvents() {
 
   return (
     <main className="my-events-page">
-      <p className="eyebrow">Events you’ve RSVP’d to</p>
-      <h1>My Events</h1>
+      <div className="events-page-header">
+        <p className="eyebrow">One place for going, planning, and creating</p>
+        <div className="events-page-title-row">
+          <div className="events-page-copy">
+            <h1>Events</h1>
+            <p className="events-page-subtitle">
+              Keep your RSVP&apos;d plans, calendar, and create flow in one cleaner home.
+            </p>
+          </div>
+        </div>
+      </div>
 
-      <div className="view-toggle">
+      <div className="events-tabs" role="tablist" aria-label="Events sections">
         <button
-          className={viewMode === "cards" ? "toggle-btn active" : "toggle-btn"}
-          onClick={() => setViewMode("cards")}
+          type="button"
+          className={`events-tab-btn ${activeTab === "my-events" ? "active" : ""}`}
+          onClick={() => changeTab("my-events")}
+          aria-pressed={activeTab === "my-events"}
         >
-          Cards
+          My Events
         </button>
-
         <button
-          className={viewMode === "calendar" ? "toggle-btn active" : "toggle-btn"}
-          onClick={() => setViewMode("calendar")}
+          type="button"
+          className={`events-tab-btn ${activeTab === "calendar" ? "active" : ""}`}
+          onClick={() => changeTab("calendar")}
+          aria-pressed={activeTab === "calendar"}
         >
           Calendar
         </button>
+        <button
+          type="button"
+          className={`events-tab-btn ${activeTab === "create" ? "active" : ""}`}
+          onClick={() => changeTab("create")}
+          aria-pressed={activeTab === "create"}
+        >
+          Create Event
+        </button>
       </div>
 
-      {savedEvents.length === 0 ? (
-        <p style={{ marginTop: "20px", color: "#6e6e73", fontSize: "18px" }}>
-          No events saved yet. Swipe right on Discover to RSVP.
-        </p>
-      ) : viewMode === "cards" ? (
-        <div className="cards-scroll">
-          {savedEvents.map((event) => (
-            <MyEventCard key={event.id} event={event} />
-          ))}
-        </div>
-      ) : (
-        <div className="calendar-view">
-          <div
-            className="calendar-swipe-zone"
-            onTouchStart={handleTouchStart}
-            onTouchEnd={handleTouchEnd}
-            onMouseDown={handleMouseDown}
-            onMouseUp={handleMouseUp}
-          >
-            <div className="calendar-box">
-              <div className="calendar-header">
-                <div className="calendar-month-nav">
-                  <button
-                    className="calendar-arrow-btn"
-                    onClick={goToPrevMonth}
-                    aria-label="Previous month"
-                  >
-                    ←
-                  </button>
-                  <button
-                    className="calendar-month-btn"
-                    onClick={() => setIsMonthPickerOpen((prev) => !prev)}
-                  >
-                    {MONTH_NAMES[calendarMonth]} {calendarYear}
-                  </button>
-                  <button
-                    className="calendar-arrow-btn"
-                    onClick={goToNextMonth}
-                    aria-label="Next month"
-                  >
-                    →
-                  </button>
-                </div>
+      <div className="events-tab-panel">
+        {activeTab === "my-events" && (
+          <>
+            <div className="events-summary-card">
+              <h2>My Events</h2>
+              <p>Events you&apos;re going to stay here for quick access and planning.</p>
+            </div>
 
-                {isMonthPickerOpen && (
-                  <input
-                    type="month"
-                    className="calendar-month-picker"
-                    value={monthInputValue}
-                    onChange={(e) => handleMonthChange(e.target.value)}
-                  />
-                )}
+            {savedEvents.length === 0 ? (
+              <div className="events-empty-state">
+                <h3>No events saved yet.</h3>
+                <p>Swipe right on Discover or add from Explore to start building your lineup.</p>
               </div>
-
-              <div className="calendar-grid">
-                <div className="calendar-day header">Sun</div>
-                <div className="calendar-day header">Mon</div>
-                <div className="calendar-day header">Tue</div>
-                <div className="calendar-day header">Wed</div>
-                <div className="calendar-day header">Thu</div>
-                <div className="calendar-day header">Fri</div>
-                <div className="calendar-day header">Sat</div>
-
-                {Array.from({ length: firstDayOffset }, (_, index) => (
-                  <div key={`empty-${index}`} className="calendar-day empty"></div>
+            ) : (
+              <div className="cards-scroll">
+                {savedEvents.map((event) => (
+                  <MyEventCard key={event.id} event={event} />
                 ))}
-
-                {Array.from({ length: daysInMonth }, (_, index) => {
-                  const day = index + 1
-                  const event = getEventForDay(day)
-
-                  return (
-                    <div
-                      key={day}
-                      className={`calendar-day ${event ? "has-event clickable" : ""}`}
-                      onClick={() => event && setSelectedCalendarEvent(event)}
-                    >
-                      <span>{day}</span>
-                      {event && (
-                        <span className="calendar-event">{event.title}</span>
-                      )}
-                    </div>
-                  )
-                })}
               </div>
-            </div>
-          </div>
+            )}
+          </>
+        )}
 
-          {selectedCalendarEvent && (
-            <div
-              className="calendar-modal-overlay"
-              onClick={() => setSelectedCalendarEvent(null)}
-            >
+        {activeTab === "calendar" && (
+          <>
+            <div className="events-summary-card">
+              <h2>Calendar</h2>
+              <p>See your saved events by month without leaving the Events page.</p>
+            </div>
+
+            <div className="calendar-view">
               <div
-                className="calendar-modal-card"
-                onClick={(e) => e.stopPropagation()}
+                className="calendar-swipe-zone"
+                onTouchStart={handleTouchStart}
+                onTouchEnd={handleTouchEnd}
+                onMouseDown={handleMouseDown}
+                onMouseUp={handleMouseUp}
               >
-                <MyEventCard event={selectedCalendarEvent} />
+                <div className="calendar-box">
+                  <div className="calendar-header">
+                    <div className="calendar-month-nav">
+                      <button
+                        className="calendar-arrow-btn"
+                        onClick={goToPrevMonth}
+                        aria-label="Previous month"
+                      >
+                        ←
+                      </button>
+                      <button
+                        className="calendar-month-btn"
+                        onClick={() => setIsMonthPickerOpen((prev) => !prev)}
+                      >
+                        {MONTH_NAMES[calendarMonth]} {calendarYear}
+                      </button>
+                      <button
+                        className="calendar-arrow-btn"
+                        onClick={goToNextMonth}
+                        aria-label="Next month"
+                      >
+                        →
+                      </button>
+                    </div>
+
+                    {isMonthPickerOpen && (
+                      <input
+                        type="month"
+                        className="calendar-month-picker"
+                        value={monthInputValue}
+                        onChange={(event) => handleMonthChange(event.target.value)}
+                      />
+                    )}
+                  </div>
+
+                  <div className="calendar-grid">
+                    <div className="calendar-day header">Sun</div>
+                    <div className="calendar-day header">Mon</div>
+                    <div className="calendar-day header">Tue</div>
+                    <div className="calendar-day header">Wed</div>
+                    <div className="calendar-day header">Thu</div>
+                    <div className="calendar-day header">Fri</div>
+                    <div className="calendar-day header">Sat</div>
+
+                    {Array.from({ length: firstDayOffset }, (_, index) => (
+                      <div key={`empty-${index}`} className="calendar-day empty"></div>
+                    ))}
+
+                    {Array.from({ length: daysInMonth }, (_, index) => {
+                      const day = index + 1
+                      const event = getEventForDay(day)
+
+                      return (
+                        <div
+                          key={day}
+                          className={`calendar-day ${event ? "has-event clickable" : ""}`}
+                          onClick={() => event && setSelectedCalendarEvent(event)}
+                        >
+                          <span>{day}</span>
+                          {event && <span className="calendar-event">{event.title}</span>}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
               </div>
+
+              {selectedCalendarEvent && (
+                <div
+                  className="calendar-modal-overlay"
+                  onClick={() => setSelectedCalendarEvent(null)}
+                >
+                  <div
+                    className="calendar-modal-card"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <MyEventCard event={selectedCalendarEvent} />
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      )}
+          </>
+        )}
+
+        {activeTab === "create" && (
+          <>
+            <div className="events-summary-card">
+              <h2>Create Event</h2>
+              <p>
+                Keep building the next event from the same Events space. Calendar-to-create hooks can
+                layer in later without changing this layout.
+              </p>
+            </div>
+
+            <CreateEvent embedded />
+          </>
+        )}
+      </div>
     </main>
   )
 }

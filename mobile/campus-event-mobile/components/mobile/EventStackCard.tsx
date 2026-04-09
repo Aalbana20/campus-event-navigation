@@ -30,7 +30,7 @@ export function EventStackCard({ event, height, onPress }: EventStackCardProps) 
         <EventActionTrigger event={event} style={styles.actions} />
 
         <View style={styles.topRow}>
-          {event.tags.slice(0, 2).map((tag) => (
+          {event.tags.slice(0, 3).map((tag) => (
             <View key={tag} style={styles.tagChip}>
               <Text style={styles.tagText}>#{tag}</Text>
             </View>
@@ -38,23 +38,25 @@ export function EventStackCard({ event, height, onPress }: EventStackCardProps) 
         </View>
 
         <View style={styles.bottomContent}>
-          <Text style={styles.title}>{event.title}</Text>
-          <Text style={styles.meta}>
-            {[event.date, event.time, event.locationName].filter(Boolean).join(' • ')}
-          </Text>
-          <Text style={styles.description} numberOfLines={3}>
-            {event.description}
-          </Text>
+          <View style={styles.contentShell}>
+            <Text style={styles.title}>{event.title}</Text>
+            <Text style={styles.meta}>
+              {[event.date, event.time, event.locationName].filter(Boolean).join(' • ')}
+            </Text>
+            <Text style={styles.description} numberOfLines={4}>
+              {event.description}
+            </Text>
 
-          <View style={styles.badgesRow}>
-            <View style={styles.badge}>
-              <Ionicons name="people-outline" size={14} color="#ffffff" />
-              <Text style={styles.badgeText}>{event.goingCount} going</Text>
-            </View>
+            <View style={styles.badgesRow}>
+              <View style={styles.badge}>
+                <Ionicons name="people-outline" size={14} color="#ffffff" />
+                <Text style={styles.badgeText}>{event.goingCount} going</Text>
+              </View>
 
-            <View style={styles.badge}>
-              <Ionicons name="repeat-outline" size={14} color="#ffffff" />
-              <Text style={styles.badgeText}>{event.repostedByIds.length} reposts</Text>
+              <View style={styles.badge}>
+                <Ionicons name="repeat-outline" size={14} color="#ffffff" />
+                <Text style={styles.badgeText}>{event.repostedByIds.length} reposts</Text>
+              </View>
             </View>
           </View>
         </View>
@@ -67,9 +69,14 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
   StyleSheet.create({
     card: {
       width: '100%',
-      borderRadius: 30,
+      borderRadius: 32,
       overflow: 'hidden',
       backgroundColor: theme.surface,
+      shadowColor: theme.shadow,
+      shadowOpacity: 0.22,
+      shadowRadius: 28,
+      shadowOffset: { width: 0, height: 16 },
+      elevation: 8,
     },
     image: {
       flex: 1,
@@ -77,7 +84,7 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       padding: 18,
     },
     imageStyle: {
-      borderRadius: 30,
+      borderRadius: 32,
     },
     overlay: {
       ...StyleSheet.absoluteFillObject,
@@ -94,13 +101,16 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       flexDirection: 'row',
       flexWrap: 'wrap',
       gap: 8,
-      marginTop: 42,
+      marginTop: 48,
+      paddingRight: 56,
     },
     tagChip: {
       borderRadius: 999,
       paddingHorizontal: 12,
       paddingVertical: 7,
       backgroundColor: 'rgba(8, 11, 16, 0.7)',
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.12)',
     },
     tagText: {
       color: '#ffffff',
@@ -110,11 +120,19 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     bottomContent: {
       gap: 10,
     },
+    contentShell: {
+      borderRadius: 26,
+      padding: 18,
+      backgroundColor: 'rgba(8, 11, 16, 0.54)',
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.12)',
+      gap: 10,
+    },
     title: {
       color: '#ffffff',
-      fontSize: 28,
+      fontSize: 30,
       fontWeight: '800',
-      lineHeight: 34,
+      lineHeight: 36,
     },
     meta: {
       color: 'rgba(255, 255, 255, 0.88)',
@@ -122,7 +140,7 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       fontWeight: '600',
     },
     description: {
-      color: 'rgba(255, 255, 255, 0.88)',
+      color: 'rgba(255, 255, 255, 0.9)',
       fontSize: 14,
       lineHeight: 20,
     },
@@ -130,6 +148,7 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       flexDirection: 'row',
       flexWrap: 'wrap',
       gap: 10,
+      marginTop: 2,
     },
     badge: {
       flexDirection: 'row',

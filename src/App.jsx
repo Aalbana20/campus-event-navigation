@@ -1,12 +1,20 @@
 import React, { useEffect, useMemo, useState } from "react"
 import "./App.css"
-import { Routes, Route, Link, Navigate, Outlet, useSearchParams } from "react-router-dom"
+import {
+  Routes,
+  Route,
+  Link,
+  Navigate,
+  Outlet,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom"
 import Discover from "./pages/Discover"
 import Explore from "./pages/Explore"
 import MyEvents from "./pages/MyEvents"
 import Profile from "./pages/Profile"
 import PublicProfile from "./pages/PublicProfile"
-import CreateEvent from "./CreateEvent"
 import SignUp from "./pages/SignUp"
 import Login from "./pages/Login"
 import Logout from "./pages/Logout"
@@ -111,6 +119,7 @@ const syncStoredUser = (session) => {
 
 function MainLayout() {
   const { savedEvents, allEvents, followingList, followersList } = useEvents()
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const [isInboxOpen, setIsInboxOpen] = useState(false)
   const [activeInboxTab, setActiveInboxTab] = useState("notifications")
@@ -303,6 +312,7 @@ function MainLayout() {
           text: `${event.title || "Your event"} is coming up ${label}`,
           time: `${Math.max(0, diffDays)}d`,
           image: event.image || defaultAvatar,
+          eventTab: "calendar",
         }
       })
       .filter(Boolean)
@@ -320,6 +330,7 @@ function MainLayout() {
         text: `${newestFollower.name || newestFollower.username || "Someone"} started following you`,
         time: newestFollower.followedAt ? timeAgoLabel(newestFollower.followedAt) : "recent",
         image: newestFollower.image || newestFollower.avatar || defaultAvatar,
+        username: newestFollower.username || "",
       })
     }
 
@@ -332,6 +343,7 @@ function MainLayout() {
         text: `${mutual.name || mutual.username || "A user"} accepted your follow`,
         time: mutual.acceptedAt ? timeAgoLabel(mutual.acceptedAt) : "recent",
         image: mutual.image || mutual.avatar || defaultAvatar,
+        username: mutual.username || "",
       })
     }
 
@@ -349,6 +361,7 @@ function MainLayout() {
         text: `${event.title || "An event"} was updated`,
         time: timeAgoLabel(event.updatedAt),
         image: event.image || defaultAvatar,
+        eventTab: "my-events",
       }))
   }, [allEvents, defaultAvatar])
 
@@ -361,6 +374,7 @@ function MainLayout() {
         text: "Jordan started following you",
         time: "1d",
         image: defaultAvatar,
+        username: followersList[0]?.username || followingList[0]?.username || "",
       },
       {
         id: "mock-follow-accepted",
@@ -369,6 +383,7 @@ function MainLayout() {
         text: "Taylor accepted your follow request",
         time: "2d",
         image: defaultAvatar,
+        username: mutualUsers[0]?.username || followersList[0]?.username || "",
       },
       {
         id: "mock-dm",
@@ -377,6 +392,7 @@ function MainLayout() {
         text: "Alex sent you a message",
         time: "3h",
         image: defaultAvatar,
+        threadId: dmThreads[0]?.id || null,
       },
       {
         id: "mock-event-reminder",
@@ -385,6 +401,7 @@ function MainLayout() {
         text: "Hackathon Night starts tomorrow",
         time: "1d",
         image: defaultAvatar,
+        eventTab: "calendar",
       },
       {
         id: "mock-event-update",
@@ -393,9 +410,10 @@ function MainLayout() {
         text: "Campus Party changed locations",
         time: "4h",
         image: defaultAvatar,
+        eventTab: "my-events",
       },
     ],
-    [defaultAvatar]
+    [defaultAvatar, dmThreads, followersList, followingList, mutualUsers]
   )
 
   const notificationSeed = useMemo(() => {
@@ -491,8 +509,12 @@ function MainLayout() {
       activeDmThread
     : null
 
+  const unreadDmCount = unreadDmThreadIds.size
+
   const openDmThread = (thread) => {
     setActiveDmThreadId(thread.id)
+    setActiveInboxTab("dms")
+    setIsInboxOpen(true)
     setDmDraftMessage("")
     setUnreadDmThreadIds((prev) => {
       const next = new Set(prev)
@@ -541,7 +563,44 @@ function MainLayout() {
     }
   }
 
-  const openInbox = () => setIsInboxOpen(true)
+  const openInbox = (tab = "notifications") => {
+    setActiveInboxTab(tab)
+    setIsInboxOpen(true)
+  }
+
+  const openDmInbox = () => openInbox("dms")
+
+  const handleNotificationSelect = (item) => {
+    markNotificationRead(item.id)
+    closeNotificationMenu()
+
+    if (item.type === "dm_received" && item.threadId) {
+      const matchedThread =
+        displayDmThreads.find((thread) => String(thread.id) === String(item.threadId)) ||
+        dmThreads.find((thread) => String(thread.id) === String(item.threadId))
+
+      if (matchedThread) {
+        openDmThread(matchedThread)
+      } else {
+        setActiveInboxTab("dms")
+        setActiveDmThreadId(item.threadId)
+        setIsInboxOpen(true)
+      }
+      return
+    }
+
+    if ((item.type === "event_reminder" || item.type === "event_update") && item.eventTab) {
+      closeInbox()
+      navigate(`/events?tab=${item.eventTab}`)
+      return
+    }
+
+    if ((item.type === "follow" || item.type === "follow_accepted") && item.username) {
+      closeInbox()
+      navigate(`/profile/${item.username}`)
+    }
+  }
+
   const closeInbox = () => {
     setIsInboxOpen(false)
     setOpenNotificationMenuId(null)
@@ -555,17 +614,49 @@ function MainLayout() {
         <div className="topbar-left">
           <Link className="topbar-item" to="/discover">Discover</Link>
           <Link className="topbar-item" to="/explore">Explore</Link>
-          <Link className="topbar-item" to="/events">My Events</Link>
-          <Link className="topbar-item" to="/create">Create Event</Link>
+          <Link className="topbar-item" to="/events">Events</Link>
           <Link className="topbar-item" to="/profile">Profile</Link>
         </div>
 
         <div className="topbar-right">
           <button
             type="button"
+            className="navbar-dm-btn"
+            aria-label="Open direct messages"
+            onClick={openDmInbox}
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              aria-hidden="true"
+            >
+              <path
+                d="M5.75 6.75h12.5A1.75 1.75 0 0 1 20 8.5v7a1.75 1.75 0 0 1-1.75 1.75H10l-3.75 3v-3H5.75A1.75 1.75 0 0 1 4 15.5v-7a1.75 1.75 0 0 1 1.75-1.75Z"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M8.25 11.5h7.5"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+              />
+            </svg>
+            {unreadDmCount > 0 && (
+              <span className="navbar-bell-badge">{unreadDmCount}</span>
+            )}
+          </button>
+
+          <button
+            type="button"
             className="navbar-bell-btn"
             aria-label="Open notifications"
-            onClick={openInbox}
+            onClick={() => openInbox("notifications")}
           >
             <svg
               width="20"
@@ -590,8 +681,8 @@ function MainLayout() {
                 strokeLinejoin="round"
               />
             </svg>
-            {(unreadNotificationCount + unreadDmThreadIds.size) > 0 && (
-              <span className="navbar-bell-badge">{unreadNotificationCount + unreadDmThreadIds.size}</span>
+            {unreadNotificationCount > 0 && (
+              <span className="navbar-bell-badge">{unreadNotificationCount}</span>
             )}
           </button>
         </div>
@@ -689,7 +780,7 @@ function MainLayout() {
                         <div
                           className={`inbox-item notification-item ${item.read ? "read" : "unread"}`}
                           key={item.id}
-                          onClick={closeNotificationMenu}
+                          onClick={() => handleNotificationSelect(item)}
                         >
                           <img
                             className="inbox-item-avatar"
@@ -849,6 +940,11 @@ function RootRedirect({ session }) {
   return <Navigate to={session ? "/discover" : "/auth/login"} replace />
 }
 
+function LegacyEventRedirect() {
+  const { eventId } = useParams()
+  return <Navigate to={`/events/${eventId || ""}`} replace />
+}
+
 function App() {
   const [session, setSession] = useState(null)
   const [isInitializing, setIsInitializing] = useState(true)
@@ -912,9 +1008,10 @@ function App() {
         >
           <Route path="/discover" element={<Discover />} />
           <Route path="/explore" element={<Explore />} />
+          <Route path="/event/:eventId" element={<LegacyEventRedirect />} />
           <Route path="/events" element={<MyEvents />} />
           <Route path="/events/:eventId" element={<MyEvents />} />
-          <Route path="/create" element={<CreateEvent />} />
+          <Route path="/create" element={<Navigate to="/events?tab=create" replace />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/profile/:username" element={<PublicProfile />} />
         </Route>

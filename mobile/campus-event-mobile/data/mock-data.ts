@@ -1,4 +1,4 @@
-import { EventRecord, FollowRelationship, ProfileRecord, TaggedMoment } from '@/types/models';
+import { EventRecord, FollowRelationship, PersonalCalendarItem, ProfileRecord, TaggedMoment } from '@/types/models';
 
 export const CURRENT_USER_ID = 'user-success';
 
@@ -218,5 +218,24 @@ export const mockTaggedMoments: TaggedMoment[] = [
     title: 'Open mic night recap',
     image:
       'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?auto=format&fit=crop&w=900&q=80',
+  },
+];
+
+export const mockPersonalCalendarItems: PersonalCalendarItem[] = [
+  {
+    id: 'personal-1',
+    ownerId: CURRENT_USER_ID,
+    date: '2026-04-24',
+    title: 'Print invite cards',
+    note: 'Drop them off before the screening starts.',
+    time: '15:30',
+  },
+  {
+    id: 'personal-2',
+    ownerId: CURRENT_USER_ID,
+    date: '2026-04-28',
+    title: 'Check in with Run Club team',
+    note: 'Bring extra glow bands for late arrivals.',
+    time: '18:00',
   },
 ];

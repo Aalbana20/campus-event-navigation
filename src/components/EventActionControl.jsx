@@ -30,7 +30,7 @@ function EventActionControl({ event }) {
   const shareSearchInputRef = useRef(null)
 
   const eventTitle = event?.title || event?.name || "Campus Event"
-  const eventLink = `${window.location.origin}/event/${event?.id || ""}`
+  const eventLink = `${window.location.origin}/#/events/${event?.id || ""}`
   const sharePreviewMeta = [
     event?.date,
     event?.locationName || event?.location,

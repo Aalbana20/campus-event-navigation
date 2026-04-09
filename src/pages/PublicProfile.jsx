@@ -178,7 +178,7 @@ function PublicProfile() {
   const copyProfileLink = async () => {
     if (!profile) return
 
-    const profileLink = `${window.location.origin}/profile/${profile.username || profile.id}`
+    const profileLink = `${window.location.origin}/#/profile/${profile.username || profile.id}`
 
     try {
       await navigator.clipboard.writeText(profileLink)
@@ -198,7 +198,7 @@ function PublicProfile() {
   const handleShareProfile = async () => {
     if (!profile) return
 
-    const profileLink = `${window.location.origin}/profile/${profile.username || profile.id}`
+    const profileLink = `${window.location.origin}/#/profile/${profile.username || profile.id}`
     const profileDisplayName =
       profile.name || (profile.username ? `@${profile.username}` : "this profile")
 

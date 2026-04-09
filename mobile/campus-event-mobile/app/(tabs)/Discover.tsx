@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   Animated,
   PanResponder,
@@ -15,6 +15,7 @@ import { AppScreen } from '@/components/mobile/AppScreen';
 import { EventStackCard } from '@/components/mobile/EventStackCard';
 import { useAppTheme } from '@/lib/app-theme';
 import { useMobileApp } from '@/providers/mobile-app-provider';
+import { useMobileInbox } from '@/providers/mobile-inbox-provider';
 
 export default function DiscoverScreen() {
   const router = useRouter();
@@ -30,6 +31,7 @@ export default function DiscoverScreen() {
     rejectDiscoverEvent,
     resetDiscoverDeck,
   } = useMobileApp();
+  const { unreadNotificationCount, unreadDmCount, defaultThreadId } = useMobileInbox();
 
   const translate = useRef(new Animated.ValueXY()).current;
 
@@ -45,18 +47,18 @@ export default function DiscoverScreen() {
   );
 
   const currentEvent = discoverEvents[0];
-  const cardHeight = Math.max(380, Math.min(height * 0.72, 720));
+  const cardHeight = Math.max(540, Math.min(height * 0.76, 760));
 
   useEffect(() => {
     translate.setValue({ x: 0, y: 0 });
   }, [currentEvent?.id, translate]);
 
-  const animateDismiss = (direction: 'left' | 'right') => {
+  const animateDismiss = useCallback((direction: 'left' | 'right') => {
     if (!currentEvent) return;
 
     Animated.timing(translate, {
-      toValue: { x: direction === 'right' ? width * 1.2 : -width * 1.2, y: 0 },
-      duration: 220,
+      toValue: { x: direction === 'right' ? width * 1.18 : -width * 1.18, y: 0 },
+      duration: 210,
       useNativeDriver: false,
     }).start(() => {
       if (direction === 'right') {
@@ -67,23 +69,23 @@ export default function DiscoverScreen() {
 
       translate.setValue({ x: 0, y: 0 });
     });
-  };
+  }, [acceptDiscoverEvent, currentEvent, rejectDiscoverEvent, translate, width]);
 
   const panResponder = useMemo(
     () =>
       PanResponder.create({
         onMoveShouldSetPanResponder: (_, gestureState) =>
-          Math.abs(gestureState.dx) > 10 || Math.abs(gestureState.dy) > 10,
+          Math.abs(gestureState.dx) > 8 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy),
         onPanResponderMove: (_, gestureState) => {
-          translate.setValue({ x: gestureState.dx, y: gestureState.dy * 0.12 });
+          translate.setValue({ x: gestureState.dx, y: gestureState.dy * 0.08 });
         },
         onPanResponderRelease: (_, gestureState) => {
-          if (gestureState.dx > 110) {
+          if (gestureState.dx > 92) {
             animateDismiss('right');
             return;
           }
 
-          if (gestureState.dx < -110) {
+          if (gestureState.dx < -92) {
             animateDismiss('left');
             return;
           }
@@ -95,7 +97,7 @@ export default function DiscoverScreen() {
           }).start();
         },
       }),
-    [currentEvent?.id, width]
+    [animateDismiss, translate]
   );
 
   const rotation = translate.x.interpolate({
@@ -103,40 +105,75 @@ export default function DiscoverScreen() {
     outputRange: ['-8deg', '0deg', '8deg'],
   });
 
+  const openNotifications = () => {
+    router.push({
+      pathname: '/inbox',
+      params: { tab: 'notifications' },
+    });
+  };
+
+  const openDms = () => {
+    router.push({
+      pathname: '/inbox',
+      params: defaultThreadId ? { tab: 'dms', dm: defaultThreadId } : { tab: 'dms' },
+    });
+  };
+
   return (
     <AppScreen style={styles.safeArea}>
       <View style={styles.container}>
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.eyebrow}>Campus Event Navigation</Text>
-            <Text style={styles.title}>Discover</Text>
+        <View style={styles.headerBar}>
+          <Pressable style={styles.headerIconButton} onPress={openDms}>
+            <Ionicons name="paper-plane-outline" size={18} color={theme.text} />
+            {unreadDmCount > 0 ? <View style={styles.headerBadge} /> : null}
+          </Pressable>
+
+          <Text style={styles.title}>Discover</Text>
+
+          <Pressable style={styles.headerIconButton} onPress={openNotifications}>
+            <Ionicons name="notifications-outline" size={18} color={theme.text} />
+            {unreadNotificationCount > 0 ? <View style={styles.headerBadge} /> : null}
+          </Pressable>
+        </View>
+
+        <View style={styles.subHeader}>
+          <Text style={styles.subHeaderText}>Swipe through what&apos;s moving around campus.</Text>
+          <View style={styles.stackPill}>
+            <Text style={styles.stackCount}>{discoverEvents.length} left</Text>
           </View>
-          <Text style={styles.stackCount}>{discoverEvents.length} left</Text>
         </View>
 
         <View style={styles.cardStage}>
           {currentEvent ? (
-            <Animated.View
-              style={[
-                styles.animatedCard,
-                {
-                  transform: [{ translateX: translate.x }, { translateY: translate.y }, { rotate: rotation }],
-                },
-              ]}
-              {...panResponder.panHandlers}>
-              <EventStackCard
-                event={currentEvent}
-                height={cardHeight}
-                onPress={() =>
-                  router.push({
-                    pathname: '/event/[id]',
-                    params: { id: currentEvent.id },
-                  })
-                }
-              />
-            </Animated.View>
+            <View style={[styles.cardDeck, { minHeight: cardHeight + 22 }]}>
+              <View style={[styles.cardBackdrop, { height: cardHeight - 18 }]} />
+
+              <Animated.View
+                style={[
+                  styles.animatedCard,
+                  {
+                    transform: [
+                      { translateX: translate.x },
+                      { translateY: translate.y },
+                      { rotate: rotation },
+                    ],
+                  },
+                ]}
+                {...panResponder.panHandlers}>
+                <EventStackCard
+                  event={currentEvent}
+                  height={cardHeight}
+                  onPress={() =>
+                    router.push({
+                      pathname: '/event/[id]',
+                      params: { id: currentEvent.id },
+                    })
+                  }
+                />
+              </Animated.View>
+            </View>
           ) : (
-            <View style={styles.endState}>
+            <View style={[styles.endState, { minHeight: cardHeight - 12 }]}>
               <Text style={styles.endTitle}>You made it to the end.</Text>
               <Text style={styles.endCopy}>
                 Accepted and rejected events have moved out of your stack for now.
@@ -148,15 +185,12 @@ export default function DiscoverScreen() {
           )}
         </View>
 
-        <View style={styles.actions}>
-          <Pressable style={[styles.actionButton, styles.rejectButton]} onPress={() => animateDismiss('left')}>
-            <Ionicons name="close" size={32} color={theme.danger} />
-          </Pressable>
-
-          <Pressable style={[styles.actionButton, styles.acceptButton]} onPress={() => animateDismiss('right')}>
-            <Ionicons name="heart" size={28} color={theme.success} />
-          </Pressable>
-        </View>
+        {currentEvent ? (
+          <View style={styles.swipeHint}>
+            <Ionicons name="swap-horizontal-outline" size={16} color={theme.textMuted} />
+            <Text style={styles.swipeHintText}>Swipe left to pass or right to save</Text>
+          </View>
+        ) : null}
       </View>
     </AppScreen>
   );
@@ -169,64 +203,101 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     },
     container: {
       flex: 1,
-      paddingHorizontal: 18,
-      paddingBottom: 24,
+      paddingHorizontal: 16,
+      paddingTop: 2,
+      paddingBottom: 12,
       backgroundColor: theme.background,
     },
-    header: {
-      flexDirection: 'row',
-      alignItems: 'flex-end',
-      justifyContent: 'space-between',
-      paddingTop: 8,
-      paddingBottom: 14,
-    },
-    eyebrow: {
-      color: theme.textMuted,
-      fontSize: 12,
-      fontWeight: '700',
-      letterSpacing: 0.5,
-      textTransform: 'uppercase',
-      marginBottom: 4,
-    },
-    title: {
-      color: theme.text,
-      fontSize: 30,
-      fontWeight: '800',
-    },
-    stackCount: {
-      color: theme.textMuted,
-      fontSize: 14,
-      fontWeight: '700',
-    },
-    cardStage: {
-      flex: 1,
-      justifyContent: 'center',
-    },
-    animatedCard: {
-      width: '100%',
-    },
-    actions: {
+    headerBar: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingHorizontal: 28,
-      paddingTop: 18,
+      paddingBottom: 12,
     },
-    actionButton: {
-      width: 78,
-      height: 78,
-      borderRadius: 39,
+    headerIconButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: theme.surface,
       borderWidth: 1,
       borderColor: theme.border,
     },
-    rejectButton: {
-      borderColor: theme.dangerSoft,
+    headerBadge: {
+      position: 'absolute',
+      top: 11,
+      right: 11,
+      width: 7,
+      height: 7,
+      borderRadius: 3.5,
+      backgroundColor: theme.success,
     },
-    acceptButton: {
-      borderColor: theme.successSoft,
+    title: {
+      color: theme.text,
+      fontSize: 18,
+      fontWeight: '800',
+    },
+    subHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+      paddingBottom: 12,
+    },
+    subHeaderText: {
+      color: theme.textMuted,
+      fontSize: 13,
+      lineHeight: 18,
+      flex: 1,
+    },
+    stackPill: {
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 999,
+      backgroundColor: theme.surface,
+      borderWidth: 1,
+      borderColor: theme.border,
+    },
+    stackCount: {
+      color: theme.textMuted,
+      fontSize: 12,
+      fontWeight: '700',
+    },
+    cardStage: {
+      flex: 1,
+      justifyContent: 'flex-start',
+    },
+    cardDeck: {
+      justifyContent: 'flex-start',
+    },
+    cardBackdrop: {
+      position: 'absolute',
+      left: 10,
+      right: 10,
+      top: 16,
+      borderRadius: 30,
+      backgroundColor: theme.surfaceAlt,
+      borderWidth: 1,
+      borderColor: theme.border,
+      opacity: 0.9,
+      transform: [{ scale: 0.985 }],
+    },
+    animatedCard: {
+      width: '100%',
+    },
+    swipeHint: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      paddingTop: 12,
+      paddingBottom: 4,
+    },
+    swipeHintText: {
+      color: theme.textMuted,
+      fontSize: 13,
+      fontWeight: '600',
     },
     endState: {
       padding: 24,
@@ -235,6 +306,7 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       borderWidth: 1,
       borderColor: theme.border,
       alignItems: 'center',
+      justifyContent: 'center',
       gap: 10,
     },
     endTitle: {

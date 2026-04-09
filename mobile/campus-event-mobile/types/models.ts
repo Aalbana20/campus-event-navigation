@@ -46,6 +46,15 @@ export type TaggedMoment = {
   image: string;
 };
 
+export type PersonalCalendarItem = {
+  id: string;
+  ownerId: string;
+  date: string;
+  title: string;
+  note?: string;
+  time?: string;
+};
+
 export type CreateEventInput = {
   title: string;
   description: string;
@@ -60,4 +69,11 @@ export type CreateEventInput = {
   tags: string[];
   privacy: EventPrivacy;
   image?: string;
+};
+
+export type CreatePersonalCalendarItemInput = {
+  date: string;
+  title: string;
+  note?: string;
+  time?: string;
 };

@@ -269,7 +269,7 @@ const getSpeechRecognitionConstructor = () => {
   return window.SpeechRecognition || window.webkitSpeechRecognition || null
 }
 
-function CreateEvent() {
+function CreateEvent({ embedded = false }) {
   const { createEvent } = useEvents()
 
   const [title, setTitle] = useState("")
@@ -385,7 +385,7 @@ function CreateEvent() {
         const nextSuggestions = mapAutocompleteSuggestions(responseData)
         setAddressSuggestions(nextSuggestions)
         setIsAddressDropdownOpen(nextSuggestions.length > 0)
-      } catch (error) {
+      } catch {
         if (controller.signal.aborted) return
         setAddressSuggestions([])
         setIsAddressDropdownOpen(false)
@@ -685,7 +685,7 @@ function CreateEvent() {
           coordinates: details.location || null,
         })
       )
-    } catch (error) {
+    } catch {
       setLocationAddress(fallbackAddress)
       if (!locationName.trim() && fallbackName) {
         setLocationName(fallbackName)
@@ -908,13 +908,15 @@ function CreateEvent() {
   }
 
   return (
-    <div className="create-page">
-      <div className="create-header">
-        <p>Create and customize your event</p>
-        <h1>Create Event</h1>
-      </div>
+    <div className={`create-page ${embedded ? "embedded" : ""}`}>
+      {!embedded && (
+        <div className="create-header">
+          <p>Create and customize your event</p>
+          <h1>Create Event</h1>
+        </div>
+      )}
 
-      <div className="create-layout">
+      <div className={`create-layout ${embedded ? "embedded" : ""}`}>
         <div className="create-form-card">
           {voiceFeedback ? (
             <div className="create-voice-feedback">{voiceFeedback}</div>

@@ -39,25 +39,171 @@ const suggestedPeopleSeed = [
   },
 ]
 
-const filters = [
-  { id: "all", label: "All" },
-  { id: "events", label: "Events" },
-  { id: "people", label: "People" },
+const EXPLORE_SECTION_DEFINITIONS = [
+  {
+    id: "discover",
+    eyebrow: "Featured",
+    title: "Discover",
+    note: "Curated event picks with strong momentum right now.",
+    select: (events) => sortEventsByMomentum(events),
+  },
+  {
+    id: "nearby",
+    eyebrow: "Local",
+    title: "Nearby",
+    note: "Things happening around campus and your usual orbit.",
+    select: (events) => {
+      const nearbyMatches = events.filter((event) =>
+        includesAny(getEventDiscoveryFields(event), [
+          "princess anne",
+          "campus",
+          "student center",
+          "quad",
+          "arena",
+          "library",
+          "arts",
+          "center",
+        ])
+      )
+
+      return nearbyMatches.length > 0 ? sortEventsByMomentum(nearbyMatches) : sortEventsByMomentum(events)
+    },
+  },
+  {
+    id: "sports",
+    eyebrow: "Energy",
+    title: "Sports",
+    note: "Games, runs, wellness drops, and campus competition.",
+    select: (events) =>
+      sortEventsByMomentum(
+        events.filter((event) =>
+          includesAny(getEventDiscoveryFields(event), [
+            "sports",
+            "game",
+            "basketball",
+            "football",
+            "soccer",
+            "run",
+            "wellness",
+            "athletic",
+          ])
+        )
+      ),
+  },
+  {
+    id: "movies",
+    eyebrow: "Watch",
+    title: "Movies & Film",
+    note: "Screenings, film nights, and cozy watch plans.",
+    select: (events) =>
+      sortEventsByMomentum(
+        events.filter((event) =>
+          includesAny(getEventDiscoveryFields(event), [
+            "movie",
+            "film",
+            "screening",
+            "cinema",
+            "watch",
+          ])
+        )
+      ),
+  },
+  {
+    id: "creative",
+    eyebrow: "Creative",
+    title: "Music & Arts",
+    note: "Open mics, showcases, concerts, and art-forward hangs.",
+    select: (events) =>
+      sortEventsByMomentum(
+        events.filter((event) =>
+          includesAny(getEventDiscoveryFields(event), [
+            "music",
+            "concert",
+            "dj",
+            "creative",
+            "arts",
+            "art",
+            "open mic",
+            "poetry",
+            "showcase",
+          ])
+        )
+      ),
+  },
+  {
+    id: "social",
+    eyebrow: "Social",
+    title: "Parties & Mixers",
+    note: "Loose, social plans for meeting people outside your usual circle.",
+    select: (events) =>
+      sortEventsByMomentum(
+        events.filter((event) =>
+          includesAny(getEventDiscoveryFields(event), [
+            "party",
+            "social",
+            "nightlife",
+            "mixer",
+            "brunch",
+            "rooftop",
+            "afterparty",
+          ])
+        )
+      ),
+  },
+  {
+    id: "networking",
+    eyebrow: "Connect",
+    title: "Networking",
+    note: "Career-minded, founder, and community-building events.",
+    select: (events) =>
+      sortEventsByMomentum(
+        events.filter((event) =>
+          includesAny(getEventDiscoveryFields(event), [
+            "networking",
+            "career",
+            "founder",
+            "startup",
+            "professional",
+            "mixer",
+            "community",
+          ])
+        )
+      ),
+  },
 ]
 
 const eventSearchFields = (event) =>
-  [event?.title, event?.description, event?.location, event?.organizer]
+  [
+    event?.title,
+    event?.description,
+    event?.location,
+    event?.locationName,
+    event?.locationAddress,
+    event?.organizer,
+    ...(event?.tags || []),
+  ]
     .filter(Boolean)
     .join(" ")
     .toLowerCase()
 
+const getEventDiscoveryFields = (event) => eventSearchFields(event)
+
 const personSearchFields = (person) =>
-  [person?.username, person?.name, person?.bio]
+  [person?.username, person?.name, person?.bio, person?.location]
     .filter(Boolean)
     .join(" ")
     .toLowerCase()
 
 const getPersonKey = (person) => String(person?.id || person?.username || "")
+
+const includesAny = (value, keywords) => keywords.some((keyword) => value.includes(keyword))
+
+const sortEventsByMomentum = (events) =>
+  [...events].sort((left, right) => {
+    const rightScore = Number(right?.goingCount || 0) + Number(right?.repostedByIds?.length || 0) * 3
+    const leftScore = Number(left?.goingCount || 0) + Number(left?.repostedByIds?.length || 0) * 3
+    return rightScore - leftScore
+  })
 
 const normalizePerson = (person, index, supportsFollowAction) => ({
   id: person.id || person.username || `person-${index}`,
@@ -77,6 +223,12 @@ const buildEventImageStyle = (event) => ({
     : "var(--explore-event-fallback)",
 })
 
+const buildCuratedSections = (events) =>
+  EXPLORE_SECTION_DEFINITIONS.map((section) => ({
+    ...section,
+    items: section.select(events).slice(0, 4),
+  })).filter((section) => section.items.length > 0)
+
 function Explore() {
   const navigate = useNavigate()
   const {
@@ -90,9 +242,8 @@ function Explore() {
     unfollow,
   } = useEvents()
   const [searchQuery, setSearchQuery] = useState("")
-  const [activeFilter, setActiveFilter] = useState("all")
   const [followOverrides, setFollowOverrides] = useState({})
-  const [searchedProfiles, setSearchedProfiles] = useState([])
+  const [remoteProfileResults, setRemoteProfileResults] = useState({ query: "", items: [] })
 
   const people = useMemo(() => {
     const fromContext = [...followingList, ...followersList].map((person, index) =>
@@ -131,14 +282,13 @@ function Explore() {
   }, [currentUser, followersList, followingList])
 
   const trimmedQuery = searchQuery.trim().toLowerCase()
-  const showEvents = activeFilter === "all" || activeFilter === "events"
-  const showPeople = activeFilter === "all" || activeFilter === "people"
 
   useEffect(() => {
     if (!trimmedQuery) {
-      setSearchedProfiles([])
-      return
+      return undefined
     }
+
+    let isActive = true
 
     supabase
       .from("profiles")
@@ -147,11 +297,36 @@ function Explore() {
       .neq("id", currentUser?.id || "")
       .limit(10)
       .then(({ data }) => {
-        setSearchedProfiles(
-          (data || []).map((p) => normalizePerson({ ...p, image: "/default-avatar.png" }, 0, true))
-        )
+        if (!isActive) return
+
+        setRemoteProfileResults({
+          query: trimmedQuery,
+          items: (data || []).map((profile, index) =>
+            normalizePerson({ ...profile, image: "/default-avatar.png" }, index, true)
+          ),
+        })
       })
+
+    return () => {
+      isActive = false
+    }
   }, [trimmedQuery, currentUser?.id])
+
+  const searchedProfiles = useMemo(() => {
+    if (!trimmedQuery) return []
+    return remoteProfileResults.query === trimmedQuery ? remoteProfileResults.items : []
+  }, [remoteProfileResults, trimmedQuery])
+
+  const discoverableEvents = useMemo(
+    () =>
+      sortEventsByMomentum(
+        (allEvents || []).filter(
+          (event) =>
+            !event?.isPrivate && String(event?.createdBy || "") !== String(currentUser?.id || "")
+        )
+      ),
+    [allEvents, currentUser?.id]
+  )
 
   const savedEventIds = useMemo(
     () => new Set((savedEvents || []).map((event) => String(event.id))),
@@ -171,23 +346,29 @@ function Explore() {
 
   const filteredEvents = useMemo(() => {
     if (!trimmedQuery) return []
-    return allEvents.filter((event) => eventSearchFields(event).includes(trimmedQuery))
-  }, [allEvents, trimmedQuery])
+    return discoverableEvents.filter((event) => eventSearchFields(event).includes(trimmedQuery))
+  }, [discoverableEvents, trimmedQuery])
 
   const filteredPeople = useMemo(() => {
     if (!trimmedQuery) return []
+
     const localMatches = people.filter((person) => personSearchFields(person).includes(trimmedQuery))
     const localIds = new Set(localMatches.map(getPersonKey))
-    const remoteOnly = searchedProfiles.filter((p) => !localIds.has(getPersonKey(p)))
+    const remoteOnly = searchedProfiles.filter((person) => !localIds.has(getPersonKey(person)))
+
     return [...localMatches, ...remoteOnly]
   }, [people, searchedProfiles, trimmedQuery])
 
-  const suggestedEvents = useMemo(() => allEvents.slice(0, 6), [allEvents])
-  const suggestedPeople = useMemo(() => people.slice(0, 6), [people])
+  const curatedSections = useMemo(
+    () => buildCuratedSections(discoverableEvents),
+    [discoverableEvents]
+  )
 
-  const isEventSaved = (eventId) => savedEventIds.has(String(eventId))
+  function isEventSaved(eventId) {
+    return savedEventIds.has(String(eventId))
+  }
 
-  const isFollowingPerson = (person) => {
+  function isFollowingPerson(person) {
     const personKey = getPersonKey(person)
 
     if (Object.prototype.hasOwnProperty.call(followOverrides, personKey)) {
@@ -199,7 +380,11 @@ function Explore() {
     return false
   }
 
-  const getEventActionLabel = (event) => {
+  const suggestedPeople = [...people]
+    .sort((left, right) => Number(isFollowingPerson(left)) - Number(isFollowingPerson(right)))
+    .slice(0, 4)
+
+  function getEventActionLabel(event) {
     if (isEventSaved(event.id)) {
       return (event.goingCount || 0) > 0 ? "Going" : "Added"
     }
@@ -207,21 +392,22 @@ function Explore() {
     return (event.goingCount || 0) > 0 ? "RSVP" : "Add Event"
   }
 
-  const handleOpenEvent = (eventId) => {
+  function handleOpenEvent(eventId) {
     if (!eventId) return
     navigate(`/events/${eventId}`)
   }
 
-  const handleOpenPerson = (person) => {
+  function handleOpenPerson(person) {
     const target =
       person.username && !person.username.startsWith("guest-")
         ? person.username
         : person.id
+
     if (!target) return
     navigate(`/profile/${target}`)
   }
 
-  const handleEventAction = (event, selectedEvent) => {
+  function handleEventAction(event, selectedEvent) {
     event.stopPropagation()
 
     if (isEventSaved(selectedEvent.id)) return
@@ -235,7 +421,7 @@ function Explore() {
     )
   }
 
-  const handleFollowToggle = async (event, person) => {
+  async function handleFollowToggle(event, person) {
     event.stopPropagation()
 
     const personKey = getPersonKey(person)
@@ -258,7 +444,7 @@ function Explore() {
     await unfollow(person.id)
   }
 
-  const renderEventCard = (event) => {
+  function renderEventCard(event) {
     const isSaved = isEventSaved(event.id)
     const eventTitle = event?.title || "Untitled Event"
 
@@ -277,7 +463,11 @@ function Explore() {
 
           <div className="explore-event-body">
             <div className="explore-event-meta">
-              {[event.date, event.location || event.locationAddress, event.organizer]
+              {[
+                event.date,
+                event.locationName || event.location || event.locationAddress,
+                event.organizer,
+              ]
                 .filter(Boolean)
                 .join(" · ")}
             </div>
@@ -310,7 +500,7 @@ function Explore() {
     )
   }
 
-  const renderPersonCard = (person) => {
+  function renderPersonCard(person) {
     const isFollowing = isFollowingPerson(person)
 
     return (
@@ -358,6 +548,18 @@ function Explore() {
     )
   }
 
+  function renderSectionHeader({ eyebrow, title, note }) {
+    return (
+      <div className="explore-section-header">
+        <div className="explore-section-copy">
+          <p className="explore-section-eyebrow">{eyebrow}</p>
+          <h2 className="explore-section-title">{title}</h2>
+        </div>
+        <p className="explore-section-note">{note}</p>
+      </div>
+    )
+  }
+
   return (
     <main className="explore-page">
       <div className="explore-shell">
@@ -372,38 +574,25 @@ function Explore() {
           />
         </div>
 
-        <div className="explore-chip-row">
-          {filters.map((chip) => (
-            <button
-              key={chip.id}
-              type="button"
-              onClick={() => setActiveFilter(chip.id)}
-              className={`explore-chip ${activeFilter === chip.id ? "active" : ""}`}
-            >
-              {chip.label}
-            </button>
-          ))}
-        </div>
+        <p className="explore-search-caption">
+          Search when you know what you want, or scroll curated rows to discover what is moving.
+        </p>
 
-        {trimmedQuery ? (
-          <section className="explore-section">
-            <div className="explore-section-header">
-              <h2 className="explore-section-title">Search Results</h2>
-              <p className="explore-section-note">
-                {activeFilter === "all"
-                  ? "Matching events and people"
-                  : activeFilter === "events"
-                    ? "Matching events"
-                    : "Matching people"}
-              </p>
-            </div>
+        <div className="explore-feed">
+          {trimmedQuery ? (
+            <>
+              {renderSectionHeader({
+                eyebrow: "Results",
+                title: "Search Results",
+                note: `Matching events and people for "${searchQuery.trim()}"`,
+              })}
 
-            {showEvents && (
               <div className="explore-results-group">
-                <div className="explore-section-header">
-                  <h3 className="explore-section-title">Events</h3>
-                  <p className="explore-section-note">{filteredEvents.length} found</p>
-                </div>
+                {renderSectionHeader({
+                  eyebrow: "Events",
+                  title: "Matching Events",
+                  note: `${filteredEvents.length} found`,
+                })}
 
                 {filteredEvents.length > 0 ? (
                   <div className="explore-grid">
@@ -413,14 +602,13 @@ function Explore() {
                   <p className="explore-empty-state">No events matched that search yet.</p>
                 )}
               </div>
-            )}
 
-            {showPeople && (
               <div className="explore-results-group">
-                <div className="explore-section-header">
-                  <h3 className="explore-section-title">People</h3>
-                  <p className="explore-section-note">{filteredPeople.length} found</p>
-                </div>
+                {renderSectionHeader({
+                  eyebrow: "People",
+                  title: "Matching People",
+                  note: `${filteredPeople.length} found`,
+                })}
 
                 {filteredPeople.length > 0 ? (
                   <div className="explore-people-grid">
@@ -430,37 +618,25 @@ function Explore() {
                   <p className="explore-empty-state">No people matched that search yet.</p>
                 )}
               </div>
-            )}
-          </section>
-        ) : (
-          <>
-            {showEvents && (
-              <section className="explore-section">
-                <div className="explore-section-header">
-                  <h2 className="explore-section-title">Suggested Events</h2>
-                  <p className="explore-section-note">
-                    Fresh ideas outside your usual community feed
-                  </p>
-                </div>
+            </>
+          ) : (
+            <>
+              {curatedSections.map((section) => (
+                <section className="explore-section" key={section.id}>
+                  {renderSectionHeader(section)}
 
-                {suggestedEvents.length > 0 ? (
                   <div className="explore-grid">
-                    {suggestedEvents.map(renderEventCard)}
+                    {section.items.map(renderEventCard)}
                   </div>
-                ) : (
-                  <p className="explore-empty-state">No events to explore yet.</p>
-                )}
-              </section>
-            )}
+                </section>
+              ))}
 
-            {showPeople && (
               <section className="explore-section">
-                <div className="explore-section-header">
-                  <h2 className="explore-section-title">Suggested People</h2>
-                  <p className="explore-section-note">
-                    New people who might lead you to your next event
-                  </p>
-                </div>
+                {renderSectionHeader({
+                  eyebrow: "People",
+                  title: "People to Follow",
+                  note: "Profiles that can lead you to your next favorite plan.",
+                })}
 
                 {suggestedPeople.length > 0 ? (
                   <div className="explore-people-grid">
@@ -470,9 +646,9 @@ function Explore() {
                   <p className="explore-empty-state">No people to explore yet.</p>
                 )}
               </section>
-            )}
-          </>
-        )}
+            </>
+          )}
+        </div>
       </div>
     </main>
   )

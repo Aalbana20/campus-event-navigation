@@ -79,8 +79,10 @@ body {
   align-items: center;
   justify-content: flex-end;
   grid-column: 3;
+  gap: 8px;
 }
 
+.navbar-dm-btn,
 .navbar-bell-btn {
   position: relative;
   width: 40px;
@@ -96,6 +98,7 @@ body {
   transition: background 0.2s ease;
 }
 
+.navbar-dm-btn:hover,
 .navbar-bell-btn:hover {
   background: rgba(0, 0, 0, 0.05);
 }
@@ -579,6 +582,9 @@ button.inbox-item:hover {
   width: 100%;
   max-width: 1120px;
   margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
 .explore-title {
@@ -602,11 +608,17 @@ button.inbox-item:hover {
   align-items: center;
   gap: 12px;
   padding: 14px 16px;
-  margin-bottom: 12px;
   border-radius: 22px;
   border: 1px solid var(--explore-card-border);
   background: var(--explore-search-bg);
   box-shadow: var(--explore-card-shadow);
+}
+
+.explore-search-caption {
+  margin: 0;
+  color: var(--explore-secondary-text);
+  font-size: 0.92rem;
+  line-height: 1.55;
 }
 
 .explore-search-icon {
@@ -670,19 +682,41 @@ body.theme-dark .explore-search-wrap .explore-search-input::placeholder {
 }
 
 .explore-section {
-  margin-top: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.explore-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
 }
 
 .explore-results-group + .explore-results-group {
-  margin-top: 28px;
+  margin-top: 8px;
 }
 
 .explore-section-header {
   display: flex;
-  align-items: baseline;
+  align-items: flex-end;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 14px;
+}
+
+.explore-section-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.explore-section-eyebrow {
+  margin: 0;
+  color: var(--explore-secondary-text);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .explore-section-title {
@@ -941,6 +975,10 @@ body.theme-dark .explore-search-wrap .explore-search-input::placeholder {
   .explore-section-header {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .explore-feed {
+    gap: 24px;
   }
 
   .explore-person-top {
@@ -1538,11 +1576,13 @@ body.theme-dark .topbar {
 }
 
 body.theme-dark .topbar-item,
+body.theme-dark .navbar-dm-btn,
 body.theme-dark .navbar-bell-btn {
   color: #d9e0ec;
 }
 
 body.theme-dark .topbar-item:hover,
+body.theme-dark .navbar-dm-btn:hover,
 body.theme-dark .navbar-bell-btn:hover {
   color: #f5f7fb;
   background: rgba(255, 255, 255, 0.08);
@@ -1551,6 +1591,23 @@ body.theme-dark .navbar-bell-btn:hover {
 body.theme-dark .navbar-bell-badge {
   background: #f5f7fb;
   color: #13161d;
+}
+
+body.theme-dark .events-tab-btn {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-main);
+}
+
+body.theme-dark .events-tab-btn.active {
+  background: #f5f7fb;
+  color: #13161d;
+}
+
+body.theme-dark .events-summary-card,
+body.theme-dark .events-empty-state {
+  background: rgba(20, 23, 30, 0.82);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.22);
 }
 
 body.theme-dark .profile-card,
@@ -1698,28 +1755,55 @@ body.theme-dark .calendar-modal-overlay {
 ========================================================= */
 .my-events-page {
   min-height: calc(100vh - 64px);
-  width: 100%;
+  width: min(1180px, 100%);
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  padding: 32px 24px 48px;
-  text-align: center;
+  gap: 18px;
+  padding: 28px 24px 52px;
 }
 
 .my-events-page h1 {
-  margin: 8px 0 24px;
-  font-size: 64px;
+  margin: 6px 0 0;
+  font-size: clamp(2.3rem, 4.8vw, 4rem);
   font-weight: 700;
   letter-spacing: -1px;
 }
 
-.view-toggle {
+.events-page-header {
   display: flex;
-  gap: 12px;
-  margin-bottom: 28px;
+  flex-direction: column;
+  gap: 10px;
 }
 
-.toggle-btn {
+.events-page-title-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.events-page-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.events-page-subtitle {
+  margin: 0;
+  max-width: 720px;
+  color: #6e6e73;
+  font-size: 0.98rem;
+  line-height: 1.55;
+}
+
+.events-tabs {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.events-tab-btn {
   border: none;
   background: #e9e9ee;
   color: #1d1d1f;
@@ -1731,9 +1815,69 @@ body.theme-dark .calendar-modal-overlay {
   transition: all 0.2s ease;
 }
 
-.toggle-btn.active {
+.events-tab-btn:hover {
+  transform: translateY(-1px);
+}
+
+.events-tab-btn.active {
   background: #1d1d1f;
   color: white;
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.12);
+}
+
+.events-tab-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.events-summary-card,
+.events-empty-state {
+  border-radius: 28px;
+  padding: 20px 22px;
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(17, 24, 39, 0.06);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+}
+
+.events-summary-card h2,
+.events-empty-state h3 {
+  margin: 0 0 8px;
+  color: #111318;
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
+.events-summary-card p,
+.events-empty-state p {
+  margin: 0;
+  color: #667085;
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
+@media (max-width: 720px) {
+  .my-events-page {
+    padding: 20px 18px 40px;
+  }
+
+  .events-page-title-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .events-tabs {
+    width: 100%;
+  }
+
+  .events-tab-btn {
+    flex: 1;
+    text-align: center;
+  }
+
+  .cards-scroll {
+    padding: 10px 4px 20px;
+  }
 }
 
 /* =========================================================
@@ -3394,6 +3538,7 @@ body.theme-dark .topbar {
 }
 
 body.theme-dark .topbar-item,
+body.theme-dark .navbar-dm-btn,
 body.theme-dark .navbar-bell-btn,
 body.theme-dark h1,
 body.theme-dark h2,
@@ -3405,7 +3550,9 @@ body.theme-dark .event-mutuals-item-name,
 body.theme-dark .inbox-item-text,
 body.theme-dark .profile-stat-number,
 body.theme-dark .create-header h1,
-body.theme-dark .my-events-page h1 {
+body.theme-dark .my-events-page h1,
+body.theme-dark .events-summary-card h2,
+body.theme-dark .events-empty-state h3 {
   color: var(--text-strong);
 }
 
@@ -3415,6 +3562,9 @@ body.theme-dark .create-header p,
 body.theme-dark .profile-share-message,
 body.theme-dark .calendar-day.header,
 body.theme-dark .my-events-page p,
+body.theme-dark .events-page-subtitle,
+body.theme-dark .events-summary-card p,
+body.theme-dark .events-empty-state p,
 body.theme-dark .inbox-item-time,
 body.theme-dark .settings-helper-text,
 body.theme-dark .real-name,

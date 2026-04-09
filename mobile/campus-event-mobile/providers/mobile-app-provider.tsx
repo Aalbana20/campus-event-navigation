@@ -4,11 +4,20 @@ import {
   CURRENT_USER_ID,
   mockEvents,
   mockFollowRelationships,
+  mockPersonalCalendarItems,
   mockProfiles,
   mockSavedEventIds,
   mockTaggedMoments,
 } from '@/data/mock-data';
-import { CreateEventInput, EventRecord, FollowRelationship, ProfileRecord, TaggedMoment } from '@/types/models';
+import {
+  CreateEventInput,
+  CreatePersonalCalendarItemInput,
+  EventRecord,
+  FollowRelationship,
+  PersonalCalendarItem,
+  ProfileRecord,
+  TaggedMoment,
+} from '@/types/models';
 
 type MobileAppContextValue = {
   currentUser: ProfileRecord;
@@ -16,9 +25,11 @@ type MobileAppContextValue = {
   events: EventRecord[];
   savedEventIds: string[];
   discoverDismissedIds: string[];
+  personalCalendarItems: PersonalCalendarItem[];
   recentDmPeople: ProfileRecord[];
   followingProfiles: ProfileRecord[];
   createEvent: (input: CreateEventInput) => EventRecord;
+  addPersonalCalendarItem: (input: CreatePersonalCalendarItemInput) => PersonalCalendarItem;
   deleteEvent: (eventId: string) => void;
   toggleSaveEvent: (eventId: string) => void;
   acceptDiscoverEvent: (eventId: string) => void;
@@ -32,6 +43,8 @@ type MobileAppContextValue = {
   getProfileByUsername: (username: string) => ProfileRecord | undefined;
   getCreatedEventsForProfile: (profileId: string) => EventRecord[];
   getGoingEventsForProfile: (profileId: string) => EventRecord[];
+  getCalendarEventsForProfile: (profileId: string) => EventRecord[];
+  getPersonalCalendarItemsForProfile: (profileId: string) => PersonalCalendarItem[];
   getRepostedEventsForProfile: (profileId: string) => EventRecord[];
   getTaggedMomentsForProfile: (profileId: string) => TaggedMoment[];
   getFollowersForProfile: (profileId: string) => ProfileRecord[];
@@ -56,6 +69,8 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
   const [savedEventIds, setSavedEventIds] = useState<string[]>(mockSavedEventIds);
   const [discoverDismissedIds, setDiscoverDismissedIds] = useState<string[]>([]);
   const [taggedMoments] = useState<TaggedMoment[]>(mockTaggedMoments);
+  const [personalCalendarItems, setPersonalCalendarItems] =
+    useState<PersonalCalendarItem[]>(mockPersonalCalendarItems);
 
   const currentUser = useMemo(() => {
     const fallback = profiles[0];
@@ -98,6 +113,20 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
     events.filter(
       (event) => savedEventIds.includes(event.id) || event.attendees.includes(profileId)
     );
+
+  const getCalendarEventsForProfile = (profileId: string) => {
+    const calendarEvents = [...getGoingEventsForProfile(profileId), ...getCreatedEventsForProfile(profileId)];
+    const seen = new Set<string>();
+
+    return calendarEvents.filter((event) => {
+      if (seen.has(event.id)) return false;
+      seen.add(event.id);
+      return true;
+    });
+  };
+
+  const getPersonalCalendarItemsForProfile = (profileId: string) =>
+    personalCalendarItems.filter((item) => item.ownerId === profileId);
 
   const getRepostedEventsForProfile = (profileId: string) =>
     events.filter((event) => event.repostedByIds.includes(profileId));
@@ -215,6 +244,21 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
     return nextEvent;
   };
 
+  const addPersonalCalendarItem = (input: CreatePersonalCalendarItemInput) => {
+    const nextItem: PersonalCalendarItem = {
+      id: `personal-${Date.now()}`,
+      ownerId: currentUser.id,
+      date: input.date,
+      title: input.title.trim() || 'New personal item',
+      note: input.note?.trim(),
+      time: input.time?.trim(),
+    };
+
+    setPersonalCalendarItems((currentItems) => [nextItem, ...currentItems]);
+
+    return nextItem;
+  };
+
   const deleteEvent = (eventId: string) => {
     setEvents((currentEvents) => currentEvents.filter((event) => event.id !== eventId));
     setSavedEventIds((currentIds) => currentIds.filter((id) => id !== eventId));
@@ -228,9 +272,11 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
       events,
       savedEventIds,
       discoverDismissedIds,
+      personalCalendarItems,
       recentDmPeople,
       followingProfiles,
       createEvent,
+      addPersonalCalendarItem,
       deleteEvent,
       toggleSaveEvent,
       acceptDiscoverEvent,
@@ -244,13 +290,24 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
       getProfileByUsername,
       getCreatedEventsForProfile,
       getGoingEventsForProfile,
+      getCalendarEventsForProfile,
+      getPersonalCalendarItemsForProfile,
       getRepostedEventsForProfile,
       getTaggedMomentsForProfile,
       getFollowersForProfile,
       getFollowingForProfile,
       isFollowingProfile,
     }),
-    [currentUser, profiles, events, savedEventIds, discoverDismissedIds, recentDmPeople, followingProfiles]
+    [
+      currentUser,
+      profiles,
+      events,
+      savedEventIds,
+      discoverDismissedIds,
+      personalCalendarItems,
+      recentDmPeople,
+      followingProfiles,
+    ]
   );
 
   return <MobileAppContext.Provider value={value}>{children}</MobileAppContext.Provider>;

@@ -337,7 +337,7 @@ function Profile() {
 
   const handleShareProfile = async () => {
     const baseUrl = window.location.origin
-    const profileLink = `${baseUrl}/profile/${draftUsername || username || "profile"}`
+    const profileLink = `${baseUrl}/#/profile/${draftUsername || username || "profile"}`
 
     try {
       await navigator.clipboard.writeText(profileLink)

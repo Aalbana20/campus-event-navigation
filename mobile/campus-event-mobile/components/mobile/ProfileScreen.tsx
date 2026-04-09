@@ -84,6 +84,8 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
     unfollowProfile,
     deleteEvent,
   } = useMobileApp();
+  const [activeList, setActiveList] = useState<ActiveList>(null);
+  const [activeTab, setActiveTab] = useState<ProfileTab>('grid');
 
   const isOwnProfile = !username || username === currentUser.username;
 
@@ -92,9 +94,6 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
   }
 
   const profile = isOwnProfile ? currentUser : getProfileByUsername(username || '');
-
-  const [activeList, setActiveList] = useState<ActiveList>(null);
-  const [activeTab, setActiveTab] = useState<ProfileTab>('grid');
 
   if (!profile) {
     return (
@@ -245,7 +244,7 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
                 </Pressable>
                 <Pressable
                   style={styles.secondaryIconButton}
-                  onPress={() => Alert.alert('Settings', 'Profile settings are ready for the redesign pass.')}>
+                  onPress={() => router.push('/settings')}>
                   <Ionicons name="settings-outline" size={18} color={theme.text} />
                 </Pressable>
               </>

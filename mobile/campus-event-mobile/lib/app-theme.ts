@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useMobileSettings } from '@/providers/mobile-settings-provider';
 
 const palettes = {
   light: {
@@ -61,8 +61,7 @@ export type AppTheme = {
 };
 
 export function useAppTheme(): AppTheme {
-  const colorScheme = useColorScheme();
-  const mode = colorScheme === 'light' ? 'light' : 'dark';
+  const { resolvedThemeMode } = useMobileSettings();
 
-  return useMemo(() => palettes[mode], [mode]);
+  return useMemo(() => palettes[resolvedThemeMode], [resolvedThemeMode]);
 }

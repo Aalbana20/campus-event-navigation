@@ -3,6 +3,11 @@
   padding: 24px 24px 52px;
 }
 
+.create-page.embedded {
+  min-height: auto;
+  padding: 0;
+}
+
 .create-header {
   text-align: center;
   margin-bottom: 20px;
@@ -28,6 +33,10 @@
   grid-template-columns: 1.2fr 0.9fr;
   gap: 26px;
   align-items: start;
+}
+
+.create-layout.embedded {
+  max-width: none;
 }
 
 .create-form-card,
