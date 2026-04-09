@@ -22,6 +22,7 @@ import Login from "./pages/Login"
 import Logout from "./pages/Logout"
 import { useEvents } from "./context/EventContext"
 import { supabase } from "./supabaseClient"
+import { applyThemeMode, getStoredThemeMode } from "./theme"
 
 const MONTH_NAMES = [
   "January",
@@ -847,6 +848,47 @@ function LegacyEventRedirect() {
 function App() {
   const [session, setSession] = useState(null)
   const [isInitializing, setIsInitializing] = useState(true)
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return undefined
+
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)")
+    const syncTheme = () => {
+      applyThemeMode(getStoredThemeMode())
+    }
+
+    syncTheme()
+
+    const handleSystemThemeChange = () => {
+      if (getStoredThemeMode() === "device") {
+        syncTheme()
+      }
+    }
+
+    const handleStorageChange = (event) => {
+      if (event.key === "themeMode") {
+        syncTheme()
+      }
+    }
+
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", handleSystemThemeChange)
+    } else {
+      mediaQuery.addListener(handleSystemThemeChange)
+    }
+
+    window.addEventListener("storage", handleStorageChange)
+
+    return () => {
+      if (typeof mediaQuery.removeEventListener === "function") {
+        mediaQuery.removeEventListener("change", handleSystemThemeChange)
+      } else {
+        mediaQuery.removeListener(handleSystemThemeChange)
+      }
+
+      window.removeEventListener("storage", handleStorageChange)
+    }
+  }, [])
 
   useEffect(() => {
     let isMounted = true

@@ -3,6 +3,12 @@ import Cropper from "react-easy-crop"
 import { useNavigate } from "react-router-dom"
 import { useEvents } from "../context/EventContext"
 import { supabase } from "../supabaseClient"
+import {
+  applyThemeMode,
+  getStoredThemeMode,
+  persistThemeMode,
+  resolveThemeMode,
+} from "../theme"
 import "./Profile.css"
 
 const createImage = (url) =>
@@ -107,9 +113,7 @@ function Profile() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [shareMessage, setShareMessage] = useState("")
   const [activeSettingsView, setActiveSettingsView] = useState("main")
-  const [themeMode, setThemeMode] = useState(
-    localStorage.getItem("themeMode") || "device"
-  )
+  const [themeMode, setThemeMode] = useState(getStoredThemeMode)
   const [pushNotifications, setPushNotifications] = useState(true)
   const [eventReminders, setEventReminders] = useState(true)
   const [followerAlerts, setFollowerAlerts] = useState(true)
@@ -198,36 +202,11 @@ function Profile() {
     setActiveSettingsView("main")
   }
 
-  const getSystemTheme = () =>
-    window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
-
-  const resolvedTheme = themeMode === "device" ? getSystemTheme() : themeMode
+  const resolvedTheme = resolveThemeMode(themeMode)
 
   useEffect(() => {
-    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)")
-
-    const applyTheme = () => {
-      const activeTheme = themeMode === "device" ? getSystemTheme() : themeMode
-      document.body.classList.remove("theme-light", "theme-dark")
-      document.body.classList.add(`theme-${activeTheme}`)
-      localStorage.setItem("themeMode", themeMode)
-    }
-
-    applyTheme()
-
-    const handleChange = () => {
-      if (themeMode === "device") {
-        applyTheme()
-      }
-    }
-
-    if (typeof mediaQuery.addEventListener === "function") {
-      mediaQuery.addEventListener("change", handleChange)
-      return () => mediaQuery.removeEventListener("change", handleChange)
-    }
-
-    mediaQuery.addListener(handleChange)
-    return () => mediaQuery.removeListener(handleChange)
+    persistThemeMode(themeMode)
+    applyThemeMode(themeMode)
   }, [themeMode])
 
   useEffect(() => {
