@@ -1,12 +1,11 @@
 import 'react-native-url-polyfill/auto';
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import { DarkTheme, DefaultTheme, ThemeProvider, useTheme } from '@react-navigation/native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import 'react-native-reanimated';
 
-import { useAppTheme } from '@/lib/app-theme';
 import { MobileAppProvider, useMobileApp } from '@/providers/mobile-app-provider';
 import { MobileInboxProvider } from '@/providers/mobile-inbox-provider';
 import { MobileSettingsProvider, useMobileSettings } from '@/providers/mobile-settings-provider';
@@ -16,12 +15,12 @@ export const unstable_settings = {
 };
 
 function BootScreen() {
-  const theme = useAppTheme();
+  const { colors } = useTheme();
 
   return (
-    <View style={[styles.loadingScreen, { backgroundColor: theme.background }]}>
-      <Text style={[styles.loadingTitle, { color: theme.text }]}>Loading campus...</Text>
-      <Text style={[styles.loadingCopy, { color: theme.textMuted }]}>
+    <View style={[styles.loadingScreen, { backgroundColor: colors.background }]}>
+      <Text style={[styles.loadingTitle, { color: colors.text }]}>Loading campus...</Text>
+      <Text style={[styles.loadingCopy, { color: colors.border }]}>
         Pulling your profile, events, messages, and follows from the shared backend.
       </Text>
     </View>
