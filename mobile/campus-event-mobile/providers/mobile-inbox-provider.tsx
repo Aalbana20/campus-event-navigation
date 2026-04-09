@@ -1,5 +1,10 @@
-import React, { createContext, useContext, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
+import {
+  formatRelativeTime,
+  getDaysUntilDate,
+} from '@/lib/mobile-backend';
+import { supabase } from '@/lib/supabase';
 import { useMobileApp } from '@/providers/mobile-app-provider';
 
 type MobileInboxTab = 'notifications' | 'dms';
@@ -44,136 +49,336 @@ type MobileInboxContextValue = {
   clearNotifications: () => void;
   deleteNotification: (notificationId: string) => void;
   openDmThread: (threadId: string) => void;
-  sendDmMessage: (threadId: string, text: string) => void;
+  sendDmMessage: (threadId: string, text: string) => Promise<void>;
 };
 
 const MobileInboxContext = createContext<MobileInboxContextValue | null>(null);
 
-const timeAgo = (offsetHours: number) => {
-  if (offsetHours < 24) return `${offsetHours}h`;
-  return `${Math.floor(offsetHours / 24)}d`;
+type MessageRow = {
+  id: string;
+  sender_id: string;
+  recipient_id: string;
+  content: string;
+  created_at?: string | null;
 };
 
 export function MobileInboxProvider({ children }: { children: React.ReactNode }) {
   const {
+    session,
     currentUser,
-    recentDmPeople,
     events,
     savedEventIds,
-    getFollowingForProfile,
+    recentDmPeople,
+    followRelationships,
+    getProfileById,
   } = useMobileApp();
+  const [messageRows, setMessageRows] = useState<MessageRow[]>([]);
+  const [unreadDmThreadIds, setUnreadDmThreadIds] = useState<Set<string>>(new Set());
+  const [readNotificationIds, setReadNotificationIds] = useState<Set<string>>(new Set());
+  const [deletedNotificationIds, setDeletedNotificationIds] = useState<Set<string>>(new Set());
+  const hasInitializedUnreadThreads = useRef(false);
 
-  const fallbackDmPeople = recentDmPeople.length > 0 ? recentDmPeople : getFollowingForProfile(currentUser.id);
-  const defaultDmPerson = fallbackDmPeople[0] || null;
-  const reminderEvent =
-    events.find((event) => savedEventIds.includes(event.id) && Boolean(event.eventDate)) || events[0] || null;
+  useEffect(() => {
+    const client = supabase;
 
-  const initialThreads = useMemo<MobileDmThread[]>(
+    if (!client || !session?.user?.id) {
+      setMessageRows([]);
+      setUnreadDmThreadIds(new Set());
+      setReadNotificationIds(new Set());
+      setDeletedNotificationIds(new Set());
+      hasInitializedUnreadThreads.current = false;
+      return;
+    }
+
+    let isActive = true;
+
+    const loadMessages = async () => {
+      const { data, error } = await client
+        .from('messages')
+        .select('id, sender_id, recipient_id, content, created_at')
+        .or(`sender_id.eq.${session.user.id},recipient_id.eq.${session.user.id}`)
+        .order('created_at', { ascending: true });
+
+      if (!isActive) return;
+
+      if (error) {
+        console.error('Unable to load mobile DMs:', error);
+        return;
+      }
+
+      const nextRows = (data || []) as MessageRow[];
+      setMessageRows(nextRows);
+
+      if (!hasInitializedUnreadThreads.current) {
+        const nextUnread = new Set<string>();
+
+        nextRows.forEach((message) => {
+          if (message.recipient_id === session.user.id) {
+            nextUnread.add(message.sender_id);
+          }
+        });
+
+        setUnreadDmThreadIds(nextUnread);
+        hasInitializedUnreadThreads.current = true;
+      }
+    };
+
+    void loadMessages();
+
+    const channel = client
+      .channel(`mobile-messages-${session.user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `recipient_id=eq.${session.user.id}`,
+        },
+        (payload) => {
+          const nextMessage = payload.new as MessageRow;
+
+          setMessageRows((currentRows) => {
+            if (currentRows.some((message) => message.id === nextMessage.id)) {
+              return currentRows;
+            }
+
+            return [...currentRows, nextMessage];
+          });
+
+          setUnreadDmThreadIds((currentIds) => {
+            const nextIds = new Set(currentIds);
+            nextIds.add(String(nextMessage.sender_id));
+            return nextIds;
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      isActive = false;
+      void client.removeChannel(channel);
+    };
+  }, [session?.user?.id]);
+
+  const dmThreads = useMemo(() => {
+    if (!currentUser.id) return [];
+
+    const threadsById = new Map<string, MobileDmThread>();
+
+    [...messageRows]
+      .sort((left, right) => {
+        const leftTime = left.created_at ? new Date(left.created_at).getTime() : 0;
+        const rightTime = right.created_at ? new Date(right.created_at).getTime() : 0;
+        return rightTime - leftTime;
+      })
+      .forEach((message) => {
+        const threadId =
+          message.sender_id === currentUser.id
+            ? String(message.recipient_id)
+            : String(message.sender_id);
+
+        if (threadsById.has(threadId)) return;
+
+        const profile = getProfileById(threadId);
+
+        threadsById.set(threadId, {
+          id: threadId,
+          name: profile?.name || 'Campus User',
+          username: profile?.username || '',
+          image: profile?.avatar || currentUser.avatar,
+          preview: message.content,
+          time: formatRelativeTime(message.created_at),
+        });
+      });
+
+    if (threadsById.size === 0) {
+      recentDmPeople.forEach((profile) => {
+        if (threadsById.has(profile.id)) return;
+        threadsById.set(profile.id, {
+          id: profile.id,
+          name: profile.name,
+          username: profile.username,
+          image: profile.avatar,
+          preview: 'Start a conversation',
+          time: 'new',
+        });
+      });
+    }
+
+    return [...threadsById.values()];
+  }, [currentUser.avatar, currentUser.id, getProfileById, messageRows, recentDmPeople]);
+
+  const messagesByThread = useMemo(
     () =>
-      fallbackDmPeople.slice(0, 6).map((person, index) => ({
-        id: person.id,
-        name: person.name,
-        username: person.username,
-        image: person.avatar,
-        preview:
-          index === 0
-            ? 'You coming to the next event?'
-            : 'Tap to keep the conversation going.',
-        time: index === 0 ? '2h' : timeAgo(index + 5),
-      })),
-    [fallbackDmPeople]
+      messageRows.reduce<Record<string, MobileDmMessage[]>>((collection, message) => {
+        const threadId =
+          message.sender_id === currentUser.id
+            ? String(message.recipient_id)
+            : String(message.sender_id);
+
+        if (!collection[threadId]) {
+          collection[threadId] = [];
+        }
+
+        collection[threadId].push({
+          id: String(message.id),
+          sender: message.sender_id === currentUser.id ? 'me' : 'them',
+          text: message.content,
+        });
+
+        return collection;
+      }, {}),
+    [currentUser.id, messageRows]
   );
 
-  const [notifications, setNotifications] = useState<MobileNotification[]>(() => {
-    const seed: MobileNotification[] = [];
+  const derivedNotifications = useMemo(() => {
+    const notifications: MobileNotification[] = [];
 
-    if (defaultDmPerson) {
-      seed.push({
-        id: `notif-dm-${defaultDmPerson.id}`,
+    const followerNotifications = followRelationships
+      .filter((relationship) => relationship.followingId === currentUser.id)
+      .sort((left, right) => {
+        const leftTime = left.createdAt ? new Date(left.createdAt).getTime() : 0;
+        const rightTime = right.createdAt ? new Date(right.createdAt).getTime() : 0;
+        return rightTime - leftTime;
+      })
+      .slice(0, 6)
+      .map((relationship) => {
+        const follower = getProfileById(relationship.followerId);
+
+        return {
+          id: `follow-${relationship.followerId}-${relationship.createdAt || 'recent'}`,
+          type: 'follow' as const,
+          category: 'following' as const,
+          text: `${follower?.name || follower?.username || 'Someone'} followed you`,
+          time: formatRelativeTime(relationship.createdAt),
+          image: follower?.avatar || currentUser.avatar,
+          read: false,
+          username: follower?.username,
+        };
+      });
+
+    notifications.push(...followerNotifications);
+
+    const latestIncomingByThread = new Map<string, MessageRow>();
+
+    [...messageRows]
+      .filter((message) => String(message.recipient_id) === String(currentUser.id))
+      .sort((left, right) => {
+        const leftTime = left.created_at ? new Date(left.created_at).getTime() : 0;
+        const rightTime = right.created_at ? new Date(right.created_at).getTime() : 0;
+        return rightTime - leftTime;
+      })
+      .forEach((message) => {
+        const threadId = String(message.sender_id);
+        if (!latestIncomingByThread.has(threadId)) {
+          latestIncomingByThread.set(threadId, message);
+        }
+      });
+
+    latestIncomingByThread.forEach((message, threadId) => {
+      const profile =
+        getProfileById(threadId) ||
+        recentDmPeople.find((person) => person.id === threadId);
+
+      notifications.push({
+        id: `message-${message.id}`,
         type: 'dm_received',
         category: 'messages',
-        text: `${defaultDmPerson.name} sent you a message`,
-        time: '2h',
-        image: defaultDmPerson.avatar,
-        threadId: defaultDmPerson.id,
+        text: `${profile?.name || profile?.username || 'Someone'} sent you a message`,
+        time: formatRelativeTime(message.created_at),
+        image: profile?.avatar || currentUser.avatar,
         read: false,
+        threadId,
       });
-    }
+    });
 
-    if (reminderEvent) {
-      seed.push({
-        id: `notif-event-${reminderEvent.id}`,
-        type: 'event_reminder',
-        category: 'events',
-        text: `${reminderEvent.title} is coming up soon`,
-        time: '1d',
-        image: reminderEvent.image,
-        eventTab: 'calendar',
-        read: false,
+    events
+      .filter((event) => savedEventIds.includes(event.id))
+      .forEach((event) => {
+        const diffDays = getDaysUntilDate(event.eventDate);
+        if (diffDays === null || diffDays < 0 || diffDays > 7) return;
+
+        notifications.push({
+          id: `event-${event.id}`,
+          type: 'event_reminder',
+          category: 'events',
+          text:
+            diffDays === 0
+              ? `${event.title} is happening today`
+              : `${event.title} is coming up in ${diffDays}d`,
+          time: `${Math.max(diffDays, 0)}d`,
+          image: event.image,
+          read: false,
+          eventTab: 'calendar',
+        });
       });
-    }
 
-    const followPerson = fallbackDmPeople[1] || defaultDmPerson
-    if (followPerson) {
-      seed.push({
-        id: `notif-follow-${followPerson.id}`,
-        type: 'follow',
-        category: 'following',
-        text: `${followPerson.name} is worth keeping an eye on`,
-        time: '3d',
-        image: followPerson.avatar,
-        username: followPerson.username,
-        read: false,
+    return notifications
+      .filter((notification) => !deletedNotificationIds.has(notification.id))
+      .map((notification) => ({
+        ...notification,
+        read: Boolean(
+          readNotificationIds.has(notification.id) ||
+          (notification.type === 'dm_received' &&
+            notification.threadId &&
+            !unreadDmThreadIds.has(notification.threadId))
+        ),
+      }))
+      .sort((left, right) => {
+        const categoryWeight = {
+          messages: 0,
+          following: 1,
+          events: 2,
+        };
+
+        return categoryWeight[left.category] - categoryWeight[right.category];
       });
-    }
+  }, [
+    currentUser.avatar,
+    currentUser.id,
+    deletedNotificationIds,
+    events,
+    followRelationships,
+    getProfileById,
+    messageRows,
+    readNotificationIds,
+    recentDmPeople,
+    savedEventIds,
+    unreadDmThreadIds,
+  ]);
 
-    return seed;
-  });
-
-  const [messagesByThread, setMessagesByThread] = useState<Record<string, MobileDmMessage[]>>(() =>
-    initialThreads.reduce<Record<string, MobileDmMessage[]>>((collection, thread, index) => {
-      collection[thread.id] =
-        index === 0
-          ? [
-              {
-                id: `message-${thread.id}-1`,
-                sender: 'them',
-                text: 'You coming to the next event?',
-              },
-            ]
-          : [
-              {
-                id: `message-${thread.id}-1`,
-                sender: 'them',
-                text: 'We should link at the next campus event.',
-              },
-            ];
-      return collection;
-    }, {})
-  );
-
-  const [unreadDmThreadIds, setUnreadDmThreadIds] = useState<Set<string>>(
-    () => new Set(defaultDmPerson ? [defaultDmPerson.id] : [])
-  );
+  const unreadNotificationCount = derivedNotifications.filter(
+    (notification) => !notification.read
+  ).length;
+  const unreadDmCount = unreadDmThreadIds.size;
 
   const markNotificationRead = (notificationId: string) => {
-    setNotifications((currentNotifications) =>
-      currentNotifications.map((notification) =>
-        notification.id === notificationId ? { ...notification, read: true } : notification
-      )
-    );
+    setReadNotificationIds((currentIds) => {
+      const nextIds = new Set(currentIds);
+      nextIds.add(notificationId);
+      return nextIds;
+    });
   };
 
   const clearNotifications = () => {
-    setNotifications((currentNotifications) =>
-      currentNotifications.map((notification) => ({ ...notification, read: true }))
-    );
+    setReadNotificationIds((currentIds) => {
+      const nextIds = new Set(currentIds);
+
+      derivedNotifications.forEach((notification) => {
+        nextIds.add(notification.id);
+      });
+
+      return nextIds;
+    });
   };
 
   const deleteNotification = (notificationId: string) => {
-    setNotifications((currentNotifications) =>
-      currentNotifications.filter((notification) => notification.id !== notificationId)
-    );
+    setDeletedNotificationIds((currentIds) => {
+      const nextIds = new Set(currentIds);
+      nextIds.add(notificationId);
+      return nextIds;
+    });
   };
 
   const openDmThread = (threadId: string) => {
@@ -182,61 +387,62 @@ export function MobileInboxProvider({ children }: { children: React.ReactNode })
       nextIds.delete(threadId);
       return nextIds;
     });
-
-    setNotifications((currentNotifications) =>
-      currentNotifications.map((notification) =>
-        notification.threadId === threadId ? { ...notification, read: true } : notification
-      )
-    );
   };
 
-  const sendDmMessage = (threadId: string, text: string) => {
+  const sendDmMessage = async (threadId: string, text: string) => {
+    if (!supabase || !currentUser.id) return;
+
     const trimmedText = text.trim();
     if (!trimmedText) return;
 
-    setMessagesByThread((currentMessages) => ({
-      ...currentMessages,
-      [threadId]: [
-        ...(currentMessages[threadId] || []),
-        {
-          id: `message-${threadId}-${Date.now()}`,
-          sender: 'me',
-          text: trimmedText,
-        },
-      ],
-    }));
+    const tempId = `temp-${Date.now()}`;
+    const optimisticMessage: MessageRow = {
+      id: tempId,
+      sender_id: currentUser.id,
+      recipient_id: threadId,
+      content: trimmedText,
+      created_at: new Date().toISOString(),
+    };
+
+    setMessageRows((currentRows) => [...currentRows, optimisticMessage]);
+    openDmThread(threadId);
+
+    const { data, error } = await supabase
+      .from('messages')
+      .insert({
+        sender_id: currentUser.id,
+        recipient_id: threadId,
+        content: trimmedText,
+      })
+      .select('id, sender_id, recipient_id, content, created_at')
+      .single();
+
+    if (error) {
+      console.error('Unable to send mobile DM:', error);
+      setMessageRows((currentRows) =>
+        currentRows.filter((message) => message.id !== tempId)
+      );
+      return;
+    }
+
+    setMessageRows((currentRows) =>
+      currentRows.map((message) =>
+        message.id === tempId ? ((data as MessageRow) || message) : message
+      )
+    );
   };
-
-  const dmThreads = useMemo(
-    () =>
-      initialThreads.map((thread) => {
-        const messages = messagesByThread[thread.id] || [];
-        const latestMessage = messages[messages.length - 1];
-
-        return latestMessage
-          ? {
-              ...thread,
-              preview: latestMessage.text,
-            }
-          : thread;
-      }),
-    [initialThreads, messagesByThread]
-  );
-
-  const unreadNotificationCount = notifications.filter((notification) => !notification.read).length;
-  const unreadDmCount = unreadDmThreadIds.size;
 
   const getThreadById = (threadId: string) =>
     dmThreads.find((thread) => String(thread.id) === String(threadId));
 
   const value = useMemo<MobileInboxContextValue>(
     () => ({
-      notifications,
+      notifications: derivedNotifications,
       dmThreads,
       messagesByThread,
       unreadNotificationCount,
       unreadDmCount,
-      defaultThreadId: defaultDmPerson?.id || null,
+      defaultThreadId: dmThreads[0]?.id || null,
       getThreadById,
       markNotificationRead,
       clearNotifications,
@@ -245,12 +451,11 @@ export function MobileInboxProvider({ children }: { children: React.ReactNode })
       sendDmMessage,
     }),
     [
-      notifications,
+      derivedNotifications,
       dmThreads,
       messagesByThread,
       unreadNotificationCount,
       unreadDmCount,
-      defaultDmPerson?.id,
     ]
   );
 

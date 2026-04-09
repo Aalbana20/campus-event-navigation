@@ -1,22 +1,55 @@
-import { Link, useRouter } from 'expo-router';
+import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 
 import { AppScreen } from '@/components/mobile/AppScreen';
 import { useAppTheme } from '@/lib/app-theme';
+import { useMobileApp } from '@/providers/mobile-app-provider';
 
 export default function SignInScreen() {
   const router = useRouter();
+  const { notice } = useLocalSearchParams<{ notice?: string }>();
   const theme = useAppTheme();
   const styles = useMemo(() => buildStyles(theme), [theme]);
+  const { authError, signIn } = useMobileApp();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async () => {
+    setErrorMessage('');
+    setIsSubmitting(true);
+
+    const result = await signIn({ email, password });
+
+    if (!result.ok) {
+      setErrorMessage(result.error || 'Unable to sign in right now.');
+      setIsSubmitting(false);
+      return;
+    }
+
+    router.replace('/(tabs)/Discover');
+  };
 
   return (
     <AppScreen style={styles.safeArea}>
       <View style={styles.card}>
         <Text style={styles.title}>Welcome back</Text>
-        <Text style={styles.subtitle}>Auth screens are in place so the mobile flow can catch up cleanly.</Text>
+        <Text style={styles.subtitle}>
+          Sign in with the same account and shared Supabase data the website already uses.
+        </Text>
+
+        {notice ? <Text style={styles.notice}>{String(notice)}</Text> : null}
+        {authError ? <Text style={styles.error}>{authError}</Text> : null}
+        {errorMessage ? <Text style={styles.error}>{errorMessage}</Text> : null}
 
         <TextInput
           value={email}
@@ -34,8 +67,12 @@ export default function SignInScreen() {
           style={styles.input}
         />
 
-        <Pressable style={styles.button} onPress={() => router.replace('/(tabs)/Discover')}>
-          <Text style={styles.buttonText}>Sign In</Text>
+        <Pressable style={styles.button} onPress={() => void handleSubmit()} disabled={isSubmitting}>
+          {isSubmitting ? (
+            <ActivityIndicator color={theme.background} />
+          ) : (
+            <Text style={styles.buttonText}>Sign In</Text>
+          )}
         </Pressable>
 
         <Link href="/auth/sign-up" style={styles.link}>
@@ -70,6 +107,17 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       fontSize: 14,
       lineHeight: 20,
       marginBottom: 4,
+    },
+    notice: {
+      color: theme.success,
+      fontSize: 13,
+      lineHeight: 18,
+      fontWeight: '600',
+    },
+    error: {
+      color: theme.danger,
+      fontSize: 13,
+      lineHeight: 18,
     },
     input: {
       borderWidth: 1,

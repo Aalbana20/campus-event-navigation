@@ -257,7 +257,12 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
                 </Pressable>
                 <Pressable
                   style={styles.secondaryButton}
-                  onPress={() => Alert.alert('Message', 'DM routing is ready for the next mobile pass.')}>
+                  onPress={() =>
+                    router.push({
+                      pathname: '/messages',
+                      params: { dm: profile.id },
+                    })
+                  }>
                   <Text style={styles.secondaryButtonText}>Message</Text>
                 </Pressable>
               </>

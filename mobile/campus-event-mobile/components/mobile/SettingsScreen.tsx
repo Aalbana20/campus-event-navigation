@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 
 import { useAppTheme } from '@/lib/app-theme';
+import { useMobileApp } from '@/providers/mobile-app-provider';
 import {
   MobileSettingsKey,
   ThemeMode,
@@ -124,6 +125,7 @@ export function SettingsScreen() {
   const router = useRouter();
   const theme = useAppTheme();
   const styles = useMemo(() => buildStyles(theme), [theme]);
+  const { signOut } = useMobileApp();
   const { settings, themeMode, resolvedThemeMode, updateSetting, setThemeMode } = useMobileSettings();
   const [activeView, setActiveView] = useState<SettingsView>('main');
 
@@ -153,7 +155,11 @@ export function SettingsScreen() {
       {
         text: 'Log out',
         style: 'destructive',
-        onPress: () => router.replace('/auth/sign-in'),
+        onPress: () => {
+          void signOut().then(() => {
+            router.replace('/auth/sign-in');
+          });
+        },
       },
     ]);
   };

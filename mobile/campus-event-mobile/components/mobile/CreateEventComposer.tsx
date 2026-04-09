@@ -114,7 +114,7 @@ export function CreateEventComposer({ onPublished }: { onPublished?: () => void 
     setTags((currentTags) => currentTags.filter((currentTag) => currentTag !== tag));
   };
 
-  const handlePublish = () => {
+  const handlePublish = async () => {
     const payload: CreateEventInput = {
       title,
       description,
@@ -131,7 +131,12 @@ export function CreateEventComposer({ onPublished }: { onPublished?: () => void 
       image: imageUrl,
     };
 
-    const createdEvent = createEvent(payload);
+    const createdEvent = await createEvent(payload);
+
+    if (!createdEvent) {
+      Alert.alert('Unable to publish', 'The event could not be created right now. Please try again.');
+      return;
+    }
 
     setTitle('');
     setDescription('');
@@ -344,7 +349,7 @@ export function CreateEventComposer({ onPublished }: { onPublished?: () => void 
         Native image upload can plug into Expo image picker next without changing the publish model.
       </Text>
 
-      <Pressable style={styles.publishButton} onPress={handlePublish}>
+      <Pressable style={styles.publishButton} onPress={() => void handlePublish()}>
         <Text style={styles.publishButtonText}>Publish Event</Text>
       </Pressable>
       <Text style={styles.previewText}>

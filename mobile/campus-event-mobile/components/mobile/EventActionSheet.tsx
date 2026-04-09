@@ -15,6 +15,7 @@ import {
 
 import { useAppTheme } from '@/lib/app-theme';
 import { useMobileApp } from '@/providers/mobile-app-provider';
+import { useMobileInbox } from '@/providers/mobile-inbox-provider';
 import { EventRecord, ProfileRecord } from '@/types/models';
 
 type EventActionSheetProps = {
@@ -37,6 +38,7 @@ export function EventActionSheet({ event, visible, onClose }: EventActionSheetPr
   const theme = useAppTheme();
   const styles = useMemo(() => buildStyles(theme), [theme]);
   const { followingProfiles, recentDmPeople, repostEvent } = useMobileApp();
+  const { sendDmMessage } = useMobileInbox();
   const [query, setQuery] = useState('');
 
   useEffect(() => {
@@ -95,7 +97,14 @@ export function EventActionSheet({ event, visible, onClose }: EventActionSheetPr
     onClose();
   };
 
-  const handleSendToProfile = (profile: ProfileRecord) => {
+  const handleSendToProfile = async (profile: ProfileRecord) => {
+    await sendDmMessage(
+      profile.id,
+      `Check out ${event.title}.\n${[event.date, event.time, event.locationName]
+        .filter(Boolean)
+        .join(' • ')}`
+    );
+
     Alert.alert('Sent', `Event sent to @${profile.username}.`);
     onClose();
   };
@@ -133,7 +142,7 @@ export function EventActionSheet({ event, visible, onClose }: EventActionSheetPr
                     <Pressable
                       key={`recent-${profile.id}`}
                       style={styles.personButton}
-                      onPress={() => handleSendToProfile(profile)}>
+                      onPress={() => void handleSendToProfile(profile)}>
                       <Image source={{ uri: profile.avatar }} style={styles.personAvatar} />
                       <Text style={styles.personName} numberOfLines={2}>
                         @{profile.username}
@@ -152,7 +161,7 @@ export function EventActionSheet({ event, visible, onClose }: EventActionSheetPr
                     <Pressable
                       key={`following-${profile.id}`}
                       style={styles.personButton}
-                      onPress={() => handleSendToProfile(profile)}>
+                      onPress={() => void handleSendToProfile(profile)}>
                       <Image source={{ uri: profile.avatar }} style={styles.personAvatar} />
                       <Text style={styles.personName} numberOfLines={2}>
                         @{profile.username}

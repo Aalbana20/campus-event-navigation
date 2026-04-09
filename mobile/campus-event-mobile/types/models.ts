@@ -23,6 +23,7 @@ export type EventRecord = {
   isPrivate: boolean;
   attendees: string[];
   repostedByIds: string[];
+  createdAt?: string;
 };
 
 export type ProfileRecord = {
@@ -31,11 +32,16 @@ export type ProfileRecord = {
   username: string;
   bio: string;
   avatar: string;
+  interests?: string[];
+  phoneNumber?: string;
+  birthday?: string;
+  email?: string;
 };
 
 export type FollowRelationship = {
   followerId: string;
   followingId: string;
+  createdAt?: string;
 };
 
 export type TaggedMoment = {
@@ -76,4 +82,25 @@ export type CreatePersonalCalendarItemInput = {
   title: string;
   note?: string;
   time?: string;
+};
+
+export type SignInInput = {
+  email: string;
+  password: string;
+};
+
+export type SignUpInput = {
+  fullName: string;
+  username: string;
+  email: string;
+  password: string;
+  avatar?: string;
+  interests?: string[];
+};
+
+export type AuthActionResult = {
+  ok: boolean;
+  error?: string;
+  message?: string;
+  requiresEmailConfirmation?: boolean;
 };
