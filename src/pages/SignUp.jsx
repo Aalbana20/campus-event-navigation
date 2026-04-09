@@ -79,24 +79,19 @@ const uploadProfileImage = async (userId, file, fallbackImage) => {
   }
 }
 
-const buildProfileBio = (bio, school, interests) => {
-  if (bio) return bio
-
-  const fallbackParts = []
-  if (school) fallbackParts.push(`${school} student`)
-  if (interests.length > 0) fallbackParts.push(`Into ${interests.slice(0, 3).join(", ")}`)
-
-  return fallbackParts.join(" • ")
-}
+const buildProfileSummary = (interests) =>
+  interests.length > 0
+    ? `Into ${interests.slice(0, 3).join(", ")}`
+    : "Exploring campus events and new people."
 
 function SignUp() {
   const [fullName, setFullName] = useState("")
   const [username, setUsername] = useState("")
   const [email, setEmail] = useState("")
+  const [phoneNumber, setPhoneNumber] = useState("")
+  const [birthday, setBirthday] = useState("")
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
-  const [bio, setBio] = useState("")
-  const [school, setSchool] = useState("")
   const [selectedInterests, setSelectedInterests] = useState(["music", "networking"])
   const [selectedAvatar, setSelectedAvatar] = useState(AVATAR_OPTIONS[0].value)
   const [profileImageFile, setProfileImageFile] = useState(null)
@@ -137,8 +132,8 @@ function SignUp() {
       const cleanEmail = email.trim().toLowerCase()
       const cleanUsername = normalizeUsername(username)
       const cleanFullName = fullName.trim()
-      const cleanBio = bio.trim()
-      const cleanSchool = school.trim()
+      const cleanPhoneNumber = phoneNumber.trim()
+      const cleanBirthday = birthday.trim()
 
       if (!cleanUsername) {
         setErrorMessage("Username is required.")
@@ -152,6 +147,16 @@ function SignUp() {
 
       if (!password) {
         setErrorMessage("Password is required.")
+        return
+      }
+
+      if (!cleanBirthday) {
+        setErrorMessage("Birthday is required.")
+        return
+      }
+
+      if (new Date(cleanBirthday) > new Date()) {
+        setErrorMessage("Birthday must be a valid date.")
         return
       }
 
@@ -183,8 +188,8 @@ function SignUp() {
           data: {
             username: cleanUsername,
             name: cleanFullName || cleanUsername,
-            bio: cleanBio,
-            school: cleanSchool,
+            phone_number: cleanPhoneNumber,
+            birthday: cleanBirthday,
             interests: selectedInterests,
             avatar_url: selectedAvatar,
           },
@@ -211,8 +216,8 @@ function SignUp() {
           data: {
             username: cleanUsername,
             name: cleanFullName || cleanUsername,
-            bio: cleanBio,
-            school: cleanSchool,
+            phone_number: cleanPhoneNumber,
+            birthday: cleanBirthday,
             interests: selectedInterests,
             avatar_url: avatarUrl,
           },
@@ -229,7 +234,7 @@ function SignUp() {
           id: data.user.id,
           name: cleanFullName || cleanUsername,
           username: cleanUsername,
-          bio: buildProfileBio(cleanBio, cleanSchool, selectedInterests),
+          bio: buildProfileSummary(selectedInterests),
           avatar_url: avatarUrl,
           updated_at: new Date().toISOString(),
         })
@@ -357,6 +362,28 @@ function SignUp() {
               </label>
 
               <label className="signup-field">
+                <span>Phone Number</span>
+                <input
+                  type="tel"
+                  placeholder="(410) 555-0123"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                  autoComplete="tel"
+                />
+              </label>
+
+              <label className="signup-field">
+                <span>Birthday</span>
+                <input
+                  type="date"
+                  value={birthday}
+                  onChange={(e) => setBirthday(e.target.value)}
+                  max={new Date().toISOString().split("T")[0]}
+                  required
+                />
+              </label>
+
+              <label className="signup-field">
                 <span>Password</span>
                 <input
                   type="password"
@@ -377,26 +404,6 @@ function SignUp() {
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   autoComplete="new-password"
                   required
-                />
-              </label>
-
-              <label className="signup-field signup-field-full">
-                <span>Short Bio / Intro</span>
-                <textarea
-                  placeholder="Concert lover, campus builder, always down for a late-night food run."
-                  value={bio}
-                  onChange={(e) => setBio(e.target.value)}
-                  rows={4}
-                />
-              </label>
-
-              <label className="signup-field signup-field-full">
-                <span>School / Campus</span>
-                <input
-                  type="text"
-                  placeholder="University of Maryland Eastern Shore"
-                  value={school}
-                  onChange={(e) => setSchool(e.target.value)}
                 />
               </label>
             </div>

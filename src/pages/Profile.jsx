@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from "react"
 import Cropper from "react-easy-crop"
 import { useNavigate } from "react-router-dom"
 import { useEvents } from "../context/EventContext"
+import { buildEventImageStyle } from "../eventImages"
 import { supabase } from "../supabaseClient"
 import {
   applyThemeMode,
@@ -83,11 +84,11 @@ function ProfileTabIcon({ type }) {
   )
 }
 
-const buildProfileEventImageStyle = (event) => ({
-  backgroundImage: event?.image
-    ? `linear-gradient(180deg, rgba(15, 23, 42, 0.08), rgba(15, 23, 42, 0.72)), url(${event.image})`
-    : "linear-gradient(135deg, rgba(17, 24, 39, 0.96), rgba(37, 99, 235, 0.82), rgba(236, 72, 153, 0.64))",
-})
+const buildProfileEventImageStyle = (event) =>
+  buildEventImageStyle(
+    event?.image,
+    "linear-gradient(180deg, rgba(15, 23, 42, 0.08), rgba(15, 23, 42, 0.72))"
+  )
 
 function Profile() {
   const navigate = useNavigate()

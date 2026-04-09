@@ -1,10 +1,11 @@
 import React from "react"
+import { buildEventImageStyle } from "../eventImages"
 
-const buildTileImageStyle = (event) => ({
-  backgroundImage: event?.image
-    ? `linear-gradient(180deg, rgba(15, 23, 42, 0.08), rgba(15, 23, 42, 0.82)), url(${event.image})`
-    : "var(--explore-event-fallback)",
-})
+const buildTileImageStyle = (event) =>
+  buildEventImageStyle(
+    event?.image,
+    "linear-gradient(180deg, rgba(15, 23, 42, 0.08), rgba(15, 23, 42, 0.82))"
+  )
 
 function ExploreEventTile({ event, onOpen }) {
   const eventTitle = event?.title || "Untitled Event"

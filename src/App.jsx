@@ -641,7 +641,40 @@ function MainLayout() {
         <div className="topbar-left">
           <Link className="topbar-item" to="/discover">Discover</Link>
           <Link className="topbar-item" to="/explore">Explore</Link>
-          <Link className="topbar-item" to="/messages">DMs</Link>
+          <Link className="topbar-item topbar-item-with-icon" to="/messages">
+            <svg
+              className="topbar-item-icon"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              aria-hidden="true"
+            >
+              <path
+                d="M22 2 11 13"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M22 2 15 22l-4-9-9-4 20-7Z"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M11 13 15 22"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            <span>DMs</span>
+          </Link>
           <Link className="topbar-item" to="/events">Events</Link>
           <Link className="topbar-item" to="/profile">Profile</Link>
         </div>

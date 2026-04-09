@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react"
 import { useEvents } from "../context/EventContext"
+import { buildEventImageStyle } from "../eventImages"
 import "../pages/Profile.css"
 
 const DEFAULT_AVATAR = "/default-avatar.png"
@@ -16,11 +17,11 @@ const normalizeSharePerson = (person, index = 0) => ({
 const matchesShareSearch = (person, query) =>
   [person?.name, person?.username].filter(Boolean).join(" ").toLowerCase().includes(query)
 
-const buildPreviewImageStyle = (event) => ({
-  backgroundImage: event?.image
-    ? `linear-gradient(180deg, rgba(15, 23, 42, 0.08), rgba(15, 23, 42, 0.62)), url(${event.image})`
-    : "linear-gradient(135deg, rgba(17, 24, 39, 0.96), rgba(37, 99, 235, 0.82), rgba(236, 72, 153, 0.64))",
-})
+const buildPreviewImageStyle = (event) =>
+  buildEventImageStyle(
+    event?.image,
+    "linear-gradient(180deg, rgba(15, 23, 42, 0.08), rgba(15, 23, 42, 0.62))"
+  )
 
 function EventActionControl({ event }) {
   const { followingList, currentUser } = useEvents()

@@ -1,11 +1,12 @@
 import React from "react"
+import { buildEventImageStyle } from "../eventImages"
 import EventActionControl from "./EventActionControl"
 
-const buildModalImageStyle = (event) => ({
-  backgroundImage: event?.image
-    ? `linear-gradient(180deg, rgba(15, 23, 42, 0.12), rgba(15, 23, 42, 0.84)), url(${event.image})`
-    : "var(--explore-event-fallback)",
-})
+const buildModalImageStyle = (event) =>
+  buildEventImageStyle(
+    event?.image,
+    "linear-gradient(180deg, rgba(15, 23, 42, 0.12), rgba(15, 23, 42, 0.84))"
+  )
 
 function ExploreEventModal({ event, isSaved, actionLabel, onAction, onClose }) {
   if (!event) return null

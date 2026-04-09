@@ -62,12 +62,23 @@ body {
 }
 
 .topbar-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   text-decoration: none;
   color: #6e6e73;
   font-size: 13px;
   font-weight: 500;
   letter-spacing: -0.01em;
   transition: color 0.2s ease;
+}
+
+.topbar-item-with-icon {
+  gap: 6px;
+}
+
+.topbar-item-icon {
+  flex-shrink: 0;
 }
 
 .topbar-item:hover {
@@ -1531,6 +1542,7 @@ body.theme-dark .explore-search-wrap .explore-search-input::placeholder {
   display: flex;
   align-items: center;
   justify-content: center;
+  background: var(--explore-event-fallback);
 }
 
 .flip-card-back {
@@ -1546,6 +1558,7 @@ body.theme-dark .explore-search-wrap .explore-search-input::placeholder {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  background: var(--explore-event-fallback);
 }
 
 .flip-card-back h2 {
@@ -2295,6 +2308,7 @@ body.theme-dark .calendar-modal-overlay {
 .my-flip-card-front {
   display: flex;
   flex-direction: column;
+  background: var(--explore-event-fallback);
 }
 
 .my-flip-card-back {
@@ -2326,6 +2340,7 @@ body.theme-dark .calendar-modal-overlay {
   width: 100%;
   height: 220px;
   object-fit: cover;
+  background: var(--explore-event-fallback);
 }
 
 .my-event-info {

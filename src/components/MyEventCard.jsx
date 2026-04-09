@@ -1,4 +1,5 @@
 import React, { useState } from "react"
+import { applyEventImageFallback, getEventImageSrc } from "../eventImages"
 import EventActionControl from "./EventActionControl"
 
 function MyEventCard({ event }) {
@@ -15,12 +16,10 @@ function MyEventCard({ event }) {
       <div className={`my-flip-card-inner ${flipped ? "flipped" : ""}`}>
         <div className="my-flip-card-front">
           <img
-            src={event.image}
+            src={getEventImageSrc(event?.image)}
             alt={eventTitle}
             className="my-event-image"
-            onError={(eventClick) => {
-              eventClick.currentTarget.src = "/default-avatar.png"
-            }}
+            onError={applyEventImageFallback}
           />
           <div className="my-event-info">
             <h3>{eventTitle}</h3>

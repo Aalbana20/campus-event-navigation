@@ -1,5 +1,6 @@
 import React, { useState } from "react"
 import { useEvents } from "../context/EventContext"
+import { applyEventImageFallback, getEventImageSrc } from "../eventImages"
 import EventActionControl from "./EventActionControl"
 
 const usersMatch = (a, b) => {
@@ -52,10 +53,11 @@ function EventCard({ event }) {
         <div className={`flip-card-inner ${flipped ? "flipped" : ""}`}>
           <div className="flip-card-front">
             <img
-              src={event.image}
+              src={getEventImageSrc(event?.image)}
               alt={eventTitle}
               className="event-image"
               draggable={false}
+              onError={applyEventImageFallback}
             />
 
             <div className="event-card-social-proof">
