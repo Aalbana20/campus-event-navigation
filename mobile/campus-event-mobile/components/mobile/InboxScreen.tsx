@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Href, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Pressable,
@@ -15,7 +15,21 @@ import { MobileInboxTab, useMobileInbox } from '@/providers/mobile-inbox-provide
 
 import { AppScreen } from './AppScreen';
 
-export function InboxScreen() {
+type InboxScreenProps = {
+  initialTab?: MobileInboxTab;
+  lockedTab?: MobileInboxTab;
+  showBackButton?: boolean;
+  title?: string;
+  subtitle?: string;
+};
+
+export function InboxScreen({
+  initialTab = 'notifications',
+  lockedTab,
+  showBackButton = true,
+  title,
+  subtitle,
+}: InboxScreenProps) {
   const router = useRouter();
   const params = useLocalSearchParams<{ tab?: string; dm?: string }>();
   const theme = useAppTheme();
@@ -32,20 +46,34 @@ export function InboxScreen() {
     openDmThread,
     sendDmMessage,
   } = useMobileInbox();
-  const [activeTab, setActiveTab] = useState<MobileInboxTab>('notifications');
+  const [internalTab, setInternalTab] = useState<MobileInboxTab>(lockedTab || initialTab);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [draftMessage, setDraftMessage] = useState('');
+  const activeTab = lockedTab || internalTab;
+  const resolvedTitle = title || (activeTab === 'dms' ? 'DMs' : 'Notifications');
+  const resolvedSubtitle =
+    subtitle ||
+    (activeTab === 'dms'
+      ? 'Conversations around your campus plans stay here.'
+      : 'Fresh updates from people and events live here.');
 
   useEffect(() => {
+    if (!lockedTab) return;
+    setInternalTab(lockedTab);
+  }, [lockedTab]);
+
+  useEffect(() => {
+    if (lockedTab) return;
+
     if (params.tab === 'dms' || params.tab === 'notifications') {
-      setActiveTab(params.tab);
+      setInternalTab(params.tab);
     }
-  }, [params.tab]);
+  }, [lockedTab, params.tab]);
 
   useEffect(() => {
     if (!params.dm || Array.isArray(params.dm)) return;
 
-    setActiveTab('dms');
+    setInternalTab('dms');
     setActiveThreadId(params.dm);
     openDmThread(params.dm);
   }, [openDmThread, params.dm]);
@@ -56,9 +84,8 @@ export function InboxScreen() {
     markNotificationRead(notificationId);
 
     if (notification.type === 'dm_received' && notification.threadId) {
-      setActiveTab('dms');
-      setActiveThreadId(notification.threadId);
       openDmThread(notification.threadId);
+      router.push(`/messages?dm=${notification.threadId}` as Href);
       return;
     }
 
@@ -94,33 +121,39 @@ export function InboxScreen() {
     <AppScreen>
       <View style={styles.page}>
         <View style={styles.header}>
-          <Pressable style={styles.iconButton} onPress={() => router.back()}>
-            <Ionicons name="chevron-back" size={20} color={theme.text} />
-          </Pressable>
+          {showBackButton ? (
+            <Pressable style={styles.iconButton} onPress={() => router.back()}>
+              <Ionicons name="chevron-back" size={20} color={theme.text} />
+            </Pressable>
+          ) : (
+            <View style={styles.headerSpacer} />
+          )}
 
           <View style={styles.headerCopy}>
-            <Text style={styles.title}>Activity</Text>
-            <Text style={styles.subtitle}>Notifications and DMs stay together here.</Text>
+            <Text style={styles.title}>{resolvedTitle}</Text>
+            <Text style={styles.subtitle}>{resolvedSubtitle}</Text>
           </View>
         </View>
 
-        <View style={styles.segmentedRow}>
-          <Pressable
-            style={[styles.segmentedButton, activeTab === 'notifications' && styles.segmentedButtonActive]}
-            onPress={() => setActiveTab('notifications')}>
-            <Text
-              style={[styles.segmentedText, activeTab === 'notifications' && styles.segmentedTextActive]}>
-              Notifications
-            </Text>
-          </Pressable>
-          <Pressable
-            style={[styles.segmentedButton, activeTab === 'dms' && styles.segmentedButtonActive]}
-            onPress={() => setActiveTab('dms')}>
-            <Text style={[styles.segmentedText, activeTab === 'dms' && styles.segmentedTextActive]}>
-              DMs
-            </Text>
-          </Pressable>
-        </View>
+        {!lockedTab ? (
+          <View style={styles.segmentedRow}>
+            <Pressable
+              style={[styles.segmentedButton, activeTab === 'notifications' && styles.segmentedButtonActive]}
+              onPress={() => setInternalTab('notifications')}>
+              <Text
+                style={[styles.segmentedText, activeTab === 'notifications' && styles.segmentedTextActive]}>
+                Notifications
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[styles.segmentedButton, activeTab === 'dms' && styles.segmentedButtonActive]}
+              onPress={() => setInternalTab('dms')}>
+              <Text style={[styles.segmentedText, activeTab === 'dms' && styles.segmentedTextActive]}>
+                DMs
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
 
         {activeTab === 'notifications' ? (
           <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -283,6 +316,10 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     headerCopy: {
       flex: 1,
       gap: 4,
+    },
+    headerSpacer: {
+      width: 40,
+      height: 40,
     },
     title: {
       color: theme.text,

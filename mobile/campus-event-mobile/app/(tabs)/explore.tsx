@@ -1,21 +1,14 @@
 import { useRouter } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { AppScreen } from '@/components/mobile/AppScreen';
-import { EventListCard } from '@/components/mobile/EventListCard';
+import { ExploreEventDetailModal } from '@/components/mobile/ExploreEventDetailModal';
+import { ExploreEventTile } from '@/components/mobile/ExploreEventTile';
 import { PersonRowCard } from '@/components/mobile/PersonRowCard';
 import { useAppTheme } from '@/lib/app-theme';
 import { useMobileApp } from '@/providers/mobile-app-provider';
 import { EventRecord } from '@/types/models';
-
-type ExploreEventSection = {
-  id: string;
-  eyebrow: string;
-  title: string;
-  note: string;
-  items: EventRecord[];
-};
 
 const includesAny = (value: string, keywords: string[]) =>
   keywords.some((keyword) => value.includes(keyword));
@@ -173,11 +166,26 @@ const SECTION_DEFINITIONS = [
   },
 ];
 
-const buildExploreSections = (events: EventRecord[]) =>
-  SECTION_DEFINITIONS.map((section) => ({
-    ...section,
-    items: section.select(events).slice(0, 2),
-  })).filter((section) => section.items.length > 0);
+const buildExploreSections = (events: EventRecord[], limit = 4) => {
+  const seen = new Set<string>();
+
+  return SECTION_DEFINITIONS.map((section) => {
+    const items = section
+      .select(events)
+      .filter((event) => {
+        const key = String(event.id);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .slice(0, limit);
+
+    return {
+      ...section,
+      items,
+    };
+  }).filter((section) => section.items.length > 0);
+};
 
 export default function ExploreScreen() {
   const router = useRouter();
@@ -194,8 +202,14 @@ export default function ExploreScreen() {
     unfollowProfile,
   } = useMobileApp();
   const [query, setQuery] = useState('');
+  const [selectedEvent, setSelectedEvent] = useState<EventRecord | null>(null);
 
   const normalizedQuery = query.trim().toLowerCase();
+  const savedEventIdSet = useMemo(() => new Set(savedEventIds), [savedEventIds]);
+
+  useEffect(() => {
+    setSelectedEvent(null);
+  }, [normalizedQuery]);
 
   const discoverableEvents = useMemo(
     () =>
@@ -241,33 +255,19 @@ export default function ExploreScreen() {
     [discoverableEvents]
   );
 
-  const renderEventSection = (section: ExploreEventSection) => (
-    <View key={section.id} style={styles.sectionShell}>
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionEyebrow}>{section.eyebrow}</Text>
-        <Text style={styles.sectionTitle}>{section.title}</Text>
-        <Text style={styles.sectionNote}>{section.note}</Text>
-      </View>
-
-      <View style={styles.sectionCards}>
-        {section.items.map((event) => (
-          <EventListCard
-            key={event.id}
-            event={event}
-            actionLabel={savedEventIds.includes(event.id) ? 'Saved' : 'Add Event'}
-            actionTone={savedEventIds.includes(event.id) ? 'success' : 'accent'}
-            onPress={() =>
-              router.push({
-                pathname: '/event/[id]',
-                params: { id: event.id },
-              })
-            }
-            onActionPress={() => toggleSaveEvent(event.id)}
-          />
-        ))}
-      </View>
+  const renderTileGrid = (items: EventRecord[]) => (
+    <View style={styles.tilesGrid}>
+      {items.map((event) => (
+        <ExploreEventTile key={event.id} event={event} onPress={() => setSelectedEvent(event)} />
+      ))}
     </View>
   );
+
+  const selectedEventActionLabel = selectedEvent
+    ? savedEventIdSet.has(selectedEvent.id)
+      ? 'Saved'
+      : 'Add Event'
+    : 'Add Event';
 
   return (
     <AppScreen>
@@ -281,7 +281,7 @@ export default function ExploreScreen() {
         />
 
         <Text style={styles.searchCaption}>
-          Search when you know what you want, or scroll curated sections to find what is moving.
+          Browse a denser grid first, then open any tile to see the full event details.
         </Text>
 
         {normalizedQuery ? (
@@ -302,23 +302,7 @@ export default function ExploreScreen() {
               </View>
 
               {eventResults.length > 0 ? (
-                <View style={styles.sectionCards}>
-                  {eventResults.map((event) => (
-                    <EventListCard
-                      key={event.id}
-                      event={event}
-                      actionLabel={savedEventIds.includes(event.id) ? 'Saved' : 'Add Event'}
-                      actionTone={savedEventIds.includes(event.id) ? 'success' : 'accent'}
-                      onPress={() =>
-                        router.push({
-                          pathname: '/event/[id]',
-                          params: { id: event.id },
-                        })
-                      }
-                      onActionPress={() => toggleSaveEvent(event.id)}
-                    />
-                  ))}
-                </View>
+                renderTileGrid(eventResults)
               ) : (
                 <View style={styles.emptyState}>
                   <Text style={styles.emptyTitle}>No matching events yet.</Text>
@@ -335,7 +319,7 @@ export default function ExploreScreen() {
               </View>
 
               {peopleResults.length > 0 ? (
-                <View style={styles.sectionCards}>
+                <View style={styles.peopleCards}>
                   {peopleResults.map((profile) => (
                     <PersonRowCard
                       key={profile.id}
@@ -365,7 +349,17 @@ export default function ExploreScreen() {
           </View>
         ) : (
           <View style={styles.feed}>
-            {curatedSections.map(renderEventSection)}
+            {curatedSections.map((section) => (
+              <View key={section.id} style={styles.sectionShell}>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionEyebrow}>{section.eyebrow}</Text>
+                  <Text style={styles.sectionTitle}>{section.title}</Text>
+                  <Text style={styles.sectionNote}>{section.note}</Text>
+                </View>
+
+                {renderTileGrid(section.items)}
+              </View>
+            ))}
 
             <View style={styles.sectionShell}>
               <View style={styles.sectionHeader}>
@@ -376,7 +370,7 @@ export default function ExploreScreen() {
                 </Text>
               </View>
 
-              <View style={styles.sectionCards}>
+              <View style={styles.peopleCards}>
                 {suggestedPeople.map((profile) => (
                   <PersonRowCard
                     key={profile.id}
@@ -400,6 +394,18 @@ export default function ExploreScreen() {
           </View>
         )}
       </ScrollView>
+
+      <ExploreEventDetailModal
+        event={selectedEvent}
+        visible={Boolean(selectedEvent)}
+        actionLabel={selectedEventActionLabel}
+        actionActive={Boolean(selectedEvent && savedEventIdSet.has(selectedEvent.id))}
+        onClose={() => setSelectedEvent(null)}
+        onActionPress={() => {
+          if (!selectedEvent || savedEventIdSet.has(selectedEvent.id)) return;
+          toggleSaveEvent(selectedEvent.id);
+        }}
+      />
     </AppScreen>
   );
 }
@@ -455,7 +461,13 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       fontSize: 13,
       lineHeight: 18,
     },
-    sectionCards: {
+    tilesGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'space-between',
+      rowGap: 12,
+    },
+    peopleCards: {
       gap: 12,
     },
     emptyState: {

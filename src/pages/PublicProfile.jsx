@@ -168,7 +168,7 @@ function PublicProfile() {
 
   const handleMessage = () => {
     if (!profile?.id) return
-    navigate(`/discover?dm=${profile.id}`)
+    navigate(`/messages?thread=${profile.id}`)
   }
 
   const closeMenu = () => {

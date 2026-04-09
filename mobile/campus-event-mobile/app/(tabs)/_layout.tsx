@@ -3,9 +3,11 @@ import { Tabs } from 'expo-router';
 import React from 'react';
 
 import { useAppTheme } from '@/lib/app-theme';
+import { useMobileInbox } from '@/providers/mobile-inbox-provider';
 
 export default function TabLayout() {
   const theme = useAppTheme();
+  const { unreadDmCount } = useMobileInbox();
 
   return (
     <Tabs
@@ -43,6 +45,20 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="messages"
+        options={{
+          title: 'DMs',
+          tabBarIcon: ({ color, size }) => <Ionicons name="paper-plane-outline" size={size} color={color} />,
+          tabBarBadge: unreadDmCount > 0 ? unreadDmCount : undefined,
+          tabBarBadgeStyle: {
+            backgroundColor: theme.text,
+            color: theme.background,
+            fontSize: 10,
+            fontWeight: '800',
+          },
+        }}
+      />
+      <Tabs.Screen
         name="events"
         options={{
           title: 'Events',
@@ -51,6 +67,18 @@ export default function TabLayout() {
       />
       <Tabs.Screen
         name="create"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="explore 2"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="events 3"
         options={{
           href: null,
         }}

@@ -75,18 +75,22 @@ body {
 }
 
 .topbar-right {
-  display: flex;
+  width: 174px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: center;
   justify-content: flex-end;
   grid-column: 3;
-  gap: 8px;
+  gap: 10px;
+  justify-self: end;
 }
 
+.navbar-profile-btn,
 .navbar-dm-btn,
 .navbar-bell-btn {
   position: relative;
-  width: 40px;
-  height: 40px;
+  width: 100%;
+  height: 42px;
   border: none;
   background: transparent;
   border-radius: 999px;
@@ -96,8 +100,10 @@ body {
   cursor: pointer;
   color: #111;
   transition: background 0.2s ease;
+  text-decoration: none;
 }
 
+.navbar-profile-btn:hover,
 .navbar-dm-btn:hover,
 .navbar-bell-btn:hover {
   background: rgba(0, 0, 0, 0.05);
@@ -152,6 +158,13 @@ body {
   margin: 0;
   font-size: 1.2rem;
   color: #111;
+}
+
+.inbox-subtitle {
+  margin: 6px 0 0;
+  color: #667085;
+  font-size: 0.88rem;
+  line-height: 1.45;
 }
 
 .inbox-close-btn {
@@ -569,6 +582,143 @@ button.inbox-item:hover {
 }
 
 /* =========================================================
+   MESSAGES PAGE
+========================================================= */
+.messages-page {
+  min-height: calc(100vh - 64px);
+  width: min(1180px, 100%);
+  margin: 0 auto;
+  padding: 24px 24px 44px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.messages-page-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.messages-page-header h1 {
+  margin: 0;
+  font-size: clamp(2.3rem, 4.8vw, 4rem);
+  font-weight: 700;
+  letter-spacing: -1px;
+}
+
+.messages-page-subtitle {
+  margin: 0;
+  max-width: 720px;
+  color: #6e6e73;
+  font-size: 0.98rem;
+  line-height: 1.55;
+}
+
+.messages-layout {
+  display: grid;
+  grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: stretch;
+}
+
+.messages-thread-panel,
+.messages-chat-panel,
+.messages-empty-card {
+  border-radius: 28px;
+  padding: 20px 22px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(17, 24, 39, 0.06);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+}
+
+.messages-thread-panel,
+.messages-chat-panel {
+  min-height: 640px;
+}
+
+.messages-thread-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.messages-chat-panel {
+  display: flex;
+}
+
+.messages-pane-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.messages-pane-header h2,
+.messages-empty-card h3 {
+  margin: 0;
+  color: #111318;
+  font-size: 1.08rem;
+  font-weight: 800;
+}
+
+.messages-pane-meta {
+  color: #667085;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.messages-empty-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+}
+
+.messages-empty-card p {
+  margin: 0;
+  color: #667085;
+  font-size: 0.94rem;
+  line-height: 1.55;
+}
+
+.messages-chat-empty {
+  width: 100%;
+}
+
+.messages-chat-view {
+  width: 100%;
+}
+
+.messages-chat-header {
+  padding-top: 0;
+}
+
+@media (max-width: 960px) {
+  .messages-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .messages-thread-panel,
+  .messages-chat-panel {
+    min-height: auto;
+  }
+}
+
+@media (max-width: 720px) {
+  .messages-page {
+    padding: 18px 18px 36px;
+  }
+
+  .messages-thread-panel,
+  .messages-chat-panel,
+  .messages-empty-card {
+    padding: 18px;
+    border-radius: 24px;
+  }
+}
+
+/* =========================================================
    EXPLORE PAGE
 ========================================================= */
 .explore-page {
@@ -731,18 +881,190 @@ body.theme-dark .explore-search-wrap .explore-search-input::placeholder {
   font-size: 0.9rem;
 }
 
-.explore-grid,
+.explore-tile-grid,
 .explore-people-grid {
   display: grid;
   gap: 16px;
 }
 
-.explore-grid {
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+.explore-tile-grid {
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
 }
 
 .explore-people-grid {
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.explore-event-tile {
+  appearance: none;
+  width: 100%;
+  aspect-ratio: 0.9;
+  padding: 0;
+  border: 1px solid var(--explore-card-border);
+  border-radius: 24px;
+  background: var(--explore-card-bg);
+  box-shadow: var(--explore-card-shadow);
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.explore-event-tile:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--explore-card-shadow-hover);
+  border-color: var(--explore-card-border-hover);
+}
+
+.explore-event-tile-media {
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  padding: 14px;
+  background-image: var(--explore-event-fallback);
+  background-size: cover;
+  background-position: center;
+}
+
+.explore-event-tile-copy {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.explore-event-tile-tag {
+  width: fit-content;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(8, 11, 16, 0.68);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.explore-event-tile-title {
+  margin: 0;
+  color: #fff;
+  font-size: 1rem;
+  line-height: 1.25;
+  font-weight: 800;
+  text-shadow: 0 10px 24px rgba(0, 0, 0, 0.34);
+}
+
+.explore-event-tile-meta {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.explore-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(10, 14, 22, 0.44);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.explore-modal-card {
+  width: min(760px, 100%);
+  max-height: min(calc(100vh - 40px), 880px);
+  overflow: auto;
+  border-radius: 28px;
+  border: 1px solid var(--explore-card-border);
+  background: var(--explore-card-bg);
+  box-shadow: 0 28px 60px rgba(15, 23, 42, 0.22);
+}
+
+.explore-modal-close {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  z-index: 7;
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  background: rgba(8, 11, 16, 0.46);
+  color: #fff;
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.explore-modal-hero {
+  min-height: 360px;
+  display: flex;
+  align-items: flex-end;
+  padding: 22px;
+  background-image: var(--explore-event-fallback);
+  background-size: cover;
+  background-position: center;
+}
+
+.explore-modal-hero-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 560px;
+}
+
+.explore-modal-hero-copy h2 {
+  margin: 0;
+  color: #fff;
+  font-size: clamp(1.8rem, 4vw, 2.8rem);
+  line-height: 1.04;
+}
+
+.explore-modal-hero-copy p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.94rem;
+  line-height: 1.5;
+}
+
+.explore-modal-hero-tag {
+  width: fit-content;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: rgba(8, 11, 16, 0.68);
+  color: #fff;
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.explore-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 22px;
+}
+
+.explore-modal-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.explore-modal-stats span {
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: var(--explore-tag-bg);
+  color: var(--explore-tag-text);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.explore-modal-description {
+  margin: 0;
+  color: var(--text-main);
+  font-size: 0.96rem;
+  line-height: 1.7;
 }
 
 .explore-card {
@@ -775,7 +1097,9 @@ body.theme-dark .explore-search-wrap .explore-search-input::placeholder {
 .explore-card-main:focus-visible,
 .explore-action-btn:focus-visible,
 .explore-chip:focus-visible,
-.explore-search-input:focus-visible {
+.explore-search-input:focus-visible,
+.explore-event-tile:focus-visible,
+.explore-modal-close:focus-visible {
   outline: 2px solid #7aa7ff;
   outline-offset: 2px;
 }
@@ -972,6 +1296,11 @@ body.theme-dark .explore-search-wrap .explore-search-input::placeholder {
     padding: 14px 18px 32px;
   }
 
+  .explore-tile-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
   .explore-section-header {
     flex-direction: column;
     align-items: flex-start;
@@ -979,6 +1308,25 @@ body.theme-dark .explore-search-wrap .explore-search-input::placeholder {
 
   .explore-feed {
     gap: 24px;
+  }
+
+  .explore-modal-overlay {
+    align-items: flex-end;
+    padding: 12px;
+  }
+
+  .explore-modal-card {
+    max-height: calc(100vh - 20px);
+    border-radius: 26px;
+  }
+
+  .explore-modal-hero {
+    min-height: 280px;
+    padding: 18px;
+  }
+
+  .explore-modal-body {
+    padding: 18px;
   }
 
   .explore-person-top {
@@ -1576,12 +1924,14 @@ body.theme-dark .topbar {
 }
 
 body.theme-dark .topbar-item,
+body.theme-dark .navbar-profile-btn,
 body.theme-dark .navbar-dm-btn,
 body.theme-dark .navbar-bell-btn {
   color: #d9e0ec;
 }
 
 body.theme-dark .topbar-item:hover,
+body.theme-dark .navbar-profile-btn:hover,
 body.theme-dark .navbar-dm-btn:hover,
 body.theme-dark .navbar-bell-btn:hover {
   color: #f5f7fb;
@@ -3538,6 +3888,7 @@ body.theme-dark .topbar {
 }
 
 body.theme-dark .topbar-item,
+body.theme-dark .navbar-profile-btn,
 body.theme-dark .navbar-dm-btn,
 body.theme-dark .navbar-bell-btn,
 body.theme-dark h1,
@@ -3563,6 +3914,9 @@ body.theme-dark .profile-share-message,
 body.theme-dark .calendar-day.header,
 body.theme-dark .my-events-page p,
 body.theme-dark .events-page-subtitle,
+body.theme-dark .messages-page-subtitle,
+body.theme-dark .messages-pane-meta,
+body.theme-dark .messages-empty-card p,
 body.theme-dark .events-summary-card p,
 body.theme-dark .events-empty-state p,
 body.theme-dark .inbox-item-time,
@@ -3581,6 +3935,9 @@ body.theme-dark .profile-card,
 body.theme-dark .profile-modal,
 body.theme-dark .settings-modal,
 body.theme-dark .inbox-panel,
+body.theme-dark .messages-thread-panel,
+body.theme-dark .messages-chat-panel,
+body.theme-dark .messages-empty-card,
 body.theme-dark .event-mutuals-modal,
 body.theme-dark .calendar-box,
 body.theme-dark .create-form-card,

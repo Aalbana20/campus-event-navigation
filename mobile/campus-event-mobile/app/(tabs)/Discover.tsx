@@ -31,7 +31,7 @@ export default function DiscoverScreen() {
     rejectDiscoverEvent,
     resetDiscoverDeck,
   } = useMobileApp();
-  const { unreadNotificationCount, unreadDmCount, defaultThreadId } = useMobileInbox();
+  const { unreadNotificationCount } = useMobileInbox();
 
   const translate = useRef(new Animated.ValueXY()).current;
 
@@ -106,34 +106,21 @@ export default function DiscoverScreen() {
   });
 
   const openNotifications = () => {
-    router.push({
-      pathname: '/inbox',
-      params: { tab: 'notifications' },
-    });
-  };
-
-  const openDms = () => {
-    router.push({
-      pathname: '/inbox',
-      params: defaultThreadId ? { tab: 'dms', dm: defaultThreadId } : { tab: 'dms' },
-    });
+    router.push('/inbox');
   };
 
   return (
     <AppScreen style={styles.safeArea}>
       <View style={styles.container}>
         <View style={styles.headerBar}>
-          <Pressable style={styles.headerIconButton} onPress={openDms}>
-            <Ionicons name="paper-plane-outline" size={18} color={theme.text} />
-            {unreadDmCount > 0 ? <View style={styles.headerBadge} /> : null}
-          </Pressable>
-
+          <View style={styles.headerSpacer} />
           <Text style={styles.title}>Discover</Text>
-
-          <Pressable style={styles.headerIconButton} onPress={openNotifications}>
-            <Ionicons name="notifications-outline" size={18} color={theme.text} />
-            {unreadNotificationCount > 0 ? <View style={styles.headerBadge} /> : null}
-          </Pressable>
+          <View style={styles.headerActions}>
+            <Pressable style={styles.headerIconButton} onPress={openNotifications}>
+              <Ionicons name="notifications-outline" size={18} color={theme.text} />
+              {unreadNotificationCount > 0 ? <View style={styles.headerBadge} /> : null}
+            </Pressable>
+          </View>
         </View>
 
         <View style={styles.subHeader}>
@@ -214,6 +201,14 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       justifyContent: 'space-between',
       paddingBottom: 12,
     },
+    headerSpacer: {
+      width: 40,
+      height: 40,
+    },
+    headerActions: {
+      width: 40,
+      alignItems: 'flex-end',
+    },
     headerIconButton: {
       width: 40,
       height: 40,
@@ -235,8 +230,9 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     },
     title: {
       color: theme.text,
-      fontSize: 18,
+      fontSize: 17,
       fontWeight: '800',
+      textAlign: 'center',
     },
     subHeader: {
       flexDirection: 'row',

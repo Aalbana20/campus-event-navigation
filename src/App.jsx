@@ -6,12 +6,14 @@ import {
   Link,
   Navigate,
   Outlet,
+  useLocation,
   useNavigate,
   useParams,
   useSearchParams,
 } from "react-router-dom"
 import Discover from "./pages/Discover"
 import Explore from "./pages/Explore"
+import Messages from "./pages/Messages"
 import MyEvents from "./pages/MyEvents"
 import Profile from "./pages/Profile"
 import PublicProfile from "./pages/PublicProfile"
@@ -119,10 +121,10 @@ const syncStoredUser = (session) => {
 
 function MainLayout() {
   const { savedEvents, allEvents, followingList, followersList } = useEvents()
+  const location = useLocation()
   const navigate = useNavigate()
-  const [searchParams, setSearchParams] = useSearchParams()
+  const [searchParams] = useSearchParams()
   const [isInboxOpen, setIsInboxOpen] = useState(false)
-  const [activeInboxTab, setActiveInboxTab] = useState("notifications")
   const [notificationFilter, setNotificationFilter] = useState("all")
   const [openNotificationMenuId, setOpenNotificationMenuId] = useState(null)
   const [activeDmThreadId, setActiveDmThreadId] = useState(null)
@@ -133,41 +135,58 @@ function MainLayout() {
   const defaultAvatar = "/default-avatar.png"
   const currentUserId = JSON.parse(localStorage.getItem("user") || "{}").id
 
-  // Open DM panel when ?dm=userId is in the URL
+  // Normalize old DM query params into the dedicated messages page.
   useEffect(() => {
-    const dmUserId = searchParams.get("dm")
+    const dmUserId = searchParams.get("thread") || searchParams.get("dm")
     if (!dmUserId || !currentUserId) return
 
-    const openWithUser = async () => {
-      // Fetch their profile so we have a name to display
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("id, name, username")
-        .eq("id", dmUserId)
-        .single()
+    let isActive = true
 
-      const thread = {
-        id: dmUserId,
-        name: profile?.name || profile?.username || "User",
-        username: profile?.username || "",
-        preview: "",
-        time: "",
-        image: defaultAvatar,
+    const openWithUser = async () => {
+      const existingThread = dmThreads.find((thread) => String(thread.id) === String(dmUserId))
+
+      if (!existingThread) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("id, name, username")
+          .eq("id", dmUserId)
+          .single()
+
+        if (!isActive) return
+
+        const thread = {
+          id: dmUserId,
+          name: profile?.name || profile?.username || "User",
+          username: profile?.username || "",
+          preview: "",
+          time: "",
+          image: defaultAvatar,
+        }
+
+        setDmThreads((prev) =>
+          prev.some((t) => t.id === dmUserId) ? prev : [thread, ...prev]
+        )
       }
 
-      setDmThreads((prev) =>
-        prev.some((t) => t.id === dmUserId) ? prev : [thread, ...prev]
-      )
       setActiveDmThreadId(dmUserId)
-      setActiveInboxTab("dms")
-      setIsInboxOpen(true)
+      setDmDraftMessage("")
+      setUnreadDmThreadIds((prev) => {
+        const next = new Set(prev)
+        next.delete(dmUserId)
+        return next
+      })
 
-      // Clear the query param so refreshing doesn't re-open it
-      setSearchParams({}, { replace: true })
+      if (location.pathname !== "/messages" || searchParams.get("dm")) {
+        navigate(`/messages?thread=${dmUserId}`, { replace: true })
+      }
     }
 
     openWithUser()
-  }, [searchParams, currentUserId, defaultAvatar, setSearchParams])
+
+    return () => {
+      isActive = false
+    }
+  }, [searchParams, currentUserId, defaultAvatar, dmThreads, location.pathname, navigate])
 
   // Load DM threads — all users the current user has messaged or been messaged by
   useEffect(() => {
@@ -513,19 +532,21 @@ function MainLayout() {
 
   const openDmThread = (thread) => {
     setActiveDmThreadId(thread.id)
-    setActiveInboxTab("dms")
-    setIsInboxOpen(true)
     setDmDraftMessage("")
     setUnreadDmThreadIds((prev) => {
       const next = new Set(prev)
       next.delete(thread.id)
       return next
     })
+    navigate(`/messages?thread=${thread.id}`)
   }
 
   const closeDmThread = () => {
     setActiveDmThreadId(null)
     setDmDraftMessage("")
+    if (location.pathname === "/messages") {
+      navigate("/messages", { replace: true })
+    }
   }
 
   const handleSendDmMessage = async (event) => {
@@ -563,18 +584,16 @@ function MainLayout() {
     }
   }
 
-  const openInbox = (tab = "notifications") => {
-    setActiveInboxTab(tab)
+  const openInbox = () => {
     setIsInboxOpen(true)
   }
-
-  const openDmInbox = () => openInbox("dms")
 
   const handleNotificationSelect = (item) => {
     markNotificationRead(item.id)
     closeNotificationMenu()
 
     if (item.type === "dm_received" && item.threadId) {
+      closeInbox()
       const matchedThread =
         displayDmThreads.find((thread) => String(thread.id) === String(item.threadId)) ||
         dmThreads.find((thread) => String(thread.id) === String(item.threadId))
@@ -582,9 +601,7 @@ function MainLayout() {
       if (matchedThread) {
         openDmThread(matchedThread)
       } else {
-        setActiveInboxTab("dms")
-        setActiveDmThreadId(item.threadId)
-        setIsInboxOpen(true)
+        navigate(`/messages?thread=${item.threadId}`)
       }
       return
     }
@@ -604,8 +621,19 @@ function MainLayout() {
   const closeInbox = () => {
     setIsInboxOpen(false)
     setOpenNotificationMenuId(null)
-    setActiveDmThreadId(null)
-    setDmDraftMessage("")
+  }
+
+  const outletContext = {
+    defaultAvatar,
+    displayDmThreads,
+    unreadDmThreadIds,
+    selectedDmThread,
+    dmMessagesByThread,
+    dmDraftMessage,
+    setDmDraftMessage,
+    openDmThread,
+    closeDmThread,
+    handleSendDmMessage,
   }
 
   return (
@@ -621,42 +649,9 @@ function MainLayout() {
         <div className="topbar-right">
           <button
             type="button"
-            className="navbar-dm-btn"
-            aria-label="Open direct messages"
-            onClick={openDmInbox}
-          >
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              aria-hidden="true"
-            >
-              <path
-                d="M5.75 6.75h12.5A1.75 1.75 0 0 1 20 8.5v7a1.75 1.75 0 0 1-1.75 1.75H10l-3.75 3v-3H5.75A1.75 1.75 0 0 1 4 15.5v-7a1.75 1.75 0 0 1 1.75-1.75Z"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <path
-                d="M8.25 11.5h7.5"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-              />
-            </svg>
-            {unreadDmCount > 0 && (
-              <span className="navbar-bell-badge">{unreadDmCount}</span>
-            )}
-          </button>
-
-          <button
-            type="button"
             className="navbar-bell-btn"
             aria-label="Open notifications"
-            onClick={() => openInbox("notifications")}
+            onClick={openInbox}
           >
             <svg
               width="20"
@@ -685,6 +680,77 @@ function MainLayout() {
               <span className="navbar-bell-badge">{unreadNotificationCount}</span>
             )}
           </button>
+
+          <button
+            type="button"
+            className="navbar-dm-btn"
+            aria-label="Open direct messages"
+            onClick={() => navigate("/messages")}
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              aria-hidden="true"
+            >
+              <path
+                d="M22 2 11 13"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M22 2 15 22l-4-9-9-4 20-7Z"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M11 13 15 22"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            {unreadDmCount > 0 && (
+              <span className="navbar-bell-badge">{unreadDmCount}</span>
+            )}
+          </button>
+
+          <Link
+            className="navbar-profile-btn"
+            to="/profile"
+            aria-label="Open profile"
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              aria-hidden="true"
+            >
+              <path
+                d="M12 11.25a3.75 3.75 0 1 0 0-7.5 3.75 3.75 0 0 0 0 7.5Z"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M5.5 20.25a6.5 6.5 0 0 1 13 0"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </Link>
         </div>
       </nav>
 
@@ -692,7 +758,10 @@ function MainLayout() {
         <div className="inbox-overlay" onClick={closeInbox}>
           <aside className="inbox-panel" onClick={(e) => e.stopPropagation()}>
             <div className="inbox-header">
-              <h3>Activity</h3>
+              <div>
+                <h3>Notifications</h3>
+                <p className="inbox-subtitle">Fresh updates from people and events land here.</p>
+              </div>
               <button
                 type="button"
                 className="inbox-close-btn"
@@ -704,222 +773,129 @@ function MainLayout() {
             </div>
 
             <div className="activity-top-row">
-              <div className="activity-main-tabs inbox-tabs">
-                <button
-                  type="button"
-                  className={activeInboxTab === "notifications" ? "active" : ""}
-                  onClick={() => setActiveInboxTab("notifications")}
-                >
-                  Notifications
-                </button>
-                <button
-                  type="button"
-                  className={activeInboxTab === "dms" ? "active" : ""}
-                  onClick={() => setActiveInboxTab("dms")}
-                >
-                  DMs
-                </button>
-              </div>
-
-              {activeInboxTab === "notifications" && (
-                <button
-                  type="button"
-                  className="activity-clear-all-btn"
-                  onClick={clearAllNotifications}
-                  disabled={!unreadNotificationCount}
-                >
-                  Clear all
-                </button>
-              )}
+              <button
+                type="button"
+                className="activity-clear-all-btn"
+                onClick={clearAllNotifications}
+                disabled={!unreadNotificationCount}
+              >
+                Clear all
+              </button>
             </div>
 
             <div className="inbox-body">
-              {activeInboxTab === "notifications" && (
-                <>
-                  <div className="notification-filters">
-                    <button
-                      type="button"
-                      className={`notification-filter-chip ${notificationFilter === "all" ? "active" : ""}`}
-                      onClick={() => setNotificationFilter("all")}
-                    >
-                      All
-                    </button>
-                    <button
-                      type="button"
-                      className={`notification-filter-chip ${notificationFilter === "following" ? "active" : ""}`}
-                      onClick={() => setNotificationFilter("following")}
-                    >
-                      Following
-                    </button>
-                    <button
-                      type="button"
-                      className={`notification-filter-chip ${notificationFilter === "messages" ? "active" : ""}`}
-                      onClick={() => setNotificationFilter("messages")}
-                    >
-                      Messages
-                    </button>
-                    <button
-                      type="button"
-                      className={`notification-filter-chip ${notificationFilter === "events" ? "active" : ""}`}
-                      onClick={() => setNotificationFilter("events")}
-                    >
-                      Events
-                    </button>
-                    <button
-                      type="button"
-                      className={`notification-filter-chip ${notificationFilter === "requests" ? "active" : ""}`}
-                      onClick={() => setNotificationFilter("requests")}
-                    >
-                      Requests
-                    </button>
-                  </div>
+              <div className="notification-filters">
+                <button
+                  type="button"
+                  className={`notification-filter-chip ${notificationFilter === "all" ? "active" : ""}`}
+                  onClick={() => setNotificationFilter("all")}
+                >
+                  All
+                </button>
+                <button
+                  type="button"
+                  className={`notification-filter-chip ${notificationFilter === "following" ? "active" : ""}`}
+                  onClick={() => setNotificationFilter("following")}
+                >
+                  Following
+                </button>
+                <button
+                  type="button"
+                  className={`notification-filter-chip ${notificationFilter === "messages" ? "active" : ""}`}
+                  onClick={() => setNotificationFilter("messages")}
+                >
+                  Messages
+                </button>
+                <button
+                  type="button"
+                  className={`notification-filter-chip ${notificationFilter === "events" ? "active" : ""}`}
+                  onClick={() => setNotificationFilter("events")}
+                >
+                  Events
+                </button>
+                <button
+                  type="button"
+                  className={`notification-filter-chip ${notificationFilter === "requests" ? "active" : ""}`}
+                  onClick={() => setNotificationFilter("requests")}
+                >
+                  Requests
+                </button>
+              </div>
 
-                  {filteredNotifications.length > 0 ? (
-                    <div className="inbox-list">
-                      {filteredNotifications.map((item) => (
-                        <div
-                          className={`inbox-item notification-item ${item.read ? "read" : "unread"}`}
-                          key={item.id}
-                          onClick={() => handleNotificationSelect(item)}
-                        >
-                          <img
-                            className="inbox-item-avatar"
-                            src={item.image || defaultAvatar}
-                            alt=""
-                            onError={(e) => {
-                              e.currentTarget.src = defaultAvatar
-                            }}
-                          />
-                          <div className="inbox-item-main">
-                            <span className="inbox-item-text">{item.text}</span>
-                            <span className="inbox-item-time">{item.time}</span>
-                          </div>
-                          {!item.read && <span className="notification-unread-dot" aria-hidden="true" />}
+              {filteredNotifications.length > 0 ? (
+                <div className="inbox-list">
+                  {filteredNotifications.map((item) => (
+                    <div
+                      className={`inbox-item notification-item ${item.read ? "read" : "unread"}`}
+                      key={item.id}
+                      onClick={() => handleNotificationSelect(item)}
+                    >
+                      <img
+                        className="inbox-item-avatar"
+                        src={item.image || defaultAvatar}
+                        alt=""
+                        onError={(e) => {
+                          e.currentTarget.src = defaultAvatar
+                        }}
+                      />
+                      <div className="inbox-item-main">
+                        <span className="inbox-item-text">{item.text}</span>
+                        <span className="inbox-item-time">{item.time}</span>
+                      </div>
+                      {!item.read && <span className="notification-unread-dot" aria-hidden="true" />}
+
+                      <button
+                        type="button"
+                        className="notification-more-btn"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          toggleNotificationMenu(item.id)
+                        }}
+                        aria-label="More options"
+                      >
+                        •••
+                      </button>
+
+                      {openNotificationMenuId === item.id && (
+                        <div className="notification-more-menu" onClick={(e) => e.stopPropagation()}>
+                          {!item.read && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                markNotificationRead(item.id)
+                                closeNotificationMenu()
+                              }}
+                            >
+                              Mark as read
+                            </button>
+                          )}
 
                           <button
                             type="button"
-                            className="notification-more-btn"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              toggleNotificationMenu(item.id)
+                            className="danger"
+                            onClick={() => {
+                              deleteNotification(item.id)
+                              closeNotificationMenu()
                             }}
-                            aria-label="More options"
                           >
-                            •••
+                            Delete notification
                           </button>
-
-                          {openNotificationMenuId === item.id && (
-                            <div className="notification-more-menu" onClick={(e) => e.stopPropagation()}>
-                              {!item.read && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    markNotificationRead(item.id)
-                                    closeNotificationMenu()
-                                  }}
-                                >
-                                  Mark as read
-                                </button>
-                              )}
-
-                              <button
-                                type="button"
-                                className="danger"
-                                onClick={() => {
-                                  deleteNotification(item.id)
-                                  closeNotificationMenu()
-                                }}
-                              >
-                                Delete notification
-                              </button>
-                            </div>
-                          )}
                         </div>
-                      ))}
+                      )}
                     </div>
-                  ) : (
-                    <p className="notification-empty-state">
-                      No notifications in this category yet.
-                    </p>
-                  )}
-                </>
-              )}
-
-              {activeInboxTab === "dms" && (
-                activeDmThread ? (
-                  <div className="dm-chat-view">
-                    <div className="dm-chat-header">
-                      <button
-                        type="button"
-                        className="dm-chat-back-btn"
-                        onClick={closeDmThread}
-                        aria-label="Back to messages"
-                      >
-                        ←
-                      </button>
-                      <div className="inbox-item-main">
-                        <span className="inbox-item-text">{selectedDmThread?.name}</span>
-                        <span className="inbox-item-time">Direct messages</span>
-                      </div>
-                    </div>
-
-                    <div className="dm-chat-messages">
-                      {(dmMessagesByThread[selectedDmThread?.id] || []).map((message) => (
-                        <div
-                          className={`dm-chat-bubble ${message.sender}`}
-                          key={message.id}
-                        >
-                          {message.text}
-                        </div>
-                      ))}
-                    </div>
-
-                    <form className="dm-chat-input-row" onSubmit={handleSendDmMessage}>
-                      <input
-                        type="text"
-                        value={dmDraftMessage}
-                        onChange={(event) => setDmDraftMessage(event.target.value)}
-                        placeholder={`Message ${selectedDmThread?.name || "your friend"}`}
-                      />
-                      <button type="submit">Send</button>
-                    </form>
-                  </div>
-                ) : (
-                  <div className="inbox-list">
-                    {displayDmThreads.map((thread) => (
-                      <button
-                        type="button"
-                        className={`inbox-item ${unreadDmThreadIds.has(thread.id) ? "inbox-item-unread" : ""}`}
-                        key={thread.id}
-                        onClick={() => openDmThread(thread)}
-                      >
-                        <img
-                          className="inbox-item-avatar"
-                          src={thread.image || defaultAvatar}
-                          alt=""
-                          onError={(e) => {
-                            e.currentTarget.src = defaultAvatar
-                          }}
-                        />
-                        <div className="inbox-item-main">
-                          <span className="inbox-item-text">{thread.name}</span>
-                          <span className="inbox-item-preview">{thread.preview}</span>
-                          <span className="inbox-item-time">{thread.time}</span>
-                        </div>
-                        {unreadDmThreadIds.has(thread.id) && (
-                          <span className="inbox-item-unread-dot" />
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                )
+                  ))}
+                </div>
+              ) : (
+                <p className="notification-empty-state">
+                  No notifications in this category yet.
+                </p>
               )}
             </div>
           </aside>
         </div>
       )}
 
-      <Outlet />
+      <Outlet context={outletContext} />
     </>
   )
 }
@@ -1011,6 +987,7 @@ function App() {
           <Route path="/event/:eventId" element={<LegacyEventRedirect />} />
           <Route path="/events" element={<MyEvents />} />
           <Route path="/events/:eventId" element={<MyEvents />} />
+          <Route path="/messages" element={<Messages />} />
           <Route path="/create" element={<Navigate to="/events?tab=create" replace />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/profile/:username" element={<PublicProfile />} />

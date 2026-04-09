@@ -19,9 +19,9 @@ const MONTH_NAMES = [
   "December",
 ]
 
-const EVENT_TABS = ["my-events", "calendar", "create"]
+const EVENT_TABS = ["calendar", "create", "my-events"]
 
-const normalizeTab = (value) => (EVENT_TABS.includes(value) ? value : "my-events")
+const normalizeTab = (value) => (EVENT_TABS.includes(value) ? value : "calendar")
 
 const parseEventDate = (rawDate) => {
   if (!rawDate || typeof rawDate !== "string") return null
@@ -68,7 +68,7 @@ function MyEvents() {
     const normalizedTab = normalizeTab(nextTab)
 
     const nextParams = new URLSearchParams(searchParams)
-    if (normalizedTab === "my-events") {
+    if (normalizedTab === "calendar") {
       nextParams.delete("tab")
     } else {
       nextParams.set("tab", normalizedTab)
@@ -161,14 +161,6 @@ function MyEvents() {
       <div className="events-tabs" role="tablist" aria-label="Events sections">
         <button
           type="button"
-          className={`events-tab-btn ${activeTab === "my-events" ? "active" : ""}`}
-          onClick={() => changeTab("my-events")}
-          aria-pressed={activeTab === "my-events"}
-        >
-          My Events
-        </button>
-        <button
-          type="button"
           className={`events-tab-btn ${activeTab === "calendar" ? "active" : ""}`}
           onClick={() => changeTab("calendar")}
           aria-pressed={activeTab === "calendar"}
@@ -181,33 +173,19 @@ function MyEvents() {
           onClick={() => changeTab("create")}
           aria-pressed={activeTab === "create"}
         >
-          Create Event
+          Create
+        </button>
+        <button
+          type="button"
+          className={`events-tab-btn ${activeTab === "my-events" ? "active" : ""}`}
+          onClick={() => changeTab("my-events")}
+          aria-pressed={activeTab === "my-events"}
+        >
+          My Events
         </button>
       </div>
 
       <div className="events-tab-panel">
-        {activeTab === "my-events" && (
-          <>
-            <div className="events-summary-card">
-              <h2>My Events</h2>
-              <p>Events you&apos;re going to stay here for quick access and planning.</p>
-            </div>
-
-            {savedEvents.length === 0 ? (
-              <div className="events-empty-state">
-                <h3>No events saved yet.</h3>
-                <p>Swipe right on Discover or add from Explore to start building your lineup.</p>
-              </div>
-            ) : (
-              <div className="cards-scroll">
-                {savedEvents.map((event) => (
-                  <MyEventCard key={event.id} event={event} />
-                ))}
-              </div>
-            )}
-          </>
-        )}
-
         {activeTab === "calendar" && (
           <>
             <div className="events-summary-card">
@@ -318,6 +296,28 @@ function MyEvents() {
             </div>
 
             <CreateEvent embedded />
+          </>
+        )}
+
+        {activeTab === "my-events" && (
+          <>
+            <div className="events-summary-card">
+              <h2>My Events</h2>
+              <p>Events you&apos;re going to stay here for quick access and planning.</p>
+            </div>
+
+            {savedEvents.length === 0 ? (
+              <div className="events-empty-state">
+                <h3>No events saved yet.</h3>
+                <p>Swipe right on Discover or add from Explore to start building your lineup.</p>
+              </div>
+            ) : (
+              <div className="cards-scroll">
+                {savedEvents.map((event) => (
+                  <MyEventCard key={event.id} event={event} />
+                ))}
+              </div>
+            )}
           </>
         )}
       </div>
