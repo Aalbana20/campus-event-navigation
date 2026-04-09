@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Href, useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Pressable,
@@ -85,7 +85,10 @@ export function InboxScreen({
 
     if (notification.type === 'dm_received' && notification.threadId) {
       openDmThread(notification.threadId);
-      router.push(`/messages?dm=${notification.threadId}` as Href);
+      router.push({
+        pathname: '/(tabs)/messages',
+        params: { dm: notification.threadId },
+      });
       return;
     }
 

@@ -108,6 +108,9 @@ const createProfilePayload = (
   updated_at: new Date().toISOString(),
 });
 
+const isNotFoundError = (error: { code?: string | null } | null) =>
+  error?.code === 'PGRST116';
+
 export function MobileAppProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [isReady, setIsReady] = useState(false);
@@ -159,6 +162,60 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
     [eventsState, localRepostsByEventId]
   );
 
+  const ensureProfileRowForUser = useCallback(async (user: User) => {
+    if (!supabase) return;
+
+    const fallbackProfile = createProfileFromAuthUser(user);
+    const preferredUsername =
+      normalizeUsername(fallbackProfile.username) || `user-${user.id.slice(0, 8)}`;
+
+    const { data: existingProfile, error: existingProfileError } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (existingProfileError && !isNotFoundError(existingProfileError)) {
+      throw existingProfileError;
+    }
+
+    if (existingProfile?.id) {
+      return;
+    }
+
+    let nextUsername = preferredUsername;
+
+    const { data: usernameMatch, error: usernameMatchError } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('username', preferredUsername)
+      .maybeSingle();
+
+    if (usernameMatchError && !isNotFoundError(usernameMatchError)) {
+      throw usernameMatchError;
+    }
+
+    if (usernameMatch?.id && String(usernameMatch.id) !== String(user.id)) {
+      nextUsername = `${preferredUsername}_${user.id.slice(0, 6)}`;
+    }
+
+    const { error: upsertError } = await supabase
+      .from('profiles')
+      .upsert(
+        createProfilePayload(
+          user.id,
+          fallbackProfile.name || nextUsername,
+          nextUsername,
+          fallbackProfile.avatar || DEFAULT_AVATAR
+        ),
+        { onConflict: 'id' }
+      );
+
+    if (upsertError) {
+      throw upsertError;
+    }
+  }, []);
+
   const refreshData = useCallback(
     async (nextUserId?: string, nextUser?: User) => {
       if (!supabase) {
@@ -178,6 +235,12 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
       }
 
       try {
+        const authUser = nextUser || session?.user;
+
+        if (authUser) {
+          await ensureProfileRowForUser(authUser);
+        }
+
         const [
           profilesResult,
           eventsResult,
@@ -305,21 +368,14 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
           )
         );
         setRecentDmProfileIds(dmProfileIds);
-        setAuthError(
-          dmParticipantResult.error ? dmParticipantResult.error.message : null
-        );
+        setAuthError(null);
       } catch (error) {
         console.error('Unable to refresh mobile backend data:', error);
-        setAuthError(
-          error instanceof Error
-            ? error.message
-            : 'Unable to load shared campus data right now.'
-        );
       } finally {
         setIsReady(true);
       }
     },
-    [resetRuntimeData, session?.user]
+    [ensureProfileRowForUser, resetRuntimeData, session?.user]
   );
 
   useEffect(() => {
@@ -540,7 +596,6 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
 
       if (error) {
         console.error('Unable to create event:', error);
-        setAuthError(error.message);
         return null;
       }
 
@@ -587,6 +642,7 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
     async (eventId: string) => {
       const previousEvents = eventsState;
       const previousSavedIds = savedEventIds;
+      const previousDismissedIds = discoverDismissedIds;
 
       setEventsState((currentEvents) =>
         currentEvents.filter((event) => event.id !== eventId)
@@ -598,19 +654,33 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
 
       if (!supabase || !currentUser.id) return;
 
-      const { error } = await supabase
-        .from('events')
-        .delete()
-        .eq('id', eventId)
-        .eq('created_by', currentUser.id);
+      try {
+        const { error: rsvpDeleteError } = await supabase
+          .from('rsvps')
+          .delete()
+          .eq('event_id', eventId);
 
-      if (error) {
+        if (rsvpDeleteError) {
+          throw rsvpDeleteError;
+        }
+
+        const { error: eventDeleteError } = await supabase
+          .from('events')
+          .delete()
+          .eq('id', eventId)
+          .eq('created_by', currentUser.id);
+
+        if (eventDeleteError) {
+          throw eventDeleteError;
+        }
+      } catch (error) {
         console.error('Unable to delete event:', error);
         setEventsState(previousEvents);
         setSavedEventIds(previousSavedIds);
+        setDiscoverDismissedIds(previousDismissedIds);
       }
     },
-    [currentUser.id, eventsState, savedEventIds]
+    [currentUser.id, discoverDismissedIds, eventsState, savedEventIds]
   );
 
   const toggleSaveEvent = useCallback(

@@ -259,7 +259,7 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
                   style={styles.secondaryButton}
                   onPress={() =>
                     router.push({
-                      pathname: '/messages',
+                      pathname: '/(tabs)/messages',
                       params: { dm: profile.id },
                     })
                   }>
