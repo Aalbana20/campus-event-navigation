@@ -1,3 +1,4 @@
+import 'react-native-url-polyfill/auto';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -43,7 +44,9 @@ function AppBootstrap() {
     }
 
     if (session && inAuthFlow) {
-      router.replace('/(tabs)/Discover');
+      // Route to the base tabs layout instead of a hardcoded specific file casing
+      // to avoid unmatched route crashes.
+      router.replace('/(tabs)');
     }
   }, [isReady, router, segments, session]);
 

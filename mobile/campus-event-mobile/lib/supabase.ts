@@ -21,6 +21,15 @@ const supabaseAnonKey =
 
 export const hasSupabaseConfig = Boolean(supabaseUrl && supabaseAnonKey);
 
+console.info('[mobile:supabase] configuration', {
+  hasSupabaseUrl: Boolean(supabaseUrl),
+  hasSupabaseAnonKey: Boolean(supabaseAnonKey),
+  runtimeUrl: Boolean(runtimeEnv.EXPO_PUBLIC_SUPABASE_URL),
+  runtimeAnonKey: Boolean(runtimeEnv.EXPO_PUBLIC_SUPABASE_ANON_KEY),
+  expoExtraUrl: Boolean(extra.supabaseUrl),
+  expoExtraAnonKey: Boolean(extra.supabaseAnonKey),
+});
+
 export const SUPABASE_CONFIG_ERROR = hasSupabaseConfig
   ? null
   : 'Missing Supabase config. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to the repo root .env or EXPO_PUBLIC_SUPABASE_* vars for Expo.';

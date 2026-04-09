@@ -1,22 +1,15 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'expo-router';
+import React, { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AppScreen } from '@/components/mobile/AppScreen';
-import { CreateEventComposer } from '@/components/mobile/CreateEventComposer';
 import { DayAgendaItem, DayAgendaSheet } from '@/components/mobile/DayAgendaSheet';
 import { EventListCard } from '@/components/mobile/EventListCard';
 import { MonthlyCalendar } from '@/components/mobile/MonthlyCalendar';
 import { useAppTheme } from '@/lib/app-theme';
 import { useMobileApp } from '@/providers/mobile-app-provider';
 
-type EventsTab = 'my-events' | 'calendar' | 'create';
-
-const resolveEventsTab = (value?: string | string[] | null): EventsTab => {
-  const normalizedValue = Array.isArray(value) ? value[0] : value;
-  if (normalizedValue === 'calendar' || normalizedValue === 'create') return normalizedValue;
-  return 'calendar';
-};
+type EventsTab = 'going' | 'calendar';
 
 const parseDateKey = (dateKey: string) => {
   const [year, month, day] = dateKey.split('-').map(Number);
@@ -39,7 +32,6 @@ const sortAgendaItems = (items: DayAgendaItem[]) =>
   });
 
 export default function EventsScreen() {
-  const params = useLocalSearchParams<{ tab?: string | string[] }>();
   const router = useRouter();
   const theme = useAppTheme();
   const styles = useMemo(() => buildStyles(theme), [theme]);
@@ -51,14 +43,10 @@ export default function EventsScreen() {
     toggleSaveEvent,
     addPersonalCalendarItem,
   } = useMobileApp();
-  const [activeTab, setActiveTab] = useState<EventsTab>(() => resolveEventsTab(params.tab));
+  const [activeTab, setActiveTab] = useState<EventsTab>('going');
   const [visibleMonth, setVisibleMonth] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [isAgendaOpen, setIsAgendaOpen] = useState(false);
-
-  useEffect(() => {
-    setActiveTab(resolveEventsTab(params.tab));
-  }, [params.tab]);
 
   const goingEvents = getGoingEventsForProfile(currentUser.id);
   const calendarEvents = getCalendarEventsForProfile(currentUser.id);
@@ -135,13 +123,27 @@ export default function EventsScreen() {
     <AppScreen>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
-          <Text style={styles.title}>Events</Text>
+          <Text style={styles.title}>My Events</Text>
           <Text style={styles.subtitle}>
-            Going plans, calendar, and event creation all live together now.
+            Everything you are going to or planning lives here.
           </Text>
         </View>
 
         <View style={styles.segmentedRow}>
+          <Pressable
+            style={[
+              styles.segmentedButton,
+              activeTab === 'going' && styles.segmentedButtonActive,
+            ]}
+            onPress={() => setActiveTab('going')}>
+            <Text
+              style={[
+                styles.segmentedText,
+                activeTab === 'going' && styles.segmentedTextActive,
+              ]}>
+              Going
+            </Text>
+          </Pressable>
           <Pressable
             style={[
               styles.segmentedButton,
@@ -156,50 +158,40 @@ export default function EventsScreen() {
               Calendar
             </Text>
           </Pressable>
-          <Pressable
-            style={[
-              styles.segmentedButton,
-              activeTab === 'create' && styles.segmentedButtonActive,
-            ]}
-            onPress={() => setActiveTab('create')}>
-            <Text
-              style={[
-                styles.segmentedText,
-                activeTab === 'create' && styles.segmentedTextActive,
-              ]}>
-              Create
-            </Text>
-          </Pressable>
-          <Pressable
-            style={[
-              styles.segmentedButton,
-              activeTab === 'my-events' && styles.segmentedButtonActive,
-            ]}
-            onPress={() => setActiveTab('my-events')}>
-            <Text
-              style={[
-                styles.segmentedText,
-                activeTab === 'my-events' && styles.segmentedTextActive,
-              ]}>
-              My Events
-            </Text>
-          </Pressable>
         </View>
 
-        {activeTab === 'calendar' ? (
-          <>
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryTitle}>Calendar</Text>
-              <Text style={styles.summaryCopy}>
-                See your campus plans and personal reminders in one monthly view.
+        {activeTab === 'going' ? (
+          goingEvents.length > 0 ? (
+            goingEvents.map((event) => (
+              <EventListCard
+                key={event.id}
+                event={event}
+                actionLabel="Remove"
+                actionTone="muted"
+                onPress={() =>
+                  router.push({
+                    pathname: '/event/[id]',
+                    params: { id: event.id },
+                  })
+                }
+                onActionPress={() => toggleSaveEvent(event.id)}
+              />
+            ))
+          ) : (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyTitle}>Nothing saved yet.</Text>
+              <Text style={styles.emptyCopy}>
+                Events you accept from Discover or save in Explore will show up here.
               </Text>
             </View>
-
+          )
+        ) : (
+          <>
             <View style={styles.calendarIntroCard}>
               <View style={styles.calendarIntroCopy}>
                 <Text style={styles.calendarIntroTitle}>Your social calendar</Text>
                 <Text style={styles.calendarIntroText}>
-                  Tap any date to open the day plan with event items and personal notes together.
+                  See campus events and your personal plans together in one monthly view.
                 </Text>
               </View>
               <View style={styles.calendarStatsRow}>
@@ -219,62 +211,13 @@ export default function EventsScreen() {
             />
 
             <View style={styles.calendarHintCard}>
-              <Text style={styles.calendarHintTitle}>Calendar-first, create-ready.</Text>
+              <Text style={styles.calendarHintTitle}>Tap any date to see the day plan.</Text>
               <Text style={styles.calendarHintCopy}>
-                Day-to-create shortcuts can layer in later without changing this tab structure.
+                Scheduled days combine app events with personal reminders you add for yourself.
               </Text>
             </View>
           </>
-        ) : null}
-
-        {activeTab === 'create' ? (
-          <>
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryTitle}>Create Event</Text>
-              <Text style={styles.summaryCopy}>
-                Start a new event without leaving the same Events space you use to plan.
-              </Text>
-            </View>
-
-            <CreateEventComposer />
-          </>
-        ) : null}
-
-        {activeTab === 'my-events' ? (
-          <>
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryTitle}>My Events</Text>
-              <Text style={styles.summaryCopy}>
-                Events you are going to stay here for quick access and planning.
-              </Text>
-            </View>
-
-            {goingEvents.length > 0 ? (
-              goingEvents.map((event) => (
-                <EventListCard
-                  key={event.id}
-                  event={event}
-                  actionLabel="Remove"
-                  actionTone="muted"
-                  onPress={() =>
-                    router.push({
-                      pathname: '/event/[id]',
-                      params: { id: event.id },
-                    })
-                  }
-                  onActionPress={() => toggleSaveEvent(event.id)}
-                />
-              ))
-            ) : (
-              <View style={styles.emptyState}>
-                <Text style={styles.emptyTitle}>Nothing saved yet.</Text>
-                <Text style={styles.emptyCopy}>
-                  Events you accept from Discover or save in Explore will show up here.
-                </Text>
-              </View>
-            )}
-          </>
-        ) : null}
+        )}
       </ScrollView>
 
       <DayAgendaSheet
@@ -329,29 +272,11 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     },
     segmentedText: {
       color: theme.textMuted,
-      fontSize: 13,
+      fontSize: 14,
       fontWeight: '800',
     },
     segmentedTextActive: {
       color: theme.background,
-    },
-    summaryCard: {
-      padding: 18,
-      borderRadius: 24,
-      backgroundColor: theme.surface,
-      borderWidth: 1,
-      borderColor: theme.border,
-      gap: 6,
-    },
-    summaryTitle: {
-      color: theme.text,
-      fontSize: 17,
-      fontWeight: '800',
-    },
-    summaryCopy: {
-      color: theme.textMuted,
-      fontSize: 13,
-      lineHeight: 19,
     },
     emptyState: {
       padding: 24,

@@ -23,7 +23,6 @@ export default function DiscoverScreen() {
   const styles = useMemo(() => buildStyles(theme), [theme]);
   const { width, height } = useWindowDimensions();
   const {
-    currentUser,
     events,
     savedEventIds,
     discoverDismissedIds,
@@ -39,11 +38,10 @@ export default function DiscoverScreen() {
     () =>
       events.filter(
         (event) =>
-          event.createdBy !== currentUser.id &&
           !savedEventIds.includes(event.id) &&
           !discoverDismissedIds.includes(event.id)
       ),
-    [currentUser.id, discoverDismissedIds, events, savedEventIds]
+    [discoverDismissedIds, events, savedEventIds]
   );
 
   const currentEvent = discoverEvents[0];

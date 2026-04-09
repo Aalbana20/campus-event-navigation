@@ -5,6 +5,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 
@@ -111,6 +112,93 @@ const createProfilePayload = (
 const isNotFoundError = (error: { code?: string | null } | null) =>
   error?.code === 'PGRST116';
 
+const STARTUP_TIMEOUT_MS = 12000;
+
+const logStartup = (step: string, details?: Record<string, unknown>) => {
+  if (details) {
+    console.info(`[mobile-app/startup] ${step}`, details);
+    return;
+  }
+
+  console.info(`[mobile-app/startup] ${step}`);
+};
+
+const createStartupError = (label: string, error: unknown) => {
+  if (error instanceof Error) return error;
+  return new Error(`${label} failed`);
+};
+
+const withTimeout = async <T,>(
+  label: string,
+  promise: PromiseLike<T>,
+  timeoutMs = STARTUP_TIMEOUT_MS
+): Promise<T> =>
+  new Promise<T>((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      reject(new Error(`${label} timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    Promise.resolve(promise)
+      .then((value) => {
+        clearTimeout(timeoutId);
+        resolve(value);
+      })
+      .catch((error) => {
+        clearTimeout(timeoutId);
+        reject(error);
+      });
+  });
+
+type QueryResult<T> = {
+  data: T | null;
+  error: { message: string; code?: string | null } | null;
+};
+
+const runStartupQuery = async <T,>(
+  label: string,
+  query: PromiseLike<QueryResult<T>>
+): Promise<QueryResult<T>> => {
+  logStartup(`${label}:start`);
+
+  try {
+    const result = await withTimeout(label, query);
+
+    if (result.error) {
+      console.warn(`[mobile-app/startup] ${label}:query-error`, result.error);
+    } else {
+      logStartup(`${label}:done`);
+    }
+
+    return result;
+  } catch (error) {
+    const startupError = createStartupError(label, error);
+    console.warn(`[mobile-app/startup] ${label}:failed`, startupError);
+    return {
+      data: null,
+      error: {
+        message: startupError.message,
+      },
+    };
+  }
+};
+
+const runStartupStep = async (label: string, step: PromiseLike<void>) => {
+  logStartup(`${label}:start`);
+
+  try {
+    await withTimeout(label, step);
+    logStartup(`${label}:done`);
+    return null;
+  } catch (error) {
+    const startupError = createStartupError(label, error);
+    console.warn(`[mobile-app/startup] ${label}:failed`, startupError);
+    return startupError;
+  }
+};
+
+const shouldRefreshForAuthEvent = (event: string) =>
+  event === 'SIGNED_IN' || event === 'USER_UPDATED';
+
 export function MobileAppProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [isReady, setIsReady] = useState(false);
@@ -124,6 +212,11 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
   const [personalCalendarItems, setPersonalCalendarItems] = useState<PersonalCalendarItem[]>([]);
   const [localRepostsByEventId, setLocalRepostsByEventId] = useState<Record<string, string[]>>({});
   const [taggedMoments] = useState<TaggedMoment[]>([]);
+  const sessionRef = useRef<Session | null>(null);
+
+  useEffect(() => {
+    sessionRef.current = session;
+  }, [session]);
 
   const resetRuntimeData = useCallback(() => {
     setProfilesState([]);
@@ -225,20 +318,30 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      const userId = nextUserId || session?.user?.id;
+      const activeSession = sessionRef.current;
+      const userId = nextUserId || activeSession?.user?.id;
+      logStartup('refreshData:entered', {
+        hasUserId: Boolean(userId),
+        nextUserId: nextUserId || null,
+        sessionUserId: activeSession?.user?.id || null,
+      });
 
       if (!userId) {
         resetRuntimeData();
         setAuthError(null);
         setIsReady(true);
+        logStartup('refreshData:no-user');
         return;
       }
 
       try {
-        const authUser = nextUser || session?.user;
+        const authUser = nextUser || activeSession?.user;
 
         if (authUser) {
-          await ensureProfileRowForUser(authUser);
+          await runStartupStep(
+            'refreshData.ensureProfileRow',
+            ensureProfileRowForUser(authUser)
+          );
         }
 
         const [
@@ -248,25 +351,31 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
           dmParticipantResult,
           followsResult,
         ] = await Promise.all([
-          supabase
-            .from('profiles')
-            .select('*')
-            .order('updated_at', { ascending: false }),
-          supabase
-            .from('events')
-            .select('*')
-            .order('created_at', { ascending: false }),
-          supabase.from('rsvps').select('*'),
-          supabase
-            .from('messages')
-            .select('sender_id, recipient_id, created_at')
-            .or(`sender_id.eq.${userId},recipient_id.eq.${userId}`)
-            .order('created_at', { ascending: false }),
-          supabase.from('follows').select('*'),
+          runStartupQuery(
+            'refreshData.profiles',
+            supabase
+              .from('profiles')
+              .select('*')
+              .order('updated_at', { ascending: false })
+          ),
+          runStartupQuery(
+            'refreshData.events',
+            supabase
+              .from('events')
+              .select('*')
+              .order('created_at', { ascending: false })
+          ),
+          runStartupQuery('refreshData.rsvps', supabase.from('rsvps').select('*')),
+          runStartupQuery(
+            'refreshData.messages',
+            supabase
+              .from('messages')
+              .select('sender_id, recipient_id, created_at')
+              .or(`sender_id.eq.${userId},recipient_id.eq.${userId}`)
+              .order('created_at', { ascending: false })
+          ),
+          runStartupQuery('refreshData.follows', supabase.from('follows').select('*')),
         ]);
-
-        if (profilesResult.error) throw profilesResult.error;
-        if (eventsResult.error) throw eventsResult.error;
 
         let rsvpRows = (allRsvpsResult.data || []) as Array<{
           user_id: string;
@@ -274,11 +383,13 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
         }>;
 
         if (allRsvpsResult.error) {
-          const { data: currentUserRsvps, error: currentUserRsvpsError } =
-            await supabase.from('rsvps').select('*').eq('user_id', userId);
+          const currentUserRsvpsResult = await runStartupQuery(
+            'refreshData.currentUserRsvps',
+            supabase.from('rsvps').select('*').eq('user_id', userId)
+          );
 
-          if (currentUserRsvpsError) throw currentUserRsvpsError;
-          rsvpRows = (currentUserRsvps || []) as Array<{
+          const currentUserRsvps = currentUserRsvpsResult.data || [];
+          rsvpRows = currentUserRsvps as Array<{
             user_id: string;
             event_id: string;
           }>;
@@ -292,12 +403,15 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
 
         if (followsResult.error) {
           const [followingResult, followerResult] = await Promise.all([
-            supabase.from('follows').select('*').eq('follower_id', userId),
-            supabase.from('follows').select('*').eq('following_id', userId),
+            runStartupQuery(
+              'refreshData.followingForUser',
+              supabase.from('follows').select('*').eq('follower_id', userId)
+            ),
+            runStartupQuery(
+              'refreshData.followersForUser',
+              supabase.from('follows').select('*').eq('following_id', userId)
+            ),
           ]);
-
-          if (followingResult.error) throw followingResult.error;
-          if (followerResult.error) throw followerResult.error;
 
           followRows = uniqueValues([
             ...((followingResult.data || []) as Array<{
@@ -314,7 +428,7 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
         }
 
         const normalizedProfiles = normalizeProfiles(
-          (profilesResult.data || []) as Array<{
+          ((profilesResult.data || []) as Array<{
             id: string;
             name?: string | null;
             username?: string | null;
@@ -324,13 +438,13 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
             birthday?: string | null;
             interests?: string[] | string | null;
             email?: string | null;
-          }>
+          }>)
         );
 
         const rsvpMap = buildRsvpMap(rsvpRows);
-        const normalizedEvents = ((eventsResult.data || []) as Array<{
+        const normalizedEvents = (((eventsResult.data || []) as Array<{
           id: string;
-        }>).map((row) =>
+        }>)).map((row) =>
           normalizeEventRow(
             row as Parameters<typeof normalizeEventRow>[0],
             rsvpMap[String(row.id)] || []
@@ -347,8 +461,8 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
         );
 
         const fallbackCurrentUser =
-          nextUser || session?.user
-            ? createProfileFromAuthUser((nextUser || session?.user) as User)
+          nextUser || activeSession?.user
+            ? createProfileFromAuthUser((nextUser || activeSession?.user) as User)
             : null;
 
         setProfilesState(
@@ -369,13 +483,21 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
         );
         setRecentDmProfileIds(dmProfileIds);
         setAuthError(null);
+        logStartup('refreshData:completed', {
+          profiles: normalizedProfiles.length,
+          events: normalizedEvents.length,
+          savedEvents: rsvpRows.filter((row) => String(row.user_id) === String(userId)).length,
+          dmThreads: dmProfileIds.length,
+          follows: followRows.length,
+        });
       } catch (error) {
         console.error('Unable to refresh mobile backend data:', error);
       } finally {
         setIsReady(true);
+        logStartup('refreshData:ready');
       }
     },
-    [ensureProfileRowForUser, resetRuntimeData, session?.user]
+    [ensureProfileRowForUser, resetRuntimeData]
   );
 
   useEffect(() => {
@@ -383,19 +505,26 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
 
     const initializeSession = async () => {
       if (!supabase) {
+        logStartup('initializeSession:no-supabase');
         setIsReady(true);
         return;
       }
 
       try {
+        logStartup('initializeSession:getSession:start');
         const {
           data: { session: restoredSession },
           error,
-        } = await supabase.auth.getSession();
+        } = await withTimeout('auth.getSession', supabase.auth.getSession());
 
         if (error) throw error;
         if (!isMounted) return;
 
+        logStartup('initializeSession:getSession:done', {
+          hasSession: Boolean(restoredSession),
+          userId: restoredSession?.user?.id || null,
+        });
+        sessionRef.current = restoredSession;
         setSession(restoredSession);
 
         if (restoredSession?.user?.id) {
@@ -405,6 +534,7 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
 
         resetRuntimeData();
         setIsReady(true);
+        logStartup('initializeSession:no-session');
       } catch (error) {
         if (!isMounted) return;
 
@@ -416,6 +546,9 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
             : 'Unable to restore your mobile session.'
         );
         setIsReady(true);
+        logStartup('initializeSession:error', {
+          message: error instanceof Error ? error.message : 'Unknown session restore error',
+        });
       }
     };
 
@@ -430,13 +563,32 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      logStartup('authStateChange', {
+        event: _event,
+        hasSession: Boolean(nextSession),
+        userId: nextSession?.user?.id || null,
+      });
+      sessionRef.current = nextSession;
       setSession(nextSession);
 
-      if (nextSession?.user?.id) {
-        void refreshData(nextSession.user.id, nextSession.user);
+      if (_event === 'INITIAL_SESSION') {
+        logStartup('authStateChange:skip-refresh', { event: _event });
         return;
       }
 
+      if (_event === 'TOKEN_REFRESHED' || _event === 'PASSWORD_RECOVERY') {
+        logStartup('authStateChange:session-updated', { event: _event });
+        return;
+      }
+
+      if (nextSession?.user?.id) {
+        if (shouldRefreshForAuthEvent(_event)) {
+          void refreshData(nextSession.user.id, nextSession.user);
+        }
+        return;
+      }
+
+      sessionRef.current = null;
       resetRuntimeData();
       setIsReady(true);
     });
@@ -583,7 +735,7 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
         tags: input.tags,
         created_by: currentUser.id,
         creator_username: currentUser.username,
-        going_count: 1,
+        going_count: 0,
         privacy: input.privacy,
         is_private: input.privacy === 'private',
       };
@@ -599,22 +751,9 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
         return null;
       }
 
-      const createdEvent = normalizeEventRow(data, [currentUser.id]);
+      const createdEvent = normalizeEventRow(data);
 
       setEventsState((currentEvents) => [createdEvent, ...currentEvents]);
-      setSavedEventIds((currentIds) =>
-        currentIds.includes(createdEvent.id)
-          ? currentIds
-          : [createdEvent.id, ...currentIds]
-      );
-
-      const { error: rsvpError } = await supabase
-        .from('rsvps')
-        .insert({ user_id: currentUser.id, event_id: createdEvent.id });
-
-      if (rsvpError && rsvpError.code !== '23505') {
-        console.error('Unable to create initial RSVP:', rsvpError);
-      }
 
       return createdEvent;
     },
@@ -877,16 +1016,11 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
       }
 
       setSession(data.session);
-
-      if (data.user?.id) {
-        await refreshData(data.user.id, data.user);
-      } else {
-        setIsReady(true);
-      }
+      sessionRef.current = data.session;
 
       return { ok: true };
     },
-    [refreshData]
+    []
   );
 
   const signUp = useCallback(
@@ -979,7 +1113,7 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
         }
 
         setSession(data.session);
-        await refreshData(data.user.id, data.user);
+        sessionRef.current = data.session;
       } else {
         setIsReady(true);
       }
@@ -992,7 +1126,7 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
         requiresEmailConfirmation: !data.session,
       };
     },
-    [refreshData]
+    []
   );
 
   const signOut = useCallback(async () => {
@@ -1004,6 +1138,7 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
     }
 
     await supabase.auth.signOut();
+    sessionRef.current = null;
     resetRuntimeData();
     setSession(null);
     setIsReady(true);
