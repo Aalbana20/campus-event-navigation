@@ -1,7 +1,7 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { mobileSettingsStorage } from '@/lib/mobile-file-storage';
 
 export type ThemeMode = 'light' | 'dark' | 'device';
 
@@ -62,8 +62,8 @@ export function MobileSettingsProvider({ children }: { children: React.ReactNode
     const hydrateSettings = async () => {
       try {
         const [storedSettings, storedThemeMode] = await Promise.all([
-          AsyncStorage.getItem(SETTINGS_STORAGE_KEY),
-          AsyncStorage.getItem(THEME_MODE_STORAGE_KEY),
+          mobileSettingsStorage.getItem(SETTINGS_STORAGE_KEY),
+          mobileSettingsStorage.getItem(THEME_MODE_STORAGE_KEY),
         ]);
 
         if (!isMounted) return;
@@ -99,7 +99,7 @@ export function MobileSettingsProvider({ children }: { children: React.ReactNode
   useEffect(() => {
     if (!hasLoadedPersistedState.current) return;
 
-    void AsyncStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings)).catch((error) => {
+    void mobileSettingsStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings)).catch((error) => {
       console.error('Unable to persist mobile settings:', error);
     });
   }, [settings]);
@@ -107,7 +107,7 @@ export function MobileSettingsProvider({ children }: { children: React.ReactNode
   useEffect(() => {
     if (!hasLoadedPersistedState.current) return;
 
-    void AsyncStorage.setItem(THEME_MODE_STORAGE_KEY, themeMode).catch((error) => {
+    void mobileSettingsStorage.setItem(THEME_MODE_STORAGE_KEY, themeMode).catch((error) => {
       console.error('Unable to persist mobile theme mode:', error);
     });
   }, [themeMode]);

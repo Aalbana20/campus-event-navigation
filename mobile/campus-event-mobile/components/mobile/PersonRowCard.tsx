@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useAppTheme } from '@/lib/app-theme';
+import { getAvatarImageSource } from '@/lib/mobile-media';
 import { ProfileRecord } from '@/types/models';
 
 type PersonRowCardProps = {
@@ -22,7 +23,7 @@ export function PersonRowCard({
 
   return (
     <Pressable style={styles.card} onPress={onPress}>
-      <Image source={{ uri: profile.avatar }} style={styles.avatar} />
+      <Image source={getAvatarImageSource(profile.avatar)} style={styles.avatar} />
 
       <View style={styles.copy}>
         <Text style={styles.name}>{profile.name}</Text>

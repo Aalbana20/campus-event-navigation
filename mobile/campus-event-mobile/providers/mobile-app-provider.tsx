@@ -33,6 +33,7 @@ import {
   normalizeProfiles,
   normalizeUsername,
 } from '@/lib/mobile-backend';
+import { getAvatarImageUri, getEventImageUri, sanitizeMediaUrl } from '@/lib/mobile-media';
 import { SUPABASE_CONFIG_ERROR, supabase } from '@/lib/supabase';
 
 type MobileAppContextValue = {
@@ -299,7 +300,7 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
           user.id,
           fallbackProfile.name || nextUsername,
           nextUsername,
-          fallbackProfile.avatar || DEFAULT_AVATAR
+          getAvatarImageUri(fallbackProfile.avatar)
         ),
         { onConflict: 'id' }
       );
@@ -439,7 +440,10 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
             interests?: string[] | string | null;
             email?: string | null;
           }>)
-        );
+        ).map((profile) => ({
+          ...profile,
+          avatar: getAvatarImageUri(profile.avatar),
+        }));
 
         const rsvpMap = buildRsvpMap(rsvpRows);
         const normalizedEvents = (((eventsResult.data || []) as Array<{
@@ -449,7 +453,10 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
             row as Parameters<typeof normalizeEventRow>[0],
             rsvpMap[String(row.id)] || []
           )
-        );
+        ).map((event) => ({
+          ...event,
+          image: getEventImageUri(event.image),
+        }));
 
         const dmProfileIds = uniqueValues(
           ((dmParticipantResult.data || []) as Array<{
@@ -464,6 +471,10 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
           nextUser || activeSession?.user
             ? createProfileFromAuthUser((nextUser || activeSession?.user) as User)
             : null;
+
+        if (fallbackCurrentUser) {
+          fallbackCurrentUser.avatar = getAvatarImageUri(fallbackCurrentUser.avatar);
+        }
 
         setProfilesState(
           fallbackCurrentUser
@@ -719,6 +730,7 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
       const locationAddress = input.locationAddress.trim() || locationName;
       const organizer = input.organizer.trim() || currentUser.name;
       const dressCode = input.dressCode.trim() || 'Open';
+      const sanitizedImage = sanitizeMediaUrl(input.image?.trim(), '');
 
       const payload = {
         title,
@@ -731,7 +743,7 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
         end_time: input.endTime,
         organizer,
         dress_code: dressCode,
-        image: input.image?.trim() || '',
+        image: sanitizedImage || null,
         tags: input.tags,
         created_by: currentUser.id,
         creator_username: currentUser.username,

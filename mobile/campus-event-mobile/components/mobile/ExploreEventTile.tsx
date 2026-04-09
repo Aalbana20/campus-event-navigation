@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 
 import { useAppTheme } from '@/lib/app-theme';
+import { getEventImageSource } from '@/lib/mobile-media';
 import { EventRecord } from '@/types/models';
 
 type ExploreEventTileProps = {
@@ -21,7 +22,7 @@ export function ExploreEventTile({ event, onPress }: ExploreEventTileProps) {
 
   return (
     <Pressable style={styles.tile} onPress={onPress}>
-      <ImageBackground source={{ uri: event.image }} style={styles.media} imageStyle={styles.image}>
+      <ImageBackground source={getEventImageSource(event.image)} style={styles.media} imageStyle={styles.image}>
         <View style={styles.overlay} />
         <View style={styles.copy}>
           <Text style={styles.tag}>#{event.tags[0] || 'Explore'}</Text>

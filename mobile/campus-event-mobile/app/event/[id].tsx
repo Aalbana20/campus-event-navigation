@@ -15,6 +15,7 @@ import {
 import { AppScreen } from '@/components/mobile/AppScreen';
 import { EventActionTrigger } from '@/components/mobile/EventActionTrigger';
 import { useAppTheme } from '@/lib/app-theme';
+import { getEventImageSource } from '@/lib/mobile-media';
 import { useMobileApp } from '@/providers/mobile-app-provider';
 
 export default function EventDetailScreen() {
@@ -48,7 +49,7 @@ export default function EventDetailScreen() {
     <AppScreen>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.heroWrap}>
-          <Image source={{ uri: event.image }} style={styles.heroImage} />
+          <Image source={getEventImageSource(event.image)} style={styles.heroImage} />
           <Pressable style={styles.backButton} onPress={() => router.back()}>
             <Ionicons name="chevron-back" size={20} color="#ffffff" />
           </Pressable>

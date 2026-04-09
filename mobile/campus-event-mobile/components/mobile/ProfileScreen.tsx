@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 
 import { useAppTheme } from '@/lib/app-theme';
+import { getAvatarImageSource, getEventImageSource } from '@/lib/mobile-media';
 import { useMobileApp } from '@/providers/mobile-app-provider';
 
 import { AppScreen } from './AppScreen';
@@ -153,7 +154,7 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
         <View style={styles.mediaGrid}>
           {taggedMoments.map((moment) => (
             <View key={moment.id} style={styles.mediaTile}>
-              <Image source={{ uri: moment.image }} style={styles.mediaTileImage} />
+              <Image source={getEventImageSource(moment.image)} style={styles.mediaTileImage} />
               <View style={styles.mediaTileOverlay}>
                 <Text style={styles.mediaTileTitle}>{moment.title}</Text>
               </View>
@@ -194,7 +195,7 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
                 params: { id: event.id },
               })
             }>
-            <Image source={{ uri: event.image }} style={styles.mediaTileImage} />
+            <Image source={getEventImageSource(event.image)} style={styles.mediaTileImage} />
             <View style={styles.mediaTileOverlay}>
               <Text style={styles.mediaTileTitle}>{event.title}</Text>
               <Text style={styles.mediaTileMeta}>
@@ -214,7 +215,7 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
         showsVerticalScrollIndicator={false}>
         <View style={styles.headerCard}>
           <View style={styles.headerTopRow}>
-            <Image source={{ uri: profile.avatar }} style={styles.avatar} />
+            <Image source={getAvatarImageSource(profile.avatar)} style={styles.avatar} />
 
             <View style={styles.headerCopy}>
               <Text style={styles.name}>{profile.name}</Text>

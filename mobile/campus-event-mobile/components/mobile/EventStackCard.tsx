@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 
 import { useAppTheme } from '@/lib/app-theme';
+import { getEventImageSource } from '@/lib/mobile-media';
 import { EventRecord } from '@/types/models';
 
 import { EventActionTrigger } from './EventActionTrigger';
@@ -25,7 +26,7 @@ export function EventStackCard({ event, height, onPress }: EventStackCardProps) 
 
   return (
     <Pressable style={[styles.card, { height }]} onPress={onPress}>
-      <ImageBackground source={{ uri: event.image }} style={styles.image} imageStyle={styles.imageStyle}>
+      <ImageBackground source={getEventImageSource(event.image)} style={styles.image} imageStyle={styles.imageStyle}>
         <View style={styles.overlay} />
         <EventActionTrigger event={event} style={styles.actions} />
 

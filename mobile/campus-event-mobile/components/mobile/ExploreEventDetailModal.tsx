@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 
 import { useAppTheme } from '@/lib/app-theme';
+import { getEventImageSource } from '@/lib/mobile-media';
 import { EventRecord } from '@/types/models';
 
 import { EventActionTrigger } from './EventActionTrigger';
@@ -45,7 +46,7 @@ export function ExploreEventDetailModal({
 
           <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
             <View style={styles.heroShell}>
-              <ImageBackground source={{ uri: event.image }} style={styles.hero} imageStyle={styles.heroImage}>
+              <ImageBackground source={getEventImageSource(event.image)} style={styles.hero} imageStyle={styles.heroImage}>
                 <View style={styles.heroOverlay} />
                 <EventActionTrigger event={event} style={styles.actions} />
                 <Pressable style={styles.closeButton} onPress={onClose}>

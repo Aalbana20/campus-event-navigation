@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useAppTheme } from '@/lib/app-theme';
+import { getEventImageSource } from '@/lib/mobile-media';
 import { EventRecord } from '@/types/models';
 
 import { EventActionTrigger } from './EventActionTrigger';
@@ -29,7 +30,7 @@ export function EventListCard({
       <EventActionTrigger event={event} style={styles.actions} />
 
       <Pressable style={styles.content} onPress={onPress}>
-        <Image source={{ uri: event.image }} style={styles.image} />
+        <Image source={getEventImageSource(event.image)} style={styles.image} />
 
         <View style={styles.copy}>
           <Text style={styles.title}>{event.title}</Text>

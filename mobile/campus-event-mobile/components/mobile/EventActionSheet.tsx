@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 
 import { useAppTheme } from '@/lib/app-theme';
+import { getAvatarImageSource, getEventImageSource } from '@/lib/mobile-media';
 import { useMobileApp } from '@/providers/mobile-app-provider';
 import { useMobileInbox } from '@/providers/mobile-inbox-provider';
 import { EventRecord, ProfileRecord } from '@/types/models';
@@ -124,7 +125,7 @@ export function EventActionSheet({ event, visible, onClose }: EventActionSheetPr
           />
 
           <View style={styles.preview}>
-            <Image source={{ uri: event.image }} style={styles.previewImage} />
+            <Image source={getEventImageSource(event.image)} style={styles.previewImage} />
             <View style={styles.previewCopy}>
               <Text style={styles.previewTitle}>{event.title}</Text>
               <Text style={styles.previewMeta} numberOfLines={2}>
@@ -143,7 +144,7 @@ export function EventActionSheet({ event, visible, onClose }: EventActionSheetPr
                       key={`recent-${profile.id}`}
                       style={styles.personButton}
                       onPress={() => void handleSendToProfile(profile)}>
-                      <Image source={{ uri: profile.avatar }} style={styles.personAvatar} />
+                      <Image source={getAvatarImageSource(profile.avatar)} style={styles.personAvatar} />
                       <Text style={styles.personName} numberOfLines={2}>
                         @{profile.username}
                       </Text>
@@ -162,7 +163,7 @@ export function EventActionSheet({ event, visible, onClose }: EventActionSheetPr
                       key={`following-${profile.id}`}
                       style={styles.personButton}
                       onPress={() => void handleSendToProfile(profile)}>
-                      <Image source={{ uri: profile.avatar }} style={styles.personAvatar} />
+                      <Image source={getAvatarImageSource(profile.avatar)} style={styles.personAvatar} />
                       <Text style={styles.personName} numberOfLines={2}>
                         @{profile.username}
                       </Text>
