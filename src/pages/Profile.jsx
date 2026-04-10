@@ -28,10 +28,20 @@ const createImage = (url) =>
     image.src = url
   })
 
-async function getCroppedImg(imageSrc, pixelCrop) {
+const revokeObjectUrl = (value) => {
+  if (typeof value === "string" && value.startsWith("blob:")) {
+    URL.revokeObjectURL(value)
+  }
+}
+
+async function getCroppedImageBlob(imageSrc, pixelCrop) {
   const image = await createImage(imageSrc)
   const canvas = document.createElement("canvas")
   const ctx = canvas.getContext("2d")
+
+  if (!ctx) {
+    throw new Error("Could not prepare the image crop.")
+  }
 
   canvas.width = pixelCrop.width
   canvas.height = pixelCrop.height
@@ -48,9 +58,14 @@ async function getCroppedImg(imageSrc, pixelCrop) {
     pixelCrop.height
   )
 
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     canvas.toBlob((file) => {
-      resolve(URL.createObjectURL(file))
+      if (!file) {
+        reject(new Error("Could not create the cropped image."))
+        return
+      }
+
+      resolve(file)
     }, "image/jpeg")
   })
 }
@@ -156,6 +171,7 @@ function Profile() {
   const [draftUsername, setDraftUsername] = useState(username)
   const [draftBio, setDraftBio] = useState(bio)
   const [draftProfileImage, setDraftProfileImage] = useState(profileImage)
+  const [draftProfileImagePreview, setDraftProfileImagePreview] = useState("")
   const [crop, setCrop] = useState({ x: 0, y: 0 })
   const [zoom, setZoom] = useState(1)
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null)
@@ -164,6 +180,13 @@ function Profile() {
   const ownerUsername = storedUser.username || username
   const currentProfileImage =
     sanitizeAvatarUrl(profileImage || storedUserAvatarValue, defaultAvatar)
+
+  useEffect(() => {
+    return () => {
+      revokeObjectUrl(rawSelectedImage)
+      revokeObjectUrl(draftProfileImagePreview)
+    }
+  }, [draftProfileImagePreview, rawSelectedImage])
 
   const createdEvents = allEvents.filter(
     (event) =>
@@ -199,11 +222,18 @@ function Profile() {
     setDraftUsername(username)
     setDraftBio(bio)
     setDraftProfileImage(profileImage || storedUserAvatarValue || "")
+    setDraftProfileImagePreview("")
     setIsEditProfileOpen(true)
   }
 
   const closeEditProfile = () => {
+    setIsCropModalOpen(false)
     setIsEditProfileOpen(false)
+    setRawSelectedImage(null)
+    setDraftProfileImagePreview("")
+    setCrop({ x: 0, y: 0 })
+    setZoom(1)
+    setCroppedAreaPixels(null)
   }
 
   const openSettings = () => {
@@ -283,7 +313,7 @@ function Profile() {
       await syncStoredUserFromSession(session)
     }
 
-    setIsEditProfileOpen(false)
+    closeEditProfile()
   }
 
   const onCropComplete = useCallback((_, croppedAreaPixelsValue) => {
@@ -294,70 +324,67 @@ function Profile() {
     const file = e.target.files?.[0]
     if (!file) return
 
-    if (rawSelectedImage?.startsWith("blob:")) {
-      URL.revokeObjectURL(rawSelectedImage)
-    }
-
     const imageUrl = URL.createObjectURL(file)
     setRawSelectedImage(imageUrl)
     setCrop({ x: 0, y: 0 })
     setZoom(1)
+    setCroppedAreaPixels(null)
     setIsCropModalOpen(true)
+    e.target.value = ""
   }
 
   const handleApplyCrop = async () => {
     if (!rawSelectedImage || !croppedAreaPixels) return
 
-    let croppedImageUrl = ""
-    let shouldClearRawImage = false
+    let previewUrl = ""
 
     try {
-      croppedImageUrl = await getCroppedImg(rawSelectedImage, croppedAreaPixels)
-
-      const userId = JSON.parse(localStorage.getItem("user") || "{}").id
-      if (userId) {
-        const response = await fetch(croppedImageUrl)
-        const blob = await response.blob()
-        const nextAvatar = await uploadProfileImageToStorage({
-          userId,
-          file: blob,
-          fileName: `${userId}.jpg`,
-          contentType: "image/jpeg",
-          fallbackUrl: draftProfileImage || profileImage || storedUserAvatarValue || null,
-        })
-
-        setDraftProfileImage(nextAvatar)
-        setIsCropModalOpen(false)
-        setRawSelectedImage(null)
-        shouldClearRawImage = true
-        return
-      }
-      
-      alert("You must be logged in to upload a profile picture.")
+      const croppedImageBlob = await getCroppedImageBlob(
+        rawSelectedImage,
+        croppedAreaPixels
+      )
+      previewUrl = URL.createObjectURL(croppedImageBlob)
+      setDraftProfileImagePreview(previewUrl)
       setIsCropModalOpen(false)
       setRawSelectedImage(null)
-      shouldClearRawImage = true
-    } catch (error) {
-      console.error("Error cropping image:", error)
-    } finally {
-      if (croppedImageUrl?.startsWith("blob:")) {
-        URL.revokeObjectURL(croppedImageUrl)
+      setCrop({ x: 0, y: 0 })
+      setZoom(1)
+      setCroppedAreaPixels(null)
+
+      const userId = JSON.parse(localStorage.getItem("user") || "{}").id
+      if (!userId) {
+        setDraftProfileImagePreview("")
+        alert("You must be logged in to upload a profile picture.")
+        return
       }
 
-      if (shouldClearRawImage && rawSelectedImage?.startsWith("blob:")) {
-        URL.revokeObjectURL(rawSelectedImage)
+      const nextAvatar = await uploadProfileImageToStorage({
+        userId,
+        file: croppedImageBlob,
+        fileName: `${userId}.jpg`,
+        contentType: "image/jpeg",
+        fallbackUrl: draftProfileImage || profileImage || storedUserAvatarValue || null,
+        throwOnError: true,
+      })
+
+      if (!nextAvatar) {
+        throw new Error("Could not upload your photo. Please try again.")
       }
+
+      setDraftProfileImage(nextAvatar)
+    } catch (error) {
+      setDraftProfileImagePreview("")
+      console.error("Error cropping image:", error)
+      alert(error?.message || "Could not upload your photo. Please try again.")
     }
   }
 
   const handleCancelCrop = () => {
-    if (rawSelectedImage?.startsWith("blob:")) {
-      URL.revokeObjectURL(rawSelectedImage)
-    }
     setIsCropModalOpen(false)
     setRawSelectedImage(null)
     setCrop({ x: 0, y: 0 })
     setZoom(1)
+    setCroppedAreaPixels(null)
   }
 
   const handleShareProfile = async () => {
@@ -805,10 +832,13 @@ function Profile() {
                   <div className="edit-profile-avatar-wrap">
                     <img
                       className="edit-profile-avatar"
-                      src={sanitizeAvatarUrl(
-                        draftProfileImage || currentProfileImage || defaultAvatar,
-                        defaultAvatar
-                      )}
+                      src={
+                        draftProfileImagePreview ||
+                        sanitizeAvatarUrl(
+                          draftProfileImage || currentProfileImage || defaultAvatar,
+                          defaultAvatar
+                        )
+                      }
                       alt="Profile preview"
                       onError={(e) => {
                         e.currentTarget.src = defaultAvatar

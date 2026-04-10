@@ -135,8 +135,8 @@ export const uploadProfileImage = async ({
   const { error: uploadError } = await supabase.storage
     .from(PROFILE_IMAGE_BUCKET)
     .upload(filePath, fileBody, {
+      cacheControl: '3600',
       contentType: image.mimeType || 'image/jpeg',
-      upsert: true,
     });
 
   if (uploadError) {

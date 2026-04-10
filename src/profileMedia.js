@@ -191,6 +191,7 @@ export const uploadProfileImageToStorage = async ({
   fileName,
   contentType,
   fallbackUrl,
+  throwOnError = false,
 }) => {
   const fallbackValue = sanitizeAvatarStorageValue(fallbackUrl, null)
 
@@ -205,18 +206,24 @@ export const uploadProfileImageToStorage = async ({
     const { error: uploadError } = await supabase.storage
       .from(PROFILE_IMAGE_BUCKET)
       .upload(filePath, file, {
+        cacheControl: "3600",
         contentType: contentType || "image/jpeg",
-        upsert: true,
       })
 
     if (uploadError) {
       console.error("Profile image upload failed:", uploadError)
+      if (throwOnError) {
+        throw uploadError
+      }
       return fallbackValue
     }
 
     return sanitizeAvatarStorageValue(filePath, fallbackValue)
   } catch (error) {
     console.error("Profile image upload failed:", error)
+    if (throwOnError) {
+      throw error
+    }
     return fallbackValue
   }
 }
