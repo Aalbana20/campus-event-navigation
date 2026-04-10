@@ -1,6 +1,6 @@
 # Campus Event Navigation — UML Diagrams
 
-> Render these diagrams with the [Mermaid VS Code extension](https://marketplace.visualstudio.com/items?itemName=bierner.markdown-mermaid) or view on GitHub.
+> **How to view:** Install the [Markdown Preview Mermaid Support](https://marketplace.visualstudio.com/items?itemName=bierner.markdown-mermaid) VS Code extension, open this file, and press `Ctrl+Shift+V`. Diagrams also render automatically on GitHub.
 
 ---
 
@@ -8,56 +8,72 @@
 
 ```mermaid
 graph TB
-    subgraph Browser["Browser (Client)"]
-        subgraph React["React SPA (Vite)"]
-            main["main.jsx\nHashRouter + EventProvider"]
-            App["App.jsx\nRouter + Auth Guard"]
-            Layout["MainLayout\nNav + Inbox"]
-            
-            subgraph Pages
-                Discover["Discover.jsx"]
-                MyEvents["MyEvents.jsx"]
-                Profile["Profile.jsx"]
-                CreateEvent["CreateEvent.jsx"]
-                Login["Login.jsx"]
-                SignUp["SignUp.jsx"]
-            end
+    subgraph Browser["Browser (React SPA — Vite)"]
+        main["main.jsx\nHashRouter + EventProvider"]
+        App["App.jsx\nAuth Guard + Router"]
+        Layout["MainLayout\nNav + Notification Inbox + DM Engine"]
 
-            subgraph Components
-                EventCard["EventCard.jsx"]
-                MyEventCard["MyEventCard.jsx"]
-            end
-
-            subgraph State["Global State"]
-                EventContext["EventContext\nuseEvents()"]
-            end
+        subgraph Pages["Pages"]
+            Discover["Discover"]
+            Explore["Explore"]
+            MyEvents["MyEvents"]
+            Profile["Profile"]
+            PublicProfile["PublicProfile"]
+            Messages["Messages"]
+            CreateEvent["CreateEvent"]
+            Login["Login"]
+            SignUp["SignUp"]
         end
 
-        LS["localStorage\n(user, profileImage, themeMode)"]
+        subgraph Components["Components"]
+            EventCard["EventCard"]
+            MyEventCard["MyEventCard"]
+            ExploreEventTile["ExploreEventTile"]
+            ExploreEventModal["ExploreEventModal"]
+        end
+
+        EventContext["EventContext\n(Global State)"]
+        ThemeJS["theme.js"]
+        LS["localStorage\nuser · profileImage · themeMode"]
     end
 
-    subgraph Supabase["Supabase (Cloud)"]
-        Auth["Supabase Auth\nemail/password sessions"]
-        DB[("PostgreSQL\nevents · rsvps · profiles")]
-        Storage["Storage\nevent-flyers bucket"]
+    subgraph Supabase["Supabase (Cloud Backend)"]
+        Auth["Auth\nemail/password sessions"]
+        DB[("PostgreSQL\nevents · rsvps · profiles\nfollows · messages")]
+        Storage["Storage\nevent-flyers · profile-images"]
+        Realtime["Realtime\nmessages channel"]
     end
 
-    subgraph Backend["Express Backend (Unused in prod)"]
-        Express["server.js"]
-        Mongo[("MongoDB")]
-    end
+    main --> App
+    App --> Layout
+    Layout --> Discover
+    Layout --> Explore
+    Layout --> MyEvents
+    Layout --> Profile
+    Layout --> PublicProfile
+    Layout --> Messages
+    Layout --> CreateEvent
+    App --> Login
+    App --> SignUp
+
+    Discover --> EventCard
+    MyEvents --> MyEventCard
+    Explore --> ExploreEventTile
+    Explore --> ExploreEventModal
 
     Pages --> EventContext
     Components --> EventContext
+
     EventContext --> DB
-    EventContext --> Auth
     App --> Auth
-    CreateEvent --> Storage
     Login --> Auth
     SignUp --> Auth
-    App --> LS
+    CreateEvent --> Storage
+    Profile --> Storage
     Profile --> LS
-    Express --> Mongo
+    App --> LS
+    App --> ThemeJS
+    Layout --> Realtime
 ```
 
 ---
@@ -66,35 +82,43 @@ graph TB
 
 ```mermaid
 graph TD
-    main["main.jsx\nHashRouter"] --> EventProvider
-    EventProvider --> AppRoot["App (root)\nsession state"]
+    main["main.jsx\nHashRouter"] --> EventProvider["EventProvider"]
+    EventProvider --> AppRoot["App\nsession state · auth guard"]
 
-    AppRoot -->|"public routes"| Login
-    AppRoot -->|"public routes"| SignUp
-    AppRoot -->|"public routes"| Logout
+    AppRoot -->|public| Login
+    AppRoot -->|public| SignUp
+    AppRoot -->|public| Logout
 
-    AppRoot -->|"protected routes"| MainLayout["MainLayout\ntop nav + notification inbox"]
+    AppRoot -->|protected| MainLayout["MainLayout\nnav + inbox + DM engine"]
 
     MainLayout --> Discover
+    MainLayout --> Explore
     MainLayout --> MyEvents
     MainLayout --> Profile
+    MainLayout --> PublicProfile
+    MainLayout --> Messages
     MainLayout --> CreateEvent
 
     Discover --> EventCard
     MyEvents --> MyEventCard
-    MyEvents --> Calendar["Calendar View\n(inline JSX)"]
+    MyEvents --> CalendarView["Calendar View"]
 
-    Profile --> EditProfileModal["EditProfile Modal"]
-    Profile --> CropModal["CropModal\n(react-easy-crop)"]
+    Explore --> ExploreEventTile
+    Explore --> ExploreEventModal
+
+    Profile --> EditProfile["EditProfile Modal"]
+    Profile --> CropModal["CropModal\nreact-easy-crop"]
     Profile --> SettingsModal["Settings Modal"]
     Profile --> FollowersModal["Followers Modal"]
     Profile --> FollowingModal["Following Modal"]
-    Profile --> CreatedEventsModal["Created Events Modal"]
+
+    PublicProfile --> PubFollowersModal["Followers Modal"]
+    PublicProfile --> PubFollowingModal["Following Modal"]
 ```
 
 ---
 
-## 3. Data Model (ER Diagram)
+## 3. Database Schema (ER Diagram)
 
 ```mermaid
 erDiagram
@@ -106,10 +130,11 @@ erDiagram
     }
 
     PROFILES {
-        uuid id PK_FK
+        uuid id PK
         string name
         string username
         string bio
+        string avatar_url
         timestamp updated_at
     }
 
@@ -127,7 +152,7 @@ erDiagram
         string organizer
         string dress_code
         string image
-        string[] tags
+        string tags
         uuid created_by FK
         string creator_username
         int going_count
@@ -142,53 +167,80 @@ erDiagram
         timestamp created_at
     }
 
+    FOLLOWS {
+        uuid id PK
+        uuid follower_id FK
+        uuid following_id FK
+        timestamp created_at
+    }
+
+    MESSAGES {
+        uuid id PK
+        uuid sender_id FK
+        uuid recipient_id FK
+        string content
+        boolean read
+        timestamp created_at
+    }
+
     AUTH_USERS ||--o| PROFILES : "extends"
     AUTH_USERS ||--o{ EVENTS : "creates"
     AUTH_USERS ||--o{ RSVPS : "submits"
+    AUTH_USERS ||--o{ FOLLOWS : "follows"
+    AUTH_USERS ||--o{ MESSAGES : "sends"
     EVENTS ||--o{ RSVPS : "receives"
 ```
 
 ---
 
-## 4. State & Data Flow
+## 4. Key Data Flows (Sequence Diagram)
 
 ```mermaid
 sequenceDiagram
     participant User
     participant App
-    participant Supabase Auth
+    participant SupabaseAuth
     participant EventContext
-    participant Supabase DB
+    participant SupabaseDB
+    participant SupabaseRealtime
 
     User->>App: Opens app
-    App->>Supabase Auth: getSession()
-    Supabase Auth-->>App: session | null
-    App->>App: Redirect → /discover or /auth/login
+    App->>SupabaseAuth: getSession()
+    SupabaseAuth-->>App: session | null
+    App->>App: redirect to /discover or /auth/login
 
-    Note over EventContext, Supabase DB: On mount
-    EventContext->>Supabase DB: SELECT * FROM events ORDER BY created_at DESC
-    Supabase DB-->>EventContext: events[]
-    EventContext->>Supabase DB: SELECT * FROM rsvps WHERE user_id = ?
-    Supabase DB-->>EventContext: rsvps[]
-    EventContext->>EventContext: savedEvents = events matching rsvps
+    Note over EventContext,SupabaseDB: App mount
+    EventContext->>SupabaseDB: SELECT events, rsvps, follows
+    SupabaseDB-->>EventContext: data
+    EventContext->>EventContext: normalize and set state
 
-    User->>App: Swipes right on event (Discover)
-    App->>EventContext: addEvent(event, user)
-    EventContext->>Supabase DB: INSERT INTO rsvps (user_id, event_id)
-    EventContext->>EventContext: savedEvents.push(event)
-    EventContext->>EventContext: allEvents[i].goingCount++
+    User->>Discover: Swipes right
+    Discover->>EventContext: addEvent(event)
+    EventContext->>SupabaseDB: INSERT INTO rsvps
+    EventContext->>EventContext: update savedEvents and goingCount
 
-    User->>App: Creates new event (CreateEvent)
-    App->>Supabase DB: UPLOAD flyer to storage
-    Supabase DB-->>App: public image URL
-    App->>Supabase DB: INSERT INTO events (...)
-    App->>EventContext: createEvent(newEvent)
-    EventContext->>EventContext: allEvents.unshift(newEvent)
+    User->>Messages: Opens DM thread
+    App->>SupabaseDB: SELECT messages for thread
+    SupabaseDB-->>App: messages[]
+    App->>SupabaseRealtime: subscribe to new messages
+    User->>Messages: Sends message
+    App->>SupabaseDB: INSERT INTO messages
+    SupabaseRealtime-->>App: broadcast to recipient
+
+    User->>Profile: Saves profile and photo
+    Profile->>SupabaseStorage: upload avatar
+    SupabaseStorage-->>Profile: public URL
+    Profile->>SupabaseDB: UPSERT profiles with avatar_url
+
+    User->>Explore: Clicks Follow
+    Explore->>EventContext: follow(userId)
+    EventContext->>SupabaseDB: INSERT INTO follows
+    EventContext->>EventContext: update followingList
 ```
 
 ---
 
-## 5. Class Diagram (Frontend)
+## 5. Class Diagram
 
 ```mermaid
 classDiagram
@@ -201,6 +253,10 @@ classDiagram
         +Event[] allEvents
         +addEvent(event, attendeeUser)
         +createEvent(event)
+        +cancelRSVP(eventId)
+        +deleteEvent(eventId)
+        +follow(targetUserId)
+        +unfollow(targetUserId)
     }
 
     class App {
@@ -211,29 +267,40 @@ classDiagram
 
     class MainLayout {
         -bool isInboxOpen
-        -string activeInboxTab
         -string notificationFilter
-        -Notification[] notifications
-        +render()
+        -string activeDmThreadId
+        -string dmDraftMessage
+        -Thread[] dmThreads
+        -Map dmMessagesByThread
+        -Set unreadDmThreadIds
+        +openDmThread(thread)
+        +closeDmThread()
+        +handleSendDmMessage(event)
+        +openInbox()
+        +closeInbox()
     }
 
     class Discover {
         -int currentIndex
         -string swipeDirection
-        -bool cardEntering
+        -string[] dismissedEventIds
+        -bool isActionLocked
         +handleAccept()
         +handleReject()
-        +showNextEvent()
     }
 
-    class MyEvents {
-        -string viewMode
-        -Date currentMonth
-        -Event selectedCalendarEvent
-        +goToPrevMonth()
-        +goToNextMonth()
-        +getEventForDay(day)
-        +parseEventDate(str)
+    class Explore {
+        -string searchQuery
+        -Event expandedEvent
+        -Map followOverrides
+        -ProfileResult[] remoteProfileResults
+        +handleFollowToggle(person)
+        +handleEventAction(event)
+        +handleOpenPerson(person)
+    }
+
+    class Messages {
+        +render()
     }
 
     class Profile {
@@ -241,65 +308,54 @@ classDiagram
         -string username
         -string bio
         -string profileImage
-        -string activePanel
+        -string themeMode
         -bool isEditProfileOpen
         -bool isSettingsOpen
-        -string themeMode
         +handleSaveProfile()
-        +handleImageCrop()
+        +handleApplyCrop()
+        +follow(id)
+        +unfollow(id)
+    }
+
+    class PublicProfile {
+        -ProfileData profile
+        -bool isFollowing
+        -User[] followers
+        -User[] following
+        -int followerCount
+        -int followingCount
+        +handleFollow()
+        +handleUnfollow()
+        +handleMessage()
     }
 
     class CreateEvent {
         -string title
         -string description
         -string date
-        -string time
         -string locationName
-        -string locationAddress
-        -string eventType
-        -int capacity
-        -string flyerPreview
         -File flyerFile
         -bool isUploading
         -string[] tags
         +handlePublish()
         +uploadFlyerToSupabase()
-        +handleAddTag()
-        +handleRemoveTag()
     }
 
     class EventCard {
         -bool flipped
         -bool isMutualsOpen
-        +render()
     }
 
-    class MyEventCard {
-        -bool flipped
-        +render()
+    class ExploreEventTile {
+        +Event event
+        +onOpen(event)
     }
 
-    class SupabaseClient {
-        +auth
-        +from(table)
-        +storage
+    class ExploreEventModal {
+        +Event event
+        +onClose()
+        +onRsvp()
     }
-
-    App --> MainLayout
-    MainLayout --> Discover
-    MainLayout --> MyEvents
-    MainLayout --> Profile
-    MainLayout --> CreateEvent
-    Discover --> EventCard
-    MyEvents --> MyEventCard
-    Discover --> EventContext
-    MyEvents --> EventContext
-    Profile --> EventContext
-    CreateEvent --> EventContext
-    App --> EventContext
-    EventContext --> SupabaseClient
-    CreateEvent --> SupabaseClient
-    App --> SupabaseClient
 
     class Event {
         +string id
@@ -316,7 +372,6 @@ classDiagram
         +string[] tags
         +int capacity
         +int goingCount
-        +User[] attendees
     }
 
     class User {
@@ -327,49 +382,18 @@ classDiagram
         +string image
     }
 
-    EventContext "1" --> "*" Event : manages
-    EventContext "1" --> "*" User : manages
+    App --> MainLayout
+    App --> EventContext
+    MainLayout --> Discover
+    MainLayout --> Explore
+    MainLayout --> MyEvents
+    MainLayout --> Profile
+    MainLayout --> PublicProfile
+    MainLayout --> Messages
+    MainLayout --> CreateEvent
+    Discover --> EventCard
+    Explore --> ExploreEventTile
+    Explore --> ExploreEventModal
+    EventContext "1" --> "*" Event
+    EventContext "1" --> "*" User
 ```
-
----
-
-## 6. Backend (Express — Auth Fallback)
-
-```mermaid
-classDiagram
-    class Server {
-        +express app
-        +connectDB()
-        +listen(PORT)
-    }
-
-    class AuthRoutes {
-        +POST /api/auth/register
-        +POST /api/auth/login
-        +GET  /api/protected
-    }
-
-    class AuthController {
-        +registerUser(req, res)
-        +loginUser(req, res)
-    }
-
-    class AuthMiddleware {
-        +protect(req, res, next)
-        +verifyJWT(token)
-    }
-
-    class UserModel {
-        +String name
-        +String email
-        +String password
-        +timestamps createdAt
-        +timestamps updatedAt
-    }
-
-    Server --> AuthRoutes
-    AuthRoutes --> AuthController
-    AuthRoutes --> AuthMiddleware
-    AuthController --> UserModel
-```
-
