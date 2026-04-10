@@ -34,6 +34,10 @@ import {
   normalizeUsername,
 } from '@/lib/mobile-backend';
 import { getAvatarImageUri, getEventImageUri, sanitizeMediaUrl } from '@/lib/mobile-media';
+import {
+  type SelectedProfileImage,
+  uploadProfileImage,
+} from '@/lib/mobile-profile-image';
 import { SUPABASE_CONFIG_ERROR, supabase } from '@/lib/supabase';
 
 type MobileAppContextValue = {
@@ -59,6 +63,7 @@ type MobileAppContextValue = {
     username: string;
     bio: string;
     avatarUrl?: string;
+    avatarImage?: SelectedProfileImage | null;
   }) => Promise<{ ok: boolean; error?: string }>;
   createEvent: (input: CreateEventInput) => Promise<EventRecord | null>;
   addPersonalCalendarItem: (
@@ -729,7 +734,13 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
   );
 
   const updateProfile = useCallback(
-    async (input: { name: string; username: string; bio: string; avatarUrl?: string }) => {
+    async (input: {
+      name: string;
+      username: string;
+      bio: string;
+      avatarUrl?: string;
+      avatarImage?: SelectedProfileImage | null;
+    }) => {
       if (!supabase || !currentUser.id) return { ok: false, error: 'Not authenticated' };
 
       const cleanUsername = normalizeUsername(input.username);
@@ -747,12 +758,32 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
+      let nextAvatarUrl = sanitizeMediaUrl(input.avatarUrl, currentUser.avatar);
+
+      if (input.avatarImage?.uri) {
+        try {
+          nextAvatarUrl = await uploadProfileImage({
+            userId: currentUser.id,
+            image: input.avatarImage,
+            fallbackUrl: nextAvatarUrl,
+          });
+        } catch (error) {
+          return {
+            ok: false,
+            error:
+              error instanceof Error
+                ? error.message
+                : 'Could not upload your photo. Please try again.',
+          };
+        }
+      }
+
       const payload = {
         id: currentUser.id,
         name: input.name.trim() || cleanUsername,
         username: cleanUsername,
         bio: input.bio.trim(),
-        avatar_url: sanitizeMediaUrl(input.avatarUrl, currentUser.avatar),
+        avatar_url: nextAvatarUrl,
         updated_at: new Date().toISOString(),
       };
 

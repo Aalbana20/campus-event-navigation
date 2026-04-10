@@ -14,6 +14,11 @@ import {
 } from 'react-native';
 
 import { useAppTheme } from '@/lib/app-theme';
+import { getAvatarImageSource } from '@/lib/mobile-media';
+import {
+  pickProfileImage,
+  type SelectedProfileImage,
+} from '@/lib/mobile-profile-image';
 import { useMobileApp } from '@/providers/mobile-app-provider';
 
 import { AppScreen } from './AppScreen';
@@ -26,6 +31,12 @@ type ProfileScreenProps = {
 
 type ActiveList = 'followers' | 'following' | 'created' | null;
 type ProfileTab = 'grid' | 'reposts' | 'tagged';
+type EditFormState = {
+  name: string;
+  username: string;
+  bio: string;
+  avatarUrl: string;
+};
 
 function StatButton({
   label,
@@ -92,7 +103,15 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
   // Edit Profile State
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [editForm, setEditForm] = useState({ name: '', username: '', bio: '', avatarUrl: '' });
+  const [isPickingAvatar, setIsPickingAvatar] = useState(false);
+  const [selectedAvatarImage, setSelectedAvatarImage] =
+    useState<SelectedProfileImage | null>(null);
+  const [editForm, setEditForm] = useState<EditFormState>({
+    name: '',
+    username: '',
+    bio: '',
+    avatarUrl: '',
+  });
 
   const isOwnProfile = !username || username === currentUser.username;
 
@@ -150,19 +169,54 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
       bio: profile.bio || '',
       avatarUrl: profile.avatar || '',
     });
+    setSelectedAvatarImage(null);
     setIsEditing(true);
+  };
+
+  const handleCloseEdit = () => {
+    if (isSaving) return;
+    setIsEditing(false);
+    setSelectedAvatarImage(null);
+  };
+
+  const handlePickAvatar = async () => {
+    if (isSaving || isPickingAvatar) return;
+
+    try {
+      setIsPickingAvatar(true);
+      const pickedImage = await pickProfileImage();
+
+      if (!pickedImage) return;
+
+      setSelectedAvatarImage(pickedImage);
+    } catch (error) {
+      Alert.alert(
+        'Photo unavailable',
+        error instanceof Error ? error.message : 'Please try again.'
+      );
+    } finally {
+      setIsPickingAvatar(false);
+    }
   };
 
   const handleSaveEdit = async () => {
     setIsSaving(true);
-    const result = await updateProfile(editForm);
+    const result = await updateProfile({
+      ...editForm,
+      avatarImage: selectedAvatarImage,
+    });
     setIsSaving(false);
     if (result.ok) {
+      setSelectedAvatarImage(null);
       setIsEditing(false);
     } else {
       Alert.alert('Unable to save', result.error || 'Please try again.');
     }
   };
+
+  const editAvatarSource = selectedAvatarImage
+    ? { uri: selectedAvatarImage.uri }
+    : getAvatarImageSource(editForm.avatarUrl || profile.avatar);
 
   const renderEventTiles = () => {
     if (activeTab === 'tagged') {
@@ -242,7 +296,7 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
         showsVerticalScrollIndicator={false}>
         <View style={styles.headerCard}>
           <View style={styles.headerTopRow}>
-            <Image source={{ uri: profile.avatar }} style={styles.avatar} />
+            <Image source={getAvatarImageSource(profile.avatar)} style={styles.avatar} />
 
             <View style={styles.headerCopy}>
               <Text style={styles.name}>{profile.name}</Text>
@@ -410,13 +464,51 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
         </Pressable>
       </Modal>
 
-      <Modal visible={isEditing} transparent animationType="slide" onRequestClose={() => setIsEditing(false)}>
-        <Pressable style={styles.modalOverlay} onPress={() => setIsEditing(false)}>
+      <Modal visible={isEditing} transparent animationType="slide" onRequestClose={handleCloseEdit}>
+        <Pressable style={styles.modalOverlay} onPress={handleCloseEdit}>
           <Pressable style={styles.modalSheet} onPress={(eventPress) => eventPress.stopPropagation()}>
             <View style={styles.modalHandle} />
             <Text style={styles.modalTitle}>Edit Profile</Text>
 
             <ScrollView contentContainerStyle={styles.modalContent} showsVerticalScrollIndicator={false}>
+              <View style={styles.avatarEditorCard}>
+                <Image source={editAvatarSource} style={styles.editAvatarPreview} />
+
+                <View style={styles.avatarEditorCopy}>
+                  <Text style={styles.editLabel}>Profile Photo</Text>
+                  <Text style={styles.avatarHelperText}>
+                    {selectedAvatarImage
+                      ? 'New photo selected. Save to update your profile.'
+                      : 'Choose a photo from your device. Your current picture stays unless you save a new one.'}
+                  </Text>
+                  <Text style={styles.avatarMetaText}>Square crop, image files up to 8 MB.</Text>
+                </View>
+              </View>
+
+              <View style={styles.avatarActionRow}>
+                <Pressable
+                  style={styles.secondaryButton}
+                  onPress={() => void handlePickAvatar()}
+                  disabled={isSaving || isPickingAvatar}>
+                  <Text style={styles.secondaryButtonText}>
+                    {isPickingAvatar
+                      ? 'Opening Photos...'
+                      : selectedAvatarImage
+                        ? 'Change Photo'
+                        : 'Upload Photo'}
+                  </Text>
+                </Pressable>
+
+                {selectedAvatarImage ? (
+                  <Pressable
+                    style={styles.tertiaryButton}
+                    onPress={() => setSelectedAvatarImage(null)}
+                    disabled={isSaving || isPickingAvatar}>
+                    <Text style={styles.tertiaryButtonText}>Keep Current</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+
               <Text style={styles.editLabel}>Name</Text>
               <TextInput
                 style={styles.editInput}
@@ -447,18 +539,8 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
                 placeholderTextColor={theme.textMuted}
               />
 
-              <Text style={styles.editLabel}>Avatar URL</Text>
-              <TextInput
-                style={styles.editInput}
-                value={editForm.avatarUrl}
-                onChangeText={(text) => setEditForm((f) => ({ ...f, avatarUrl: text }))}
-                autoCapitalize="none"
-                placeholder="https://..."
-                placeholderTextColor={theme.textMuted}
-              />
-
               <View style={styles.actionRow}>
-                <Pressable style={styles.secondaryButton} onPress={() => setIsEditing(false)}>
+                <Pressable style={styles.secondaryButton} onPress={handleCloseEdit}>
                   <Text style={styles.secondaryButtonText}>Cancel</Text>
                 </Pressable>
                 <Pressable style={styles.primaryButton} onPress={handleSaveEdit} disabled={isSaving}>
@@ -699,6 +781,41 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       gap: 12,
       paddingBottom: 22,
     },
+    avatarEditorCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 14,
+      padding: 14,
+      borderRadius: 22,
+      backgroundColor: theme.surfaceAlt,
+      borderWidth: 1,
+      borderColor: theme.border,
+    },
+    editAvatarPreview: {
+      width: 84,
+      height: 84,
+      borderRadius: 28,
+      backgroundColor: theme.background,
+    },
+    avatarEditorCopy: {
+      flex: 1,
+      gap: 6,
+    },
+    avatarHelperText: {
+      color: theme.textMuted,
+      fontSize: 13,
+      lineHeight: 18,
+    },
+    avatarMetaText: {
+      color: theme.textMuted,
+      fontSize: 12,
+      fontWeight: '700',
+    },
+    avatarActionRow: {
+      flexDirection: 'row',
+      gap: 10,
+      marginBottom: 4,
+    },
     editLabel: {
       color: theme.text,
       fontSize: 14,
@@ -718,5 +835,19 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     editTextarea: {
       minHeight: 96,
       paddingTop: 14,
+    },
+    tertiaryButton: {
+      paddingHorizontal: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: 18,
+      backgroundColor: theme.dangerSoft,
+      borderWidth: 1,
+      borderColor: theme.border,
+    },
+    tertiaryButtonText: {
+      color: theme.text,
+      fontSize: 13,
+      fontWeight: '800',
     },
   });
