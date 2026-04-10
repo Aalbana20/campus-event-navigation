@@ -5,9 +5,8 @@ export const PROFILE_IMAGE_BUCKET = "profile-images"
 export const PROFILE_IMAGE_FOLDER = "avatars"
 
 const PROFILE_IMAGE_PUBLIC_SEGMENT = `/storage/v1/object/public/${PROFILE_IMAGE_BUCKET}/`
-
-const getFallbackUsername = (email = "") =>
-  email.includes("@") ? email.split("@")[0] : "campus-user"
+const SYNTHETIC_USERNAME_PATTERN = /^user-[a-z0-9]{4,}$/i
+const INVALID_DISPLAY_USERNAMES = new Set(["guest", "campus-host"])
 
 const isBrowser = () => typeof window !== "undefined"
 
@@ -37,6 +36,18 @@ const getFileExtension = (fileName = "", contentType = "") => {
 
 const toTrimmedString = (value) =>
   typeof value === "string" ? value.trim() : ""
+
+const sanitizeDisplayUsername = (value) => {
+  const trimmed = toTrimmedString(value)
+
+  if (!trimmed) return ""
+  if (trimmed.startsWith("@")) return sanitizeDisplayUsername(trimmed.slice(1))
+  if (trimmed.includes("@")) return ""
+  if (INVALID_DISPLAY_USERNAMES.has(trimmed.toLowerCase())) return ""
+  if (SYNTHETIC_USERNAME_PATTERN.test(trimmed)) return ""
+
+  return trimmed
+}
 
 const isRemoteUrl = (value) =>
   value.startsWith("http://") || value.startsWith("https://")
@@ -116,13 +127,11 @@ export const sanitizeAvatarUrl = (value, fallback = DEFAULT_AVATAR_URL) => {
 
 export const buildStoredUserFromSources = ({ authUser, profile }) => {
   const email = authUser?.email || ""
-  const fallbackUsername = getFallbackUsername(email)
-  const username =
+  const username = toTrimmedString(
     profile?.username ||
-    authUser?.user_metadata?.username ||
-    authUser?.user_metadata?.user_name ||
-    authUser?.user_metadata?.name ||
-    fallbackUsername
+      authUser?.user_metadata?.username ||
+      authUser?.user_metadata?.user_name
+  )
 
   const avatarStorageValue = sanitizeAvatarStorageValue(
     profile?.avatar_url ||
@@ -137,17 +146,47 @@ export const buildStoredUserFromSources = ({ authUser, profile }) => {
     id: authUser?.id || profile?.id || "",
     email,
     name:
-      profile?.name ||
-      authUser?.user_metadata?.name ||
-      authUser?.user_metadata?.full_name ||
-      authUser?.user_metadata?.username ||
-      username,
+      toTrimmedString(
+        profile?.name ||
+          authUser?.user_metadata?.name ||
+          authUser?.user_metadata?.full_name
+      ) ||
+      username ||
+      "Campus User",
     username,
     avatarStorageValue,
     avatarUrl: avatarStorageValue,
     avatar_url: avatarStorageValue,
     image,
     avatar: image,
+  }
+}
+
+export const resolveCreatorIdentity = ({
+  profileName,
+  profileUsername,
+  eventName,
+  eventUsername,
+  fallbackName,
+  fallbackUsername,
+} = {}) => {
+  const creatorUsername =
+    sanitizeDisplayUsername(profileUsername) ||
+    sanitizeDisplayUsername(eventUsername) ||
+    sanitizeDisplayUsername(fallbackUsername) ||
+    ""
+  const creatorName =
+    toTrimmedString(profileName) ||
+    sanitizeDisplayUsername(profileUsername) ||
+    toTrimmedString(eventName) ||
+    sanitizeDisplayUsername(eventUsername) ||
+    toTrimmedString(fallbackName) ||
+    sanitizeDisplayUsername(fallbackUsername) ||
+    "Campus User"
+
+  return {
+    creatorName,
+    creatorUsername,
   }
 }
 
@@ -229,17 +268,15 @@ export const uploadProfileImageToStorage = async ({
 }
 
 export const getEventCreatorDisplay = (event) => {
-  const creatorName =
-    event?.creatorName ||
-    event?.organizer ||
-    event?.creatorUsername ||
-    "Campus User"
-  const creatorHandle = event?.creatorUsername ? `@${event.creatorUsername}` : ""
+  const { creatorName } = resolveCreatorIdentity({
+    eventName: event?.creatorName,
+    eventUsername: event?.creatorUsername,
+  })
   const creatorAvatar = sanitizeAvatarUrl(event?.creatorAvatar, DEFAULT_AVATAR_URL)
 
   return {
     creatorName,
-    creatorHandle,
+    creatorHandle: "",
     creatorAvatar,
   }
 }

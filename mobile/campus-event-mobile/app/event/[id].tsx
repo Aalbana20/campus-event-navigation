@@ -15,6 +15,7 @@ import {
 import { AppScreen } from '@/components/mobile/AppScreen';
 import { EventActionTrigger } from '@/components/mobile/EventActionTrigger';
 import { useAppTheme } from '@/lib/app-theme';
+import { getEventCreatorLabel } from '@/lib/mobile-backend';
 import { getAvatarImageSource, getEventImageSource } from '@/lib/mobile-media';
 import { useMobileApp } from '@/providers/mobile-app-provider';
 
@@ -64,7 +65,7 @@ export default function EventDetailScreen() {
               <View style={styles.creatorRow}>
                 <Image source={getAvatarImageSource(event.creatorAvatar)} style={styles.creatorAvatar} />
                 <Text style={styles.creatorName} numberOfLines={1}>
-                  {event.creatorName || event.organizer || `@${event.creatorUsername || 'host'}`}
+                  {getEventCreatorLabel(event)}
                 </Text>
               </View>
             </View>

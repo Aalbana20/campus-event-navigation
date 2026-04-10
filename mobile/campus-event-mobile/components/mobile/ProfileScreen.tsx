@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 
 import { useAppTheme } from '@/lib/app-theme';
+import { getEventCreatorLabel } from '@/lib/mobile-backend';
 import { getAvatarImageSource, getEventImageSource } from '@/lib/mobile-media';
 import {
   pickProfileImage,
@@ -282,7 +283,7 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
                 <Image source={getAvatarImageSource(event.creatorAvatar)} style={{ width: 16, height: 16, borderRadius: 8 }} />
                 <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 12, fontWeight: '600' }} numberOfLines={1}>
-                  {event.creatorName || event.organizer || 'Campus User'}
+                  {getEventCreatorLabel(event)}
                 </Text>
               </View>
             </View>

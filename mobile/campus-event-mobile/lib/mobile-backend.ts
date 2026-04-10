@@ -48,6 +48,8 @@ const DEFAULT_EVENT_IMAGE_SVG = encodeURIComponent(`
 export const DEFAULT_AVATAR = `data:image/svg+xml;utf8,${DEFAULT_AVATAR_SVG}`;
 export const DEFAULT_EVENT_IMAGE = `data:image/svg+xml;utf8,${DEFAULT_EVENT_IMAGE_SVG}`;
 export const DEFAULT_PROFILE_BIO = 'Exploring campus events and new people.';
+const SYNTHETIC_USERNAME_PATTERN = /^user-[a-z0-9]{4,}$/i;
+const INVALID_DISPLAY_USERNAMES = new Set(['guest', 'campus-host']);
 
 export const EMPTY_PROFILE: ProfileRecord = {
   id: '',
@@ -109,6 +111,18 @@ type RsvpRow = {
 
 const toStringValue = (value: unknown) =>
   typeof value === 'string' ? value.trim() : '';
+
+const sanitizeDisplayUsername = (value: unknown) => {
+  const trimmed = toStringValue(value);
+
+  if (!trimmed) return '';
+  if (trimmed.startsWith('@')) return sanitizeDisplayUsername(trimmed.slice(1));
+  if (trimmed.includes('@')) return '';
+  if (INVALID_DISPLAY_USERNAMES.has(trimmed.toLowerCase())) return '';
+  if (SYNTHETIC_USERNAME_PATTERN.test(trimmed)) return '';
+
+  return normalizeUsername(trimmed);
+};
 
 export const normalizeUsername = (value: string) =>
   value
@@ -246,17 +260,15 @@ export const getDaysUntilDate = (eventDate?: string | null) => {
 };
 
 export const createProfileFromAuthUser = (user: User): ProfileRecord => {
-  const username =
-    normalizeUsername(
-      toStringValue(user.user_metadata?.username || user.email?.split('@')[0] || '')
-    ) || `user-${user.id.slice(0, 8)}`;
+  const username = normalizeUsername(toStringValue(user.user_metadata?.username));
 
   return {
     id: user.id,
     name:
       toStringValue(user.user_metadata?.name) ||
       toStringValue(user.user_metadata?.full_name) ||
-      username,
+      username ||
+      'Campus User',
     username,
     bio: toStringValue(user.user_metadata?.bio) || DEFAULT_PROFILE_BIO,
     avatar: normalizeAvatarStorageValue(
@@ -272,9 +284,7 @@ export const createProfileFromAuthUser = (user: User): ProfileRecord => {
 export const normalizeProfileRow = (row: ProfileRow): ProfileRecord => ({
   id: row.id,
   name: toStringValue(row.name) || toStringValue(row.username) || 'Campus User',
-  username:
-    normalizeUsername(toStringValue(row.username)) ||
-    `user-${String(row.id).slice(0, 8)}`,
+  username: normalizeUsername(toStringValue(row.username)),
   bio: toStringValue(row.bio) || DEFAULT_PROFILE_BIO,
   avatar: normalizeAvatarStorageValue(toStringValue(row.avatar_url)),
   interests: normalizeInterests(row.interests),
@@ -342,9 +352,7 @@ export const normalizeEventRow = (
     image: toStringValue(row.image) || DEFAULT_EVENT_IMAGE,
     tags: normalizeTags(row.tags),
     createdBy: toStringValue(row.created_by),
-    creatorUsername:
-      normalizeUsername(toStringValue(row.creator_username)) ||
-      'campus-host',
+    creatorUsername: normalizeUsername(toStringValue(row.creator_username)),
     goingCount: Math.max(Number(row.going_count || 0), attendeeIds.length),
     privacy,
     isPrivate: privacy === 'private',
@@ -365,20 +373,34 @@ export const enrichEventWithCreator = (
       (normalizedCreatorUsername && profile.username === normalizedCreatorUsername)
   );
 
+  const creatorUsername =
+    sanitizeDisplayUsername(creatorProfile?.username) ||
+    sanitizeDisplayUsername(event.creatorUsername) ||
+    '';
+  const creatorName =
+    toStringValue(creatorProfile?.name) ||
+    sanitizeDisplayUsername(creatorProfile?.username) ||
+    toStringValue(event.creatorName) ||
+    sanitizeDisplayUsername(event.creatorUsername) ||
+    'Campus User';
+
   return {
     ...event,
-    creatorName:
-      creatorProfile?.name ||
-      event.creatorName ||
-      event.organizer ||
-      event.creatorUsername ||
-      'Campus User',
+    creatorName,
+    creatorUsername,
     creatorAvatar:
       creatorProfile?.avatar ||
       event.creatorAvatar ||
       DEFAULT_AVATAR,
   };
 };
+
+export const getEventCreatorLabel = (
+  event: Pick<EventRecord, 'creatorName' | 'creatorUsername'>
+) =>
+  toStringValue(event.creatorName) ||
+  sanitizeDisplayUsername(event.creatorUsername) ||
+  'Campus User';
 
 export const normalizeFollowRow = (row: FollowRow): FollowRelationship => ({
   followerId: String(row.follower_id),

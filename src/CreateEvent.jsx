@@ -302,8 +302,8 @@ function CreateEvent({ embedded = false }) {
   const addressBlurTimeoutRef = useRef(null)
 
   const currentUser = JSON.parse(localStorage.getItem("user") || "{}")
-  const creatorUsername = currentUser.username || "itzmesuccess1"
-  const creatorName = currentUser.name || "Campus Organization"
+  const creatorUsername = currentUser.username || ""
+  const creatorName = currentUser.name || currentUser.username || "Campus User"
   const supportsVoiceInput = Boolean(getSpeechRecognitionConstructor())
   const isGooglePlacesConfigured = Boolean(GOOGLE_PLACES_API_KEY)
 

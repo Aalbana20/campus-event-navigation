@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 
 import { useAppTheme } from '@/lib/app-theme';
+import { getEventCreatorLabel } from '@/lib/mobile-backend';
 import { getAvatarImageSource, getEventImageSource } from '@/lib/mobile-media';
 import { useMobileApp } from '@/providers/mobile-app-provider';
 import { EventRecord } from '@/types/models';
@@ -60,7 +61,7 @@ export function EventStackCard({
             <View style={styles.creatorIdentity}>
               <Image source={getAvatarImageSource(event.creatorAvatar)} style={styles.creatorAvatar} />
               <Text style={styles.creatorName} numberOfLines={1}>
-                {event.creatorName || event.organizer || `@${event.creatorUsername || 'host'}`}
+                {getEventCreatorLabel(event)}
               </Text>
             </View>
             <EventActionTrigger event={event} style={styles.actions} />

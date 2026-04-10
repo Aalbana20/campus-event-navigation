@@ -1,5 +1,9 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react"
-import { DEFAULT_AVATAR_URL, sanitizeAvatarUrl } from "../profileMedia"
+import {
+  DEFAULT_AVATAR_URL,
+  resolveCreatorIdentity,
+  sanitizeAvatarUrl,
+} from "../profileMedia"
 import { supabase } from "../supabaseClient"
 
 const EventContext = createContext()
@@ -24,8 +28,8 @@ const readStoredUser = () => {
 
   return {
     id: stored.id || "current-user",
-    username: stored.username || "itzmesuccess1",
-    name: stored.name || "Success Myers",
+    username: stored.username || "",
+    name: stored.name || "Campus User",
     image,
     avatar: image,
   }
@@ -103,26 +107,31 @@ const buildProfileLookup = (profiles) =>
     { byId: new Map(), byUsername: new Map() }
   )
 
-const enrichEventWithCreator = (event, creatorProfile = null, fallbackCreator = null) => ({
-  ...event,
-  creatorName:
-    event?.creatorName ||
-    creatorProfile?.name ||
-    creatorProfile?.username ||
-    fallbackCreator?.name ||
-    event?.organizer ||
-    event?.creatorUsername ||
-    "Campus User",
-  creatorAvatar: sanitizeAvatarUrl(
-    event?.creatorAvatar ||
-      creatorProfile?.avatar_url ||
-      creatorProfile?.image ||
-      creatorProfile?.avatar ||
-      fallbackCreator?.image ||
-      fallbackCreator?.avatar,
-    DEFAULT_AVATAR_URL
-  ),
-})
+const enrichEventWithCreator = (event, creatorProfile = null, fallbackCreator = null) => {
+  const { creatorName, creatorUsername } = resolveCreatorIdentity({
+    profileName: creatorProfile?.name,
+    profileUsername: creatorProfile?.username,
+    eventName: event?.creatorName,
+    eventUsername: event?.creatorUsername,
+    fallbackName: fallbackCreator?.name,
+    fallbackUsername: fallbackCreator?.username,
+  })
+
+  return {
+    ...event,
+    creatorName,
+    creatorUsername,
+    creatorAvatar: sanitizeAvatarUrl(
+      event?.creatorAvatar ||
+        creatorProfile?.avatar_url ||
+        creatorProfile?.image ||
+        creatorProfile?.avatar ||
+        fallbackCreator?.image ||
+        fallbackCreator?.avatar,
+      DEFAULT_AVATAR_URL
+    ),
+  }
+}
 
 export function EventProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(readStoredUser)
