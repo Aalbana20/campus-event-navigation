@@ -1,5 +1,6 @@
 import type { ImageSourcePropType } from 'react-native';
 
+import { resolveAvatarUrl } from '@/lib/avatar-storage';
 import { DEFAULT_AVATAR, DEFAULT_EVENT_IMAGE } from '@/lib/mobile-backend';
 
 export const sanitizeMediaUrl = (
@@ -19,7 +20,7 @@ export const sanitizeMediaUrl = (
 };
 
 export const getAvatarImageUri = (url: string | null | undefined) =>
-  sanitizeMediaUrl(url, DEFAULT_AVATAR);
+  resolveAvatarUrl(url, DEFAULT_AVATAR);
 
 export const getEventImageUri = (url: string | null | undefined) =>
   sanitizeMediaUrl(url, DEFAULT_EVENT_IMAGE);

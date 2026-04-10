@@ -1,5 +1,6 @@
 import type { User } from '@supabase/supabase-js';
 
+import { normalizeAvatarStorageValue } from '@/lib/avatar-storage';
 import {
   EventPrivacy,
   EventRecord,
@@ -258,7 +259,9 @@ export const createProfileFromAuthUser = (user: User): ProfileRecord => {
       username,
     username,
     bio: toStringValue(user.user_metadata?.bio) || DEFAULT_PROFILE_BIO,
-    avatar: toStringValue(user.user_metadata?.avatar_url) || DEFAULT_AVATAR,
+    avatar: normalizeAvatarStorageValue(
+      toStringValue(user.user_metadata?.avatar_url)
+    ),
     interests: normalizeInterests(user.user_metadata?.interests),
     phoneNumber: toStringValue(user.user_metadata?.phone_number),
     birthday: toStringValue(user.user_metadata?.birthday),
@@ -273,7 +276,7 @@ export const normalizeProfileRow = (row: ProfileRow): ProfileRecord => ({
     normalizeUsername(toStringValue(row.username)) ||
     `user-${String(row.id).slice(0, 8)}`,
   bio: toStringValue(row.bio) || DEFAULT_PROFILE_BIO,
-  avatar: toStringValue(row.avatar_url) || DEFAULT_AVATAR,
+  avatar: normalizeAvatarStorageValue(toStringValue(row.avatar_url)),
   interests: normalizeInterests(row.interests),
   phoneNumber: toStringValue(row.phone_number),
   birthday: toStringValue(row.birthday),

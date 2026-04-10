@@ -1,9 +1,25 @@
 import { supabase } from "./supabaseClient"
 
 export const DEFAULT_AVATAR_URL = "/default-avatar.png"
+export const PROFILE_IMAGE_BUCKET = "profile-images"
+export const PROFILE_IMAGE_FOLDER = "avatars"
+
+const PROFILE_IMAGE_PUBLIC_SEGMENT = `/storage/v1/object/public/${PROFILE_IMAGE_BUCKET}/`
 
 const getFallbackUsername = (email = "") =>
   email.includes("@") ? email.split("@")[0] : "campus-user"
+
+const isBrowser = () => typeof window !== "undefined"
+
+const dispatchStoredUserUpdate = (storedUser) => {
+  if (!isBrowser()) return
+
+  window.dispatchEvent(
+    new CustomEvent("campus-user-storage-updated", {
+      detail: storedUser,
+    })
+  )
+}
 
 const getFileExtension = (fileName = "", contentType = "") => {
   const normalizedName = String(fileName || "").trim().toLowerCase()
@@ -19,24 +35,83 @@ const getFileExtension = (fileName = "", contentType = "") => {
   return "jpg"
 }
 
-export const sanitizeAvatarUrl = (value, fallback = DEFAULT_AVATAR_URL) => {
-  if (typeof value !== "string") return fallback
+const toTrimmedString = (value) =>
+  typeof value === "string" ? value.trim() : ""
 
-  const trimmed = value.trim()
+const isRemoteUrl = (value) =>
+  value.startsWith("http://") || value.startsWith("https://")
 
-  if (!trimmed) return fallback
-  if (trimmed.startsWith("blob:")) return fallback
+const normalizeProfileImagePath = (value) => {
+  const trimmed = toTrimmedString(value)
 
-  if (
-    trimmed.startsWith("http://") ||
-    trimmed.startsWith("https://") ||
-    trimmed.startsWith("data:image/") ||
-    trimmed.startsWith("/")
-  ) {
+  if (!trimmed) return ""
+
+  if (trimmed.includes(PROFILE_IMAGE_PUBLIC_SEGMENT)) {
+    const [, rawPath = ""] = trimmed.split(PROFILE_IMAGE_PUBLIC_SEGMENT)
+    return decodeURIComponent(rawPath.split("?")[0] || "")
+  }
+
+  if (trimmed.startsWith(`${PROFILE_IMAGE_BUCKET}/`)) {
+    return trimmed.slice(PROFILE_IMAGE_BUCKET.length + 1)
+  }
+
+  if (trimmed.startsWith(`${PROFILE_IMAGE_FOLDER}/`)) {
     return trimmed
   }
 
-  return fallback
+  return ""
+}
+
+export const sanitizeAvatarStorageValue = (value, fallback = null) => {
+  const fallbackValue =
+    fallback === null || fallback === undefined
+      ? null
+      : sanitizeAvatarStorageValue(fallback, null)
+  const trimmed = toTrimmedString(value)
+
+  if (!trimmed) return fallbackValue
+
+  if (
+    trimmed === DEFAULT_AVATAR_URL ||
+    trimmed === "/default-avatar.png" ||
+    trimmed.startsWith("blob:") ||
+    trimmed.startsWith("file:") ||
+    trimmed.startsWith("data:image/") ||
+    trimmed.startsWith("/")
+  ) {
+    return fallbackValue
+  }
+
+  const storagePath = normalizeProfileImagePath(trimmed)
+  if (storagePath) return storagePath
+
+  if (isRemoteUrl(trimmed)) {
+    return trimmed
+  }
+
+  return fallbackValue
+}
+
+const resolveProfileImageUrl = (value) => {
+  if (!value) return ""
+
+  if (isRemoteUrl(value)) {
+    return value
+  }
+
+  const { data } = supabase.storage.from(PROFILE_IMAGE_BUCKET).getPublicUrl(value)
+  return data?.publicUrl || ""
+}
+
+export const sanitizeAvatarUrl = (value, fallback = DEFAULT_AVATAR_URL) => {
+  const normalizedValue = sanitizeAvatarStorageValue(value, fallback)
+
+  if (!normalizedValue) {
+    return DEFAULT_AVATAR_URL
+  }
+
+  const resolvedUrl = resolveProfileImageUrl(normalizedValue)
+  return resolvedUrl || DEFAULT_AVATAR_URL
 }
 
 export const buildStoredUserFromSources = ({ authUser, profile }) => {
@@ -49,13 +124,14 @@ export const buildStoredUserFromSources = ({ authUser, profile }) => {
     authUser?.user_metadata?.name ||
     fallbackUsername
 
-  const image = sanitizeAvatarUrl(
+  const avatarStorageValue = sanitizeAvatarStorageValue(
     profile?.avatar_url ||
       authUser?.user_metadata?.avatar_url ||
       authUser?.user_metadata?.picture ||
       authUser?.user_metadata?.image,
-    DEFAULT_AVATAR_URL
+    null
   )
+  const image = sanitizeAvatarUrl(avatarStorageValue, DEFAULT_AVATAR_URL)
 
   return {
     id: authUser?.id || profile?.id || "",
@@ -67,6 +143,9 @@ export const buildStoredUserFromSources = ({ authUser, profile }) => {
       authUser?.user_metadata?.username ||
       username,
     username,
+    avatarStorageValue,
+    avatarUrl: avatarStorageValue,
+    avatar_url: avatarStorageValue,
     image,
     avatar: image,
   }
@@ -91,6 +170,7 @@ export const fetchProfileForUser = async (userId) => {
 export const syncStoredUserFromSession = async (session) => {
   if (!session?.user) {
     localStorage.removeItem("user")
+    dispatchStoredUserUpdate(null)
     return null
   }
 
@@ -101,6 +181,7 @@ export const syncStoredUserFromSession = async (session) => {
   })
 
   localStorage.setItem("user", JSON.stringify(storedUser))
+  dispatchStoredUserUpdate(storedUser)
   return storedUser
 }
 
@@ -111,16 +192,18 @@ export const uploadProfileImageToStorage = async ({
   contentType,
   fallbackUrl,
 }) => {
+  const fallbackValue = sanitizeAvatarStorageValue(fallbackUrl, null)
+
   if (!userId || !file) {
-    return sanitizeAvatarUrl(fallbackUrl, DEFAULT_AVATAR_URL)
+    return fallbackValue
   }
 
   try {
     const extension = getFileExtension(fileName, contentType)
-    const filePath = `avatars/${userId}-${Date.now()}.${extension}`
+    const filePath = `${PROFILE_IMAGE_FOLDER}/${userId}-${Date.now()}.${extension}`
 
     const { error: uploadError } = await supabase.storage
-      .from("profile-images")
+      .from(PROFILE_IMAGE_BUCKET)
       .upload(filePath, file, {
         contentType: contentType || "image/jpeg",
         upsert: true,
@@ -128,14 +211,13 @@ export const uploadProfileImageToStorage = async ({
 
     if (uploadError) {
       console.error("Profile image upload failed:", uploadError)
-      return sanitizeAvatarUrl(fallbackUrl, DEFAULT_AVATAR_URL)
+      return fallbackValue
     }
 
-    const { data } = supabase.storage.from("profile-images").getPublicUrl(filePath)
-    return sanitizeAvatarUrl(data?.publicUrl, sanitizeAvatarUrl(fallbackUrl, DEFAULT_AVATAR_URL))
+    return sanitizeAvatarStorageValue(filePath, fallbackValue)
   } catch (error) {
     console.error("Profile image upload failed:", error)
-    return sanitizeAvatarUrl(fallbackUrl, DEFAULT_AVATAR_URL)
+    return fallbackValue
   }
 }
 

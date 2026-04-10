@@ -1,6 +1,9 @@
 import React, { useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
-import { sanitizeAvatarUrl, uploadProfileImageToStorage } from "../profileMedia"
+import {
+  sanitizeAvatarStorageValue,
+  uploadProfileImageToStorage,
+} from "../profileMedia"
 import { supabase } from "../supabaseClient"
 
 const INTEREST_OPTIONS = [
@@ -158,7 +161,7 @@ function SignUp() {
         return
       }
 
-      const fallbackAvatar = sanitizeAvatarUrl(selectedAvatar)
+      const fallbackAvatarValue = sanitizeAvatarStorageValue(selectedAvatar, null)
 
       const { data, error } = await supabase.auth.signUp({
         email: cleanEmail,
@@ -170,7 +173,7 @@ function SignUp() {
             phone_number: cleanPhoneNumber,
             birthday: cleanBirthday,
             interests: selectedInterests,
-            avatar_url: fallbackAvatar,
+            avatar_url: fallbackAvatarValue,
           },
         },
       })
@@ -192,9 +195,9 @@ function SignUp() {
               file: profileImageFile,
               fileName: profileImageFile.name,
               contentType: profileImageFile.type,
-              fallbackUrl: fallbackAvatar,
+              fallbackUrl: fallbackAvatarValue,
             })
-          : fallbackAvatar
+          : fallbackAvatarValue
 
       if (data.session) {
         const { error: metadataError } = await supabase.auth.updateUser({
@@ -204,7 +207,7 @@ function SignUp() {
             phone_number: cleanPhoneNumber,
             birthday: cleanBirthday,
             interests: selectedInterests,
-            avatar_url: avatarUrl,
+            avatar_url: avatarUrl || null,
           },
         })
 
@@ -220,7 +223,7 @@ function SignUp() {
           name: cleanFullName || cleanUsername,
           username: cleanUsername,
           bio: buildProfileSummary(selectedInterests),
-          avatar_url: avatarUrl,
+          avatar_url: avatarUrl || null,
           updated_at: new Date().toISOString(),
         })
 

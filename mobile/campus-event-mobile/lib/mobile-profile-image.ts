@@ -2,12 +2,14 @@ import { Buffer } from 'buffer';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
 
+import {
+  normalizeAvatarStorageValue,
+  PROFILE_IMAGE_BUCKET,
+  PROFILE_IMAGE_FOLDER,
+} from '@/lib/avatar-storage';
 import { DEFAULT_AVATAR } from '@/lib/mobile-backend';
-import { sanitizeMediaUrl } from '@/lib/mobile-media';
 import { supabase } from '@/lib/supabase';
 
-const PROFILE_IMAGE_BUCKET = 'profile-images';
-const PROFILE_IMAGE_FOLDER = 'avatars';
 const MAX_PROFILE_IMAGE_BYTES = 8 * 1024 * 1024;
 
 const MIME_EXTENSION_MAP: Record<string, string> = {
@@ -120,6 +122,8 @@ export const uploadProfileImage = async ({
     throw new Error('Storage is unavailable right now. Please try again later.');
   }
 
+  const normalizedFallback = normalizeAvatarStorageValue(fallbackUrl, null);
+
   const fileExtension = getFileExtension(
     image.fileName,
     image.mimeType,
@@ -140,12 +144,5 @@ export const uploadProfileImage = async ({
     throw new Error('Could not upload your photo. Please try again.');
   }
 
-  const { data } = supabase.storage
-    .from(PROFILE_IMAGE_BUCKET)
-    .getPublicUrl(filePath);
-
-  return sanitizeMediaUrl(
-    data?.publicUrl,
-    sanitizeMediaUrl(fallbackUrl, DEFAULT_AVATAR)
-  );
+  return normalizeAvatarStorageValue(filePath, normalizedFallback || DEFAULT_AVATAR);
 };

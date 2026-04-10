@@ -21,8 +21,8 @@ import {
   SignUpInput,
   TaggedMoment,
 } from '@/types/models';
+import { normalizeAvatarStorageValue } from '@/lib/avatar-storage';
 import {
-  DEFAULT_AVATAR,
   DEFAULT_PROFILE_BIO,
   EMPTY_PROFILE,
   buildRsvpMap,
@@ -34,7 +34,7 @@ import {
   normalizeProfiles,
   normalizeUsername,
 } from '@/lib/mobile-backend';
-import { getAvatarImageUri, getEventImageUri, sanitizeMediaUrl } from '@/lib/mobile-media';
+import { getEventImageUri, sanitizeMediaUrl } from '@/lib/mobile-media';
 import {
   type SelectedProfileImage,
   uploadProfileImage,
@@ -118,7 +118,7 @@ const createProfilePayload = (
   name: fullName || username,
   username,
   bio: DEFAULT_PROFILE_BIO,
-  avatar_url: avatarUrl || DEFAULT_AVATAR,
+  avatar_url: normalizeAvatarStorageValue(avatarUrl, null) || null,
   updated_at: new Date().toISOString(),
 });
 
@@ -318,7 +318,7 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
           user.id,
           fallbackProfile.name || nextUsername,
           nextUsername,
-          getAvatarImageUri(fallbackProfile.avatar)
+          String(user.user_metadata?.avatar_url || '')
         ),
         { onConflict: 'id' }
       );
@@ -458,10 +458,7 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
             interests?: string[] | string | null;
             email?: string | null;
           }>)
-        ).map((profile) => ({
-          ...profile,
-          avatar: getAvatarImageUri(profile.avatar),
-        }));
+        );
 
         const rsvpMap = buildRsvpMap(rsvpRows);
         const normalizedEvents = (((eventsResult.data || []) as Array<{
@@ -489,10 +486,6 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
           nextUser || activeSession?.user
             ? createProfileFromAuthUser((nextUser || activeSession?.user) as User)
             : null;
-
-        if (fallbackCurrentUser) {
-          fallbackCurrentUser.avatar = getAvatarImageUri(fallbackCurrentUser.avatar);
-        }
 
         setProfilesState(
           fallbackCurrentUser
@@ -765,7 +758,8 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      let nextAvatarUrl = sanitizeMediaUrl(input.avatarUrl, currentUser.avatar);
+      let nextAvatarUrl =
+        normalizeAvatarStorageValue(input.avatarUrl, currentUser.avatar) || '';
 
       if (input.avatarImage?.uri) {
         try {
@@ -790,7 +784,7 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
         name: input.name.trim() || cleanUsername,
         username: cleanUsername,
         bio: input.bio.trim(),
-        avatar_url: nextAvatarUrl,
+        avatar_url: nextAvatarUrl || null,
         updated_at: new Date().toISOString(),
       };
 
@@ -801,19 +795,25 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
         return { ok: false, error: error.message };
       }
 
-        // Keep Auth Session metadata in sync
-        await supabase.auth.updateUser({
-          data: {
-            name: payload.name,
-            username: payload.username,
-          avatar_url: getAvatarImageUri(payload.avatar_url),
-          }
-        });
+      // Keep Auth Session metadata in sync
+      await supabase.auth.updateUser({
+        data: {
+          name: payload.name,
+          username: payload.username,
+          avatar_url: payload.avatar_url,
+        },
+      });
 
       setProfilesState((current) =>
         current.map((p) =>
           p.id === currentUser.id
-          ? { ...p, name: payload.name, username: payload.username, bio: payload.bio, avatar: getAvatarImageUri(payload.avatar_url) }
+            ? {
+                ...p,
+                name: payload.name,
+                username: payload.username,
+                bio: payload.bio,
+                avatar: payload.avatar_url || '',
+              }
             : p
         )
       );
@@ -1156,7 +1156,7 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
       const cleanUsername = normalizeUsername(username);
       const cleanEmail = email.trim().toLowerCase();
       const cleanFullName = fullName.trim() || cleanUsername;
-      const avatarUrl = avatar || DEFAULT_AVATAR;
+      const avatarUrl = normalizeAvatarStorageValue(avatar, null) || '';
 
       if (!cleanUsername) {
         setIsReady(true);
@@ -1192,7 +1192,7 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
           data: {
             name: cleanFullName,
             username: cleanUsername,
-            avatar_url: avatarUrl,
+            avatar_url: avatarUrl || null,
           },
         },
       });

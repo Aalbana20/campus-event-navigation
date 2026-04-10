@@ -4,6 +4,32 @@ import { supabase } from "../supabaseClient"
 
 const EventContext = createContext()
 
+const normalizeUsername = (value = "") =>
+  String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._]/g, "")
+    .replace(/^[._]+|[._]+$/g, "")
+
+const readStoredUser = () => {
+  const stored = JSON.parse(localStorage.getItem("user") || "{}")
+  const image = sanitizeAvatarUrl(
+    stored.avatarStorageValue ||
+      stored.avatarUrl ||
+      stored.avatar_url ||
+      stored.image ||
+      stored.avatar,
+    DEFAULT_AVATAR_URL
+  )
+
+  return {
+    id: stored.id || "current-user",
+    username: stored.username || "itzmesuccess1",
+    name: stored.name || "Success Myers",
+    image,
+    avatar: image,
+  }
+}
 
 const usersMatch = (a, b) => {
   if (!a || !b) return false
@@ -69,7 +95,7 @@ const buildProfileLookup = (profiles) =>
       }
 
       if (profile?.username) {
-        lookup.byUsername.set(profile.username, profile)
+        lookup.byUsername.set(normalizeUsername(profile.username), profile)
       }
 
       return lookup
@@ -99,16 +125,8 @@ const enrichEventWithCreator = (event, creatorProfile = null, fallbackCreator = 
 })
 
 export function EventProvider({ children }) {
-  const [currentUser] = useState(() => {
-    const stored = JSON.parse(localStorage.getItem("user") || "{}")
-
-    return {
-      id: stored.id || "current-user",
-      username: stored.username || "itzmesuccess1",
-      name: stored.name || "Success Myers",
-      image: sanitizeAvatarUrl(stored.image || stored.avatar, DEFAULT_AVATAR_URL),
-    }
-  })
+  const [currentUser, setCurrentUser] = useState(readStoredUser)
+  const [refreshToken, setRefreshToken] = useState(0)
 
   const [savedEvents, setSavedEvents] = useState([])
   const [allEvents, setAllEvents] = useState([])
@@ -116,7 +134,27 @@ export function EventProvider({ children }) {
   const [followersList, setFollowersList] = useState([])
 
   useEffect(() => {
-    const userId = JSON.parse(localStorage.getItem("user") || "{}").id
+    if (typeof window === "undefined") return undefined
+
+    const syncCurrentUser = () => {
+      setCurrentUser(readStoredUser())
+      setRefreshToken((currentValue) => currentValue + 1)
+    }
+
+    window.addEventListener("storage", syncCurrentUser)
+    window.addEventListener("campus-user-storage-updated", syncCurrentUser)
+
+    return () => {
+      window.removeEventListener("storage", syncCurrentUser)
+      window.removeEventListener("campus-user-storage-updated", syncCurrentUser)
+    }
+  }, [])
+
+  useEffect(() => {
+    const userId =
+      currentUser?.id && currentUser.id !== "current-user"
+        ? currentUser.id
+        : JSON.parse(localStorage.getItem("user") || "{}").id
 
     const loadData = async () => {
       try {
@@ -144,7 +182,11 @@ export function EventProvider({ children }) {
 
         const creatorIds = [...new Set(eventsData.map((event) => event.created_by).filter(Boolean))]
         const creatorUsernames = [
-          ...new Set(eventsData.map((event) => event.creator_username).filter(Boolean)),
+          ...new Set(
+            eventsData
+              .map((event) => normalizeUsername(event.creator_username))
+              .filter(Boolean)
+          ),
         ]
 
         const [creatorIdResult, creatorUsernameResult] = await Promise.all([
@@ -186,7 +228,7 @@ export function EventProvider({ children }) {
         const normalized = eventsData.map((e) => {
           const creatorProfile =
             profileLookup.byId.get(String(e.created_by || "")) ||
-            profileLookup.byUsername.get(e.creator_username || "")
+            profileLookup.byUsername.get(normalizeUsername(e.creator_username || ""))
 
           return enrichEventWithCreator(
             normalizeEventTimes({
@@ -262,7 +304,7 @@ export function EventProvider({ children }) {
     }
 
     loadData()
-  }, [])
+  }, [currentUser?.id, refreshToken])
 
   const addEvent = (event, attendeeUser) => {
     const attendee = attendeeUser || currentUser

@@ -5,6 +5,7 @@ import { useEvents } from "../context/EventContext"
 import { buildEventImageStyle } from "../eventImages"
 import {
   DEFAULT_AVATAR_URL,
+  sanitizeAvatarStorageValue,
   sanitizeAvatarUrl,
   syncStoredUserFromSession,
   uploadProfileImageToStorage,
@@ -141,6 +142,15 @@ function Profile() {
 
   const defaultAvatar = DEFAULT_AVATAR_URL
   const storedUser = JSON.parse(localStorage.getItem("user") || "{}")
+  const storedUserAvatarValue =
+    sanitizeAvatarStorageValue(
+      storedUser.avatarStorageValue ||
+        storedUser.avatarUrl ||
+        storedUser.avatar_url ||
+        storedUser.image ||
+        storedUser.avatar,
+      null
+    ) || ""
   const [profileImage, setProfileImage] = useState("")
   const [draftName, setDraftName] = useState(name)
   const [draftUsername, setDraftUsername] = useState(username)
@@ -153,12 +163,7 @@ function Profile() {
   const ownerId = storedUser.id || currentUser?.id
   const ownerUsername = storedUser.username || username
   const currentProfileImage =
-    sanitizeAvatarUrl(
-      profileImage ||
-        storedUser.image ||
-        storedUser.avatar,
-      defaultAvatar
-    )
+    sanitizeAvatarUrl(profileImage || storedUserAvatarValue, defaultAvatar)
 
   const createdEvents = allEvents.filter(
     (event) =>
@@ -193,7 +198,7 @@ function Profile() {
     setDraftName(name)
     setDraftUsername(username)
     setDraftBio(bio)
-    setDraftProfileImage(currentProfileImage)
+    setDraftProfileImage(profileImage || storedUserAvatarValue || "")
     setIsEditProfileOpen(true)
   }
 
@@ -232,22 +237,24 @@ function Profile() {
         if (data.name) setName(data.name)
         if (data.username) setUsername(data.username)
         if (data.bio) setBio(data.bio)
-        if (data.avatar_url) {
-          const nextAvatar = sanitizeAvatarUrl(data.avatar_url, defaultAvatar)
-          setProfileImage(nextAvatar)
-          localStorage.setItem("profileImage", nextAvatar)
-        }
+        const nextAvatarValue = sanitizeAvatarStorageValue(data.avatar_url, null) || ""
+        setProfileImage(nextAvatarValue)
+        localStorage.setItem("profileImage", nextAvatarValue)
       })
   }, [defaultAvatar])
 
   const handleSaveProfile = async () => {
-    const nextProfileImage = sanitizeAvatarUrl(draftProfileImage, defaultAvatar)
+    const nextProfileImageValue =
+      sanitizeAvatarStorageValue(
+        draftProfileImage,
+        profileImage || storedUserAvatarValue || null
+      ) || ""
 
     setName(draftName)
     setUsername(draftUsername)
     setBio(draftBio)
-    setProfileImage(nextProfileImage)
-    localStorage.setItem("profileImage", nextProfileImage)
+    setProfileImage(nextProfileImageValue)
+    localStorage.setItem("profileImage", nextProfileImageValue)
 
     const userId = JSON.parse(localStorage.getItem("user") || "{}").id
     if (userId) {
@@ -255,7 +262,7 @@ function Profile() {
         data: {
           name: draftName,
           username: draftUsername,
-          avatar_url: nextProfileImage,
+          avatar_url: nextProfileImageValue || null,
         },
       })
 
@@ -266,7 +273,7 @@ function Profile() {
           name: draftName,
           username: draftUsername,
           bio: draftBio,
-          avatar_url: nextProfileImage,
+          avatar_url: nextProfileImageValue || null,
           updated_at: new Date().toISOString(),
         })
 
@@ -316,7 +323,7 @@ function Profile() {
           file: blob,
           fileName: `${userId}.jpg`,
           contentType: "image/jpeg",
-          fallbackUrl: draftProfileImage || profileImage || defaultAvatar,
+          fallbackUrl: draftProfileImage || profileImage || storedUserAvatarValue || null,
         })
 
         setDraftProfileImage(nextAvatar)
@@ -798,7 +805,10 @@ function Profile() {
                   <div className="edit-profile-avatar-wrap">
                     <img
                       className="edit-profile-avatar"
-                      src={draftProfileImage || currentProfileImage || defaultAvatar}
+                      src={sanitizeAvatarUrl(
+                        draftProfileImage || currentProfileImage || defaultAvatar,
+                        defaultAvatar
+                      )}
                       alt="Profile preview"
                       onError={(e) => {
                         e.currentTarget.src = defaultAvatar
