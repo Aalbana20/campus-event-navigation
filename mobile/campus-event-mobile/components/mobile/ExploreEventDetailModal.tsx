@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useMemo } from 'react';
 import {
+  Image,
   ImageBackground,
   Modal,
   Pressable,
@@ -11,7 +12,7 @@ import {
 } from 'react-native';
 
 import { useAppTheme } from '@/lib/app-theme';
-import { getEventImageSource } from '@/lib/mobile-media';
+import { getAvatarImageSource, getEventImageSource } from '@/lib/mobile-media';
 import { EventRecord } from '@/types/models';
 
 import { EventActionTrigger } from './EventActionTrigger';
@@ -64,6 +65,12 @@ export function ExploreEventDetailModal({
             </View>
 
             <View style={styles.statsRow}>
+              <View style={styles.creatorPill}>
+                <Image source={getAvatarImageSource(event.creatorAvatar)} style={styles.creatorAvatar} />
+                <Text style={styles.creatorText} numberOfLines={1}>
+                  {event.creatorName || event.organizer || `@${event.creatorUsername || 'host'}`}
+                </Text>
+              </View>
               <View style={styles.statPill}>
                 <Ionicons name="people-outline" size={14} color={theme.text} />
                 <Text style={styles.statText}>{event.goingCount} going</Text>
@@ -209,6 +216,27 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       paddingVertical: 9,
       borderRadius: 999,
       backgroundColor: theme.surfaceAlt,
+    },
+    creatorPill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      borderRadius: 999,
+      backgroundColor: theme.surfaceAlt,
+      maxWidth: '100%',
+    },
+    creatorAvatar: {
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+    },
+    creatorText: {
+      flexShrink: 1,
+      color: theme.text,
+      fontSize: 12,
+      fontWeight: '700',
     },
     statText: {
       color: theme.text,

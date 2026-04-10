@@ -1,6 +1,7 @@
 import React, { useState } from "react"
 import { applyEventImageFallback, getEventImageSrc } from "../eventImages"
 import EventActionControl from "./EventActionControl"
+import EventCreatorBadge from "./EventCreatorBadge"
 
 function MyEventCard({ event }) {
   const [flipped, setFlipped] = useState(false)
@@ -21,6 +22,7 @@ function MyEventCard({ event }) {
             className="my-event-image"
             onError={applyEventImageFallback}
           />
+          <EventCreatorBadge event={event} className="my-event-creator" compact />
           <div className="my-event-info">
             <h3>{eventTitle}</h3>
             <p>{event.date}</p>

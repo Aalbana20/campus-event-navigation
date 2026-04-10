@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 
 import { useAppTheme } from '@/lib/app-theme';
+import { getAvatarImageSource, getEventImageSource } from '@/lib/mobile-media';
 import { useMobileApp } from '@/providers/mobile-app-provider';
 import { EventRecord } from '@/types/models';
 
@@ -32,12 +33,7 @@ export function EventStackCard({
 }: EventStackCardProps) {
   const theme = useAppTheme();
   const styles = useMemo(() => buildStyles(theme), [theme]);
-  const { getProfileById, followingProfiles } = useMobileApp();
-
-  const creator = useMemo(
-    () => getProfileById(event.createdBy),
-    [event.createdBy, getProfileById]
-  );
+  const { followingProfiles } = useMobileApp();
 
   const mutualsGoing = useMemo(() => {
     return followingProfiles.filter((profile) => event.attendees.includes(profile.id));
@@ -52,22 +48,19 @@ export function EventStackCard({
 
   return (
     <Pressable style={[styles.card, { height }]} onPress={onPress}>
-      <ImageBackground source={{ uri: event.image }} style={styles.image} imageStyle={styles.imageStyle}>
+      <ImageBackground
+        source={getEventImageSource(event.image)}
+        style={styles.image}
+        imageStyle={styles.imageStyle}>
         <View style={styles.overlay} />
         <View style={[styles.swipeFeedback, { backgroundColor: swipeFeedbackColor }]} pointerEvents="none" />
 
         <View style={styles.topContent}>
           <View style={styles.topRow}>
             <View style={styles.creatorIdentity}>
-              {creator?.avatar ? (
-                <Image source={{ uri: creator.avatar }} style={styles.creatorAvatar} />
-              ) : (
-                <View style={[styles.creatorAvatar, styles.creatorAvatarFallback]}>
-                  <Ionicons name="person" size={14} color="#ffffff" />
-                </View>
-              )}
+              <Image source={getAvatarImageSource(event.creatorAvatar)} style={styles.creatorAvatar} />
               <Text style={styles.creatorName} numberOfLines={1}>
-                @{creator?.username || event.creatorUsername || 'host'}
+                {event.creatorName || event.organizer || `@${event.creatorUsername || 'host'}`}
               </Text>
             </View>
             <EventActionTrigger event={event} style={styles.actions} />
@@ -106,7 +99,7 @@ export function EventStackCard({
                     {mutualsGoing.slice(0, 3).map((mutual, i) => (
                       <Image
                         key={mutual.id}
-                        source={{ uri: mutual.avatar }}
+                        source={getAvatarImageSource(mutual.avatar)}
                         style={[styles.mutualAvatar, { marginLeft: i > 0 ? -8 : 0, zIndex: 3 - i }]}
                       />
                     ))}
@@ -180,11 +173,6 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       width: 26,
       height: 26,
       borderRadius: 13,
-    },
-    creatorAvatarFallback: {
-      backgroundColor: 'rgba(255, 255, 255, 0.2)',
-      alignItems: 'center',
-      justifyContent: 'center',
     },
     creatorName: {
       color: '#ffffff',

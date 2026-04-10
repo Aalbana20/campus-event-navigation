@@ -3,6 +3,12 @@ import Cropper from "react-easy-crop"
 import { useNavigate } from "react-router-dom"
 import { useEvents } from "../context/EventContext"
 import { buildEventImageStyle } from "../eventImages"
+import {
+  DEFAULT_AVATAR_URL,
+  sanitizeAvatarUrl,
+  syncStoredUserFromSession,
+  uploadProfileImageToStorage,
+} from "../profileMedia"
 import { supabase } from "../supabaseClient"
 import {
   applyThemeMode,
@@ -133,7 +139,7 @@ function Profile() {
   const [isConfirmingAction, setIsConfirmingAction] = useState(false)
   const [activeProfileTab, setActiveProfileTab] = useState("grid")
 
-  const defaultAvatar = "/default-avatar.png"
+  const defaultAvatar = DEFAULT_AVATAR_URL
   const storedUser = JSON.parse(localStorage.getItem("user") || "{}")
   const [profileImage, setProfileImage] = useState("")
   const [draftName, setDraftName] = useState(name)
@@ -147,10 +153,12 @@ function Profile() {
   const ownerId = storedUser.id || currentUser?.id
   const ownerUsername = storedUser.username || username
   const currentProfileImage =
-    profileImage ||
-    storedUser.image ||
-    storedUser.avatar ||
-    defaultAvatar
+    sanitizeAvatarUrl(
+      profileImage ||
+        storedUser.image ||
+        storedUser.avatar,
+      defaultAvatar
+    )
 
   const createdEvents = allEvents.filter(
     (event) =>
@@ -185,7 +193,7 @@ function Profile() {
     setDraftName(name)
     setDraftUsername(username)
     setDraftBio(bio)
-    setDraftProfileImage(profileImage)
+    setDraftProfileImage(currentProfileImage)
     setIsEditProfileOpen(true)
   }
 
@@ -225,32 +233,47 @@ function Profile() {
         if (data.username) setUsername(data.username)
         if (data.bio) setBio(data.bio)
         if (data.avatar_url) {
-          setProfileImage(data.avatar_url)
-          localStorage.setItem("profileImage", data.avatar_url)
+          const nextAvatar = sanitizeAvatarUrl(data.avatar_url, defaultAvatar)
+          setProfileImage(nextAvatar)
+          localStorage.setItem("profileImage", nextAvatar)
         }
       })
-  }, [])
+  }, [defaultAvatar])
 
   const handleSaveProfile = async () => {
+    const nextProfileImage = sanitizeAvatarUrl(draftProfileImage, defaultAvatar)
+
     setName(draftName)
     setUsername(draftUsername)
     setBio(draftBio)
-    setProfileImage(draftProfileImage)
-    localStorage.setItem("profileImage", draftProfileImage)
-    localStorage.setItem(
-      "user",
-      JSON.stringify({
-        ...storedUser,
-        username: draftUsername,
-        image: draftProfileImage,
-      })
-    )
+    setProfileImage(nextProfileImage)
+    localStorage.setItem("profileImage", nextProfileImage)
 
     const userId = JSON.parse(localStorage.getItem("user") || "{}").id
     if (userId) {
+      await supabase.auth.updateUser({
+        data: {
+          name: draftName,
+          username: draftUsername,
+          avatar_url: nextProfileImage,
+        },
+      })
+
       await supabase
         .from("profiles")
-        .upsert({ id: userId, name: draftName, username: draftUsername, bio: draftBio, avatar_url: draftProfileImage, updated_at: new Date().toISOString() })
+        .upsert({
+          id: userId,
+          name: draftName,
+          username: draftUsername,
+          bio: draftBio,
+          avatar_url: nextProfileImage,
+          updated_at: new Date().toISOString(),
+        })
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      await syncStoredUserFromSession(session)
     }
 
     setIsEditProfileOpen(false)
@@ -264,6 +287,10 @@ function Profile() {
     const file = e.target.files?.[0]
     if (!file) return
 
+    if (rawSelectedImage?.startsWith("blob:")) {
+      URL.revokeObjectURL(rawSelectedImage)
+    }
+
     const imageUrl = URL.createObjectURL(file)
     setRawSelectedImage(imageUrl)
     setCrop({ x: 0, y: 0 })
@@ -274,41 +301,52 @@ function Profile() {
   const handleApplyCrop = async () => {
     if (!rawSelectedImage || !croppedAreaPixels) return
 
+    let croppedImageUrl = ""
+    let shouldClearRawImage = false
+
     try {
-      const croppedImageUrl = await getCroppedImg(rawSelectedImage, croppedAreaPixels)
+      croppedImageUrl = await getCroppedImg(rawSelectedImage, croppedAreaPixels)
 
       const userId = JSON.parse(localStorage.getItem("user") || "{}").id
       if (userId) {
         const response = await fetch(croppedImageUrl)
         const blob = await response.blob()
-        const filePath = `avatars/${userId}-${Date.now()}.jpg`
+        const nextAvatar = await uploadProfileImageToStorage({
+          userId,
+          file: blob,
+          fileName: `${userId}.jpg`,
+          contentType: "image/jpeg",
+          fallbackUrl: draftProfileImage || profileImage || defaultAvatar,
+        })
 
-        const { error: uploadError } = await supabase.storage
-          .from("profile-images")
-          .upload(filePath, blob, { contentType: "image/jpeg", upsert: true })
-
-        if (uploadError) {
-          console.error("Supabase upload error:", uploadError)
-        }
-
-        if (!uploadError) {
-          const { data } = supabase.storage.from("profile-images").getPublicUrl(filePath)
-          setDraftProfileImage(data.publicUrl)
-          setIsCropModalOpen(false)
-          setRawSelectedImage(null)
-          return
-        }
+        setDraftProfileImage(nextAvatar)
+        setIsCropModalOpen(false)
+        setRawSelectedImage(null)
+        shouldClearRawImage = true
+        return
       }
-
-      setDraftProfileImage(croppedImageUrl)
+      
+      alert("You must be logged in to upload a profile picture.")
       setIsCropModalOpen(false)
       setRawSelectedImage(null)
+      shouldClearRawImage = true
     } catch (error) {
       console.error("Error cropping image:", error)
+    } finally {
+      if (croppedImageUrl?.startsWith("blob:")) {
+        URL.revokeObjectURL(croppedImageUrl)
+      }
+
+      if (shouldClearRawImage && rawSelectedImage?.startsWith("blob:")) {
+        URL.revokeObjectURL(rawSelectedImage)
+      }
     }
   }
 
   const handleCancelCrop = () => {
+    if (rawSelectedImage?.startsWith("blob:")) {
+      URL.revokeObjectURL(rawSelectedImage)
+    }
     setIsCropModalOpen(false)
     setRawSelectedImage(null)
     setCrop({ x: 0, y: 0 })

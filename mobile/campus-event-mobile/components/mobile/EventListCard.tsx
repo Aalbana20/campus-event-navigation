@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useAppTheme } from '@/lib/app-theme';
-import { getEventImageSource } from '@/lib/mobile-media';
+import { getAvatarImageSource, getEventImageSource } from '@/lib/mobile-media';
 import { EventRecord } from '@/types/models';
 
 import { EventActionTrigger } from './EventActionTrigger';
@@ -33,6 +33,12 @@ export function EventListCard({
         <Image source={getEventImageSource(event.image)} style={styles.image} />
 
         <View style={styles.copy}>
+          <View style={styles.creatorRow}>
+            <Image source={getAvatarImageSource(event.creatorAvatar)} style={styles.creatorAvatar} />
+            <Text style={styles.creatorName} numberOfLines={1}>
+              {event.creatorName || event.organizer || `@${event.creatorUsername || 'host'}`}
+            </Text>
+          </View>
           <Text style={styles.title}>{event.title}</Text>
           <Text style={styles.meta} numberOfLines={2}>
             {[event.date, event.time, event.locationName].filter(Boolean).join(' • ')}
@@ -109,6 +115,22 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     copy: {
       flex: 1,
       gap: 6,
+    },
+    creatorRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    creatorAvatar: {
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+    },
+    creatorName: {
+      flex: 1,
+      color: theme.textMuted,
+      fontSize: 12,
+      fontWeight: '700',
     },
     title: {
       color: theme.text,

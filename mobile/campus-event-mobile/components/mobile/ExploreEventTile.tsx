@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import {
+  Image,
   ImageBackground,
   Pressable,
   StyleSheet,
@@ -8,7 +9,7 @@ import {
 } from 'react-native';
 
 import { useAppTheme } from '@/lib/app-theme';
-import { getEventImageSource } from '@/lib/mobile-media';
+import { getAvatarImageSource, getEventImageSource } from '@/lib/mobile-media';
 import { EventRecord } from '@/types/models';
 
 type ExploreEventTileProps = {
@@ -26,6 +27,12 @@ export function ExploreEventTile({ event, onPress }: ExploreEventTileProps) {
         <View style={styles.overlay} />
         <View style={styles.copy}>
           <Text style={styles.tag}>#{event.tags[0] || 'Explore'}</Text>
+          <View style={styles.creatorRow}>
+            <Image source={getAvatarImageSource(event.creatorAvatar)} style={styles.creatorAvatar} />
+            <Text style={styles.creatorName} numberOfLines={1}>
+              {event.creatorName || event.organizer || `@${event.creatorUsername || 'host'}`}
+            </Text>
+          </View>
           <Text style={styles.title} numberOfLines={2}>
             {event.title}
           </Text>
@@ -63,6 +70,22 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     },
     copy: {
       gap: 6,
+    },
+    creatorRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    creatorAvatar: {
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+    },
+    creatorName: {
+      flex: 1,
+      color: 'rgba(255, 255, 255, 0.88)',
+      fontSize: 11,
+      fontWeight: '700',
     },
     tag: {
       alignSelf: 'flex-start',

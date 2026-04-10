@@ -1,5 +1,6 @@
 import React, { useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
+import { sanitizeAvatarUrl, uploadProfileImageToStorage } from "../profileMedia"
 import { supabase } from "../supabaseClient"
 
 const INTEREST_OPTIONS = [
@@ -54,30 +55,6 @@ const readFileAsDataUrl = (file) =>
     reader.onerror = () => reject(new Error("Could not read the selected image."))
     reader.readAsDataURL(file)
   })
-
-const uploadProfileImage = async (userId, file, fallbackImage) => {
-  if (!userId || !file) return fallbackImage
-
-  try {
-    const extension = file.name.split(".").pop()?.toLowerCase() || "jpg"
-    const filePath = `avatars/${userId}-${Date.now()}.${extension}`
-
-    const { error: uploadError } = await supabase.storage
-      .from("profile-images")
-      .upload(filePath, file, { contentType: file.type || "image/jpeg", upsert: true })
-
-    if (uploadError) {
-      console.error("Profile image upload failed:", uploadError)
-      return fallbackImage
-    }
-
-    const { data } = supabase.storage.from("profile-images").getPublicUrl(filePath)
-    return data?.publicUrl || fallbackImage
-  } catch (error) {
-    console.error("Profile image upload failed:", error)
-    return fallbackImage
-  }
-}
 
 const buildProfileSummary = (interests) =>
   interests.length > 0
@@ -181,6 +158,8 @@ function SignUp() {
         return
       }
 
+      const fallbackAvatar = sanitizeAvatarUrl(selectedAvatar)
+
       const { data, error } = await supabase.auth.signUp({
         email: cleanEmail,
         password,
@@ -191,7 +170,7 @@ function SignUp() {
             phone_number: cleanPhoneNumber,
             birthday: cleanBirthday,
             interests: selectedInterests,
-            avatar_url: selectedAvatar,
+            avatar_url: fallbackAvatar,
           },
         },
       })
@@ -208,8 +187,14 @@ function SignUp() {
 
       const avatarUrl =
         data.session && profileImageFile
-          ? await uploadProfileImage(data.user.id, profileImageFile, selectedAvatar)
-          : selectedAvatar
+          ? await uploadProfileImageToStorage({
+              userId: data.user.id,
+              file: profileImageFile,
+              fileName: profileImageFile.name,
+              contentType: profileImageFile.type,
+              fallbackUrl: fallbackAvatar,
+            })
+          : fallbackAvatar
 
       if (data.session) {
         const { error: metadataError } = await supabase.auth.updateUser({

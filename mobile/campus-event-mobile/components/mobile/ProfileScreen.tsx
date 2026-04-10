@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 
 import { useAppTheme } from '@/lib/app-theme';
-import { getAvatarImageSource } from '@/lib/mobile-media';
+import { getAvatarImageSource, getEventImageSource } from '@/lib/mobile-media';
 import {
   pickProfileImage,
   type SelectedProfileImage,
@@ -235,7 +235,7 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
         <View style={styles.mediaGrid}>
           {taggedMoments.map((moment) => (
             <View key={moment.id} style={styles.mediaTile}>
-              <Image source={{ uri: moment.image }} style={styles.mediaTileImage} />
+              <Image source={getEventImageSource(moment.image)} style={styles.mediaTileImage} />
               <View style={styles.mediaTileOverlay}>
                 <Text style={styles.mediaTileTitle}>{moment.title}</Text>
               </View>
@@ -276,12 +276,15 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
                 params: { id: event.id },
               })
             }>
-            <Image source={{ uri: event.image }} style={styles.mediaTileImage} />
+            <Image source={getEventImageSource(event.image)} style={styles.mediaTileImage} />
             <View style={styles.mediaTileOverlay}>
-              <Text style={styles.mediaTileTitle}>{event.title}</Text>
-              <Text style={styles.mediaTileMeta}>
-                {activeTab === 'grid' ? (isOwnProfile ? 'Going' : 'Created') : 'Reposted'}
-              </Text>
+              <Text style={styles.mediaTileTitle} numberOfLines={1}>{event.title}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                <Image source={getAvatarImageSource(event.creatorAvatar)} style={{ width: 16, height: 16, borderRadius: 8 }} />
+                <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 12, fontWeight: '600' }} numberOfLines={1}>
+                  {event.creatorName || event.organizer || 'Campus User'}
+                </Text>
+              </View>
             </View>
           </Pressable>
         ))}

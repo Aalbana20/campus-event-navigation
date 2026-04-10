@@ -1693,6 +1693,74 @@ body.theme-dark .explore-search-wrap .explore-search-input::placeholder {
   color: #333;
 }
 
+.event-creator-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 8px 12px 8px 8px;
+  border-radius: 999px;
+  background: rgba(8, 11, 16, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(12px);
+  color: #fff;
+}
+
+.event-creator-badge.compact {
+  gap: 8px;
+  padding: 6px 10px 6px 6px;
+}
+
+.event-creator-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  object-fit: cover;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  flex-shrink: 0;
+}
+
+.event-creator-badge.compact .event-creator-avatar {
+  width: 28px;
+  height: 28px;
+}
+
+.event-creator-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 1px;
+}
+
+.event-creator-name,
+.event-creator-handle {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-creator-name {
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.event-creator-handle {
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.event-card-creator,
+.my-event-creator {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  z-index: 3;
+}
+
 .event-mutuals-overlay {
   position: fixed;
   inset: 0;

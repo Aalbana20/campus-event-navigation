@@ -1,7 +1,9 @@
 import React, { useState } from "react"
 import { useEvents } from "../context/EventContext"
 import { applyEventImageFallback, getEventImageSrc } from "../eventImages"
+import { DEFAULT_AVATAR_URL, sanitizeAvatarUrl } from "../profileMedia"
 import EventActionControl from "./EventActionControl"
+import EventCreatorBadge from "./EventCreatorBadge"
 
 const usersMatch = (a, b) => {
   if (!a || !b) return false
@@ -59,6 +61,7 @@ function EventCard({ event }) {
               draggable={false}
               onError={applyEventImageFallback}
             />
+            <EventCreatorBadge event={event} className="event-card-creator" compact />
 
             <div className="event-card-social-proof">
               <div className="event-card-going-pill">
@@ -75,11 +78,14 @@ function EventCard({ event }) {
                   {mutualAttendees.slice(0, 3).map((person, index) => (
                     <img
                       key={person.id || index}
-                      src={person.image || person.avatar || "/default-avatar.png"}
+                      src={sanitizeAvatarUrl(
+                        person.image || person.avatar,
+                        DEFAULT_AVATAR_URL
+                      )}
                       alt={person.name || "Mutual attendee"}
                       className="event-card-mutual-avatar"
                       onError={(eventClick) => {
-                        eventClick.currentTarget.src = "/default-avatar.png"
+                        eventClick.currentTarget.src = DEFAULT_AVATAR_URL
                       }}
                     />
                   ))}
@@ -142,11 +148,14 @@ function EventCard({ event }) {
                     key={person.id || person.username || index}
                   >
                     <img
-                      src={person.image || person.avatar || "/default-avatar.png"}
+                      src={sanitizeAvatarUrl(
+                        person.image || person.avatar,
+                        DEFAULT_AVATAR_URL
+                      )}
                       alt={person.name || person.username || "Attendee"}
                       className="event-mutuals-item-avatar"
                       onError={(eventClick) => {
-                        eventClick.currentTarget.src = "/default-avatar.png"
+                        eventClick.currentTarget.src = DEFAULT_AVATAR_URL
                       }}
                     />
                     <span className="event-mutuals-item-name">

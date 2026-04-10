@@ -1,5 +1,6 @@
 import React from "react"
 import { buildEventImageStyle } from "../eventImages"
+import EventCreatorBadge from "./EventCreatorBadge"
 
 const buildTileImageStyle = (event) =>
   buildEventImageStyle(
@@ -24,6 +25,7 @@ function ExploreEventTile({ event, onOpen }) {
           <span className="explore-event-tile-tag">
             #{event?.tags?.[0] || "Explore"}
           </span>
+          <EventCreatorBadge event={event} compact />
           <h3 className="explore-event-tile-title">{eventTitle}</h3>
           <p className="explore-event-tile-meta">{eventMeta || "Campus Event"}</p>
         </div>

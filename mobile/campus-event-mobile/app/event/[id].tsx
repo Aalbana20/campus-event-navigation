@@ -15,7 +15,7 @@ import {
 import { AppScreen } from '@/components/mobile/AppScreen';
 import { EventActionTrigger } from '@/components/mobile/EventActionTrigger';
 import { useAppTheme } from '@/lib/app-theme';
-import { getEventImageSource } from '@/lib/mobile-media';
+import { getAvatarImageSource, getEventImageSource } from '@/lib/mobile-media';
 import { useMobileApp } from '@/providers/mobile-app-provider';
 
 export default function EventDetailScreen() {
@@ -61,6 +61,12 @@ export default function EventDetailScreen() {
             <View style={styles.titleBlock}>
               <Text style={styles.title}>{event.title}</Text>
               <Text style={styles.meta}>{[event.date, event.time, event.locationName].join(' • ')}</Text>
+              <View style={styles.creatorRow}>
+                <Image source={getAvatarImageSource(event.creatorAvatar)} style={styles.creatorAvatar} />
+                <Text style={styles.creatorName} numberOfLines={1}>
+                  {event.creatorName || event.organizer || `@${event.creatorUsername || 'host'}`}
+                </Text>
+              </View>
             </View>
             <View style={styles.privacyPill}>
               <Text style={styles.privacyText}>{event.isPrivate ? 'Private' : 'Public'}</Text>
@@ -150,6 +156,23 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     titleBlock: {
       flex: 1,
       gap: 6,
+    },
+    creatorRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginTop: 4,
+    },
+    creatorAvatar: {
+      width: 24,
+      height: 24,
+      borderRadius: 12,
+    },
+    creatorName: {
+      flexShrink: 1,
+      color: theme.textMuted,
+      fontSize: 13,
+      fontWeight: '700',
     },
     title: {
       color: theme.text,

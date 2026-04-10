@@ -21,6 +21,7 @@ import SignUp from "./pages/SignUp"
 import Login from "./pages/Login"
 import Logout from "./pages/Logout"
 import { useEvents } from "./context/EventContext"
+import { DEFAULT_AVATAR_URL, sanitizeAvatarUrl, syncStoredUserFromSession } from "./profileMedia"
 import { supabase } from "./supabaseClient"
 import { applyThemeMode, getStoredThemeMode } from "./theme"
 
@@ -82,44 +83,6 @@ const parseEventDate = (event) => {
   return null
 }
 
-const createStoredUser = (user) => {
-  if (!user) return null
-
-  const email = user.email || ""
-  const fallbackUsername = email.includes("@") ? email.split("@")[0] : "campus-user"
-  const username =
-    user.user_metadata?.username ||
-    user.user_metadata?.user_name ||
-    user.user_metadata?.name ||
-    fallbackUsername
-
-  return {
-    id: user.id,
-    email,
-    name:
-      user.user_metadata?.name ||
-      user.user_metadata?.full_name ||
-      user.user_metadata?.username ||
-      username,
-    username,
-    image:
-      user.user_metadata?.avatar_url ||
-      user.user_metadata?.picture ||
-      user.user_metadata?.image ||
-      "",
-  }
-}
-
-const syncStoredUser = (session) => {
-  if (session?.user) {
-    localStorage.setItem("user", JSON.stringify(createStoredUser(session.user)))
-    return
-  }
-
-  localStorage.removeItem("user")
-}
-
-
 function MainLayout() {
   const { savedEvents, allEvents, followingList, followersList } = useEvents()
   const location = useLocation()
@@ -133,7 +96,7 @@ function MainLayout() {
   const [dmThreads, setDmThreads] = useState([])
   const [dmMessagesByThread, setDmMessagesByThread] = useState({})
   const [unreadDmThreadIds, setUnreadDmThreadIds] = useState(new Set())
-  const defaultAvatar = "/default-avatar.png"
+  const defaultAvatar = DEFAULT_AVATAR_URL
   const currentUserId = JSON.parse(localStorage.getItem("user") || "{}").id
 
   // Normalize old DM query params into the dedicated messages page.
@@ -149,7 +112,7 @@ function MainLayout() {
       if (!existingThread) {
         const { data: profile } = await supabase
           .from("profiles")
-          .select("id, name, username")
+          .select("id, name, username, avatar_url")
           .eq("id", dmUserId)
           .single()
 
@@ -161,7 +124,7 @@ function MainLayout() {
           username: profile?.username || "",
           preview: "",
           time: "",
-          image: defaultAvatar,
+          image: sanitizeAvatarUrl(profile?.avatar_url, defaultAvatar),
         }
 
         setDmThreads((prev) =>
@@ -207,7 +170,7 @@ function MainLayout() {
 
       const { data: profiles } = await supabase
         .from("profiles")
-        .select("id, name, username")
+        .select("id, name, username, avatar_url")
         .in("id", otherIds)
 
       setDmThreads(
@@ -217,7 +180,7 @@ function MainLayout() {
           username: p.username,
           preview: "Tap to view conversation",
           time: "",
-          image: defaultAvatar,
+          image: sanitizeAvatarUrl(p.avatar_url, defaultAvatar),
         }))
       )
     }
@@ -276,20 +239,31 @@ function MainLayout() {
           // Mark thread as unread
           setUnreadDmThreadIds((prev) => new Set([...prev, threadId]))
 
-          // Add thread if it doesn't exist yet
-          setDmThreads((prev) => {
-            if (prev.some((t) => t.id === threadId)) return prev
-            return [
-              ...prev,
-              {
-                id: threadId,
-                name: "New message",
-                preview: msg.content,
-                time: "now",
-                image: defaultAvatar,
-              },
-            ]
-          })
+          void supabase
+            .from("profiles")
+            .select("id, name, username, avatar_url")
+            .eq("id", threadId)
+            .maybeSingle()
+            .then(({ data: profile }) => {
+              setDmThreads((prev) => {
+                const nextThread = {
+                  id: threadId,
+                  name: profile?.name || profile?.username || "New message",
+                  username: profile?.username || "",
+                  preview: msg.content,
+                  time: "now",
+                  image: sanitizeAvatarUrl(profile?.avatar_url, defaultAvatar),
+                }
+
+                if (prev.some((thread) => thread.id === threadId)) {
+                  return prev.map((thread) =>
+                    thread.id === threadId ? { ...thread, ...nextThread } : thread
+                  )
+                }
+
+                return [...prev, nextThread]
+              })
+            })
         }
       )
       .subscribe()
@@ -935,13 +909,13 @@ function App() {
         if (!isMounted) return
 
         setSession(restoredSession)
-        syncStoredUser(restoredSession)
+        await syncStoredUserFromSession(restoredSession)
       } catch (error) {
         if (!isMounted) return
 
         console.error("Unable to restore Supabase session:", error)
         setSession(null)
-        syncStoredUser(null)
+        await syncStoredUserFromSession(null)
       } finally {
         if (isMounted) {
           setIsInitializing(false)
@@ -953,9 +927,14 @@ function App() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    } = supabase.auth.onAuthStateChange((event, nextSession) => {
       setSession(nextSession)
-      syncStoredUser(nextSession)
+
+      if (event === "INITIAL_SESSION" || event === "TOKEN_REFRESHED") {
+        return
+      }
+
+      void syncStoredUserFromSession(nextSession)
     })
 
     return () => {

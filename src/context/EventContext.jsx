@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react"
+import { DEFAULT_AVATAR_URL, sanitizeAvatarUrl } from "../profileMedia"
 import { supabase } from "../supabaseClient"
 
 const EventContext = createContext()
@@ -60,6 +61,43 @@ const normalizeEventTimes = (event) => {
   }
 }
 
+const buildProfileLookup = (profiles) =>
+  (profiles || []).reduce(
+    (lookup, profile) => {
+      if (profile?.id) {
+        lookup.byId.set(String(profile.id), profile)
+      }
+
+      if (profile?.username) {
+        lookup.byUsername.set(profile.username, profile)
+      }
+
+      return lookup
+    },
+    { byId: new Map(), byUsername: new Map() }
+  )
+
+const enrichEventWithCreator = (event, creatorProfile = null, fallbackCreator = null) => ({
+  ...event,
+  creatorName:
+    event?.creatorName ||
+    creatorProfile?.name ||
+    creatorProfile?.username ||
+    fallbackCreator?.name ||
+    event?.organizer ||
+    event?.creatorUsername ||
+    "Campus User",
+  creatorAvatar: sanitizeAvatarUrl(
+    event?.creatorAvatar ||
+      creatorProfile?.avatar_url ||
+      creatorProfile?.image ||
+      creatorProfile?.avatar ||
+      fallbackCreator?.image ||
+      fallbackCreator?.avatar,
+    DEFAULT_AVATAR_URL
+  ),
+})
+
 export function EventProvider({ children }) {
   const [currentUser] = useState(() => {
     const stored = JSON.parse(localStorage.getItem("user") || "{}")
@@ -68,7 +106,7 @@ export function EventProvider({ children }) {
       id: stored.id || "current-user",
       username: stored.username || "itzmesuccess1",
       name: stored.name || "Success Myers",
-      image: stored.image || stored.avatar || "/default-avatar.png",
+      image: sanitizeAvatarUrl(stored.image || stored.avatar, DEFAULT_AVATAR_URL),
     }
   })
 
@@ -104,36 +142,78 @@ export function EventProvider({ children }) {
 
         const eventsData = eventsResult.data || []
 
+        const creatorIds = [...new Set(eventsData.map((event) => event.created_by).filter(Boolean))]
+        const creatorUsernames = [
+          ...new Set(eventsData.map((event) => event.creator_username).filter(Boolean)),
+        ]
+
+        const [creatorIdResult, creatorUsernameResult] = await Promise.all([
+          creatorIds.length > 0
+            ? supabase
+                .from("profiles")
+                .select("id, name, username, avatar_url")
+                .in("id", creatorIds)
+            : Promise.resolve({ data: [], error: null }),
+          creatorUsernames.length > 0
+            ? supabase
+                .from("profiles")
+                .select("id, name, username, avatar_url")
+                .in("username", creatorUsernames)
+            : Promise.resolve({ data: [], error: null }),
+        ])
+
+        const creatorProfiles = [
+          ...(creatorIdResult.data || []),
+          ...(creatorUsernameResult.data || []),
+        ].reduce((collection, profile) => {
+          const key = String(profile?.id || profile?.username || "")
+          if (!key || collection.some((existingProfile) => String(existingProfile.id || existingProfile.username) === key)) {
+            return collection
+          }
+
+          collection.push(profile)
+          return collection
+        }, [])
+
+        const profileLookup = buildProfileLookup(creatorProfiles)
+
         if (eventsData.length === 0) {
           setAllEvents([])
           setSavedEvents([])
           return
         }
 
-        const normalized = eventsData.map((e) =>
-          normalizeEventTimes({
-            id: e.id,
-            title: e.title,
-            description: e.description,
-            location: e.location,
-            locationAddress: e.location_address,
-            date: e.date,
-            eventDate: e.event_date,
-            startTime: e.start_time,
-            endTime: e.end_time,
-            price: e.price,
-            organizer: e.organizer,
-            dressCode: e.dress_code,
-            image: e.image,
-            tags: e.tags || [],
-            createdBy: e.created_by,
-            created_by: e.created_by,
-            creatorUsername: e.creator_username,
-            goingCount: e.going_count || 0,
-            rsvp: `${e.going_count || 0} Going`,
-            attendees: [],
-          })
-        )
+        const normalized = eventsData.map((e) => {
+          const creatorProfile =
+            profileLookup.byId.get(String(e.created_by || "")) ||
+            profileLookup.byUsername.get(e.creator_username || "")
+
+          return enrichEventWithCreator(
+            normalizeEventTimes({
+              id: e.id,
+              title: e.title,
+              description: e.description,
+              location: e.location,
+              locationAddress: e.location_address,
+              date: e.date,
+              eventDate: e.event_date,
+              startTime: e.start_time,
+              endTime: e.end_time,
+              price: e.price,
+              organizer: e.organizer,
+              dressCode: e.dress_code,
+              image: e.image,
+              tags: e.tags || [],
+              createdBy: e.created_by,
+              created_by: e.created_by,
+              creatorUsername: e.creator_username,
+              goingCount: e.going_count || 0,
+              rsvp: `${e.going_count || 0} Going`,
+              attendees: [],
+            }),
+            creatorProfile
+          )
+        })
 
         setAllEvents(normalized)
 
@@ -153,7 +233,7 @@ export function EventProvider({ children }) {
             id: p.id,
             name: p.name || p.username || "User",
             username: p.username || "",
-            image: p.avatar_url || "/default-avatar.png",
+            image: sanitizeAvatarUrl(p.avatar_url, DEFAULT_AVATAR_URL),
           }))
 
         const followingIds = (followingResult.data || []).map((f) => f.following_id)
@@ -204,12 +284,13 @@ export function EventProvider({ children }) {
       if (exists) return prev
 
       const normalizedEvent = normalizeEventTimes(event)
+      const enrichedEvent = enrichEventWithCreator(normalizedEvent)
 
       return [
         ...prev,
         {
-          ...normalizedEvent,
-          attendees: [...(normalizedEvent.attendees || []), attendee],
+          ...enrichedEvent,
+          attendees: [...(enrichedEvent.attendees || []), attendee],
         },
       ]
     })
@@ -236,7 +317,11 @@ export function EventProvider({ children }) {
   }
 
   const createEvent = (event) => {
-    const normalizedEvent = normalizeEventTimes(event)
+    const normalizedEvent = enrichEventWithCreator(
+      normalizeEventTimes(event),
+      null,
+      currentUser
+    )
 
     setAllEvents((prev) => {
       const exists = prev.some(
@@ -290,7 +375,7 @@ export function EventProvider({ children }) {
     if (!error) {
       const { data: profile } = await supabase
         .from("profiles")
-        .select("id, name, username")
+        .select("id, name, username, avatar_url")
         .eq("id", targetUserId)
         .single()
 
@@ -301,7 +386,7 @@ export function EventProvider({ children }) {
             id: profile.id,
             name: profile.name || profile.username || "User",
             username: profile.username || "",
-            image: "/default-avatar.png",
+            image: sanitizeAvatarUrl(profile.avatar_url, DEFAULT_AVATAR_URL),
           },
         ])
       }

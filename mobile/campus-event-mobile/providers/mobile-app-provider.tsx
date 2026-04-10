@@ -27,6 +27,7 @@ import {
   EMPTY_PROFILE,
   buildRsvpMap,
   createProfileFromAuthUser,
+  enrichEventWithCreator,
   ensureCurrentUserInProfiles,
   normalizeEventRow,
   normalizeFollowRow,
@@ -257,14 +258,20 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
 
   const events = useMemo(
     () =>
-      eventsState.map((event) => ({
-        ...event,
-        repostedByIds: uniqueValues([
-          ...(event.repostedByIds || []),
-          ...(localRepostsByEventId[event.id] || []),
-        ]),
-      })),
-    [eventsState, localRepostsByEventId]
+      eventsState.map((event) =>
+        enrichEventWithCreator(
+          {
+            ...event,
+            image: getEventImageUri(event.image),
+            repostedByIds: uniqueValues([
+              ...(event.repostedByIds || []),
+              ...(localRepostsByEventId[event.id] || []),
+            ]),
+          },
+          profiles
+        )
+      ),
+    [eventsState, localRepostsByEventId, profiles]
   );
 
   const ensureProfileRowForUser = useCallback(async (user: User) => {
@@ -794,10 +801,19 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
         return { ok: false, error: error.message };
       }
 
+        // Keep Auth Session metadata in sync
+        await supabase.auth.updateUser({
+          data: {
+            name: payload.name,
+            username: payload.username,
+          avatar_url: getAvatarImageUri(payload.avatar_url),
+          }
+        });
+
       setProfilesState((current) =>
         current.map((p) =>
           p.id === currentUser.id
-            ? { ...p, name: payload.name, username: payload.username, bio: payload.bio, avatar: payload.avatar_url }
+          ? { ...p, name: payload.name, username: payload.username, bio: payload.bio, avatar: getAvatarImageUri(payload.avatar_url) }
             : p
         )
       );
@@ -851,13 +867,15 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
         return null;
       }
 
-      const createdEvent = normalizeEventRow(data);
+      const rawEvent = normalizeEventRow(data);
+      rawEvent.image = getEventImageUri(rawEvent.image);
+      const createdEvent = enrichEventWithCreator(rawEvent, profiles);
 
       setEventsState((currentEvents) => [createdEvent, ...currentEvents]);
 
       return createdEvent;
     },
-    [currentUser.id, currentUser.name, currentUser.username]
+    [currentUser.id, currentUser.name, currentUser.username, profiles]
   );
 
   const addPersonalCalendarItem = useCallback(

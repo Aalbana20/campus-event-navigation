@@ -1,33 +1,7 @@
 import React, { useEffect, useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
+import { syncStoredUserFromSession } from "../profileMedia"
 import { supabase } from "../supabaseClient"
-
-const createStoredUser = (user) => {
-  const email = user?.email || ""
-  const fallbackUsername = email.includes("@") ? email.split("@")[0] : "campus-user"
-
-  const username =
-    user?.user_metadata?.username ||
-    user?.user_metadata?.user_name ||
-    user?.user_metadata?.name ||
-    fallbackUsername
-
-  return {
-    id: user?.id || "",
-    email,
-    name:
-      user?.user_metadata?.name ||
-      user?.user_metadata?.full_name ||
-      user?.user_metadata?.username ||
-      username,
-    username,
-    image:
-      user?.user_metadata?.avatar_url ||
-      user?.user_metadata?.picture ||
-      user?.user_metadata?.image ||
-      "",
-  }
-}
 
 function Login() {
   const [email, setEmail] = useState("")
@@ -72,7 +46,7 @@ function Login() {
         return
       }
 
-      localStorage.setItem("user", JSON.stringify(createStoredUser(authenticatedUser)))
+      await syncStoredUserFromSession(data?.session || { user: authenticatedUser })
 
       navigate("/discover", { replace: true })
     } catch (error) {

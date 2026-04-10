@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react"
 import "./CreateEvent.css"
 import { useEvents } from "./context/EventContext"
+import { DEFAULT_AVATAR_URL, sanitizeAvatarUrl } from "./profileMedia"
 import { supabase } from "./supabaseClient"
 
 const ADDRESS_AUTOCOMPLETE_PROVIDER = "google-places-new"
@@ -777,8 +778,10 @@ function CreateEvent({ embedded = false }) {
         dressCode: cleanDressCode,
         capacity,
         tags: normalizedTags,
-        createdBy: creatorUsername,
+        createdBy: currentUser.id || creatorUsername,
         creatorUsername,
+        creatorName,
+        creatorAvatar: sanitizeAvatarUrl(currentUser.image || currentUser.avatar, DEFAULT_AVATAR_URL),
         createdAt: new Date().toISOString(),
         attendees: [],
         goingCount: 0,

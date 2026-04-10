@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom"
 import ExploreEventModal from "../components/ExploreEventModal"
 import ExploreEventTile from "../components/ExploreEventTile"
 import { useEvents } from "../context/EventContext"
+import { DEFAULT_AVATAR_URL, sanitizeAvatarUrl } from "../profileMedia"
 import { supabase } from "../supabaseClient"
 
 const suggestedPeopleSeed = [
@@ -214,7 +215,7 @@ const normalizePerson = (person, index, supportsFollowAction) => ({
     person.bio ||
     "Exploring concerts, parties, pop-ups, and new people outside the usual circle.",
   location: person.location || "New city nearby",
-  image: person.image || person.avatar || "/default-avatar.png",
+  image: sanitizeAvatarUrl(person.image || person.avatar || person.avatar_url, DEFAULT_AVATAR_URL),
   supportsFollowAction,
 })
 
@@ -303,7 +304,7 @@ function Explore() {
 
     supabase
       .from("profiles")
-      .select("id, name, username, bio")
+      .select("id, name, username, bio, avatar_url")
       .or(`username.ilike.%${trimmedQuery}%,name.ilike.%${trimmedQuery}%`)
       .neq("id", currentUser?.id || "")
       .limit(10)
@@ -312,9 +313,7 @@ function Explore() {
 
         setRemoteProfileResults({
           query: trimmedQuery,
-          items: (data || []).map((profile, index) =>
-            normalizePerson({ ...profile, image: "/default-avatar.png" }, index, true)
-          ),
+          items: (data || []).map((profile, index) => normalizePerson(profile, index, true)),
         })
       })
 

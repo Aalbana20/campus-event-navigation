@@ -1,6 +1,7 @@
 import React from "react"
 import { buildEventImageStyle } from "../eventImages"
 import EventActionControl from "./EventActionControl"
+import EventCreatorBadge from "./EventCreatorBadge"
 
 const buildModalImageStyle = (event) =>
   buildEventImageStyle(
@@ -31,6 +32,7 @@ function ExploreEventModal({ event, isSaved, actionLabel, onAction, onClose }) {
         <div className="explore-modal-hero" style={buildModalImageStyle(event)}>
           <div className="explore-modal-hero-copy">
             <span className="explore-modal-hero-tag">#{event?.tags?.[0] || "Explore"}</span>
+            <EventCreatorBadge event={event} />
             <h2>{event?.title || "Untitled Event"}</h2>
             <p>
               {[

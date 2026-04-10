@@ -18,6 +18,8 @@ export type EventRecord = {
   tags: string[];
   createdBy: string;
   creatorUsername: string;
+  creatorName?: string;
+  creatorAvatar?: string;
   goingCount: number;
   privacy: EventPrivacy;
   isPrivate: boolean;

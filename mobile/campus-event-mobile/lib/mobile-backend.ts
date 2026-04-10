@@ -351,6 +351,32 @@ export const normalizeEventRow = (
   };
 };
 
+export const enrichEventWithCreator = (
+  event: EventRecord,
+  profiles: ProfileRecord[]
+): EventRecord => {
+  const normalizedCreatorUsername = normalizeUsername(event.creatorUsername || '');
+  const creatorProfile = profiles.find(
+    (profile) =>
+      (event.createdBy && String(profile.id) === String(event.createdBy)) ||
+      (normalizedCreatorUsername && profile.username === normalizedCreatorUsername)
+  );
+
+  return {
+    ...event,
+    creatorName:
+      creatorProfile?.name ||
+      event.creatorName ||
+      event.organizer ||
+      event.creatorUsername ||
+      'Campus User',
+    creatorAvatar:
+      creatorProfile?.avatar ||
+      event.creatorAvatar ||
+      DEFAULT_AVATAR,
+  };
+};
+
 export const normalizeFollowRow = (row: FollowRow): FollowRelationship => ({
   followerId: String(row.follower_id),
   followingId: String(row.following_id),

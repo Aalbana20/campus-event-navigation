@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react"
 import { Navigate, useNavigate, useParams } from "react-router-dom"
 import { useEvents } from "../context/EventContext"
+import { DEFAULT_AVATAR_URL, sanitizeAvatarUrl } from "../profileMedia"
 import { supabase } from "../supabaseClient"
 import "./Profile.css"
 
@@ -10,7 +11,7 @@ function PublicProfile() {
   const { allEvents, followingList, follow, unfollow, currentUser } = useEvents()
 
   const storedUser = JSON.parse(localStorage.getItem("user") || "{}")
-  const defaultAvatar = "/default-avatar.png"
+  const defaultAvatar = DEFAULT_AVATAR_URL
   const ownProfileTokens = [
     storedUser.id,
     storedUser.username,
@@ -292,7 +293,7 @@ function PublicProfile() {
           id: person.id,
           name: person.name || person.username || "User",
           username: person.username || "",
-          image: person.avatar_url || defaultAvatar,
+          image: sanitizeAvatarUrl(person.avatar_url, defaultAvatar),
         },
       ])
     )
@@ -359,7 +360,7 @@ function PublicProfile() {
           <div className="profile-avatar-wrap">
             <img
               className="profile-avatar"
-              src={profile.avatar_url || defaultAvatar}
+              src={sanitizeAvatarUrl(profile.avatar_url, defaultAvatar)}
               alt={profile.name || profile.username || "Profile"}
               onError={(event) => {
                 event.currentTarget.src = defaultAvatar
