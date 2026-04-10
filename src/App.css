@@ -1552,6 +1552,8 @@ body.theme-dark .explore-search-wrap .explore-search-input::placeholder {
   flex-direction: column;
   justify-content: flex-start;
   text-align: left;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .event-image {
@@ -1577,6 +1579,7 @@ body.theme-dark .explore-search-wrap .explore-search-input::placeholder {
 .discover-event-back-shell {
   display: flex;
   flex: 1;
+  min-height: 100%;
   flex-direction: column;
   gap: 22px;
 }
@@ -1604,6 +1607,7 @@ body.theme-dark .explore-search-wrap .explore-search-input::placeholder {
   color: #4b5563;
   font-size: 0.98rem;
   line-height: 1.6;
+  word-break: break-word;
 }
 
 .discover-event-back-details {
@@ -1643,6 +1647,7 @@ body.theme-dark .explore-search-wrap .explore-search-input::placeholder {
   font-size: 1rem;
   font-weight: 700;
   line-height: 1.45;
+  word-break: break-word;
 }
 
 .discover-event-back-stats {
@@ -1681,6 +1686,11 @@ body.theme-dark .explore-search-wrap .explore-search-input::placeholder {
 
 .discover-event-back-actions-spacer {
   flex: 1;
+}
+
+.flip-card-back::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 .discover-end-card {

@@ -32,9 +32,13 @@ function EventCard({ event }) {
   const [isMutualsOpen, setIsMutualsOpen] = useState(false)
 
   const eventTitle = event?.title || event?.name || "Untitled Event"
-  const displayLocation = event.locationName || event.location || "No location"
-  const displayDate = event?.date || "TBD"
-  const displayTime = event?.time || "TBA"
+  const displayLocation =
+    event.locationName || event.locationAddress || event.location || "No location"
+  const displayDate = event?.date || event?.eventDate || "TBD"
+  const displayTime =
+    event?.time ||
+    [event?.startTime, event?.endTime].filter(Boolean).join(" - ") ||
+    "TBA"
   const descriptionPreview = buildDescriptionPreview(event?.description)
   const mapsQuery = encodeURIComponent(event.locationAddress || event.location || "")
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${mapsQuery}`
