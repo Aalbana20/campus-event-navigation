@@ -6,10 +6,11 @@ import {
   StyleSheet,
   Text,
   View,
+  Image,
 } from 'react-native';
 
 import { useAppTheme } from '@/lib/app-theme';
-import { getEventImageSource } from '@/lib/mobile-media';
+import { useMobileApp } from '@/providers/mobile-app-provider';
 import { EventRecord } from '@/types/models';
 
 import { EventActionTrigger } from './EventActionTrigger';
@@ -18,46 +19,103 @@ type EventStackCardProps = {
   event: EventRecord;
   height: number;
   onPress?: () => void;
+  swipeDirection?: 'left' | 'right' | null;
+  swipeIntensity?: number;
 };
 
-export function EventStackCard({ event, height, onPress }: EventStackCardProps) {
+export function EventStackCard({
+  event,
+  height,
+  onPress,
+  swipeDirection = null,
+  swipeIntensity = 0,
+}: EventStackCardProps) {
   const theme = useAppTheme();
   const styles = useMemo(() => buildStyles(theme), [theme]);
+  const { getProfileById, followingProfiles } = useMobileApp();
+
+  const creator = useMemo(
+    () => getProfileById(event.createdBy),
+    [event.createdBy, getProfileById]
+  );
+
+  const mutualsGoing = useMemo(() => {
+    return followingProfiles.filter((profile) => event.attendees.includes(profile.id));
+  }, [event.attendees, followingProfiles]);
+
+  const swipeFeedbackColor =
+    swipeDirection === 'right'
+      ? `rgba(74, 222, 128, ${Math.min(swipeIntensity * 0.5, 0.4)})`
+      : swipeDirection === 'left'
+        ? `rgba(248, 113, 113, ${Math.min(swipeIntensity * 0.5, 0.4)})`
+        : 'transparent';
 
   return (
     <Pressable style={[styles.card, { height }]} onPress={onPress}>
-      <ImageBackground source={getEventImageSource(event.image)} style={styles.image} imageStyle={styles.imageStyle}>
+      <ImageBackground source={{ uri: event.image }} style={styles.image} imageStyle={styles.imageStyle}>
         <View style={styles.overlay} />
-        <EventActionTrigger event={event} style={styles.actions} />
+        <View style={[styles.swipeFeedback, { backgroundColor: swipeFeedbackColor }]} pointerEvents="none" />
 
-        <View style={styles.topRow}>
-          {event.tags.slice(0, 3).map((tag) => (
-            <View key={tag} style={styles.tagChip}>
-              <Text style={styles.tagText}>#{tag}</Text>
+        <View style={styles.topContent}>
+          <View style={styles.topRow}>
+            <View style={styles.creatorIdentity}>
+              {creator?.avatar ? (
+                <Image source={{ uri: creator.avatar }} style={styles.creatorAvatar} />
+              ) : (
+                <View style={[styles.creatorAvatar, styles.creatorAvatarFallback]}>
+                  <Ionicons name="person" size={14} color="#ffffff" />
+                </View>
+              )}
+              <Text style={styles.creatorName} numberOfLines={1}>
+                @{creator?.username || event.creatorUsername || 'host'}
+              </Text>
             </View>
-          ))}
+            <EventActionTrigger event={event} style={styles.actions} />
+          </View>
+
+          <View style={styles.tagsRow}>
+            {event.tags.slice(0, 3).map((tag) => (
+              <View key={tag} style={styles.tagChip}>
+                <Text style={styles.tagText}>#{tag}</Text>
+              </View>
+            ))}
+          </View>
         </View>
 
         <View style={styles.bottomContent}>
           <View style={styles.contentShell}>
-            <Text style={styles.title}>{event.title}</Text>
-            <Text style={styles.meta}>
+            <Text style={styles.title} numberOfLines={2}>
+              {event.title}
+            </Text>
+            <Text style={styles.meta} numberOfLines={1}>
               {[event.date, event.time, event.locationName].filter(Boolean).join(' • ')}
             </Text>
-            <Text style={styles.description} numberOfLines={4}>
+            <Text style={styles.description} numberOfLines={3}>
               {event.description}
             </Text>
 
             <View style={styles.badgesRow}>
-              <View style={styles.badge}>
-                <Ionicons name="people-outline" size={14} color="#ffffff" />
+              <Pressable style={styles.badge} onPress={() => { /* Expand Attendees Modal */ }}>
+                <Ionicons name="people-outline" size={16} color="#ffffff" />
                 <Text style={styles.badgeText}>{event.goingCount} going</Text>
-              </View>
+              </Pressable>
 
-              <View style={styles.badge}>
-                <Ionicons name="repeat-outline" size={14} color="#ffffff" />
-                <Text style={styles.badgeText}>{event.repostedByIds.length} reposts</Text>
-              </View>
+              <Pressable style={styles.badge} onPress={() => { /* Expand Mutuals Modal */ }}>
+                {mutualsGoing.length > 0 ? (
+                  <View style={styles.mutualsStack}>
+                    {mutualsGoing.slice(0, 3).map((mutual, i) => (
+                      <Image
+                        key={mutual.id}
+                        source={{ uri: mutual.avatar }}
+                        style={[styles.mutualAvatar, { marginLeft: i > 0 ? -8 : 0, zIndex: 3 - i }]}
+                      />
+                    ))}
+                  </View>
+                ) : (
+                  <Ionicons name="person-add-outline" size={14} color="#ffffff" />
+                )}
+                <Text style={styles.badgeText}>{mutualsGoing.length} mutuals</Text>
+              </Pressable>
             </View>
           </View>
         </View>
@@ -91,19 +149,56 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       ...StyleSheet.absoluteFillObject,
       backgroundColor: theme.cardImageOverlay,
     },
-    actions: {
-      position: 'absolute',
-      right: 18,
-      top: 18,
-      zIndex: 2,
-      backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    swipeFeedback: {
+      ...StyleSheet.absoluteFillObject,
+      zIndex: 1,
+    },
+    topContent: {
+      gap: 12,
+      zIndex: 3,
     },
     topRow: {
       flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      width: '100%',
+    },
+    creatorIdentity: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: 'rgba(8, 11, 16, 0.7)',
+      borderRadius: 999,
+      padding: 6,
+      paddingRight: 14,
+      gap: 8,
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.12)',
+      flexShrink: 1,
+      marginRight: 10,
+    },
+    creatorAvatar: {
+      width: 26,
+      height: 26,
+      borderRadius: 13,
+    },
+    creatorAvatarFallback: {
+      backgroundColor: 'rgba(255, 255, 255, 0.2)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    creatorName: {
+      color: '#ffffff',
+      fontSize: 13,
+      fontWeight: '700',
+      flexShrink: 1,
+    },
+    actions: {
+      backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    },
+    tagsRow: {
+      flexDirection: 'row',
       flexWrap: 'wrap',
       gap: 8,
-      marginTop: 48,
-      paddingRight: 56,
     },
     tagChip: {
       borderRadius: 999,
@@ -161,6 +256,18 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       backgroundColor: 'rgba(8, 11, 16, 0.78)',
       borderWidth: 1,
       borderColor: 'rgba(255, 255, 255, 0.12)',
+    },
+    mutualsStack: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginRight: 4,
+    },
+    mutualAvatar: {
+      width: 18,
+      height: 18,
+      borderRadius: 9,
+      borderWidth: 1,
+      borderColor: '#111',
     },
     badgeText: {
       color: '#ffffff',

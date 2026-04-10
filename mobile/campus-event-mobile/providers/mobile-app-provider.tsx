@@ -54,6 +54,12 @@ type MobileAppContextValue = {
   signIn: (input: SignInInput) => Promise<AuthActionResult>;
   signUp: (input: SignUpInput) => Promise<AuthActionResult>;
   signOut: () => Promise<void>;
+  updateProfile: (input: {
+    name: string;
+    username: string;
+    bio: string;
+    avatarUrl?: string;
+  }) => Promise<{ ok: boolean; error?: string }>;
   createEvent: (input: CreateEventInput) => Promise<EventRecord | null>;
   addPersonalCalendarItem: (
     input: CreatePersonalCalendarItemInput
@@ -618,7 +624,10 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
 
   const getProfileByUsername = useCallback(
     (username: string) =>
-      profiles.find((profile) => profile.username === normalizeUsername(username)),
+      profiles.find(
+        (profile) =>
+          profile.username === normalizeUsername(username) || String(profile.id) === String(username)
+      ),
     [profiles]
   );
 
@@ -717,6 +726,54 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
     (profileId: string) =>
       taggedMoments.filter((moment) => moment.profileId === profileId),
     [taggedMoments]
+  );
+
+  const updateProfile = useCallback(
+    async (input: { name: string; username: string; bio: string; avatarUrl?: string }) => {
+      if (!supabase || !currentUser.id) return { ok: false, error: 'Not authenticated' };
+
+      const cleanUsername = normalizeUsername(input.username);
+      if (!cleanUsername) return { ok: false, error: 'Username is required' };
+
+      if (cleanUsername !== currentUser.username) {
+        const { data: existing } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('username', cleanUsername)
+          .maybeSingle();
+
+        if (existing && String(existing.id) !== String(currentUser.id)) {
+          return { ok: false, error: 'That username is already taken.' };
+        }
+      }
+
+      const payload = {
+        id: currentUser.id,
+        name: input.name.trim() || cleanUsername,
+        username: cleanUsername,
+        bio: input.bio.trim(),
+        avatar_url: sanitizeMediaUrl(input.avatarUrl, currentUser.avatar),
+        updated_at: new Date().toISOString(),
+      };
+
+      const { error } = await supabase.from('profiles').upsert(payload, { onConflict: 'id' });
+
+      if (error) {
+        console.error('Failed to update profile:', error);
+        return { ok: false, error: error.message };
+      }
+
+      setProfilesState((current) =>
+        current.map((p) =>
+          p.id === currentUser.id
+            ? { ...p, name: payload.name, username: payload.username, bio: payload.bio, avatar: payload.avatar_url }
+            : p
+        )
+      );
+
+      return { ok: true };
+    },
+    [currentUser.avatar, currentUser.id, currentUser.username]
   );
 
   const createEvent = useCallback(
@@ -1175,6 +1232,7 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
       signIn,
       signUp,
       signOut,
+      updateProfile,
       createEvent,
       addPersonalCalendarItem,
       deleteEvent,
@@ -1235,6 +1293,7 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
       signIn,
       signOut,
       signUp,
+      updateProfile,
       toggleSaveEvent,
       unfollowProfile,
     ]

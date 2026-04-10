@@ -9,11 +9,11 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 
 import { useAppTheme } from '@/lib/app-theme';
-import { getAvatarImageSource, getEventImageSource } from '@/lib/mobile-media';
 import { useMobileApp } from '@/providers/mobile-app-provider';
 
 import { AppScreen } from './AppScreen';
@@ -84,9 +84,15 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
     followProfile,
     unfollowProfile,
     deleteEvent,
+    updateProfile,
   } = useMobileApp();
   const [activeList, setActiveList] = useState<ActiveList>(null);
   const [activeTab, setActiveTab] = useState<ProfileTab>('grid');
+
+  // Edit Profile State
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [editForm, setEditForm] = useState({ name: '', username: '', bio: '', avatarUrl: '' });
 
   const isOwnProfile = !username || username === currentUser.username;
 
@@ -137,6 +143,27 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
     followProfile(profile.id);
   };
 
+  const handleOpenEdit = () => {
+    setEditForm({
+      name: profile.name,
+      username: profile.username,
+      bio: profile.bio || '',
+      avatarUrl: profile.avatar || '',
+    });
+    setIsEditing(true);
+  };
+
+  const handleSaveEdit = async () => {
+    setIsSaving(true);
+    const result = await updateProfile(editForm);
+    setIsSaving(false);
+    if (result.ok) {
+      setIsEditing(false);
+    } else {
+      Alert.alert('Unable to save', result.error || 'Please try again.');
+    }
+  };
+
   const renderEventTiles = () => {
     if (activeTab === 'tagged') {
       if (taggedMoments.length === 0) {
@@ -154,7 +181,7 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
         <View style={styles.mediaGrid}>
           {taggedMoments.map((moment) => (
             <View key={moment.id} style={styles.mediaTile}>
-              <Image source={getEventImageSource(moment.image)} style={styles.mediaTileImage} />
+              <Image source={{ uri: moment.image }} style={styles.mediaTileImage} />
               <View style={styles.mediaTileOverlay}>
                 <Text style={styles.mediaTileTitle}>{moment.title}</Text>
               </View>
@@ -195,7 +222,7 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
                 params: { id: event.id },
               })
             }>
-            <Image source={getEventImageSource(event.image)} style={styles.mediaTileImage} />
+            <Image source={{ uri: event.image }} style={styles.mediaTileImage} />
             <View style={styles.mediaTileOverlay}>
               <Text style={styles.mediaTileTitle}>{event.title}</Text>
               <Text style={styles.mediaTileMeta}>
@@ -215,7 +242,7 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
         showsVerticalScrollIndicator={false}>
         <View style={styles.headerCard}>
           <View style={styles.headerTopRow}>
-            <Image source={getAvatarImageSource(profile.avatar)} style={styles.avatar} />
+            <Image source={{ uri: profile.avatar }} style={styles.avatar} />
 
             <View style={styles.headerCopy}>
               <Text style={styles.name}>{profile.name}</Text>
@@ -235,7 +262,7 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
               <>
                 <Pressable
                   style={styles.secondaryButton}
-                  onPress={() => Alert.alert('Edit Profile', 'Mobile edit profile flow is ready for the next pass.')}>
+                  onPress={handleOpenEdit}>
                   <Text style={styles.secondaryButtonText}>Edit Profile</Text>
                 </Pressable>
                 <Pressable
@@ -378,6 +405,66 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
                   <Text style={styles.emptyTitle}>No created events yet.</Text>
                 </View>
               ) : null}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={isEditing} transparent animationType="slide" onRequestClose={() => setIsEditing(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setIsEditing(false)}>
+          <Pressable style={styles.modalSheet} onPress={(eventPress) => eventPress.stopPropagation()}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>Edit Profile</Text>
+
+            <ScrollView contentContainerStyle={styles.modalContent} showsVerticalScrollIndicator={false}>
+              <Text style={styles.editLabel}>Name</Text>
+              <TextInput
+                style={styles.editInput}
+                value={editForm.name}
+                onChangeText={(text) => setEditForm((f) => ({ ...f, name: text }))}
+                placeholder="Your name"
+                placeholderTextColor={theme.textMuted}
+              />
+
+              <Text style={styles.editLabel}>Username</Text>
+              <TextInput
+                style={styles.editInput}
+                value={editForm.username}
+                onChangeText={(text) => setEditForm((f) => ({ ...f, username: text }))}
+                autoCapitalize="none"
+                placeholder="username"
+                placeholderTextColor={theme.textMuted}
+              />
+
+              <Text style={styles.editLabel}>Bio</Text>
+              <TextInput
+                style={[styles.editInput, styles.editTextarea]}
+                value={editForm.bio}
+                onChangeText={(text) => setEditForm((f) => ({ ...f, bio: text }))}
+                multiline
+                textAlignVertical="top"
+                placeholder="A short bio..."
+                placeholderTextColor={theme.textMuted}
+              />
+
+              <Text style={styles.editLabel}>Avatar URL</Text>
+              <TextInput
+                style={styles.editInput}
+                value={editForm.avatarUrl}
+                onChangeText={(text) => setEditForm((f) => ({ ...f, avatarUrl: text }))}
+                autoCapitalize="none"
+                placeholder="https://..."
+                placeholderTextColor={theme.textMuted}
+              />
+
+              <View style={styles.actionRow}>
+                <Pressable style={styles.secondaryButton} onPress={() => setIsEditing(false)}>
+                  <Text style={styles.secondaryButtonText}>Cancel</Text>
+                </Pressable>
+                <Pressable style={styles.primaryButton} onPress={handleSaveEdit} disabled={isSaving}>
+                  <Text style={styles.primaryButtonText}>{isSaving ? 'Saving...' : 'Save'}</Text>
+                </Pressable>
+              </View>
             </ScrollView>
           </Pressable>
         </Pressable>
@@ -611,5 +698,25 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     modalContent: {
       gap: 12,
       paddingBottom: 22,
+    },
+    editLabel: {
+      color: theme.text,
+      fontSize: 14,
+      fontWeight: '800',
+      marginTop: 6,
+    },
+    editInput: {
+      borderWidth: 1,
+      borderColor: theme.border,
+      backgroundColor: theme.surfaceAlt,
+      borderRadius: 16,
+      paddingHorizontal: 14,
+      paddingVertical: 13,
+      color: theme.text,
+      fontSize: 14,
+    },
+    editTextarea: {
+      minHeight: 96,
+      paddingTop: 14,
     },
   });
