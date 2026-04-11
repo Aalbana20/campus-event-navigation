@@ -72,12 +72,13 @@ export function DiscoverStoriesRow({
               ) : null}
 
               <Text style={styles.storyLabel} numberOfLines={1}>
-                {isCurrent ? 'Your Story' : (item.username || item.name)}
+                {isCurrent ? 'Your Story' : item.username || item.name}
               </Text>
             </Pressable>
           );
         })}
       </ScrollView>
+    </View>
   );
 }
 
