@@ -32,11 +32,11 @@ export function DiscoverStoriesRow({
   return (
     <View style={styles.panel}>
       <View style={styles.header}>
-        <View>
+        <View style={styles.heading}>
           <Text style={styles.eyebrow}>Campus Pulse</Text>
           <Text style={styles.title}>Stories</Text>
         </View>
-        <Text style={styles.note}>People, hosts, and suggestions worth checking between events.</Text>
+        <Text style={styles.note}>Hosts, friends, and suggestions.</Text>
       </View>
 
       <ScrollView
@@ -96,67 +96,69 @@ export function DiscoverStoriesRow({
 const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
   StyleSheet.create({
     panel: {
-      borderRadius: 28,
-      paddingHorizontal: 16,
-      paddingTop: 16,
-      paddingBottom: 14,
+      borderRadius: 22,
+      paddingHorizontal: 12,
+      paddingTop: 10,
+      paddingBottom: 8,
       backgroundColor: theme.surface,
       borderWidth: 1,
       borderColor: theme.border,
       shadowColor: theme.shadow,
-      shadowOpacity: 0.08,
-      shadowRadius: 22,
-      shadowOffset: { width: 0, height: 12 },
-      elevation: 3,
+      shadowOpacity: 0.05,
+      shadowRadius: 14,
+      shadowOffset: { width: 0, height: 7 },
+      elevation: 2,
     },
     header: {
       flexDirection: 'row',
-      alignItems: 'flex-end',
+      alignItems: 'center',
       justifyContent: 'space-between',
-      gap: 12,
-      marginBottom: 14,
+      gap: 10,
+      marginBottom: 6,
+    },
+    heading: {
+      gap: 2,
     },
     eyebrow: {
       color: theme.textMuted,
-      fontSize: 11,
+      fontSize: 10,
       fontWeight: '800',
       letterSpacing: 1.1,
       textTransform: 'uppercase',
-      marginBottom: 4,
     },
     title: {
       color: theme.text,
-      fontSize: 23,
+      fontSize: 17,
       fontWeight: '800',
-      letterSpacing: -0.5,
+      letterSpacing: -0.3,
     },
     note: {
       flex: 1,
-      maxWidth: 190,
+      maxWidth: 132,
       color: theme.textMuted,
-      fontSize: 12,
-      lineHeight: 17,
+      fontSize: 9,
+      lineHeight: 12,
       textAlign: 'right',
     },
     track: {
-      gap: 14,
-      paddingRight: 6,
+      gap: 8,
+      paddingRight: 2,
     },
     storyItem: {
-      width: 78,
+      width: 60,
       alignItems: 'center',
-      gap: 7,
+      gap: 4,
     },
     storyRing: {
-      width: 74,
-      height: 74,
-      borderRadius: 37,
+      width: 54,
+      height: 54,
+      borderRadius: 27,
       padding: 3,
       backgroundColor: '#2563eb',
       shadowColor: theme.shadow,
-      shadowOpacity: 0.12,
-      shadowRadius: 12,
-      shadowOffset: { width: 0, height: 7 },
+      shadowOpacity: 0.08,
+      shadowRadius: 7,
+      shadowOffset: { width: 0, height: 4 },
       elevation: 2,
     },
     storyRingSeen: {
@@ -179,11 +181,11 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     },
     storyBadge: {
       position: 'absolute',
-      right: 2,
-      top: 52,
-      width: 24,
-      height: 24,
-      borderRadius: 12,
+      right: 0,
+      top: 38,
+      width: 18,
+      height: 18,
+      borderRadius: 9,
       alignItems: 'center',
       justifyContent: 'center',
       borderWidth: 2,
@@ -197,18 +199,18 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     },
     storyBadgeText: {
       color: '#ffffff',
-      fontSize: 13,
+      fontSize: 10,
       fontWeight: '800',
     },
     storyLabel: {
       color: theme.text,
-      fontSize: 12,
+      fontSize: 10,
       fontWeight: '700',
-      maxWidth: 80,
+      maxWidth: 62,
     },
     storyMeta: {
       color: theme.textMuted,
-      fontSize: 11,
+      fontSize: 9,
       fontWeight: '600',
     },
   });

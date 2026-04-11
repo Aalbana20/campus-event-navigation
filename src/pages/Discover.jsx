@@ -192,6 +192,17 @@ function Discover() {
     setActiveMode("friends")
   }, [])
 
+  const handleResetStack = useCallback(() => {
+    setDismissedEventIds([])
+    setCurrentIndex(0)
+    setSwipeDirection("")
+    setCardEntering(false)
+  }, [])
+
+  const handleCreateEvent = useCallback(() => {
+    navigate("/create")
+  }, [navigate])
+
   const handleOpenPerson = useCallback(
     (person) => {
       if (!person?.routeKey) return
@@ -224,24 +235,18 @@ function Discover() {
 
         <div className="discover-topbar">
           <DiscoverModeSwitch activeMode={activeMode} onChange={setActiveMode} />
-
-          <div className="discover-status-pill">
-            {activeMode === "events"
-              ? `${discoverEvents.length} in stack`
-              : `${friendCards.length} people to explore`}
-          </div>
         </div>
 
         <p className="discover-context-copy">
           {activeMode === "events"
-            ? "Swipe through what is moving around campus right now. Use ← and → on your keyboard too."
-            : "A social lane for people worth following, creators worth watching, and friends shaping the vibe."}
+            ? "See what's moving around campus."
+            : "Find people shaping the campus scene."}
         </p>
 
         {activeMode === "events" ? (
-          <div className="swipe-area">
+          <div className={`swipe-area ${!currentEvent ? "stack-empty" : ""}`}>
             <button
-              className={`swipe-btn reject ${buttonFlash === "flash-reject" ? "active-flash-reject" : ""}`}
+              className={`swipe-btn reject ${!currentEvent ? "inactive" : ""} ${buttonFlash === "flash-reject" ? "active-flash-reject" : ""}`}
               onClick={handleReject}
               disabled={!currentEvent || isActionLocked}
               aria-label="Skip current event"
@@ -264,16 +269,44 @@ function Discover() {
                 </>
               ) : (
                 <div className="discover-end-card">
-                  <div className="discover-end-kicker">Stack cleared</div>
-                  <h2>You made it to the end.</h2>
-                  <p>No more events right now.</p>
-                  <p>Come back later or make one.</p>
+                  <div className="discover-end-kicker">You're caught up</div>
+                  <h2>The stack is clear for now.</h2>
+                  <p>
+                    You made it through the current Discover lineup. Reload the
+                    stack, switch to Friends, or create something people should
+                    see next.
+                  </p>
+
+                  <div className="discover-end-actions">
+                    <button
+                      type="button"
+                      className="discover-end-action primary"
+                      onClick={handleResetStack}
+                    >
+                      Reload Stack
+                    </button>
+                    <button
+                      type="button"
+                      className="discover-end-action secondary"
+                      onClick={handleOpenSuggestion}
+                    >
+                      See Friends
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="discover-end-link"
+                    onClick={handleCreateEvent}
+                  >
+                    Create an Event
+                  </button>
                 </div>
               )}
             </div>
 
             <button
-              className={`swipe-btn accept ${buttonFlash === "flash-accept" ? "active-flash-accept" : ""}`}
+              className={`swipe-btn accept ${!currentEvent ? "inactive" : ""} ${buttonFlash === "flash-accept" ? "active-flash-accept" : ""}`}
               onClick={handleAccept}
               disabled={!currentEvent || isActionLocked}
               aria-label="Accept current event"

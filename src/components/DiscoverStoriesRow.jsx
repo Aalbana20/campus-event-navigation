@@ -48,13 +48,13 @@ function DiscoverStoriesRow({ items, onOpenSuggestion }) {
   return (
     <section className="discover-stories-panel" aria-label="Discover stories">
       <div className="discover-stories-header">
-        <div>
+        <div className="discover-stories-heading">
           <p className="discover-stories-eyebrow">Campus Pulse</p>
           <h2 className="discover-stories-title">Stories</h2>
         </div>
 
         <p className="discover-stories-note">
-          Quick social snapshots from people, hosts, and suggested accounts.
+          Hosts, friends, and suggestions.
         </p>
       </div>
 

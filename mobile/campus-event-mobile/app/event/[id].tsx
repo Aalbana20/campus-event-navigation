@@ -42,6 +42,7 @@ export default function EventDetailScreen() {
   }
 
   const isSaved = savedEventIds.includes(event.id);
+  const detailTags = (event.tags || []).filter(Boolean);
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
     event.locationAddress || event.locationName
   )}`;
@@ -61,12 +62,19 @@ export default function EventDetailScreen() {
           <View style={styles.headerRow}>
             <View style={styles.titleBlock}>
               <Text style={styles.title}>{event.title}</Text>
-              <Text style={styles.meta}>{[event.date, event.time, event.locationName].join(' • ')}</Text>
-              <View style={styles.creatorRow}>
-                <Image source={getAvatarImageSource(event.creatorAvatar)} style={styles.creatorAvatar} />
-                <Text style={styles.creatorName} numberOfLines={1}>
-                  {getEventCreatorLabel(event)}
-                </Text>
+              <Text style={styles.meta}>
+                {[event.date, event.time, event.locationName].filter(Boolean).join(' • ')}
+              </Text>
+              <View style={styles.creatorCard}>
+                <View style={styles.creatorRow}>
+                  <Image source={getAvatarImageSource(event.creatorAvatar)} style={styles.creatorAvatar} />
+                  <View style={styles.creatorTextWrap}>
+                    <Text style={styles.creatorLabel}>Hosted by</Text>
+                    <Text style={styles.creatorName} numberOfLines={1}>
+                      {getEventCreatorLabel(event)}
+                    </Text>
+                  </View>
+                </View>
               </View>
             </View>
             <View style={styles.privacyPill}>
@@ -74,34 +82,53 @@ export default function EventDetailScreen() {
             </View>
           </View>
 
-          <Text style={styles.description}>{event.description}</Text>
-
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Organizer</Text>
-            <Text style={styles.detailValue}>{event.organizer}</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Dress Code</Text>
-            <Text style={styles.detailValue}>{event.dressCode}</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Address</Text>
-            <Text style={styles.detailValue}>{event.locationAddress}</Text>
+          <View style={styles.sectionBlock}>
+            <Text style={styles.description}>
+              {event.description || 'No description available yet.'}
+            </Text>
           </View>
 
-          <View style={styles.tagsRow}>
-            {event.tags.map((tag) => (
-              <View key={tag} style={styles.tagChip}>
-                <Text style={styles.tagText}>#{tag}</Text>
+          <View style={styles.detailsCard}>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Organizer</Text>
+              <Text style={styles.detailValue}>{event.organizer || 'Campus Host'}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Dress Code</Text>
+              <Text style={styles.detailValue}>{event.dressCode || 'Open'}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Address</Text>
+              <Text style={styles.detailValue}>
+                {event.locationAddress || event.locationName || 'Address unavailable'}
+              </Text>
+            </View>
+          </View>
+
+          {detailTags.length > 0 ? (
+            <View style={styles.tagsSection}>
+              <Text style={styles.sectionEyebrow}>Tags</Text>
+              <View style={styles.tagsRow}>
+                {detailTags.map((tag) => (
+                  <View key={tag} style={styles.tagChip}>
+                    <Text style={styles.tagText}>#{tag}</Text>
+                  </View>
+                ))}
               </View>
-            ))}
-          </View>
+            </View>
+          ) : null}
 
           <View style={styles.actionsRow}>
             <Pressable style={styles.primaryButton} onPress={() => toggleSaveEvent(event.id)}>
-              <Text style={styles.primaryButtonText}>{isSaved ? 'Going' : 'Add Event'}</Text>
+              <Text style={styles.primaryButtonText}>{isSaved ? 'Going' : 'RSVP'}</Text>
             </Pressable>
-            <Pressable style={styles.secondaryButton} onPress={() => Linking.openURL(mapsUrl).catch(() => Alert.alert('Map', 'Map link is unavailable.'))}>
+            <Pressable
+              style={styles.secondaryButton}
+              onPress={() =>
+                Linking.openURL(mapsUrl).catch(() =>
+                  Alert.alert('Map', 'Map link is unavailable.')
+                )
+              }>
               <Text style={styles.secondaryButtonText}>View Map</Text>
             </Pressable>
           </View>
@@ -142,12 +169,14 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       backgroundColor: 'rgba(255, 255, 255, 0.92)',
     },
     body: {
-      marginTop: -24,
-      borderTopLeftRadius: 28,
-      borderTopRightRadius: 28,
-      padding: 20,
+      marginTop: -28,
+      borderTopLeftRadius: 30,
+      borderTopRightRadius: 30,
+      paddingHorizontal: 20,
+      paddingTop: 22,
+      paddingBottom: 12,
       backgroundColor: theme.background,
-      gap: 16,
+      gap: 18,
     },
     headerRow: {
       flexDirection: 'row',
@@ -156,24 +185,44 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     },
     titleBlock: {
       flex: 1,
-      gap: 6,
+      gap: 8,
+    },
+    creatorCard: {
+      alignSelf: 'flex-start',
+      marginTop: 2,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      borderRadius: 18,
+      backgroundColor: theme.surface,
+      borderWidth: 1,
+      borderColor: theme.border,
     },
     creatorRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 8,
-      marginTop: 4,
+      gap: 10,
     },
     creatorAvatar: {
-      width: 24,
-      height: 24,
-      borderRadius: 12,
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+    },
+    creatorTextWrap: {
+      flexShrink: 1,
+      gap: 2,
+    },
+    creatorLabel: {
+      color: theme.textMuted,
+      fontSize: 10,
+      fontWeight: '700',
+      textTransform: 'uppercase',
+      letterSpacing: 0.6,
     },
     creatorName: {
       flexShrink: 1,
-      color: theme.textMuted,
+      color: theme.text,
       fontSize: 13,
-      fontWeight: '700',
+      fontWeight: '800',
     },
     title: {
       color: theme.text,
@@ -203,10 +252,21 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     description: {
       color: theme.text,
       fontSize: 15,
-      lineHeight: 22,
+      lineHeight: 24,
+    },
+    sectionBlock: {
+      gap: 8,
+    },
+    detailsCard: {
+      gap: 14,
+      padding: 16,
+      borderRadius: 22,
+      backgroundColor: theme.surface,
+      borderWidth: 1,
+      borderColor: theme.border,
     },
     detailRow: {
-      gap: 4,
+      gap: 6,
     },
     detailLabel: {
       color: theme.textMuted,
@@ -218,16 +278,26 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     detailValue: {
       color: theme.text,
       fontSize: 15,
-      lineHeight: 21,
+      lineHeight: 22,
+    },
+    tagsSection: {
+      gap: 10,
+    },
+    sectionEyebrow: {
+      color: theme.textMuted,
+      fontSize: 11,
+      fontWeight: '800',
+      textTransform: 'uppercase',
+      letterSpacing: 0.7,
     },
     tagsRow: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      gap: 8,
+      gap: 10,
     },
     tagChip: {
       paddingHorizontal: 12,
-      paddingVertical: 8,
+      paddingVertical: 7,
       borderRadius: 999,
       backgroundColor: theme.surface,
       borderWidth: 1,
@@ -235,13 +305,13 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     },
     tagText: {
       color: theme.text,
-      fontSize: 12,
+      fontSize: 11,
       fontWeight: '700',
     },
     actionsRow: {
       flexDirection: 'row',
       gap: 10,
-      marginTop: 8,
+      marginTop: 6,
     },
     primaryButton: {
       flex: 1,
