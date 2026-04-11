@@ -1,12 +1,32 @@
 import React from "react"
 
-function DiscoverStoryItem({ item, onOpenSuggestion }) {
+function DiscoverStoryItem({
+  item,
+  onOpenStory,
+  onOpenSuggestion,
+  onOpenCreateStory,
+}) {
   const isCurrent = item.kind === "current"
   const isSuggested = item.kind === "suggested"
+  const hasStories = Array.isArray(item.stories) && item.stories.length > 0
 
   const handleClick = () => {
-    if (isSuggested && onOpenSuggestion) {
-      onOpenSuggestion(item)
+    if (isSuggested) {
+      if (onOpenSuggestion) onOpenSuggestion(item)
+      return
+    }
+
+    if (isCurrent) {
+      if (hasStories) {
+        if (onOpenStory) onOpenStory(item)
+      } else {
+        if (onOpenCreateStory) onOpenCreateStory()
+      }
+      return
+    }
+
+    if (item.kind === "story") {
+      if (onOpenStory) onOpenStory(item)
     }
   }
 
@@ -30,20 +50,40 @@ function DiscoverStoryItem({ item, onOpenSuggestion }) {
         </div>
 
         {isCurrent ? (
-          <span className="discover-story-badge current" aria-hidden="true">+</span>
+          <span
+            className="discover-story-badge current"
+            aria-hidden="true"
+            onClick={(event) => {
+              event.stopPropagation()
+              if (onOpenCreateStory) {
+                onOpenCreateStory()
+              }
+            }}
+          >
+            +
+          </span>
         ) : null}
 
         {isSuggested ? (
-          <span className="discover-story-badge suggested" aria-hidden="true">↗</span>
+          <span className="discover-story-badge suggested" aria-hidden="true">
+            ↗
+          </span>
         ) : null}
       </div>
 
-      <span className="discover-story-label">{isCurrent ? "Your Story" : (item.username || item.name)}</span>
+      <span className="discover-story-label">
+        {isCurrent ? "Your Story" : item.username || item.name}
+      </span>
     </button>
   )
 }
 
-function DiscoverStoriesRow({ items, onOpenSuggestion }) {
+function DiscoverStoriesRow({
+  items,
+  onOpenStory,
+  onOpenSuggestion,
+  onOpenCreateStory,
+}) {
   return (
     <section className="discover-stories-panel" aria-label="Discover stories">
       <div className="discover-stories-track" role="list">
@@ -51,7 +91,9 @@ function DiscoverStoriesRow({ items, onOpenSuggestion }) {
           <DiscoverStoryItem
             key={item.id}
             item={item}
+            onOpenStory={onOpenStory}
             onOpenSuggestion={onOpenSuggestion}
+            onOpenCreateStory={onOpenCreateStory}
           />
         ))}
       </div>

@@ -58,6 +58,10 @@ function AppBootstrap() {
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="inbox" options={{ headerShown: false }} />
       <Stack.Screen name="settings" options={{ headerShown: false }} />
+      <Stack.Screen
+        name="story/create"
+        options={{ headerShown: false, presentation: 'fullScreenModal' }}
+      />
       <Stack.Screen name="profile/[username]" options={{ headerShown: false }} />
       <Stack.Screen name="event/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="auth/sign-in" options={{ headerShown: false }} />

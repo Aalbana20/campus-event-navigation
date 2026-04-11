@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import DiscoverFriendsPanel from "../components/DiscoverFriendsPanel"
 import DiscoverModeSwitch from "../components/DiscoverModeSwitch"
+import DiscoverStoryComposer from "../components/DiscoverStoryComposer"
 import DiscoverStoriesRow from "../components/DiscoverStoriesRow"
 import EventCard from "../components/EventCard"
 import { useEvents } from "../context/EventContext"
@@ -30,8 +31,12 @@ function Discover() {
   const [cardEntering, setCardEntering] = useState(false)
   const [dismissedEventIds, setDismissedEventIds] = useState([])
   const [isActionLocked, setIsActionLocked] = useState(false)
+  const [activeStoryItem, setActiveStoryItem] = useState(null)
+  const [isStoryComposerOpen, setIsStoryComposerOpen] = useState(false)
+  const [localStoryPosts, setLocalStoryPosts] = useState([])
   const enterTimeoutRef = useRef(null)
   const swipeTimeoutRef = useRef(null)
+  const localStoryObjectUrlsRef = useRef([])
 
   const savedEventIds = useMemo(
     () => new Set((savedEvents || []).map((event) => String(event.id))),
@@ -46,16 +51,27 @@ function Discover() {
     () => new Set((followingList || []).map((person) => String(person.id))),
     [followingList]
   )
-  const storyItems = useMemo(
-    () =>
-      buildDiscoverStoryItems({
-        currentUser,
-        followingList,
-        followersList,
-        allEvents,
-      }),
-    [allEvents, currentUser, followersList, followingList]
-  )
+  const storyItems = useMemo(() => {
+    const baseItems = buildDiscoverStoryItems({
+      currentUser,
+      followingList,
+      followersList,
+      allEvents,
+    })
+
+    if (localStoryPosts.length === 0) return baseItems
+
+    return baseItems.map((item) => {
+      if (item.kind !== "current") return item
+
+      return {
+        ...item,
+        seen: false,
+        meta: "Live",
+        stories: localStoryPosts,
+      }
+    })
+  }, [allEvents, currentUser, followersList, followingList, localStoryPosts])
   const friendCards = useMemo(
     () =>
       buildDiscoverFriendCards({
@@ -82,6 +98,10 @@ function Discover() {
   const nextIndex =
     discoverEvents.length > safeCurrentIndex + 1 ? safeCurrentIndex + 1 : null
   const nextEvent = nextIndex !== null ? discoverEvents[nextIndex] : null
+  const activeStoryMedia =
+    Array.isArray(activeStoryItem?.stories) && activeStoryItem.stories.length > 0
+      ? activeStoryItem.stories[0]
+      : null
 
   const prepareNextCard = useCallback((removedIndex, previousLength) => {
     const remainingLength = Math.max(previousLength - 1, 0)
@@ -167,17 +187,79 @@ function Discover() {
     }, 300)
   }, [currentEvent, discoverEvents.length, isActionLocked, prepareNextCard, safeCurrentIndex])
 
+  const handleOpenStory = useCallback((item) => {
+    if (!item) return
+    setIsStoryComposerOpen(false)
+    setActiveStoryItem(item)
+  }, [])
+
+  const handleCloseStory = useCallback(() => {
+    setActiveStoryItem(null)
+  }, [])
+
+  const handleOpenStoryComposer = useCallback(() => {
+    setActiveStoryItem(null)
+    setIsStoryComposerOpen(true)
+  }, [])
+
+  const handleCloseStoryComposer = useCallback(() => {
+    setIsStoryComposerOpen(false)
+  }, [])
+
+  const handleSubmitStoryComposer = useCallback(({ file, caption }) => {
+    if (!file) return
+
+    const nextObjectUrl = URL.createObjectURL(file)
+    localStoryObjectUrlsRef.current.push(nextObjectUrl)
+
+    const mediaType = file.type.startsWith("video/") ? "video" : "image"
+
+    setLocalStoryPosts((prev) => [
+      {
+        id: `local-story-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        mediaUrl: nextObjectUrl,
+        mediaType,
+        caption: caption || "",
+        createdAt: new Date().toISOString(),
+      },
+      ...prev,
+    ])
+
+    setIsStoryComposerOpen(false)
+  }, [])
+
   useEffect(() => {
     const handleKeyDown = (event) => {
+      if (activeStoryItem) {
+        if (event.key === "Escape") {
+          handleCloseStory()
+        }
+        return
+      }
+
+      if (isStoryComposerOpen && event.key === "Escape") {
+        handleCloseStoryComposer()
+        return
+      }
+
       if (event.key === "ArrowRight") handleAccept()
       if (event.key === "ArrowLeft") handleReject()
     }
 
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [handleAccept, handleReject])
+  }, [
+    activeStoryItem,
+    handleAccept,
+    handleCloseStory,
+    handleCloseStoryComposer,
+    handleReject,
+    isStoryComposerOpen,
+  ])
 
   useEffect(() => {
+    const localStoryObjectUrls = localStoryObjectUrlsRef.current
+
     return () => {
       if (enterTimeoutRef.current) {
         clearTimeout(enterTimeoutRef.current)
@@ -185,6 +267,10 @@ function Discover() {
       if (swipeTimeoutRef.current) {
         clearTimeout(swipeTimeoutRef.current)
       }
+
+      localStoryObjectUrls.forEach((objectUrl) => {
+        URL.revokeObjectURL(objectUrl)
+      })
     }
   }, [])
 
@@ -238,7 +324,9 @@ function Discover() {
 
         <DiscoverStoriesRow
           items={storyItems}
+          onOpenStory={handleOpenStory}
           onOpenSuggestion={handleOpenSuggestion}
+          onOpenCreateStory={handleOpenStoryComposer}
         />
 
         <div className="discover-switch-wrap">
@@ -325,6 +413,281 @@ function Discover() {
           />
         )}
       </div>
+
+      {activeStoryItem ? (
+        <div
+          aria-hidden="true"
+          onClick={handleCloseStory}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 1600,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "24px",
+            background: "rgba(3, 5, 10, 0.82)",
+            backdropFilter: "blur(18px)",
+            WebkitBackdropFilter: "blur(18px)",
+          }}
+        >
+          <div
+            aria-modal="true"
+            role="dialog"
+            aria-label={`${activeStoryItem.username || activeStoryItem.name} story`}
+            onClick={(event) => event.stopPropagation()}
+            style={{
+              width: "min(420px, 100%)",
+              borderRadius: "28px",
+              padding: "20px",
+              color: "var(--text-main, #f5f7fb)",
+              background:
+                "linear-gradient(180deg, rgba(12, 16, 26, 0.98), rgba(7, 10, 18, 0.98))",
+              border: "1px solid rgba(255, 255, 255, 0.08)",
+              boxShadow: "0 28px 70px rgba(0, 0, 0, 0.34)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "12px",
+                marginBottom: "18px",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0 }}>
+                <img
+                  src={activeStoryItem.avatar}
+                  alt={activeStoryItem.username || activeStoryItem.name}
+                  onError={(event) => {
+                    event.currentTarget.src = "/default-avatar.png"
+                  }}
+                  style={{
+                    width: "52px",
+                    height: "52px",
+                    borderRadius: "50%",
+                    objectFit: "cover",
+                    border: "2px solid rgba(255,255,255,0.9)",
+                    boxShadow: "0 10px 24px rgba(37, 99, 235, 0.16)",
+                    flexShrink: 0,
+                  }}
+                />
+                <div style={{ minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontSize: "1rem",
+                      fontWeight: 800,
+                      lineHeight: 1.2,
+                      color: "var(--text-main, #f5f7fb)",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
+                    {activeStoryItem.name || activeStoryItem.username || "Campus User"}
+                  </div>
+                  <div
+                    style={{
+                      marginTop: "4px",
+                      color: "rgba(226, 232, 240, 0.72)",
+                      fontSize: "0.82rem",
+                      fontWeight: 600,
+                    }}
+                  >
+                    {activeStoryMedia?.createdAt
+                      ? new Date(activeStoryMedia.createdAt).toLocaleTimeString([], {
+                          hour: "numeric",
+                          minute: "2-digit",
+                        })
+                      : activeStoryItem.meta || "Story"}
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleCloseStory}
+                aria-label="Close story viewer"
+                style={{
+                  width: "38px",
+                  height: "38px",
+                  border: "1px solid rgba(255, 255, 255, 0.08)",
+                  borderRadius: "999px",
+                  cursor: "pointer",
+                  color: "var(--text-main, #f5f7fb)",
+                  background: "rgba(255, 255, 255, 0.06)",
+                  fontSize: "1rem",
+                  fontWeight: 700,
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div
+              style={{
+                position: "relative",
+                overflow: "hidden",
+                borderRadius: "24px",
+                aspectRatio: "9 / 16",
+                background:
+                  "radial-gradient(circle at top, rgba(37,99,235,0.22), transparent 34%), linear-gradient(180deg, rgba(19,27,41,0.98), rgba(8,12,20,0.98))",
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "flex-end",
+                padding: "22px",
+                border: "1px solid rgba(255, 255, 255, 0.08)",
+              }}
+            >
+              <div
+                style={{
+                  position: "absolute",
+                  inset: "18px 18px auto auto",
+                  padding: "7px 10px",
+                  borderRadius: "999px",
+                  background: "rgba(15, 23, 42, 0.42)",
+                  color: "rgba(248, 250, 252, 0.84)",
+                  fontSize: "0.72rem",
+                  fontWeight: 700,
+                  letterSpacing: "0.02em",
+                }}
+              >
+                {activeStoryMedia ? "Story Preview" : "Web Story Preview"}
+              </div>
+
+              {activeStoryMedia ? (
+                activeStoryMedia.mediaType === "video" ? (
+                  <video
+                    src={activeStoryMedia.mediaUrl}
+                    controls
+                    autoPlay
+                    muted
+                    loop
+                    playsInline
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "cover",
+                    }}
+                  />
+                ) : (
+                  <img
+                    src={activeStoryMedia.mediaUrl}
+                    alt="Story preview"
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "cover",
+                    }}
+                  />
+                )
+              ) : null}
+
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  background:
+                    activeStoryMedia
+                      ? "linear-gradient(180deg, rgba(6,8,14,0.18), rgba(6,8,14,0.58) 60%, rgba(6,8,14,0.82))"
+                      : "linear-gradient(180deg, rgba(6,8,14,0.06), rgba(6,8,14,0.46) 52%, rgba(6,8,14,0.82))",
+                }}
+              />
+
+              <div
+                style={{
+                  position: "relative",
+                  zIndex: 1,
+                  color: "#f8fafc",
+                  maxWidth: "280px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "10px",
+                }}
+              >
+                <div style={{ fontSize: "1.45rem", fontWeight: 800, lineHeight: 1.05 }}>
+                  {activeStoryMedia?.caption ||
+                    activeStoryItem.featuredTitle ||
+                    activeStoryItem.name ||
+                    "Campus story"}
+                </div>
+                <div
+                  style={{
+                    color: "rgba(241,245,249,0.82)",
+                    fontSize: "0.95rem",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {activeStoryMedia
+                    ? "Shared from the new web story composer. This preview is kept in your current session while the web story backend is still being wired."
+                    : activeStoryItem.bio ||
+                      activeStoryItem.featuredMeta ||
+                      "Story playback is not wired on web yet, so this lightweight preview keeps the story interaction connected here."}
+                </div>
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "10px",
+                marginTop: "16px",
+              }}
+            >
+              {activeStoryItem.routeKey ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleCloseStory()
+                    navigate(`/profile/${activeStoryItem.routeKey}`)
+                  }}
+                  style={{
+                    border: "1px solid rgba(255, 255, 255, 0.08)",
+                    borderRadius: "999px",
+                    padding: "12px 16px",
+                    cursor: "pointer",
+                    background: "#f8fafc",
+                    color: "#111827",
+                    fontSize: "0.86rem",
+                    fontWeight: 700,
+                  }}
+                >
+                  Open Profile
+                </button>
+              ) : null}
+
+              <button
+                type="button"
+                onClick={handleCloseStory}
+                style={{
+                  borderRadius: "999px",
+                  padding: "12px 16px",
+                  cursor: "pointer",
+                  background: "rgba(255, 255, 255, 0.06)",
+                  color: "var(--text-main, #f5f7fb)",
+                  fontSize: "0.86rem",
+                  fontWeight: 700,
+                  border: "1px solid rgba(255, 255, 255, 0.08)",
+                }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <DiscoverStoryComposer
+        isOpen={isStoryComposerOpen}
+        onClose={handleCloseStoryComposer}
+        onSubmit={handleSubmitStoryComposer}
+      />
     </main>
   )
 }

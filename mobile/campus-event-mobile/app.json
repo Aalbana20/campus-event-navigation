@@ -29,6 +29,20 @@
     "plugins": [
       "expo-router",
       [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Campus Event Navigation to capture story photos and videos.",
+          "microphonePermission": "Allow Campus Event Navigation to record audio for story videos.",
+          "recordAudioAndroid": true
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Campus Event Navigation to choose story photos and videos from your library."
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-icon.png",

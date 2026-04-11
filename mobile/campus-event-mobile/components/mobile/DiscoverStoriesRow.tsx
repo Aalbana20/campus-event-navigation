@@ -9,13 +9,14 @@ import {
 } from 'react-native';
 
 import { useAppTheme } from '@/lib/app-theme';
-import type { MobileDiscoverStoryItem } from '@/lib/mobile-discover-social';
 import { getAvatarImageUri } from '@/lib/mobile-media';
+import type { MobileStoryStripItem } from '@/lib/mobile-stories';
 
 type DiscoverStoriesRowProps = {
-  items: MobileDiscoverStoryItem[];
-  onOpenStory?: (item: MobileDiscoverStoryItem) => void;
-  onOpenSuggestion?: (item: MobileDiscoverStoryItem) => void;
+  items: MobileStoryStripItem[];
+  onOpenStory?: (item: MobileStoryStripItem) => void;
+  onOpenSuggestion?: (item: MobileStoryStripItem) => void;
+  onOpenCreateStory?: () => void;
 };
 
 const getStoryAvatarUri = (value: string) =>
@@ -25,6 +26,7 @@ export function DiscoverStoriesRow({
   items,
   onOpenStory,
   onOpenSuggestion,
+  onOpenCreateStory,
 }: DiscoverStoriesRowProps) {
   const theme = useAppTheme();
   const styles = useMemo(() => buildStyles(theme), [theme]);
@@ -40,29 +42,53 @@ export function DiscoverStoriesRow({
           const isSuggested = item.kind === 'suggested';
 
           return (
-            <Pressable
-              key={item.id}
-              style={styles.storyItem}
-              onPress={() =>
-                isSuggested ? onOpenSuggestion?.(item) : onOpenStory?.(item)
-              }>
-              <View
-                style={[
-                  styles.storyRing,
-                  item.seen && styles.storyRingSeen,
-                  isSuggested && styles.storyRingSuggested,
-                  isCurrent && styles.storyRingCurrent,
-                ]}>
-                <Image
-                  source={{ uri: getStoryAvatarUri(item.avatar) }}
-                  style={styles.storyAvatar}
-                />
-              </View>
+            <View key={item.id} style={styles.storyItem}>
+              <Pressable
+                style={styles.storyPressable}
+                onPress={() => {
+                  if (isSuggested) {
+                    onOpenSuggestion?.(item);
+                    return;
+                  }
+
+                  if (isCurrent && item.stories.length === 0) {
+                    onOpenCreateStory?.();
+                    return;
+                  }
+
+                  onOpenStory?.(item);
+                }}>
+                <View
+                  style={[
+                    styles.storyRing,
+                    item.seen && styles.storyRingSeen,
+                    isSuggested && styles.storyRingSuggested,
+                    isCurrent && styles.storyRingCurrent,
+                  ]}>
+                  <Image
+                    source={{ uri: getStoryAvatarUri(item.avatar) }}
+                    style={styles.storyAvatar}
+                  />
+                </View>
+
+                <Text style={styles.storyLabel} numberOfLines={1}>
+                  {isCurrent ? 'Your Story' : item.username || item.name}
+                </Text>
+
+                <Text style={styles.storyMeta} numberOfLines={1}>
+                  {isCurrent && item.stories.length === 0
+                    ? 'Add'
+                    : item.meta || (isSuggested ? 'Suggested' : 'Story')}
+                </Text>
+              </Pressable>
 
               {isCurrent ? (
-                <View style={[styles.storyBadge, styles.storyBadgeCurrent]}>
+                <Pressable
+                  hitSlop={8}
+                  style={[styles.storyBadge, styles.storyBadgeCurrent]}
+                  onPress={onOpenCreateStory}>
                   <Text style={styles.storyBadgeText}>+</Text>
-                </View>
+                </Pressable>
               ) : null}
 
               {isSuggested ? (
@@ -70,11 +96,7 @@ export function DiscoverStoriesRow({
                   <Text style={styles.storyBadgeText}>↗</Text>
                 </View>
               ) : null}
-
-              <Text style={styles.storyLabel} numberOfLines={1}>
-                {isCurrent ? 'Your Story' : item.username || item.name}
-              </Text>
-            </Pressable>
+            </View>
           );
         })}
       </ScrollView>
@@ -94,6 +116,10 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     },
     storyItem: {
       width: 60,
+      alignItems: 'center',
+      gap: 4,
+    },
+    storyPressable: {
       alignItems: 'center',
       gap: 4,
     },
@@ -154,6 +180,12 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       color: theme.text,
       fontSize: 10,
       fontWeight: '700',
+      maxWidth: 62,
+    },
+    storyMeta: {
+      color: theme.textMuted,
+      fontSize: 9,
+      fontWeight: '600',
       maxWidth: 62,
     },
   });

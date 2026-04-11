@@ -1,9 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
-  Image,
   PanResponder,
   Pressable,
   RefreshControl,
@@ -18,10 +18,22 @@ import { AppScreen } from '@/components/mobile/AppScreen';
 import { DiscoverStoriesRow } from '@/components/mobile/DiscoverStoriesRow';
 import { DiscoverModeSwitch } from '@/components/mobile/DiscoverModeSwitch';
 import { EventStackCard } from '@/components/mobile/EventStackCard';
+import { StoryViewerModal } from '@/components/mobile/StoryViewerModal';
 import { useAppTheme } from '@/lib/app-theme';
-import { buildMobileDiscoverStoryItems } from '@/lib/mobile-discover-social';
+import {
+  buildMobileStoryStripItems,
+  buildStoryReplyMessage,
+  buildStoryShareMessage,
+  createStoryShare,
+  fetchStoryViewers,
+  loadActiveStoryRecords,
+  loadReactedStoryIds,
+  recordStoryView,
+  toggleStoryHeart,
+} from '@/lib/mobile-stories';
 import { useMobileApp } from '@/providers/mobile-app-provider';
 import { useMobileInbox } from '@/providers/mobile-inbox-provider';
+import type { ProfileRecord, StoryRecord } from '@/types/models';
 
 export default function DiscoverScreen() {
   const router = useRouter();
@@ -39,22 +51,58 @@ export default function DiscoverScreen() {
     rejectDiscoverEvent,
     resetDiscoverDeck,
     refreshData,
+    getProfileById,
+    recentDmPeople,
   } = useMobileApp();
-  const { unreadNotificationCount } = useMobileInbox();
+  const { sendDmMessage, unreadNotificationCount } = useMobileInbox();
 
   const translate = useRef(new Animated.ValueXY()).current;
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<'events' | 'friends'>('events');
+  const [storyRecords, setStoryRecords] = useState<StoryRecord[]>([]);
+  const [seenStoryIds, setSeenStoryIds] = useState<Set<string>>(new Set());
+  const [reactedStoryIds, setReactedStoryIds] = useState<Set<string>>(new Set());
+  const [isStoryViewerVisible, setIsStoryViewerVisible] = useState(false);
+  const [activeStoryItemId, setActiveStoryItemId] = useState<string | null>(null);
 
-  const storyItems = useMemo(() => {
-    if (!currentUser) return [];
-    return buildMobileDiscoverStoryItems({
+  const loadStories = useCallback(async () => {
+    const nextStories = await loadActiveStoryRecords({
       currentUser,
-      followingProfiles,
-      profiles,
-      events,
+      getProfileById,
     });
-  }, [currentUser, followingProfiles, profiles, events]);
+
+    setStoryRecords(nextStories);
+
+    const nextReactionIds = await loadReactedStoryIds({
+      userId: currentUser.id,
+      storyIds: nextStories.map((story) => story.id),
+    });
+
+    setReactedStoryIds(nextReactionIds);
+  }, [currentUser, getProfileById]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadStories();
+    }, [loadStories])
+  );
+
+  const handleOpenCreateStory = useCallback(() => {
+    router.push('/story/create');
+  }, [router]);
+
+  const storyItems = useMemo(
+    () =>
+      buildMobileStoryStripItems({
+        currentUser,
+        storyRecords,
+        followingProfiles,
+        profiles,
+        events,
+        seenStoryIds,
+      }),
+    [currentUser, events, followingProfiles, profiles, seenStoryIds, storyRecords]
+  );
 
   const discoverEvents = useMemo(
     () =>
@@ -132,8 +180,116 @@ export default function DiscoverScreen() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await refreshData();
+    await loadStories();
     setRefreshing(false);
-  }, [refreshData]);
+  }, [loadStories, refreshData]);
+
+  const handleOpenStory = useCallback((item: { id: string; stories: StoryRecord[] }) => {
+    if (!item.stories.length) return;
+    setActiveStoryItemId(item.id);
+    setIsStoryViewerVisible(true);
+  }, []);
+
+  const handleCloseStoryViewer = useCallback(() => {
+    setIsStoryViewerVisible(false);
+    setActiveStoryItemId(null);
+  }, []);
+
+  const handleStoryOpen = useCallback(
+    (story: StoryRecord) => {
+      if (!story || !currentUser.id || String(story.authorId) === String(currentUser.id)) {
+        return;
+      }
+
+      setSeenStoryIds((currentIds) => {
+        if (currentIds.has(String(story.id))) return currentIds;
+
+        const nextIds = new Set(currentIds);
+        nextIds.add(String(story.id));
+        return nextIds;
+      });
+
+      void recordStoryView({
+        storyId: story.id,
+        viewerId: currentUser.id,
+      });
+    },
+    [currentUser.id]
+  );
+
+  const handleToggleStoryHeart = useCallback(
+    async (story: StoryRecord) => {
+      if (!currentUser.id) return;
+
+      const isActive = reactedStoryIds.has(String(story.id));
+
+      setReactedStoryIds((currentIds) => {
+        const nextIds = new Set(currentIds);
+
+        if (isActive) {
+          nextIds.delete(String(story.id));
+        } else {
+          nextIds.add(String(story.id));
+        }
+
+        return nextIds;
+      });
+
+      try {
+        await toggleStoryHeart({
+          storyId: story.id,
+          userId: currentUser.id,
+          nextActive: !isActive,
+        });
+      } catch {
+        setReactedStoryIds((currentIds) => {
+          const nextIds = new Set(currentIds);
+
+          if (isActive) {
+            nextIds.add(String(story.id));
+          } else {
+            nextIds.delete(String(story.id));
+          }
+
+          return nextIds;
+        });
+
+        throw new Error('Unable to update story heart');
+      }
+    },
+    [currentUser.id, reactedStoryIds]
+  );
+
+  const handleReplyToStory = useCallback(
+    async (story: StoryRecord, message: string) => {
+      await sendDmMessage(story.authorId, buildStoryReplyMessage(story, message));
+    },
+    [sendDmMessage]
+  );
+
+  const handleShareStory = useCallback(
+    async (story: StoryRecord, recipient: ProfileRecord) => {
+      if (!currentUser.id) return;
+
+      await createStoryShare({
+        storyId: story.id,
+        senderId: currentUser.id,
+        recipientId: recipient.id,
+      });
+
+      await sendDmMessage(recipient.id, buildStoryShareMessage(story));
+    },
+    [currentUser.id, sendDmMessage]
+  );
+
+  const handleLoadViewers = useCallback(
+    async (story: StoryRecord) =>
+      fetchStoryViewers({
+        storyId: story.id,
+        getProfileById,
+      }),
+    [getProfileById]
+  );
 
   return (
     <AppScreen style={styles.safeArea}>
@@ -161,7 +317,9 @@ export default function DiscoverScreen() {
 
         <DiscoverStoriesRow
           items={storyItems}
+          onOpenStory={handleOpenStory}
           onOpenSuggestion={() => setActiveTab('friends')}
+          onOpenCreateStory={handleOpenCreateStory}
         />
 
         <View style={styles.cardStage}>
@@ -213,6 +371,22 @@ export default function DiscoverScreen() {
           </View>
         ) : null}
       </ScrollView>
+
+      <StoryViewerModal
+        visible={isStoryViewerVisible}
+        items={storyItems}
+        initialItemId={activeStoryItemId}
+        currentUserId={currentUser.id}
+        followingProfiles={followingProfiles}
+        recentDmPeople={recentDmPeople}
+        reactedStoryIds={reactedStoryIds}
+        onClose={handleCloseStoryViewer}
+        onStoryOpen={handleStoryOpen}
+        onToggleHeart={handleToggleStoryHeart}
+        onReplyToStory={handleReplyToStory}
+        onShareStory={handleShareStory}
+        onLoadViewers={handleLoadViewers}
+      />
     </AppScreen>
   );
 }

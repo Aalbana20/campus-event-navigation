@@ -54,6 +54,32 @@ export type TaggedMoment = {
   image: string;
 };
 
+export type StoryMediaType = 'image' | 'video';
+
+export type StoryRecord = {
+  id: string;
+  authorId: string;
+  mediaUrl: string;
+  mediaType: StoryMediaType;
+  caption: string;
+  eventId?: string | null;
+  createdAt: string;
+  expiresAt: string;
+  authorName: string;
+  authorUsername: string;
+  authorAvatar: string;
+};
+
+export type StoryViewerRecord = {
+  id: string;
+  storyId: string;
+  viewerId: string;
+  viewedAt: string;
+  name: string;
+  username: string;
+  avatar: string;
+};
+
 export type PersonalCalendarItem = {
   id: string;
   ownerId: string;
