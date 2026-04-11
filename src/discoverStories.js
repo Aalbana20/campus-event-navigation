@@ -86,6 +86,11 @@ const getAuthenticatedStoryUser = async () => {
   return user || null
 }
 
+export const loadAuthenticatedDiscoverStoryUserId = async () => {
+  const user = await getAuthenticatedStoryUser()
+  return user?.id ? String(user.id) : ""
+}
+
 const createLookupKeys = ({ id, profileId, username }) =>
   [profileId, id, normalizeUsername(username)].filter(Boolean).map(String)
 
@@ -374,6 +379,68 @@ export const recordDiscoverStoryView = async ({
 
   if (error) {
     console.error("Unable to record story view:", error)
+  }
+}
+
+export const loadDiscoverReactedStoryIds = async ({
+  storyIds,
+}) => {
+  const authUser = await getAuthenticatedStoryUser()
+
+  if (!authUser?.id || !Array.isArray(storyIds) || storyIds.length === 0) {
+    return new Set()
+  }
+
+  const { data, error } = await supabase
+    .from("story_reactions")
+    .select("story_id")
+    .eq("user_id", authUser.id)
+    .eq("reaction_type", "heart")
+    .in("story_id", storyIds)
+
+  if (error) {
+    console.error("Unable to load story reactions:", error)
+    return new Set()
+  }
+
+  return new Set((data || []).map((row) => String(row.story_id)))
+}
+
+export const toggleDiscoverStoryHeart = async ({
+  storyId,
+  nextActive,
+}) => {
+  const authUser = await getAuthenticatedStoryUser()
+
+  if (!storyId || !authUser?.id) {
+    throw new Error("You need to be signed in to react to stories.")
+  }
+
+  if (nextActive) {
+    const { error } = await supabase.from("story_reactions").insert({
+      story_id: storyId,
+      user_id: authUser.id,
+      reaction_type: "heart",
+    })
+
+    if (error) {
+      console.error("Unable to react to story:", error)
+      throw new Error("Could not save your reaction right now.")
+    }
+
+    return
+  }
+
+  const { error } = await supabase
+    .from("story_reactions")
+    .delete()
+    .eq("story_id", storyId)
+    .eq("user_id", authUser.id)
+    .eq("reaction_type", "heart")
+
+  if (error) {
+    console.error("Unable to remove story reaction:", error)
+    throw new Error("Could not update your reaction right now.")
   }
 }
 

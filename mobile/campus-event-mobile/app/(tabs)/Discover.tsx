@@ -27,6 +27,7 @@ import {
   createStoryShare,
   fetchStoryViewers,
   loadActiveStoryRecords,
+  loadAuthenticatedStoryUserId,
   loadReactedStoryIds,
   recordStoryView,
   toggleStoryHeart,
@@ -64,17 +65,20 @@ export default function DiscoverScreen() {
   const [reactedStoryIds, setReactedStoryIds] = useState<Set<string>>(new Set());
   const [isStoryViewerVisible, setIsStoryViewerVisible] = useState(false);
   const [activeStoryItemId, setActiveStoryItemId] = useState<string | null>(null);
+  const [authenticatedStoryUserId, setAuthenticatedStoryUserId] = useState('');
 
   const loadStories = useCallback(async () => {
     const nextStories = await loadActiveStoryRecords({
       currentUser,
       getProfileById,
     });
+    const storyUserId = (await loadAuthenticatedStoryUserId()) || currentUser.id;
 
     setStoryRecords(nextStories);
+    setAuthenticatedStoryUserId(storyUserId);
 
     const nextReactionIds = await loadReactedStoryIds({
-      userId: currentUser.id,
+      userId: storyUserId,
       storyIds: nextStories.map((story) => story.id),
     });
 
@@ -195,9 +199,11 @@ export default function DiscoverScreen() {
     setActiveStoryItemId(null);
   }, []);
 
+  const effectiveStoryUserId = authenticatedStoryUserId || currentUser.id;
+
   const handleStoryOpen = useCallback(
     (story: StoryRecord) => {
-      if (!story || !currentUser.id || String(story.authorId) === String(currentUser.id)) {
+      if (!story || !effectiveStoryUserId || String(story.authorId) === String(effectiveStoryUserId)) {
         return;
       }
 
@@ -211,10 +217,9 @@ export default function DiscoverScreen() {
 
       void recordStoryView({
         storyId: story.id,
-        viewerId: currentUser.id,
       });
     },
-    [currentUser.id]
+    [effectiveStoryUserId]
   );
 
   const handleToggleStoryHeart = useCallback(
@@ -376,7 +381,7 @@ export default function DiscoverScreen() {
         visible={isStoryViewerVisible}
         items={storyItems}
         initialItemId={activeStoryItemId}
-        currentUserId={currentUser.id}
+        currentUserId={effectiveStoryUserId}
         followingProfiles={followingProfiles}
         recentDmPeople={recentDmPeople}
         reactedStoryIds={reactedStoryIds}

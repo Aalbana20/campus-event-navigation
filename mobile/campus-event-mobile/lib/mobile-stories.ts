@@ -27,6 +27,13 @@ type StoryViewRow = {
   viewed_at?: string | null;
 };
 
+type ProfileRow = {
+  id: string;
+  name?: string | null;
+  username?: string | null;
+  avatar_url?: string | null;
+};
+
 export type MobileStoryStripItem = {
   id: string;
   profileId?: string;
@@ -249,19 +256,32 @@ export const buildMobileStoryStripItems = ({
 
 export const recordStoryView = async ({
   storyId,
-  viewerId,
 }: {
   storyId: string;
-  viewerId: string;
 }) => {
-  if (!supabase || !storyId || !viewerId) return;
+  if (!supabase || !storyId) return;
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError) {
+    console.error('Unable to resolve authenticated story viewer:', authError);
+    return;
+  }
+
+  if (!user?.id) {
+    console.error('Unable to record story view: no authenticated Supabase user found.');
+    return;
+  }
 
   const { error } = await supabase
     .from('story_views')
     .upsert(
       {
         story_id: storyId,
-        viewer_id: viewerId,
+        viewer_id: user.id,
       },
       {
         onConflict: 'story_id,viewer_id',
@@ -272,6 +292,22 @@ export const recordStoryView = async ({
   if (error) {
     console.error('Unable to record story view:', error);
   }
+};
+
+export const loadAuthenticatedStoryUserId = async () => {
+  if (!supabase) return '';
+
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+
+  if (error) {
+    console.error('Unable to resolve authenticated story user:', error);
+    return '';
+  }
+
+  return user?.id ? String(user.id) : '';
 };
 
 export const fetchStoryViewers = async ({
@@ -294,17 +330,47 @@ export const fetchStoryViewers = async ({
     return [] as StoryViewerRecord[];
   }
 
+  const viewerIds = [
+    ...new Set(
+      ((data || []) as StoryViewRow[])
+        .map((row) => String(row.viewer_id))
+        .filter(Boolean)
+    ),
+  ];
+
+  const { data: profileRows, error: profileError } = viewerIds.length
+    ? await supabase
+        .from('profiles')
+        .select('id, name, username, avatar_url')
+        .in('id', viewerIds)
+    : { data: [], error: null };
+
+  if (profileError) {
+    console.error('Unable to load story viewer profiles:', profileError);
+  }
+
+  const profileLookup = new Map(
+    ((profileRows || []) as ProfileRow[]).map((profile) => [String(profile.id), profile])
+  );
+
   return ((data || []) as StoryViewRow[]).map((row) => {
-    const profile = getProfileById(String(row.viewer_id));
+    const viewerId = String(row.viewer_id);
+    const profile = profileLookup.get(viewerId);
+    const localProfile = getProfileById(viewerId);
 
     return {
       id: String(row.id),
       storyId: String(row.story_id),
-      viewerId: String(row.viewer_id),
+      viewerId,
       viewedAt: row.viewed_at || '',
-      name: profile?.name || profile?.username || 'Campus User',
-      username: profile?.username || '',
-      avatar: profile?.avatar || '',
+      name:
+        profile?.name ||
+        localProfile?.name ||
+        profile?.username ||
+        localProfile?.username ||
+        'Campus User',
+      username: profile?.username || localProfile?.username || '',
+      avatar: profile?.avatar_url || localProfile?.avatar || '',
     };
   });
 };

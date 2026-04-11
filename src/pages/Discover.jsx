@@ -10,7 +10,10 @@ import {
   buildDiscoverStoryStripItems,
   fetchDiscoverStoryViewers,
   loadActiveDiscoverStories,
+  loadAuthenticatedDiscoverStoryUserId,
+  loadDiscoverReactedStoryIds,
   recordDiscoverStoryView,
+  toggleDiscoverStoryHeart,
   uploadDiscoverStory,
 } from "../discoverStories"
 import {
@@ -41,8 +44,12 @@ function Discover() {
   const [activeStoryItem, setActiveStoryItem] = useState(null)
   const [isStoryComposerOpen, setIsStoryComposerOpen] = useState(false)
   const [storyRecords, setStoryRecords] = useState([])
+  const [likedStoryIds, setLikedStoryIds] = useState(new Set())
   const [storyViewerRows, setStoryViewerRows] = useState([])
   const [isStoryViewerRowsLoading, setIsStoryViewerRowsLoading] = useState(false)
+  const [isStoryActivityOpen, setIsStoryActivityOpen] = useState(false)
+  const [storyActionFeedback, setStoryActionFeedback] = useState("")
+  const [authenticatedStoryUserId, setAuthenticatedStoryUserId] = useState("")
   const enterTimeoutRef = useRef(null)
   const swipeTimeoutRef = useRef(null)
 
@@ -108,8 +115,14 @@ function Discover() {
     Array.isArray(activeStoryItem?.stories) && activeStoryItem.stories.length > 0
       ? activeStoryItem.stories[0]
       : null
+  const effectiveStoryUserId = authenticatedStoryUserId || currentUser?.id || ""
+  const activeStoryAuthorId = activeStoryMedia?.authorId || ""
   const isViewingOwnStory =
-    activeStoryMedia && String(activeStoryMedia.authorId || "") === String(currentUser?.id || "")
+    activeStoryMedia && String(activeStoryMedia.authorId || "") === String(effectiveStoryUserId)
+  const ownerPreviewViewers = storyViewerRows.slice(0, 3)
+  const isActiveStoryLiked = activeStoryMedia
+    ? likedStoryIds.has(String(activeStoryMedia.id))
+    : false
 
   const prepareNextCard = useCallback((removedIndex, previousLength) => {
     const remainingLength = Math.max(previousLength - 1, 0)
@@ -198,6 +211,8 @@ function Discover() {
   const handleOpenStory = useCallback((item) => {
     if (!item) return
     setIsStoryComposerOpen(false)
+    setIsStoryActivityOpen(false)
+    setStoryActionFeedback("")
     setStoryViewerRows([])
     setIsStoryViewerRowsLoading(false)
     setActiveStoryItem(item)
@@ -205,12 +220,16 @@ function Discover() {
 
   const handleCloseStory = useCallback(() => {
     setActiveStoryItem(null)
+    setIsStoryActivityOpen(false)
+    setStoryActionFeedback("")
     setStoryViewerRows([])
     setIsStoryViewerRowsLoading(false)
   }, [])
 
   const handleOpenStoryComposer = useCallback(() => {
     setActiveStoryItem(null)
+    setIsStoryActivityOpen(false)
+    setStoryActionFeedback("")
     setIsStoryComposerOpen(true)
   }, [])
 
@@ -219,12 +238,19 @@ function Discover() {
   }, [])
 
   const loadStories = useCallback(async () => {
+    const storyUserId =
+      (await loadAuthenticatedDiscoverStoryUserId()) || currentUser?.id || ""
     const nextStories = await loadActiveDiscoverStories({
       currentUser,
       baseItems: baseStoryItems,
     })
+    const nextLikedStoryIds = await loadDiscoverReactedStoryIds({
+      storyIds: nextStories.map((story) => String(story.id)),
+    })
 
+    setAuthenticatedStoryUserId(storyUserId)
     setStoryRecords(nextStories)
+    setLikedStoryIds(nextLikedStoryIds)
   }, [baseStoryItems, currentUser])
 
   const handleSubmitStoryComposer = useCallback(
@@ -252,6 +278,88 @@ function Discover() {
     [currentUser, loadStories]
   )
 
+  const handleToggleStoryActivity = useCallback(() => {
+    setIsStoryActivityOpen((prev) => !prev)
+  }, [])
+
+  const handleOpenStoryMessage = useCallback(() => {
+    if (!activeStoryAuthorId) return
+
+    handleCloseStory()
+    navigate(`/messages?thread=${activeStoryAuthorId}`)
+  }, [activeStoryAuthorId, handleCloseStory, navigate])
+
+  const handleToggleStoryHeart = useCallback(async () => {
+    if (!activeStoryMedia?.id || isViewingOwnStory) return
+
+    const storyId = String(activeStoryMedia.id)
+    const nextActive = !likedStoryIds.has(storyId)
+
+    setLikedStoryIds((prev) => {
+      const next = new Set(prev)
+      if (nextActive) {
+        next.add(storyId)
+      } else {
+        next.delete(storyId)
+      }
+      return next
+    })
+
+    try {
+      await toggleDiscoverStoryHeart({
+        storyId,
+        nextActive,
+      })
+    } catch (error) {
+      setLikedStoryIds((prev) => {
+        const next = new Set(prev)
+        if (nextActive) {
+          next.delete(storyId)
+        } else {
+          next.add(storyId)
+        }
+        return next
+      })
+
+      setStoryActionFeedback(
+        error?.message || "Could not update your story reaction right now."
+      )
+    }
+  }, [activeStoryMedia, isViewingOwnStory, likedStoryIds])
+
+  const handleShareStory = useCallback(async () => {
+    if (!activeStoryMedia) return
+
+    const shareUrl = activeStoryMedia.mediaUrl || window.location.href
+    const shareText =
+      activeStoryMedia.caption ||
+      `Story from ${activeStoryItem?.name || activeStoryMedia.authorName || "Campus User"}`
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: "Campus Story",
+          text: shareText,
+          url: shareUrl,
+        })
+        setStoryActionFeedback("Story shared.")
+        return
+      } catch (error) {
+        if (error?.name === "AbortError") {
+          return
+        }
+      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(shareUrl)
+      setStoryActionFeedback("Story link copied.")
+    } catch {
+      window.prompt("Copy story link:", shareUrl)
+      setStoryActionFeedback("Story link ready to copy.")
+    }
+  }, [activeStoryItem?.name, activeStoryMedia])
+
   useEffect(() => {
     const syncStories = async () => {
       await loadStories()
@@ -259,6 +367,16 @@ function Discover() {
 
     syncStories()
   }, [loadStories])
+
+  useEffect(() => {
+    if (!storyActionFeedback) return undefined
+
+    const timeoutId = window.setTimeout(() => {
+      setStoryActionFeedback("")
+    }, 2400)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [storyActionFeedback])
 
   useEffect(() => {
     const handleKeyDown = (event) => {
@@ -304,7 +422,7 @@ function Discover() {
     let isActive = true
 
     const syncStoryViewerState = async () => {
-      if (!activeStoryMedia?.id || !currentUser?.id) {
+      if (!activeStoryMedia?.id || !effectiveStoryUserId) {
         if (!isActive) return
         setStoryViewerRows([])
         setIsStoryViewerRowsLoading(false)
@@ -329,7 +447,7 @@ function Discover() {
       setIsStoryViewerRowsLoading(false)
       await recordDiscoverStoryView({
         storyId: activeStoryMedia.id,
-        viewerId: currentUser.id,
+        viewerId: effectiveStoryUserId,
       })
     }
 
@@ -338,7 +456,7 @@ function Discover() {
     return () => {
       isActive = false
     }
-  }, [activeStoryMedia, currentUser, isViewingOwnStory])
+  }, [activeStoryMedia, effectiveStoryUserId, isViewingOwnStory])
 
   const handleOpenSuggestion = useCallback(() => {
     setActiveMode("friends")
@@ -699,29 +817,70 @@ function Discover() {
               </div>
             </div>
 
-            <div
-              style={{
-                marginTop: "16px",
-                padding: "16px",
-                borderRadius: "20px",
-                border: "1px solid rgba(255, 255, 255, 0.08)",
-                background: "rgba(255, 255, 255, 0.04)",
-              }}
-            >
+            {storyActionFeedback ? (
               <div
                 style={{
-                  color: "rgba(248, 250, 252, 0.9)",
-                  fontSize: "0.78rem",
-                  fontWeight: 700,
-                  letterSpacing: "0.04em",
-                  textTransform: "uppercase",
+                  marginTop: "14px",
+                  color: "rgba(226, 232, 240, 0.78)",
+                  fontSize: "0.82rem",
+                  fontWeight: 600,
+                  lineHeight: 1.45,
+                }}
+                role="status"
+                aria-live="polite"
+              >
+                {storyActionFeedback}
+              </div>
+            ) : null}
+
+            {isViewingOwnStory && isStoryActivityOpen ? (
+              <div
+                style={{
+                  marginTop: "16px",
+                  padding: "16px",
+                  borderRadius: "20px",
+                  border: "1px solid rgba(255, 255, 255, 0.08)",
+                  background: "rgba(255, 255, 255, 0.04)",
                 }}
               >
-                Viewed by
-              </div>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "12px",
+                  }}
+                >
+                  <div
+                    style={{
+                      color: "rgba(248, 250, 252, 0.92)",
+                      fontSize: "0.8rem",
+                      fontWeight: 700,
+                      letterSpacing: "0.04em",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    Viewer activity
+                  </div>
 
-              {isViewingOwnStory ? (
-                isStoryViewerRowsLoading ? (
+                  <button
+                    type="button"
+                    onClick={handleToggleStoryActivity}
+                    style={{
+                      border: "none",
+                      padding: 0,
+                      cursor: "pointer",
+                      background: "transparent",
+                      color: "rgba(226, 232, 240, 0.76)",
+                      fontSize: "0.8rem",
+                      fontWeight: 700,
+                    }}
+                  >
+                    Hide
+                  </button>
+                </div>
+
+                {isStoryViewerRowsLoading ? (
                   <div
                     style={{
                       marginTop: "12px",
@@ -738,9 +897,12 @@ function Discover() {
                       display: "grid",
                       gap: "10px",
                       marginTop: "12px",
+                      maxHeight: "220px",
+                      overflowY: "auto",
+                      paddingRight: "4px",
                     }}
                   >
-                    {storyViewerRows.slice(0, 6).map((viewer) => (
+                    {storyViewerRows.map((viewer) => (
                       <div
                         key={viewer.id}
                         style={{
@@ -827,46 +989,227 @@ function Discover() {
                   >
                     No viewers yet. When people open this story, they will appear here.
                   </div>
-                )
-              ) : (
-                <div
-                  style={{
-                    marginTop: "12px",
-                    color: "rgba(226, 232, 240, 0.72)",
-                    fontSize: "0.88rem",
-                    lineHeight: 1.5,
-                  }}
-                >
-                  Viewer details are available to the story owner.
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            ) : null}
 
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "flex-end",
-                gap: "10px",
-                marginTop: "16px",
-              }}
-            >
-              <button
-                type="button"
-                onClick={handleCloseStory}
+            {isViewingOwnStory ? (
+              <div
                 style={{
-                  borderRadius: "999px",
-                  padding: "12px 16px",
-                  cursor: "pointer",
-                  background: "rgba(255, 255, 255, 0.06)",
-                  color: "var(--text-main, #f5f7fb)",
-                  fontSize: "0.86rem",
-                  fontWeight: 700,
-                  border: "1px solid rgba(255, 255, 255, 0.08)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "12px",
+                  marginTop: "16px",
                 }}
               >
-                Close
-              </button>
-            </div>
+                <button
+                  type="button"
+                  onClick={handleToggleStoryActivity}
+                  style={{
+                    width: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "14px",
+                    padding: "12px 14px",
+                    borderRadius: "999px",
+                    cursor: "pointer",
+                    background: "rgba(255, 255, 255, 0.06)",
+                    border: "1px solid rgba(255, 255, 255, 0.08)",
+                    color: "var(--text-main, #f5f7fb)",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      minWidth: "44px",
+                    }}
+                  >
+                    {ownerPreviewViewers.length > 0 ? (
+                      ownerPreviewViewers.map((viewer, index) => (
+                        <img
+                          key={viewer.id}
+                          src={viewer.avatar || "/default-avatar.png"}
+                          alt={viewer.username || viewer.name}
+                          onError={(event) => {
+                            event.currentTarget.src = "/default-avatar.png"
+                          }}
+                          style={{
+                            width: "30px",
+                            height: "30px",
+                            borderRadius: "50%",
+                            objectFit: "cover",
+                            marginLeft: index === 0 ? 0 : "-10px",
+                            border: "2px solid rgba(12, 16, 26, 0.96)",
+                            boxShadow: "0 4px 14px rgba(0, 0, 0, 0.18)",
+                          }}
+                        />
+                      ))
+                    ) : (
+                      <div
+                        aria-hidden="true"
+                        style={{
+                          width: "30px",
+                          height: "30px",
+                          borderRadius: "50%",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          background: "rgba(255, 255, 255, 0.08)",
+                          color: "rgba(248, 250, 252, 0.8)",
+                          fontSize: "0.76rem",
+                          fontWeight: 700,
+                        }}
+                      >
+                        0
+                      </div>
+                    )}
+                  </div>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "flex-start",
+                      gap: "2px",
+                      minWidth: 0,
+                    }}
+                  >
+                    <span
+                      style={{
+                        color: "var(--text-main, #f5f7fb)",
+                        fontSize: "0.9rem",
+                        fontWeight: 700,
+                      }}
+                    >
+                      {isStoryViewerRowsLoading
+                        ? "Activity"
+                        : storyViewerRows.length > 0
+                          ? `${storyViewerRows.length} Views`
+                          : "Views"}
+                    </span>
+                    <span
+                      style={{
+                        color: "rgba(226, 232, 240, 0.68)",
+                        fontSize: "0.78rem",
+                        fontWeight: 600,
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      {isStoryActivityOpen
+                        ? "Hide viewer list"
+                        : "Open viewer activity"}
+                    </span>
+                  </div>
+
+                  <span
+                    style={{
+                      marginLeft: "auto",
+                      color: "rgba(226, 232, 240, 0.76)",
+                      fontSize: "0.8rem",
+                      fontWeight: 700,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {isStoryActivityOpen ? "Hide" : "Open"}
+                  </span>
+                </button>
+              </div>
+            ) : (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "12px",
+                  marginTop: "16px",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={handleOpenStoryMessage}
+                  style={{
+                    flex: 1,
+                    minHeight: "52px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "flex-start",
+                    padding: "0 18px",
+                    borderRadius: "999px",
+                    cursor: "pointer",
+                    border: "1px solid rgba(255, 255, 255, 0.08)",
+                    background: "rgba(255, 255, 255, 0.08)",
+                    color: "rgba(248, 250, 252, 0.92)",
+                    fontSize: "0.94rem",
+                    fontWeight: 700,
+                  }}
+                >
+                  Send message...
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleToggleStoryHeart}
+                  aria-label={isActiveStoryLiked ? "Remove heart reaction" : "Heart this story"}
+                  aria-pressed={isActiveStoryLiked}
+                  style={{
+                    width: "52px",
+                    height: "52px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: "999px",
+                    cursor: "pointer",
+                    border: "1px solid rgba(255, 255, 255, 0.08)",
+                    background: "rgba(255, 255, 255, 0.06)",
+                    color: isActiveStoryLiked ? "#ff6b8b" : "var(--text-main, #f5f7fb)",
+                    boxShadow: isActiveStoryLiked
+                      ? "0 12px 24px rgba(255, 107, 139, 0.18)"
+                      : "none",
+                  }}
+                >
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill={isActiveStoryLiked ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.9">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M12 20.25s-6.716-4.308-9.093-8.216C.974 8.907 2.01 4.5 6.09 4.5c2.07 0 3.308 1.154 3.91 2.125.602-.97 1.84-2.125 3.91-2.125 4.08 0 5.116 4.407 3.183 7.534C18.716 15.942 12 20.25 12 20.25Z"
+                    />
+                  </svg>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleShareStory}
+                  aria-label="Share story"
+                  style={{
+                    width: "52px",
+                    height: "52px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: "999px",
+                    cursor: "pointer",
+                    border: "1px solid rgba(255, 255, 255, 0.08)",
+                    background: "rgba(255, 255, 255, 0.06)",
+                    color: "var(--text-main, #f5f7fb)",
+                  }}
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M21 3 10 14"
+                    />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="m21 3-7 18-4-7-7-4 18-7Z"
+                    />
+                  </svg>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       ) : null}
