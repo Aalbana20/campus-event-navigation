@@ -1,10 +1,29 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useNavigate } from "react-router-dom"
+import DiscoverFriendsPanel from "../components/DiscoverFriendsPanel"
+import DiscoverModeSwitch from "../components/DiscoverModeSwitch"
+import DiscoverStoriesRow from "../components/DiscoverStoriesRow"
 import EventCard from "../components/EventCard"
 import { useEvents } from "../context/EventContext"
+import {
+  buildDiscoverFriendCards,
+  buildDiscoverStoryItems,
+} from "../discoverSocial"
 
 function Discover() {
-  const { addEvent, allEvents, currentUser, savedEvents } = useEvents()
+  const navigate = useNavigate()
+  const {
+    addEvent,
+    allEvents,
+    currentUser,
+    follow,
+    followingList,
+    followersList,
+    savedEvents,
+    unfollow,
+  } = useEvents()
 
+  const [activeMode, setActiveMode] = useState("events")
   const [currentIndex, setCurrentIndex] = useState(0)
   const [swipeDirection, setSwipeDirection] = useState("")
   const [buttonFlash, setButtonFlash] = useState("")
@@ -22,6 +41,30 @@ function Discover() {
   const dismissedEventIdSet = useMemo(
     () => new Set(dismissedEventIds.map((eventId) => String(eventId))),
     [dismissedEventIds]
+  )
+  const followingIdSet = useMemo(
+    () => new Set((followingList || []).map((person) => String(person.id))),
+    [followingList]
+  )
+  const storyItems = useMemo(
+    () =>
+      buildDiscoverStoryItems({
+        currentUser,
+        followingList,
+        followersList,
+        allEvents,
+      }),
+    [allEvents, currentUser, followersList, followingList]
+  )
+  const friendCards = useMemo(
+    () =>
+      buildDiscoverFriendCards({
+        currentUser,
+        followingList,
+        followersList,
+        allEvents,
+      }),
+    [allEvents, currentUser, followersList, followingList]
   )
 
   const discoverEvents = useMemo(
@@ -145,54 +188,107 @@ function Discover() {
     }
   }, [])
 
+  const handleOpenSuggestion = useCallback(() => {
+    setActiveMode("friends")
+  }, [])
+
+  const handleOpenPerson = useCallback(
+    (person) => {
+      if (!person?.routeKey) return
+      navigate(`/profile/${person.routeKey}`)
+    },
+    [navigate]
+  )
+
+  const handleToggleFollow = useCallback(
+    async (person, isFollowing) => {
+      if (!person?.profileId) return
+
+      if (isFollowing) {
+        await unfollow(person.profileId)
+        return
+      }
+
+      await follow(person.profileId)
+    },
+    [follow, unfollow]
+  )
+
   return (
     <main className="discover">
-      <p className="eyebrow">Find your next event</p>
-      <h1 className="discover-title">Discover</h1>
+      <div className="discover-shell">
+        <DiscoverStoriesRow
+          items={storyItems}
+          onOpenSuggestion={handleOpenSuggestion}
+        />
 
-      <div className="discover-tip">Use ← and → on your keyboard too</div>
+        <div className="discover-topbar">
+          <DiscoverModeSwitch activeMode={activeMode} onChange={setActiveMode} />
 
-      <div className="swipe-area">
-        <button
-          className={`swipe-btn reject ${buttonFlash === "flash-reject" ? "active-flash-reject" : ""}`}
-          onClick={handleReject}
-          disabled={!currentEvent || isActionLocked}
-          aria-label="Skip current event"
-        >
-          ↺
-        </button>
-
-        <div className="discover-stack">
-          {currentEvent ? (
-            <>
-              {nextEvent && (
-                <div className="next-card-preview">
-                  <EventCard event={nextEvent} />
-                </div>
-              )}
-
-              <div className={`discover-card-wrap ${swipeDirection} ${cardEntering ? "card-enter" : ""}`}>
-                <EventCard event={currentEvent} />
-              </div>
-            </>
-          ) : (
-            <div className="discover-end-card">
-              <div className="discover-end-kicker">Stack cleared</div>
-              <h2>You made it to the end.</h2>
-              <p>No more events right now.</p>
-              <p>Come back later or make one.</p>
-            </div>
-          )}
+          <div className="discover-status-pill">
+            {activeMode === "events"
+              ? `${discoverEvents.length} in stack`
+              : `${friendCards.length} people to explore`}
+          </div>
         </div>
 
-        <button
-          className={`swipe-btn accept ${buttonFlash === "flash-accept" ? "active-flash-accept" : ""}`}
-          onClick={handleAccept}
-          disabled={!currentEvent || isActionLocked}
-          aria-label="Accept current event"
-        >
-          ↻
-        </button>
+        <p className="discover-context-copy">
+          {activeMode === "events"
+            ? "Swipe through what is moving around campus right now. Use ← and → on your keyboard too."
+            : "A social lane for people worth following, creators worth watching, and friends shaping the vibe."}
+        </p>
+
+        {activeMode === "events" ? (
+          <div className="swipe-area">
+            <button
+              className={`swipe-btn reject ${buttonFlash === "flash-reject" ? "active-flash-reject" : ""}`}
+              onClick={handleReject}
+              disabled={!currentEvent || isActionLocked}
+              aria-label="Skip current event"
+            >
+              ↺
+            </button>
+
+            <div className="discover-stack">
+              {currentEvent ? (
+                <>
+                  {nextEvent && (
+                    <div className="next-card-preview">
+                      <EventCard event={nextEvent} />
+                    </div>
+                  )}
+
+                  <div className={`discover-card-wrap ${swipeDirection} ${cardEntering ? "card-enter" : ""}`}>
+                    <EventCard event={currentEvent} />
+                  </div>
+                </>
+              ) : (
+                <div className="discover-end-card">
+                  <div className="discover-end-kicker">Stack cleared</div>
+                  <h2>You made it to the end.</h2>
+                  <p>No more events right now.</p>
+                  <p>Come back later or make one.</p>
+                </div>
+              )}
+            </div>
+
+            <button
+              className={`swipe-btn accept ${buttonFlash === "flash-accept" ? "active-flash-accept" : ""}`}
+              onClick={handleAccept}
+              disabled={!currentEvent || isActionLocked}
+              aria-label="Accept current event"
+            >
+              ↻
+            </button>
+          </div>
+        ) : (
+          <DiscoverFriendsPanel
+            items={friendCards}
+            followingIds={followingIdSet}
+            onOpenPerson={handleOpenPerson}
+            onToggleFollow={handleToggleFollow}
+          />
+        )}
       </div>
     </main>
   )

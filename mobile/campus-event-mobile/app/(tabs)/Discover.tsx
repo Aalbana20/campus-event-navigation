@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   PanResponder,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -12,8 +13,15 @@ import {
 } from 'react-native';
 
 import { AppScreen } from '@/components/mobile/AppScreen';
+import { DiscoverFriendsPanel } from '@/components/mobile/DiscoverFriendsPanel';
+import { DiscoverModeSwitch } from '@/components/mobile/DiscoverModeSwitch';
+import { DiscoverStoriesRow } from '@/components/mobile/DiscoverStoriesRow';
 import { EventStackCard } from '@/components/mobile/EventStackCard';
 import { useAppTheme } from '@/lib/app-theme';
+import {
+  buildMobileDiscoverFriendCards,
+  buildMobileDiscoverStoryItems,
+} from '@/lib/mobile-discover-social';
 import { useMobileApp } from '@/providers/mobile-app-provider';
 import { useMobileInbox } from '@/providers/mobile-inbox-provider';
 
@@ -23,16 +31,22 @@ export default function DiscoverScreen() {
   const styles = useMemo(() => buildStyles(theme), [theme]);
   const { width, height } = useWindowDimensions();
   const {
+    currentUser,
+    profiles,
     events,
     savedEventIds,
     discoverDismissedIds,
     acceptDiscoverEvent,
     rejectDiscoverEvent,
     resetDiscoverDeck,
+    followingProfiles,
+    followProfile,
+    unfollowProfile,
   } = useMobileApp();
   const { unreadNotificationCount } = useMobileInbox();
 
   const translate = useRef(new Animated.ValueXY()).current;
+  const [activeMode, setActiveMode] = useState<'events' | 'friends'>('events');
 
   const discoverEvents = useMemo(
     () =>
@@ -43,9 +57,33 @@ export default function DiscoverScreen() {
       ),
     [discoverDismissedIds, events, savedEventIds]
   );
+  const followingIdSet = useMemo(
+    () => new Set(followingProfiles.map((profile) => String(profile.id))),
+    [followingProfiles]
+  );
+  const storyItems = useMemo(
+    () =>
+      buildMobileDiscoverStoryItems({
+        currentUser,
+        followingProfiles,
+        profiles,
+        events,
+      }),
+    [currentUser, events, followingProfiles, profiles]
+  );
+  const friendCards = useMemo(
+    () =>
+      buildMobileDiscoverFriendCards({
+        currentUser,
+        followingProfiles,
+        profiles,
+        events,
+      }),
+    [currentUser, events, followingProfiles, profiles]
+  );
 
   const currentEvent = discoverEvents[0];
-  const cardHeight = Math.max(540, Math.min(height * 0.76, 760));
+  const cardHeight = Math.max(460, Math.min(height * 0.58, 640));
 
   useEffect(() => {
     translate.setValue({ x: 0, y: 0 });
@@ -107,12 +145,50 @@ export default function DiscoverScreen() {
     router.push('/inbox');
   };
 
+  const handleOpenSuggestion = useCallback(() => {
+    setActiveMode('friends');
+  }, []);
+
+  const handleOpenPerson = useCallback(
+    (person: { routeKey?: string }) => {
+      if (!person?.routeKey) return;
+
+      router.push({
+        pathname: '/profile/[username]',
+        params: { username: person.routeKey },
+      });
+    },
+    [router]
+  );
+
+  const handleToggleFollow = useCallback(
+    async (person: { profileId?: string }, isFollowing: boolean) => {
+      if (!person?.profileId) return;
+
+      if (isFollowing) {
+        await unfollowProfile(person.profileId);
+        return;
+      }
+
+      await followProfile(person.profileId);
+    },
+    [followProfile, unfollowProfile]
+  );
+
   return (
     <AppScreen style={styles.safeArea}>
       <View style={styles.container}>
-        <View style={styles.headerBar}>
+        <DiscoverStoriesRow
+          items={storyItems}
+          onOpenStory={handleOpenPerson}
+          onOpenSuggestion={handleOpenSuggestion}
+        />
+
+        <View style={styles.modeRow}>
           <View style={styles.headerSpacer} />
-          <Text style={styles.title}>Discover</Text>
+          <View style={styles.modeSwitchWrap}>
+            <DiscoverModeSwitch activeMode={activeMode} onChange={setActiveMode} />
+          </View>
           <View style={styles.headerActions}>
             <Pressable style={styles.headerIconButton} onPress={openNotifications}>
               <Ionicons name="notifications-outline" size={18} color={theme.text} />
@@ -122,60 +198,84 @@ export default function DiscoverScreen() {
         </View>
 
         <View style={styles.subHeader}>
-          <Text style={styles.subHeaderText}>Swipe through what&apos;s moving around campus.</Text>
+          <Text style={styles.subHeaderText}>
+            {activeMode === 'events'
+              ? "Swipe through what&apos;s moving around campus right now."
+              : 'A social lane for people worth following, creators worth watching, and campus momentum.'}
+          </Text>
           <View style={styles.stackPill}>
-            <Text style={styles.stackCount}>{discoverEvents.length} left</Text>
+            <Text style={styles.stackCount}>
+              {activeMode === 'events'
+                ? `${discoverEvents.length} left`
+                : `${friendCards.length} to explore`}
+            </Text>
           </View>
         </View>
 
-        <View style={styles.cardStage}>
-          {currentEvent ? (
-            <View style={[styles.cardDeck, { minHeight: cardHeight + 22 }]}>
-              <View style={[styles.cardBackdrop, { height: cardHeight - 18 }]} />
+        {activeMode === 'events' ? (
+          <>
+            <View style={styles.cardStage}>
+              {currentEvent ? (
+                <View style={[styles.cardDeck, { minHeight: cardHeight + 22 }]}>
+                  <View style={[styles.cardBackdrop, { height: cardHeight - 18 }]} />
 
-              <Animated.View
-                style={[
-                  styles.animatedCard,
-                  {
-                    transform: [
-                      { translateX: translate.x },
-                      { translateY: translate.y },
-                      { rotate: rotation },
-                    ],
-                  },
-                ]}
-                {...panResponder.panHandlers}>
-                <EventStackCard
-                  event={currentEvent}
-                  height={cardHeight}
-                  onPress={() =>
-                    router.push({
-                      pathname: '/event/[id]',
-                      params: { id: currentEvent.id },
-                    })
-                  }
-                />
-              </Animated.View>
+                  <Animated.View
+                    style={[
+                      styles.animatedCard,
+                      {
+                        transform: [
+                          { translateX: translate.x },
+                          { translateY: translate.y },
+                          { rotate: rotation },
+                        ],
+                      },
+                    ]}
+                    {...panResponder.panHandlers}>
+                    <EventStackCard
+                      event={currentEvent}
+                      height={cardHeight}
+                      onPress={() =>
+                        router.push({
+                          pathname: '/event/[id]',
+                          params: { id: currentEvent.id },
+                        })
+                      }
+                    />
+                  </Animated.View>
+                </View>
+              ) : (
+                <View style={[styles.endState, { minHeight: cardHeight - 12 }]}>
+                  <Text style={styles.endTitle}>You made it to the end.</Text>
+                  <Text style={styles.endCopy}>
+                    Accepted and rejected events have moved out of your stack for now.
+                  </Text>
+                  <Pressable style={styles.resetButton} onPress={resetDiscoverDeck}>
+                    <Text style={styles.resetButtonText}>Reload Discover</Text>
+                  </Pressable>
+                </View>
+              )}
             </View>
-          ) : (
-            <View style={[styles.endState, { minHeight: cardHeight - 12 }]}>
-              <Text style={styles.endTitle}>You made it to the end.</Text>
-              <Text style={styles.endCopy}>
-                Accepted and rejected events have moved out of your stack for now.
-              </Text>
-              <Pressable style={styles.resetButton} onPress={resetDiscoverDeck}>
-                <Text style={styles.resetButtonText}>Reload Discover</Text>
-              </Pressable>
-            </View>
-          )}
-        </View>
 
-        {currentEvent ? (
-          <View style={styles.swipeHint}>
-            <Ionicons name="swap-horizontal-outline" size={16} color={theme.textMuted} />
-            <Text style={styles.swipeHintText}>Swipe left to pass or right to save</Text>
-          </View>
-        ) : null}
+            {currentEvent ? (
+              <View style={styles.swipeHint}>
+                <Ionicons name="swap-horizontal-outline" size={16} color={theme.textMuted} />
+                <Text style={styles.swipeHintText}>Swipe left to pass or right to save</Text>
+              </View>
+            ) : null}
+          </>
+        ) : (
+          <ScrollView
+            style={styles.friendsStage}
+            contentContainerStyle={styles.friendsScrollContent}
+            showsVerticalScrollIndicator={false}>
+            <DiscoverFriendsPanel
+              items={friendCards}
+              followingIds={followingIdSet}
+              onOpenPerson={handleOpenPerson}
+              onToggleFollow={handleToggleFollow}
+            />
+          </ScrollView>
+        )}
       </View>
     </AppScreen>
   );
@@ -192,16 +292,20 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       paddingTop: 2,
       paddingBottom: 12,
       backgroundColor: theme.background,
+      gap: 12,
     },
-    headerBar: {
+    modeRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingBottom: 12,
+      gap: 10,
     },
     headerSpacer: {
       width: 40,
       height: 40,
+    },
+    modeSwitchWrap: {
+      flex: 1,
     },
     headerActions: {
       width: 40,
@@ -226,18 +330,11 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       borderRadius: 3.5,
       backgroundColor: theme.success,
     },
-    title: {
-      color: theme.text,
-      fontSize: 17,
-      fontWeight: '800',
-      textAlign: 'center',
-    },
     subHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       gap: 12,
-      paddingBottom: 12,
     },
     subHeaderText: {
       color: theme.textMuted,
@@ -261,6 +358,12 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     cardStage: {
       flex: 1,
       justifyContent: 'flex-start',
+    },
+    friendsStage: {
+      flex: 1,
+    },
+    friendsScrollContent: {
+      paddingBottom: 24,
     },
     cardDeck: {
       justifyContent: 'flex-start',
