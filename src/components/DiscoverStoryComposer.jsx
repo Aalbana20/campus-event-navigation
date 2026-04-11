@@ -351,7 +351,7 @@ function DiscoverStoryComposer({ isOpen, onClose, onSubmit }) {
                   color: "var(--text-main, #f5f7fb)",
                 }}
               >
-                Web composer fallback
+                Story publishing
               </div>
               <div
                 style={{
@@ -361,8 +361,8 @@ function DiscoverStoryComposer({ isOpen, onClose, onSubmit }) {
                   lineHeight: 1.45,
                 }}
               >
-                The web story backend is not wired yet, so shared stories stay in this browser
-                session for now.
+                Your image or video will upload to the shared stories feed so other people can
+                see it in Discover too.
               </div>
             </div>
 

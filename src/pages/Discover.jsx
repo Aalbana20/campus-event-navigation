@@ -7,6 +7,13 @@ import DiscoverStoriesRow from "../components/DiscoverStoriesRow"
 import EventCard from "../components/EventCard"
 import { useEvents } from "../context/EventContext"
 import {
+  buildDiscoverStoryStripItems,
+  fetchDiscoverStoryViewers,
+  loadActiveDiscoverStories,
+  recordDiscoverStoryView,
+  uploadDiscoverStory,
+} from "../discoverStories"
+import {
   buildDiscoverFriendCards,
   buildDiscoverStoryItems,
 } from "../discoverSocial"
@@ -33,10 +40,11 @@ function Discover() {
   const [isActionLocked, setIsActionLocked] = useState(false)
   const [activeStoryItem, setActiveStoryItem] = useState(null)
   const [isStoryComposerOpen, setIsStoryComposerOpen] = useState(false)
-  const [localStoryPosts, setLocalStoryPosts] = useState([])
+  const [storyRecords, setStoryRecords] = useState([])
+  const [storyViewerRows, setStoryViewerRows] = useState([])
+  const [isStoryViewerRowsLoading, setIsStoryViewerRowsLoading] = useState(false)
   const enterTimeoutRef = useRef(null)
   const swipeTimeoutRef = useRef(null)
-  const localStoryObjectUrlsRef = useRef([])
 
   const savedEventIds = useMemo(
     () => new Set((savedEvents || []).map((event) => String(event.id))),
@@ -51,27 +59,25 @@ function Discover() {
     () => new Set((followingList || []).map((person) => String(person.id))),
     [followingList]
   )
-  const storyItems = useMemo(() => {
-    const baseItems = buildDiscoverStoryItems({
-      currentUser,
-      followingList,
-      followersList,
-      allEvents,
-    })
-
-    if (localStoryPosts.length === 0) return baseItems
-
-    return baseItems.map((item) => {
-      if (item.kind !== "current") return item
-
-      return {
-        ...item,
-        seen: false,
-        meta: "Live",
-        stories: localStoryPosts,
-      }
-    })
-  }, [allEvents, currentUser, followersList, followingList, localStoryPosts])
+  const baseStoryItems = useMemo(
+    () =>
+      buildDiscoverStoryItems({
+        currentUser,
+        followingList,
+        followersList,
+        allEvents,
+      }),
+    [allEvents, currentUser, followersList, followingList]
+  )
+  const storyItems = useMemo(
+    () =>
+      buildDiscoverStoryStripItems({
+        currentUser,
+        baseItems: baseStoryItems,
+        storyRecords,
+      }),
+    [baseStoryItems, currentUser, storyRecords]
+  )
   const friendCards = useMemo(
     () =>
       buildDiscoverFriendCards({
@@ -102,6 +108,8 @@ function Discover() {
     Array.isArray(activeStoryItem?.stories) && activeStoryItem.stories.length > 0
       ? activeStoryItem.stories[0]
       : null
+  const isViewingOwnStory =
+    activeStoryMedia && String(activeStoryMedia.authorId || "") === String(currentUser?.id || "")
 
   const prepareNextCard = useCallback((removedIndex, previousLength) => {
     const remainingLength = Math.max(previousLength - 1, 0)
@@ -190,11 +198,15 @@ function Discover() {
   const handleOpenStory = useCallback((item) => {
     if (!item) return
     setIsStoryComposerOpen(false)
+    setStoryViewerRows([])
+    setIsStoryViewerRowsLoading(false)
     setActiveStoryItem(item)
   }, [])
 
   const handleCloseStory = useCallback(() => {
     setActiveStoryItem(null)
+    setStoryViewerRows([])
+    setIsStoryViewerRowsLoading(false)
   }, [])
 
   const handleOpenStoryComposer = useCallback(() => {
@@ -206,27 +218,47 @@ function Discover() {
     setIsStoryComposerOpen(false)
   }, [])
 
-  const handleSubmitStoryComposer = useCallback(({ file, caption }) => {
-    if (!file) return
+  const loadStories = useCallback(async () => {
+    const nextStories = await loadActiveDiscoverStories({
+      currentUser,
+      baseItems: baseStoryItems,
+    })
 
-    const nextObjectUrl = URL.createObjectURL(file)
-    localStoryObjectUrlsRef.current.push(nextObjectUrl)
+    setStoryRecords(nextStories)
+  }, [baseStoryItems, currentUser])
 
-    const mediaType = file.type.startsWith("video/") ? "video" : "image"
+  const handleSubmitStoryComposer = useCallback(
+    async ({ file, caption }) => {
+      if (!file || !currentUser?.id) {
+        window.alert("You need to be logged in to share a story.")
+        return
+      }
 
-    setLocalStoryPosts((prev) => [
-      {
-        id: `local-story-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        mediaUrl: nextObjectUrl,
-        mediaType,
-        caption: caption || "",
-        createdAt: new Date().toISOString(),
-      },
-      ...prev,
-    ])
+      try {
+        await uploadDiscoverStory({
+          authorId: currentUser.id,
+          file,
+          caption,
+        })
 
-    setIsStoryComposerOpen(false)
-  }, [])
+        await loadStories()
+        setIsStoryComposerOpen(false)
+      } catch (error) {
+        window.alert(
+          error?.message || "Could not share your story right now. Please try again."
+        )
+      }
+    },
+    [currentUser, loadStories]
+  )
+
+  useEffect(() => {
+    const syncStories = async () => {
+      await loadStories()
+    }
+
+    syncStories()
+  }, [loadStories])
 
   useEffect(() => {
     const handleKeyDown = (event) => {
@@ -258,8 +290,6 @@ function Discover() {
   ])
 
   useEffect(() => {
-    const localStoryObjectUrls = localStoryObjectUrlsRef.current
-
     return () => {
       if (enterTimeoutRef.current) {
         clearTimeout(enterTimeoutRef.current)
@@ -267,12 +297,48 @@ function Discover() {
       if (swipeTimeoutRef.current) {
         clearTimeout(swipeTimeoutRef.current)
       }
-
-      localStoryObjectUrls.forEach((objectUrl) => {
-        URL.revokeObjectURL(objectUrl)
-      })
     }
   }, [])
+
+  useEffect(() => {
+    let isActive = true
+
+    const syncStoryViewerState = async () => {
+      if (!activeStoryMedia?.id || !currentUser?.id) {
+        if (!isActive) return
+        setStoryViewerRows([])
+        setIsStoryViewerRowsLoading(false)
+        return
+      }
+
+      if (isViewingOwnStory) {
+        setIsStoryViewerRowsLoading(true)
+
+        const nextViewerRows = await fetchDiscoverStoryViewers({
+          storyId: activeStoryMedia.id,
+        })
+
+        if (!isActive) return
+
+        setStoryViewerRows(nextViewerRows)
+        setIsStoryViewerRowsLoading(false)
+        return
+      }
+
+      setStoryViewerRows([])
+      setIsStoryViewerRowsLoading(false)
+      await recordDiscoverStoryView({
+        storyId: activeStoryMedia.id,
+        viewerId: currentUser.id,
+      })
+    }
+
+    syncStoryViewerState()
+
+    return () => {
+      isActive = false
+    }
+  }, [activeStoryMedia, currentUser, isViewingOwnStory])
 
   const handleOpenSuggestion = useCallback(() => {
     setActiveMode("friends")
@@ -624,7 +690,8 @@ function Discover() {
                   }}
                 >
                   {activeStoryMedia
-                    ? "Shared from the new web story composer. This preview is kept in your current session while the web story backend is still being wired."
+                    ? activeStoryMedia.caption ||
+                      "Shared from Discover stories and synced through the live campus feed."
                     : activeStoryItem.bio ||
                       activeStoryItem.featuredMeta ||
                       "Story playback is not wired on web yet, so this lightweight preview keeps the story interaction connected here."}
@@ -634,34 +701,155 @@ function Discover() {
 
             <div
               style={{
+                marginTop: "16px",
+                padding: "16px",
+                borderRadius: "20px",
+                border: "1px solid rgba(255, 255, 255, 0.08)",
+                background: "rgba(255, 255, 255, 0.04)",
+              }}
+            >
+              <div
+                style={{
+                  color: "rgba(248, 250, 252, 0.9)",
+                  fontSize: "0.78rem",
+                  fontWeight: 700,
+                  letterSpacing: "0.04em",
+                  textTransform: "uppercase",
+                }}
+              >
+                Viewed by
+              </div>
+
+              {isViewingOwnStory ? (
+                isStoryViewerRowsLoading ? (
+                  <div
+                    style={{
+                      marginTop: "12px",
+                      color: "rgba(226, 232, 240, 0.72)",
+                      fontSize: "0.88rem",
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    Loading viewer activity...
+                  </div>
+                ) : storyViewerRows.length > 0 ? (
+                  <div
+                    style={{
+                      display: "grid",
+                      gap: "10px",
+                      marginTop: "12px",
+                    }}
+                  >
+                    {storyViewerRows.slice(0, 6).map((viewer) => (
+                      <div
+                        key={viewer.id}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: "12px",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "10px",
+                            minWidth: 0,
+                          }}
+                        >
+                          <img
+                            src={viewer.avatar || "/default-avatar.png"}
+                            alt={viewer.username || viewer.name}
+                            onError={(event) => {
+                              event.currentTarget.src = "/default-avatar.png"
+                            }}
+                            style={{
+                              width: "36px",
+                              height: "36px",
+                              borderRadius: "50%",
+                              objectFit: "cover",
+                              flexShrink: 0,
+                            }}
+                          />
+                          <div style={{ minWidth: 0 }}>
+                            <div
+                              style={{
+                                color: "var(--text-main, #f5f7fb)",
+                                fontSize: "0.88rem",
+                                fontWeight: 700,
+                                whiteSpace: "nowrap",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                              }}
+                            >
+                              {viewer.name}
+                            </div>
+                            <div
+                              style={{
+                                marginTop: "2px",
+                                color: "rgba(226, 232, 240, 0.7)",
+                                fontSize: "0.78rem",
+                                fontWeight: 600,
+                              }}
+                            >
+                              {viewer.username ? `@${viewer.username}` : "Campus User"}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div
+                          style={{
+                            color: "rgba(226, 232, 240, 0.68)",
+                            fontSize: "0.76rem",
+                            fontWeight: 600,
+                            flexShrink: 0,
+                          }}
+                        >
+                          {viewer.viewedAt
+                            ? new Date(viewer.viewedAt).toLocaleTimeString([], {
+                                hour: "numeric",
+                                minute: "2-digit",
+                              })
+                            : "Recently"}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      marginTop: "12px",
+                      color: "rgba(226, 232, 240, 0.72)",
+                      fontSize: "0.88rem",
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    No viewers yet. When people open this story, they will appear here.
+                  </div>
+                )
+              ) : (
+                <div
+                  style={{
+                    marginTop: "12px",
+                    color: "rgba(226, 232, 240, 0.72)",
+                    fontSize: "0.88rem",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  Viewer details are available to the story owner.
+                </div>
+              )}
+            </div>
+
+            <div
+              style={{
                 display: "flex",
-                flexWrap: "wrap",
+                justifyContent: "flex-end",
                 gap: "10px",
                 marginTop: "16px",
               }}
             >
-              {activeStoryItem.routeKey ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleCloseStory()
-                    navigate(`/profile/${activeStoryItem.routeKey}`)
-                  }}
-                  style={{
-                    border: "1px solid rgba(255, 255, 255, 0.08)",
-                    borderRadius: "999px",
-                    padding: "12px 16px",
-                    cursor: "pointer",
-                    background: "#f8fafc",
-                    color: "#111827",
-                    fontSize: "0.86rem",
-                    fontWeight: 700,
-                  }}
-                >
-                  Open Profile
-                </button>
-              ) : null}
-
               <button
                 type="button"
                 onClick={handleCloseStory}
