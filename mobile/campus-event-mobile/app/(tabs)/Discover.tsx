@@ -15,8 +15,11 @@ import {
 } from 'react-native';
 
 import { AppScreen } from '@/components/mobile/AppScreen';
+import { DiscoverStoriesRow } from '@/components/mobile/DiscoverStoriesRow';
+import { DiscoverModeSwitch } from '@/components/mobile/DiscoverModeSwitch';
 import { EventStackCard } from '@/components/mobile/EventStackCard';
 import { useAppTheme } from '@/lib/app-theme';
+import { buildMobileDiscoverStoryItems } from '@/lib/mobile-discover-social';
 import { useMobileApp } from '@/providers/mobile-app-provider';
 import { useMobileInbox } from '@/providers/mobile-inbox-provider';
 
@@ -27,6 +30,7 @@ export default function DiscoverScreen() {
   const { width, height } = useWindowDimensions();
   const {
     currentUser,
+    followingProfiles,
     profiles,
     events,
     savedEventIds,
@@ -42,9 +46,15 @@ export default function DiscoverScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<'events' | 'friends'>('events');
 
-  const storyUsers = useMemo(() => {
-    return profiles.filter((p) => p.id !== currentUser?.id).slice(0, 10);
-  }, [profiles, currentUser?.id]);
+  const storyItems = useMemo(() => {
+    if (!currentUser) return [];
+    return buildMobileDiscoverStoryItems({
+      currentUser,
+      followingProfiles,
+      profiles,
+      events,
+    });
+  }, [currentUser, followingProfiles, profiles, events]);
 
   const discoverEvents = useMemo(
     () =>
@@ -139,14 +149,7 @@ export default function DiscoverScreen() {
             </Pressable>
           </View>
 
-          <View style={styles.segmentedControl}>
-            <Pressable style={[styles.segment, activeTab === 'events' && styles.segmentActive]} onPress={() => setActiveTab('events')}>
-              <Text style={[styles.segmentText, activeTab === 'events' && styles.segmentTextActive]}>Events</Text>
-            </Pressable>
-            <Pressable style={[styles.segment, activeTab === 'friends' && styles.segmentActive]} onPress={() => setActiveTab('friends')}>
-              <Text style={[styles.segmentText, activeTab === 'friends' && styles.segmentTextActive]}>Friends</Text>
-            </Pressable>
-          </View>
+          <DiscoverModeSwitch activeMode={activeTab} onChange={setActiveTab} />
 
           <View style={styles.headerActions}>
             <Pressable style={styles.headerIconButton} onPress={openNotifications}>
@@ -156,28 +159,10 @@ export default function DiscoverScreen() {
           </View>
         </View>
 
-        <View style={styles.storiesOpenContainer}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.storiesScrollContent}>
-            <Pressable style={styles.storyItem} onPress={() => router.push('/(tabs)/events?tab=create')}>
-              <View style={[styles.storyRing, styles.storyRingActive]}>
-                <Image source={{ uri: currentUser?.avatar || 'https://via.placeholder.com/150' }} style={styles.storyAvatar} />
-                <View style={styles.storyAddBadge}>
-                  <Ionicons name="add" size={12} color={theme.background} />
-                </View>
-              </View>
-              <Text style={styles.storyName} numberOfLines={1}>Your Story</Text>
-            </Pressable>
-
-            {storyUsers.map((user) => (
-              <Pressable key={user.id} style={styles.storyItem} onPress={() => router.push({ pathname: '/profile/[username]', params: { username: user.username } })}>
-                <View style={styles.storyRing}>
-                  <Image source={{ uri: user.avatar || 'https://via.placeholder.com/150' }} style={styles.storyAvatar} />
-                </View>
-                <Text style={styles.storyName} numberOfLines={1}>{user.name?.split(' ')[0] || user.username}</Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-        </View>
+        <DiscoverStoriesRow
+          items={storyItems}
+          onOpenSuggestion={() => setActiveTab('friends')}
+        />
 
         <View style={styles.cardStage}>
           {currentEvent ? (
@@ -277,84 +262,6 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       borderRadius: 3.5,
       backgroundColor: theme.success,
     },
-  segmentedControl: {
-    flexDirection: 'row',
-    backgroundColor: theme.surfaceAlt,
-    borderRadius: 20,
-    padding: 4,
-    },
-  segment: {
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 16,
-    },
-  segmentActive: {
-    backgroundColor: theme.surface,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-    },
-  segmentText: {
-    color: theme.textMuted,
-    fontSize: 13,
-    fontWeight: '700',
-    },
-  segmentTextActive: {
-    color: theme.text,
-  },
-  storiesOpenContainer: {
-    paddingVertical: 12,
-    width: '100%',
-    },
-  storiesScrollContent: {
-    paddingHorizontal: 16,
-    gap: 16,
-  },
-  storyItem: {
-    alignItems: 'center',
-    gap: 6,
-    width: 64,
-  },
-  storyRing: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    borderWidth: 2,
-    borderColor: theme.border,
-    padding: 3,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  storyRingActive: {
-    borderColor: theme.accent,
-  },
-  storyAvatar: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 999,
-    backgroundColor: theme.surfaceAlt,
-  },
-  storyAddBadge: {
-    position: 'absolute',
-    bottom: -2,
-    right: -2,
-    backgroundColor: theme.accent,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: theme.background,
-    width: 20,
-    height: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  storyName: {
-    color: theme.text,
-    fontSize: 11,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
     cardStage: {
       flex: 1,
       justifyContent: 'flex-start',

@@ -1,6 +1,6 @@
 import { DEFAULT_AVATAR_URL, sanitizeAvatarUrl } from "./profileMedia"
 
-const STORY_MIN_ITEMS = 9
+const STORY_MIN_ITEMS = 15
 const FRIEND_CARD_MIN_ITEMS = 6
 const PLACEHOLDER_PEOPLE = [
   {

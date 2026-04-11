@@ -1387,55 +1387,11 @@ body.theme-dark .explore-search-wrap .explore-search-input::placeholder {
 
 .discover-stories-panel {
   position: relative;
-  overflow: hidden;
-  border-radius: 22px;
-  padding: 12px 14px 10px;
-  background:
-    radial-gradient(circle at top left, rgba(96, 165, 250, 0.14), transparent 30%),
-    radial-gradient(circle at top right, rgba(244, 114, 182, 0.11), transparent 26%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 255, 0.98));
-  border: 1px solid rgba(17, 24, 39, 0.08);
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.05);
-}
-
-.discover-stories-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 8px;
-}
-
-.discover-stories-heading {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.discover-stories-eyebrow {
-  margin: 0;
-  color: #667085;
-  font-size: 0.66rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
-.discover-stories-title {
-  margin: 0;
-  color: #111827;
-  font-size: 1.12rem;
-  font-weight: 800;
-  letter-spacing: -0.04em;
-}
-
-.discover-stories-note {
-  margin: 0;
-  max-width: 160px;
-  color: #667085;
-  font-size: 0.72rem;
-  line-height: 1.3;
-  text-align: right;
+  width: 100%;
+  padding: 0 0 12px 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
 }
 
 .discover-stories-track {
@@ -1532,19 +1488,38 @@ body.theme-dark .explore-search-wrap .explore-search-input::placeholder {
   line-height: 1.2;
 }
 
-.discover-story-meta {
-  color: #667085;
-  font-size: 0.64rem;
-  font-weight: 600;
-}
 
 .discover-topbar {
+  position: fixed;
+  top: 0;
+  left: 28px;
+  height: 64px;
+  z-index: 105;
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+}
+
+.header-icon-btn {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 1px solid rgba(17, 24, 39, 0.08);
+  background: rgba(255, 255, 255, 0.94);
+  color: #111827;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  margin-top: 4px;
-  padding-top: 2px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.header-icon-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 .discover-mode-switch {
@@ -1553,11 +1528,12 @@ body.theme-dark .explore-search-wrap .explore-search-input::placeholder {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: center;
   padding: 3px;
-  width: min(340px, 100%);
+  width: 180px;
   border-radius: 999px;
   background: rgba(233, 237, 244, 0.96);
   border: 1px solid rgba(17, 24, 39, 0.08);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
+  margin: 0 auto;
 }
 
 .discover-mode-switch-indicator {
@@ -1582,10 +1558,10 @@ body.theme-dark .explore-search-wrap .explore-search-input::placeholder {
   z-index: 1;
   border: none;
   background: transparent;
-  padding: 10px 18px;
+  padding: 6px 12px;
   border-radius: 999px;
   color: #667085;
-  font-size: 0.9rem;
+  font-size: 0.82rem;
   font-weight: 700;
   letter-spacing: -0.01em;
   cursor: pointer;
@@ -1594,6 +1570,13 @@ body.theme-dark .explore-search-wrap .explore-search-input::placeholder {
 
 .discover-mode-switch-option.active {
   color: #111827;
+}
+
+.discover-switch-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
 }
 
 .discover-status-pill {
@@ -1607,19 +1590,22 @@ body.theme-dark .explore-search-wrap .explore-search-input::placeholder {
   white-space: nowrap;
 }
 
-.discover-context-copy {
-  margin: 2px auto 2px;
-  max-width: 340px;
-  color: #667085;
-  font-size: 0.8rem;
-  line-height: 1.45;
-  text-align: center;
-}
-
 .discover-friends-panel {
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+body.theme-dark .header-icon-btn {
+  background: rgba(32, 38, 49, 0.96);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: #f5f7fb;
+}
+
+body.theme-dark .discover-stories-panel {
+  background: transparent;
+  border: none;
+  box-shadow: none;
 }
 
 .discover-friends-intro {
@@ -4026,6 +4012,10 @@ body.theme-dark .auth-error {
 }
 
 @media (max-width: 768px) {
+  .discover-topbar {
+    left: 14px;
+  }
+
   .topbar {
     padding: 0 14px;
     gap: 12px;
@@ -4933,7 +4923,6 @@ body.theme-dark .calendar-modal-card,
 body.theme-dark .my-flip-card-front,
 body.theme-dark .my-flip-card-back,
 body.theme-dark .flip-card-back,
-body.theme-dark .discover-stories-panel,
 body.theme-dark .discover-friend-card {
   background: var(--bg-elevated);
   color: var(--text-main);

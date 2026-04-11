@@ -15,13 +15,13 @@ function DiscoverStoryItem({ item, onOpenSuggestion }) {
       type="button"
       className={`discover-story-item ${item.kind} ${item.seen ? "seen" : "unseen"}`}
       onClick={handleClick}
-      aria-label={`${item.name} ${item.meta || "story"}`}
+      aria-label={`${item.username || item.name} story`}
     >
       <div className="discover-story-avatar-shell">
         <div className="discover-story-ring">
           <img
             src={item.avatar}
-            alt={item.name}
+            alt={item.username || item.name}
             className="discover-story-avatar"
             onError={(event) => {
               event.currentTarget.src = "/default-avatar.png"
@@ -38,8 +38,7 @@ function DiscoverStoryItem({ item, onOpenSuggestion }) {
         ) : null}
       </div>
 
-      <span className="discover-story-label">{isCurrent ? "Your Story" : item.name}</span>
-      <span className="discover-story-meta">{item.meta || "Campus"}</span>
+      <span className="discover-story-label">{isCurrent ? "Your Story" : (item.username || item.name)}</span>
     </button>
   )
 }
@@ -47,17 +46,6 @@ function DiscoverStoryItem({ item, onOpenSuggestion }) {
 function DiscoverStoriesRow({ items, onOpenSuggestion }) {
   return (
     <section className="discover-stories-panel" aria-label="Discover stories">
-      <div className="discover-stories-header">
-        <div className="discover-stories-heading">
-          <p className="discover-stories-eyebrow">Campus Pulse</p>
-          <h2 className="discover-stories-title">Stories</h2>
-        </div>
-
-        <p className="discover-stories-note">
-          Hosts, friends, and suggestions.
-        </p>
-      </div>
-
       <div className="discover-stories-track" role="list">
         {items.map((item) => (
           <DiscoverStoryItem

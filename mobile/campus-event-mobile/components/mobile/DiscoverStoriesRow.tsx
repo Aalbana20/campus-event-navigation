@@ -31,14 +31,6 @@ export function DiscoverStoriesRow({
 
   return (
     <View style={styles.panel}>
-      <View style={styles.header}>
-        <View style={styles.heading}>
-          <Text style={styles.eyebrow}>Campus Pulse</Text>
-          <Text style={styles.title}>Stories</Text>
-        </View>
-        <Text style={styles.note}>Hosts, friends, and suggestions.</Text>
-      </View>
-
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -80,69 +72,24 @@ export function DiscoverStoriesRow({
               ) : null}
 
               <Text style={styles.storyLabel} numberOfLines={1}>
-                {isCurrent ? 'Your Story' : item.name}
-              </Text>
-              <Text style={styles.storyMeta} numberOfLines={1}>
-                {item.meta}
+                {isCurrent ? 'Your Story' : (item.username || item.name)}
               </Text>
             </Pressable>
           );
         })}
       </ScrollView>
-    </View>
   );
 }
 
 const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
   StyleSheet.create({
     panel: {
-      borderRadius: 22,
-      paddingHorizontal: 12,
-      paddingTop: 10,
-      paddingBottom: 8,
-      backgroundColor: theme.surface,
-      borderWidth: 1,
-      borderColor: theme.border,
-      shadowColor: theme.shadow,
-      shadowOpacity: 0.05,
-      shadowRadius: 14,
-      shadowOffset: { width: 0, height: 7 },
-      elevation: 2,
-    },
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      gap: 10,
-      marginBottom: 6,
-    },
-    heading: {
-      gap: 2,
-    },
-    eyebrow: {
-      color: theme.textMuted,
-      fontSize: 10,
-      fontWeight: '800',
-      letterSpacing: 1.1,
-      textTransform: 'uppercase',
-    },
-    title: {
-      color: theme.text,
-      fontSize: 17,
-      fontWeight: '800',
-      letterSpacing: -0.3,
-    },
-    note: {
-      flex: 1,
-      maxWidth: 132,
-      color: theme.textMuted,
-      fontSize: 9,
-      lineHeight: 12,
-      textAlign: 'right',
+      paddingVertical: 8,
+      width: '100%',
     },
     track: {
-      gap: 8,
-      paddingRight: 2,
+      gap: 12,
+      paddingHorizontal: 16,
     },
     storyItem: {
       width: 60,
@@ -207,10 +154,5 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       fontSize: 10,
       fontWeight: '700',
       maxWidth: 62,
-    },
-    storyMeta: {
-      color: theme.textMuted,
-      fontSize: 9,
-      fontWeight: '600',
     },
   });
