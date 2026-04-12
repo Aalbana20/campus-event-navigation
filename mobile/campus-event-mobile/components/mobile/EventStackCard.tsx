@@ -313,7 +313,7 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     bottomContent: {
       zIndex: 3,
       position: 'absolute',
-      bottom: 48,
+      bottom: 72,
       left: 16,
       right: 12,
       flexDirection: 'row',
@@ -378,8 +378,8 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     },
     rsvpCheckBadge: {
       position: 'absolute',
-      top: 14,
-      left: 12,
+      top: 11,
+      left: 10,
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: 'transparent',
