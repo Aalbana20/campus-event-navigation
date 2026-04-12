@@ -1,19 +1,20 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useMemo } from 'react';
 import {
+  Image,
   ImageBackground,
   Pressable,
   StyleSheet,
   Text,
   View,
-  Image,
 } from 'react-native';
+import type { GestureResponderEvent } from 'react-native';
 
 import { useAppTheme } from '@/lib/app-theme';
 import { getEventCreatorLabel } from '@/lib/mobile-backend';
 import { getAvatarImageSource, getEventImageSource } from '@/lib/mobile-media';
 import { useMobileApp } from '@/providers/mobile-app-provider';
-import { EventRecord } from '@/types/models';
+import { EventRecord, ProfileRecord } from '@/types/models';
 
 import { EventActionTrigger } from './EventActionTrigger';
 
@@ -21,6 +22,12 @@ type EventStackCardProps = {
   event: EventRecord;
   height: number;
   onPress?: () => void;
+  isRsvped?: boolean;
+  isSavedForLater?: boolean;
+  onPressRsvp?: (event: EventRecord) => void;
+  onPressComment?: (event: EventRecord) => void;
+  onPressSave?: (event: EventRecord) => void;
+  onPressMutuals?: (event: EventRecord, mutuals: ProfileRecord[]) => void;
   swipeDirection?: 'left' | 'right' | null;
   swipeIntensity?: number;
 };
@@ -29,6 +36,12 @@ export function EventStackCard({
   event,
   height,
   onPress,
+  isRsvped = false,
+  isSavedForLater = false,
+  onPressRsvp,
+  onPressComment,
+  onPressSave,
+  onPressMutuals,
   swipeDirection = null,
   swipeIntensity = 0,
 }: EventStackCardProps) {
@@ -36,9 +49,10 @@ export function EventStackCard({
   const styles = useMemo(() => buildStyles(theme), [theme]);
   const { followingProfiles } = useMobileApp();
 
-  const mutualsGoing = useMemo(() => {
-    return followingProfiles.filter((profile) => event.attendees.includes(profile.id));
-  }, [event.attendees, followingProfiles]);
+  const mutualsGoing = useMemo(
+    () => followingProfiles.filter((profile) => event.attendees.includes(profile.id)),
+    [event.attendees, followingProfiles]
+  );
 
   const swipeFeedbackColor =
     swipeDirection === 'right'
@@ -46,6 +60,35 @@ export function EventStackCard({
       : swipeDirection === 'left'
         ? `rgba(248, 113, 113, ${Math.min(swipeIntensity * 0.5, 0.4)})`
         : 'transparent';
+
+  const eventTitle = event.title || 'Campus Event';
+  const eventDate = event.date || 'Date TBA';
+  const eventTime = event.time || 'Time TBA';
+  const mutualCount = mutualsGoing.length;
+
+  const stopEventPress = (eventPress: GestureResponderEvent) => {
+    eventPress.stopPropagation();
+  };
+
+  const handleMutualsPress = (eventPress: GestureResponderEvent) => {
+    stopEventPress(eventPress);
+    onPressMutuals?.(event, mutualsGoing);
+  };
+
+  const handleRsvpPress = (eventPress: GestureResponderEvent) => {
+    stopEventPress(eventPress);
+    onPressRsvp?.(event);
+  };
+
+  const handleCommentPress = (eventPress: GestureResponderEvent) => {
+    stopEventPress(eventPress);
+    onPressComment?.(event);
+  };
+
+  const handleSavePress = (eventPress: GestureResponderEvent) => {
+    stopEventPress(eventPress);
+    onPressSave?.(event);
+  };
 
   return (
     <Pressable style={[styles.card, { height }]} onPress={onPress}>
@@ -58,60 +101,96 @@ export function EventStackCard({
 
         <View style={styles.topContent}>
           <View style={styles.topRow}>
-            <View style={styles.creatorIdentity}>
-              <Image source={getAvatarImageSource(event.creatorAvatar)} style={styles.creatorAvatar} />
-              <Text style={styles.creatorName} numberOfLines={1}>
-                {getEventCreatorLabel(event)}
-              </Text>
-            </View>
-            <EventActionTrigger event={event} style={styles.actions} />
-          </View>
-
-          <View style={styles.tagsRow}>
-            {event.tags.slice(0, 3).map((tag) => (
-              <View key={tag} style={styles.tagChip}>
-                <Text style={styles.tagText}>#{tag}</Text>
+            <View style={styles.creatorCluster}>
+              <View style={styles.creatorIdentity}>
+                <Image source={getAvatarImageSource(event.creatorAvatar)} style={styles.creatorAvatar} />
+                <Text style={styles.creatorName} numberOfLines={1}>
+                  {getEventCreatorLabel(event)}
+                </Text>
               </View>
-            ))}
-          </View>
-        </View>
 
-        <View style={styles.bottomContent}>
-          <View style={styles.contentShell}>
-            <Text style={styles.title} numberOfLines={2}>
-              {event.title}
-            </Text>
-            <Text style={styles.meta} numberOfLines={1}>
-              {[event.date, event.time, event.locationName].filter(Boolean).join(' • ')}
-            </Text>
-            <Text style={styles.description} numberOfLines={3}>
-              {event.description}
-            </Text>
-
-            <View style={styles.badgesRow}>
-              <Pressable style={styles.badge} onPress={() => { /* Expand Attendees Modal */ }}>
-                <Ionicons name="people-outline" size={16} color="#ffffff" />
-                <Text style={styles.badgeText}>{event.goingCount} going</Text>
-              </Pressable>
-
-              <Pressable style={styles.badge} onPress={() => { /* Expand Mutuals Modal */ }}>
+              <Pressable style={styles.mutualInlineButton} onPress={handleMutualsPress}>
                 {mutualsGoing.length > 0 ? (
-                  <View style={styles.mutualsStack}>
-                    {mutualsGoing.slice(0, 3).map((mutual, i) => (
+                  <View style={styles.mutualsInlineStack}>
+                    {mutualsGoing.slice(0, 3).map((mutual, index) => (
                       <Image
                         key={mutual.id}
                         source={getAvatarImageSource(mutual.avatar)}
-                        style={[styles.mutualAvatar, { marginLeft: i > 0 ? -8 : 0, zIndex: 3 - i }]}
+                        style={[
+                          styles.mutualInlineAvatar,
+                          { marginLeft: index > 0 ? -8 : 0, zIndex: 3 - index },
+                        ]}
                       />
                     ))}
                   </View>
                 ) : (
-                  <Ionicons name="person-add-outline" size={14} color="#ffffff" />
+                  <View style={styles.mutualInlineEmpty}>
+                    <Ionicons name="people-outline" size={14} color="rgba(255,255,255,0.76)" />
+                  </View>
                 )}
-                <Text style={styles.badgeText}>{mutualsGoing.length} mutuals</Text>
+                <Text style={styles.mutualInlineCount}>{mutualCount}</Text>
               </Pressable>
             </View>
+
+            <EventActionTrigger event={event} style={styles.actions} />
           </View>
+        </View>
+
+        <View style={styles.bottomContent}>
+          <View style={styles.infoPills}>
+            <View style={[styles.infoPill, styles.titlePill]}>
+              <Text style={styles.title} numberOfLines={2}>
+                {eventTitle}
+              </Text>
+            </View>
+
+            <View style={styles.infoPill}>
+              <Ionicons name="calendar-outline" size={14} color="rgba(255,255,255,0.92)" />
+              <Text style={styles.infoPillText} numberOfLines={1}>
+                {eventDate}
+              </Text>
+            </View>
+
+            <View style={styles.infoPill}>
+              <Ionicons name="time-outline" size={14} color="rgba(255,255,255,0.92)" />
+              <Text style={styles.infoPillText} numberOfLines={1}>
+                {eventTime}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.actionRail}>
+            <Pressable style={styles.actionButton} onPress={handleRsvpPress}>
+              <View style={styles.rsvpIconWrap}>
+                <Ionicons
+                  name="person-outline"
+                  size={34}
+                  color={isRsvped ? '#4ade80' : '#ffffff'}
+                />
+                <View style={styles.rsvpCheckBadge}>
+                  <Ionicons name="checkmark" size={16} color={isRsvped ? '#4ade80' : '#ffffff'} />
+                </View>
+              </View>
+            </Pressable>
+
+            <Pressable style={styles.actionButton} onPress={handleCommentPress}>
+              <Ionicons name="chatbubble-outline" size={32} color="#ffffff" />
+            </Pressable>
+
+            <Pressable style={styles.actionButton} onPress={handleSavePress}>
+              <Ionicons
+                name={isSavedForLater ? 'bookmark' : 'bookmark-outline'}
+                size={32}
+                color="#ffffff"
+              />
+            </Pressable>
+          </View>
+        </View>
+
+        <View style={styles.bottomHintWrap}>
+          <Text style={styles.bottomHintText} numberOfLines={1}>
+            Tap for details
+          </Text>
         </View>
       </ImageBackground>
     </Pressable>
@@ -134,7 +213,8 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     image: {
       flex: 1,
       justifyContent: 'space-between',
-      padding: 18,
+      paddingTop: 18,
+      paddingHorizontal: 16,
     },
     imageStyle: {
       borderRadius: 32,
@@ -148,7 +228,6 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       zIndex: 1,
     },
     topContent: {
-      gap: 12,
       zIndex: 3,
     },
     topRow: {
@@ -156,24 +235,32 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       justifyContent: 'space-between',
       alignItems: 'flex-start',
       width: '100%',
+      gap: 10,
+    },
+    creatorCluster: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      flex: 1,
+      minWidth: 0,
     },
     creatorIdentity: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: 'rgba(8, 11, 16, 0.7)',
+      backgroundColor: 'rgba(8, 11, 16, 0.48)',
       borderRadius: 999,
-      padding: 6,
-      paddingRight: 14,
+      paddingVertical: 5,
+      paddingHorizontal: 6,
+      paddingRight: 11,
       gap: 8,
       borderWidth: 1,
       borderColor: 'rgba(255, 255, 255, 0.12)',
-      flexShrink: 1,
-      marginRight: 10,
+      maxWidth: '72%',
     },
     creatorAvatar: {
-      width: 26,
-      height: 26,
-      borderRadius: 13,
+      width: 25,
+      height: 25,
+      borderRadius: 12.5,
     },
     creatorName: {
       color: '#ffffff',
@@ -181,86 +268,131 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       fontWeight: '700',
       flexShrink: 1,
     },
-    actions: {
-      backgroundColor: 'rgba(255, 255, 255, 0.92)',
-    },
-    tagsRow: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 8,
-    },
-    tagChip: {
-      borderRadius: 999,
-      paddingHorizontal: 12,
-      paddingVertical: 7,
-      backgroundColor: 'rgba(8, 11, 16, 0.7)',
-      borderWidth: 1,
-      borderColor: 'rgba(255, 255, 255, 0.12)',
-    },
-    tagText: {
-      color: '#ffffff',
-      fontSize: 12,
-      fontWeight: '700',
-    },
-    bottomContent: {
-      gap: 10,
-    },
-    contentShell: {
-      borderRadius: 26,
-      padding: 18,
-      backgroundColor: 'rgba(8, 11, 16, 0.54)',
-      borderWidth: 1,
-      borderColor: 'rgba(255, 255, 255, 0.12)',
-      gap: 10,
-    },
-    title: {
-      color: '#ffffff',
-      fontSize: 30,
-      fontWeight: '800',
-      lineHeight: 36,
-    },
-    meta: {
-      color: 'rgba(255, 255, 255, 0.88)',
-      fontSize: 14,
-      fontWeight: '600',
-    },
-    description: {
-      color: 'rgba(255, 255, 255, 0.9)',
-      fontSize: 14,
-      lineHeight: 20,
-    },
-    badgesRow: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 10,
-      marginTop: 2,
-    },
-    badge: {
+    mutualInlineButton: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 6,
-      paddingHorizontal: 12,
-      paddingVertical: 9,
+      paddingVertical: 5,
+      paddingHorizontal: 8,
       borderRadius: 999,
-      backgroundColor: 'rgba(8, 11, 16, 0.78)',
+      backgroundColor: 'rgba(8, 11, 16, 0.44)',
       borderWidth: 1,
-      borderColor: 'rgba(255, 255, 255, 0.12)',
+      borderColor: 'rgba(255,255,255,0.11)',
     },
-    mutualsStack: {
+    mutualsInlineStack: {
       flexDirection: 'row',
       alignItems: 'center',
-      marginRight: 4,
+      marginRight: 2,
     },
-    mutualAvatar: {
+    mutualInlineAvatar: {
       width: 18,
       height: 18,
       borderRadius: 9,
       borderWidth: 1,
-      borderColor: '#111',
+      borderColor: 'rgba(8, 11, 16, 0.9)',
     },
-    badgeText: {
+    mutualInlineEmpty: {
+      width: 18,
+      height: 18,
+      borderRadius: 9,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: 'rgba(255,255,255,0.08)',
+    },
+    mutualInlineCount: {
       color: '#ffffff',
+      fontSize: 12,
+      fontWeight: '700',
+      minWidth: 12,
+      textAlign: 'center',
+    },
+    actions: {
+      backgroundColor: 'rgba(8, 11, 16, 0.5)',
+      borderColor: 'rgba(255,255,255,0.14)',
+    },
+    bottomContent: {
+      zIndex: 3,
+      position: 'absolute',
+      bottom: 48,
+      left: 16,
+      right: 12,
+      flexDirection: 'row',
+      alignItems: 'flex-end',
+      justifyContent: 'space-between',
+    },
+    infoPills: {
+      flex: 1,
+      maxWidth: '75%',
+      flexDirection: 'column',
+      alignItems: 'flex-start',
+      gap: 6,
+    },
+    infoPill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      borderRadius: 999,
+      paddingVertical: 6,
+      paddingHorizontal: 12,
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.1)',
+      backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    },
+    titlePill: {
+      paddingVertical: 10,
+      paddingHorizontal: 14,
+      borderRadius: 16,
+      maxWidth: '100%',
+    },
+    title: {
+      color: '#ffffff',
+      fontSize: 24,
+      fontWeight: '800',
+      lineHeight: 28,
+    },
+    infoPillText: {
+      color: 'rgba(255,255,255,0.95)',
       fontSize: 13,
       fontWeight: '700',
+    },
+    actionRail: {
+      alignItems: 'center',
+      gap: 22,
+      alignSelf: 'flex-end',
+      marginBottom: 2,
+    },
+    actionButton: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.35,
+      shadowRadius: 4,
+      elevation: 5,
+    },
+    rsvpIconWrap: {
+      width: 34,
+      height: 34,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    rsvpCheckBadge: {
+      position: 'absolute',
+      top: 14,
+      left: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: 'transparent',
+    },
+    bottomHintWrap: {
+      zIndex: 3,
+      alignItems: 'flex-start',
+      marginTop: 8,
+    },
+    bottomHintText: {
+      color: 'rgba(255,255,255,0.68)',
+      fontSize: 11,
+      fontWeight: '600',
+      paddingHorizontal: 4,
     },
   });

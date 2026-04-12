@@ -17,6 +17,8 @@ import {
 import { AppScreen } from '@/components/mobile/AppScreen';
 import { DiscoverStoriesRow } from '@/components/mobile/DiscoverStoriesRow';
 import { DiscoverModeSwitch } from '@/components/mobile/DiscoverModeSwitch';
+import { EventCommentsSheet, type EventCommentRecord } from '@/components/mobile/EventCommentsSheet';
+import { EventMutualsSheet } from '@/components/mobile/EventMutualsSheet';
 import { EventStackCard } from '@/components/mobile/EventStackCard';
 import { StoryViewerModal } from '@/components/mobile/StoryViewerModal';
 import { useAppTheme } from '@/lib/app-theme';
@@ -34,7 +36,7 @@ import {
 } from '@/lib/mobile-stories';
 import { useMobileApp } from '@/providers/mobile-app-provider';
 import { useMobileInbox } from '@/providers/mobile-inbox-provider';
-import type { ProfileRecord, StoryRecord } from '@/types/models';
+import type { EventRecord, ProfileRecord, StoryRecord } from '@/types/models';
 
 export default function DiscoverScreen() {
   const router = useRouter();
@@ -66,6 +68,15 @@ export default function DiscoverScreen() {
   const [isStoryViewerVisible, setIsStoryViewerVisible] = useState(false);
   const [activeStoryItemId, setActiveStoryItemId] = useState<string | null>(null);
   const [authenticatedStoryUserId, setAuthenticatedStoryUserId] = useState('');
+  const [savedForLaterIds, setSavedForLaterIds] = useState<Set<string>>(new Set());
+  const [activeCommentEvent, setActiveCommentEvent] = useState<EventRecord | null>(null);
+  const [commentDraft, setCommentDraft] = useState('');
+  const [commentsByEventId, setCommentsByEventId] = useState<Record<string, EventCommentRecord[]>>(
+    {}
+  );
+  const [isMutualsSheetVisible, setIsMutualsSheetVisible] = useState(false);
+  const [mutualSheetTitle, setMutualSheetTitle] = useState('');
+  const [mutualSheetProfiles, setMutualSheetProfiles] = useState<ProfileRecord[]>([]);
 
   const loadStories = useCallback(async () => {
     const nextStories = await loadActiveStoryRecords({
@@ -120,6 +131,14 @@ export default function DiscoverScreen() {
 
   const currentEvent = discoverEvents[0];
   const cardHeight = Math.max(540, Math.min(height * 0.76, 760));
+  const isCurrentEventRsvped = Boolean(currentEvent && savedEventIds.includes(currentEvent.id));
+  const isCurrentEventSavedForLater = Boolean(
+    currentEvent && savedForLaterIds.has(String(currentEvent.id))
+  );
+  const activeCommentEventId = activeCommentEvent?.id || '';
+  const activeComments = activeCommentEventId
+    ? commentsByEventId[activeCommentEventId] || []
+    : [];
 
   useEffect(() => {
     translate.setValue({ x: 0, y: 0 });
@@ -142,6 +161,65 @@ export default function DiscoverScreen() {
       translate.setValue({ x: 0, y: 0 });
     });
   }, [acceptDiscoverEvent, currentEvent, rejectDiscoverEvent, translate, width]);
+
+  const handleCardRsvp = useCallback(
+    (event: EventRecord) => {
+      if (!currentEvent || String(event.id) !== String(currentEvent.id)) return;
+      animateDismiss('right');
+    },
+    [animateDismiss, currentEvent]
+  );
+
+  const handleCardComment = useCallback((event: EventRecord) => {
+    setActiveCommentEvent(event);
+  }, []);
+
+  const handleCardSaveForLater = useCallback((event: EventRecord) => {
+    const eventId = String(event.id);
+    setSavedForLaterIds((currentValue) => {
+      const nextValue = new Set(currentValue);
+      if (nextValue.has(eventId)) {
+        nextValue.delete(eventId);
+      } else {
+        nextValue.add(eventId);
+      }
+      return nextValue;
+    });
+  }, []);
+
+  const handleOpenMutuals = useCallback((event: EventRecord, mutualProfiles: ProfileRecord[]) => {
+    setMutualSheetTitle(event.title || 'Campus Event');
+    setMutualSheetProfiles(mutualProfiles);
+    setIsMutualsSheetVisible(true);
+  }, []);
+
+  const handleCloseMutuals = useCallback(() => {
+    setIsMutualsSheetVisible(false);
+  }, []);
+
+  const handleCloseComments = useCallback(() => {
+    setActiveCommentEvent(null);
+    setCommentDraft('');
+  }, []);
+
+  const handleSubmitComment = useCallback(() => {
+    if (!activeCommentEvent || !commentDraft.trim()) return;
+
+    const eventId = String(activeCommentEvent.id);
+    const nextComment: EventCommentRecord = {
+      id: `${eventId}-${Date.now()}`,
+      authorName: currentUser.name || currentUser.username || 'Campus User',
+      authorUsername: currentUser.username || '',
+      body: commentDraft.trim(),
+      createdAt: new Date().toISOString(),
+    };
+
+    setCommentsByEventId((currentValue) => ({
+      ...currentValue,
+      [eventId]: [...(currentValue[eventId] || []), nextComment],
+    }));
+    setCommentDraft('');
+  }, [activeCommentEvent, commentDraft, currentUser.name, currentUser.username]);
 
   const panResponder = useMemo(
     () =>
@@ -206,6 +284,8 @@ export default function DiscoverScreen() {
       if (!story || !effectiveStoryUserId || String(story.authorId) === String(effectiveStoryUserId)) {
         return;
       }
+
+      console.log('[Discover.handleStoryOpen] currentUser.id:', currentUser.id);
 
       setSeenStoryIds((currentIds) => {
         if (currentIds.has(String(story.id))) return currentIds;
@@ -347,6 +427,12 @@ export default function DiscoverScreen() {
                 <EventStackCard
                   event={currentEvent}
                   height={cardHeight}
+                  isRsvped={isCurrentEventRsvped}
+                  isSavedForLater={isCurrentEventSavedForLater}
+                  onPressRsvp={handleCardRsvp}
+                  onPressComment={handleCardComment}
+                  onPressSave={handleCardSaveForLater}
+                  onPressMutuals={handleOpenMutuals}
                   onPress={() =>
                     router.push({
                       pathname: '/event/[id]',
@@ -376,6 +462,23 @@ export default function DiscoverScreen() {
           </View>
         ) : null}
       </ScrollView>
+
+      <EventCommentsSheet
+        visible={Boolean(activeCommentEvent)}
+        event={activeCommentEvent}
+        comments={activeComments}
+        draft={commentDraft}
+        onChangeDraft={setCommentDraft}
+        onClose={handleCloseComments}
+        onSubmit={handleSubmitComment}
+      />
+
+      <EventMutualsSheet
+        visible={isMutualsSheetVisible}
+        title={mutualSheetTitle}
+        profiles={mutualSheetProfiles}
+        onClose={handleCloseMutuals}
+      />
 
       <StoryViewerModal
         visible={isStoryViewerVisible}

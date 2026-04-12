@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -83,6 +83,7 @@ export function StoryViewerModal({
   const [viewersByStoryId, setViewersByStoryId] = useState<Record<string, StoryViewerRecord[]>>(
     {}
   );
+  const autoAdvancedStoryIdRef = useRef<string | null>(null);
 
   const activeItems = useMemo(
     () => items.filter((item) => !item.isPlaceholder && item.stories.length > 0),
@@ -177,6 +178,7 @@ export function StoryViewerModal({
   useEffect(() => {
     if (!visible || !currentStory) return;
 
+    autoAdvancedStoryIdRef.current = null;
     onStoryOpen(currentStory);
     setProgress(0);
   }, [currentStory, onStoryOpen, visible]);
@@ -185,20 +187,24 @@ export function StoryViewerModal({
     if (!visible || !currentStory || isPaused) return;
 
     const interval = setInterval(() => {
-      setProgress((currentValue) => {
-        const nextProgress = Math.min(currentValue + 50 / STORY_DURATION_MS, 1);
-
-        if (nextProgress >= 1) {
-          clearInterval(interval);
-          advanceStory();
-        }
-
-        return nextProgress;
-      });
+      setProgress((currentValue) => Math.min(currentValue + 50 / STORY_DURATION_MS, 1));
     }, 50);
 
     return () => clearInterval(interval);
-  }, [advanceStory, currentStory, isPaused, visible]);
+  }, [currentStory, isPaused, visible]);
+
+  useEffect(() => {
+    if (!visible || !currentStory || progress < 1) return;
+
+    const currentStoryId = String(currentStory.id);
+
+    if (autoAdvancedStoryIdRef.current === currentStoryId) {
+      return;
+    }
+
+    autoAdvancedStoryIdRef.current = currentStoryId;
+    advanceStory();
+  }, [advanceStory, currentStory, progress, visible]);
 
   const handleToggleHeart = async () => {
     if (!currentStory || isOwnStory) return;

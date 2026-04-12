@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import DiscoverFriendsPanel from "../components/DiscoverFriendsPanel"
 import DiscoverModeSwitch from "../components/DiscoverModeSwitch"
+import DiscoverCommentsDrawer from "../components/DiscoverCommentsDrawer"
 import DiscoverStoryComposer from "../components/DiscoverStoryComposer"
 import DiscoverStoriesRow from "../components/DiscoverStoriesRow"
 import EventCard from "../components/EventCard"
@@ -20,6 +21,35 @@ import {
   buildDiscoverFriendCards,
   buildDiscoverStoryItems,
 } from "../discoverSocial"
+
+const SAVED_FOR_LATER_KEY = "discover-saved-for-later-event-ids"
+
+const normalizeEventGoingCount = (event) => {
+  const parsedValue = Number.parseInt(String(event?.rsvp || "").replace(/\D/g, ""), 10)
+
+  if (Number.isFinite(Number(event?.goingCount))) return Number(event.goingCount)
+  if (Number.isFinite(Number(event?.rsvpCount))) return Number(event.rsvpCount)
+  if (Array.isArray(event?.attendees)) return event.attendees.length
+  if (Number.isFinite(parsedValue)) return parsedValue
+  return 0
+}
+
+const readSavedForLaterIds = () => {
+  if (typeof window === "undefined") return new Set()
+
+  try {
+    const rawValue = window.localStorage.getItem(SAVED_FOR_LATER_KEY)
+    const parsedValue = rawValue ? JSON.parse(rawValue) : []
+
+    if (!Array.isArray(parsedValue)) {
+      return new Set()
+    }
+
+    return new Set(parsedValue.map((value) => String(value)))
+  } catch {
+    return new Set()
+  }
+}
 
 function Discover() {
   const SWIPE_TRIGGER_PX = 110
@@ -52,6 +82,11 @@ function Discover() {
   const [isStoryActivityOpen, setIsStoryActivityOpen] = useState(false)
   const [storyActionFeedback, setStoryActionFeedback] = useState("")
   const [authenticatedStoryUserId, setAuthenticatedStoryUserId] = useState("")
+  const [savedForLaterIds, setSavedForLaterIds] = useState(() => readSavedForLaterIds())
+  const [discoverActionFeedback, setDiscoverActionFeedback] = useState("")
+  const [activeCommentEventId, setActiveCommentEventId] = useState(null)
+  const [commentDraft, setCommentDraft] = useState("")
+  const [eventCommentsById, setEventCommentsById] = useState({})
   const [cardDragOffsetX, setCardDragOffsetX] = useState(0)
   const enterTimeoutRef = useRef(null)
   const swipeTimeoutRef = useRef(null)
@@ -122,6 +157,23 @@ function Discover() {
   const nextIndex =
     discoverEvents.length > safeCurrentIndex + 1 ? safeCurrentIndex + 1 : null
   const nextEvent = nextIndex !== null ? discoverEvents[nextIndex] : null
+  const currentEventId = currentEvent ? String(currentEvent.id) : ""
+  const currentEventGoingCount = currentEvent ? normalizeEventGoingCount(currentEvent) : 0
+  const isCurrentEventSavedForLater = currentEventId
+    ? savedForLaterIds.has(currentEventId)
+    : false
+  const activeCommentEvent = useMemo(() => {
+    if (!activeCommentEventId) return null
+
+    const matchedEvent = (allEvents || []).find(
+      (event) => String(event.id) === String(activeCommentEventId)
+    )
+
+    return matchedEvent || (currentEventId === String(activeCommentEventId) ? currentEvent : null)
+  }, [activeCommentEventId, allEvents, currentEvent, currentEventId])
+  const activeEventComments = activeCommentEventId
+    ? eventCommentsById[String(activeCommentEventId)] || []
+    : []
   const activeStoryMedia =
     Array.isArray(activeStoryItem?.stories) && activeStoryItem.stories.length > 0
       ? activeStoryItem.stories[0]
@@ -228,6 +280,65 @@ function Discover() {
       setIsActionLocked(false)
     }, 300)
   }, [currentEvent, discoverEvents.length, isActionLocked, prepareNextCard, safeCurrentIndex])
+
+  const handleRsvpAction = useCallback(() => {
+    if (!currentEvent || isActionLocked) return
+    handleAccept()
+  }, [currentEvent, handleAccept, isActionLocked])
+
+  const handleToggleSaveForLater = useCallback(() => {
+    if (!currentEvent) return
+
+    const eventId = String(currentEvent.id)
+    let nextSavedState = false
+
+    setSavedForLaterIds((currentValue) => {
+      const nextValue = new Set(currentValue)
+
+      if (nextValue.has(eventId)) {
+        nextValue.delete(eventId)
+        nextSavedState = false
+      } else {
+        nextValue.add(eventId)
+        nextSavedState = true
+      }
+
+      return nextValue
+    })
+
+    setDiscoverActionFeedback(nextSavedState ? "Saved for later." : "Removed from saved.")
+  }, [currentEvent])
+
+  const handleOpenComments = useCallback(() => {
+    if (!currentEvent) return
+
+    setActiveCommentEventId(String(currentEvent.id))
+    setCommentDraft("")
+  }, [currentEvent])
+
+  const handleCloseComments = useCallback(() => {
+    setActiveCommentEventId(null)
+    setCommentDraft("")
+  }, [])
+
+  const handleSubmitComment = useCallback(() => {
+    if (!activeCommentEvent || !commentDraft.trim()) return
+
+    const eventId = String(activeCommentEvent.id)
+    const nextComment = {
+      id: `${eventId}-${Date.now()}`,
+      authorName: currentUser?.name || currentUser?.username || "Campus User",
+      authorUsername: currentUser?.username || "",
+      body: commentDraft.trim(),
+      createdAt: new Date().toISOString(),
+    }
+
+    setEventCommentsById((currentValue) => ({
+      ...currentValue,
+      [eventId]: [...(currentValue[eventId] || []), nextComment],
+    }))
+    setCommentDraft("")
+  }, [activeCommentEvent, commentDraft, currentUser?.name, currentUser?.username])
 
   const handleCardPointerDown = useCallback(
     (event) => {
@@ -511,6 +622,24 @@ function Discover() {
   }, [storyActionFeedback])
 
   useEffect(() => {
+    if (typeof window === "undefined") return
+    window.localStorage.setItem(
+      SAVED_FOR_LATER_KEY,
+      JSON.stringify(Array.from(savedForLaterIds))
+    )
+  }, [savedForLaterIds])
+
+  useEffect(() => {
+    if (!discoverActionFeedback) return undefined
+
+    const timeoutId = window.setTimeout(() => {
+      setDiscoverActionFeedback("")
+    }, 2200)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [discoverActionFeedback])
+
+  useEffect(() => {
     const handleKeyDown = (event) => {
       if (activeStoryItem) {
         if (event.key === "Escape") {
@@ -524,6 +653,15 @@ function Discover() {
         return
       }
 
+      if (activeCommentEventId && event.key === "Escape") {
+        handleCloseComments()
+        return
+      }
+
+      if (activeCommentEventId) {
+        return
+      }
+
       if (event.key === "ArrowRight") handleAccept()
       if (event.key === "ArrowLeft") handleReject()
     }
@@ -534,8 +672,10 @@ function Discover() {
     activeStoryItem,
     handleAccept,
     handleCloseStory,
+    handleCloseComments,
     handleCloseStoryComposer,
     handleReject,
+    activeCommentEventId,
     isStoryComposerOpen,
   ])
 
@@ -591,8 +731,20 @@ function Discover() {
   }, [activeStoryMedia, effectiveStoryUserId, isViewingOwnStory])
 
   const handleOpenSuggestion = useCallback(() => {
+    handleCloseComments()
     setActiveMode("friends")
-  }, [])
+  }, [handleCloseComments])
+
+  const handleChangeDiscoverMode = useCallback(
+    (nextMode) => {
+      if (nextMode !== "events") {
+        handleCloseComments()
+      }
+
+      setActiveMode(nextMode)
+    },
+    [handleCloseComments]
+  )
 
   const handleResetStack = useCallback(() => {
     setDismissedEventIds([])
@@ -646,7 +798,7 @@ function Discover() {
         />
 
         <div className="discover-switch-wrap">
-          <DiscoverModeSwitch activeMode={activeMode} onChange={setActiveMode} />
+          <DiscoverModeSwitch activeMode={activeMode} onChange={handleChangeDiscoverMode} />
         </div>
 
         {activeMode === "events" ? (
@@ -657,7 +809,10 @@ function Discover() {
               disabled={!currentEvent || isActionLocked}
               aria-label="Skip current event"
             >
-              ↺
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
             </button>
 
             <div className="discover-stack">
@@ -728,14 +883,66 @@ function Discover() {
               )}
             </div>
 
-            <button
-              className={`swipe-btn accept ${!currentEvent ? "inactive" : ""} ${buttonFlash === "flash-accept" ? "active-flash-accept" : ""}`}
-              onClick={handleAccept}
-              disabled={!currentEvent || isActionLocked}
-              aria-label="Accept current event"
-            >
-              ↻
-            </button>
+            {currentEvent ? (
+              <aside className="discover-side-actions" aria-label="Event actions">
+                <button
+                  type="button"
+                  className={`swipe-btn accept ${buttonFlash === "flash-accept" ? "active-flash-accept" : ""}`}
+                  onClick={handleAccept}
+                  disabled={isActionLocked}
+                  aria-label="Swipe right to RSVP"
+                  style={{ marginBottom: "16px" }}
+                >
+                  <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                </button>
+
+                <button
+                  type="button"
+                  className={`discover-side-action rsvp ${buttonFlash === "flash-accept" ? "active-flash-accept" : ""}`}
+                  onClick={handleRsvpAction}
+                  disabled={isActionLocked}
+                  aria-label="RSVP to event"
+                >
+                  <span className="discover-side-action-icon rsvp-icon" aria-hidden="true">
+                    <svg width="34" height="34" viewBox="0 0 24 24" fill="none">
+                      <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                      <circle cx="8.5" cy="7" r="4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                      <polyline points="14 11 16 13 21 8" stroke={buttonFlash === "flash-accept" ? "#34c759" : "currentColor"} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  className={`discover-side-action comment ${activeCommentEventId === currentEventId ? "active" : ""}`}
+                  onClick={handleOpenComments}
+                  aria-label="Open comments"
+                >
+                  <span className="discover-side-action-icon" aria-hidden="true">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
+                      <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  className={`discover-side-action save ${isCurrentEventSavedForLater ? "active" : ""}`}
+                  onClick={handleToggleSaveForLater}
+                  aria-label="Save event for later"
+                >
+                  <span className="discover-side-action-icon" aria-hidden="true">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill={isCurrentEventSavedForLater ? "currentColor" : "none"}>
+                      <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </span>
+                </button>
+              </aside>
+            ) : (
+              <div className="discover-side-actions-placeholder" aria-hidden="true" />
+            )}
           </div>
         ) : (
           <DiscoverFriendsPanel
@@ -745,7 +952,23 @@ function Discover() {
             onToggleFollow={handleToggleFollow}
           />
         )}
+
+        {discoverActionFeedback ? (
+          <p className="discover-action-feedback" role="status" aria-live="polite">
+            {discoverActionFeedback}
+          </p>
+        ) : null}
       </div>
+
+      <DiscoverCommentsDrawer
+        open={Boolean(activeCommentEventId)}
+        event={activeCommentEvent}
+        comments={activeEventComments}
+        draft={commentDraft}
+        onDraftChange={setCommentDraft}
+        onSubmit={handleSubmitComment}
+        onClose={handleCloseComments}
+      />
 
       {activeStoryItem ? (
         <div

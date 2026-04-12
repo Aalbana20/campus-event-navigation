@@ -5,20 +5,6 @@ import { DEFAULT_AVATAR_URL, sanitizeAvatarUrl } from "../profileMedia"
 import EventActionControl from "./EventActionControl"
 import EventCreatorBadge from "./EventCreatorBadge"
 
-const buildDescriptionPreview = (value) => {
-  const trimmed = String(value || "").trim()
-
-  if (!trimmed) {
-    return "A standout campus event worth checking out."
-  }
-
-  if (trimmed.length <= 160) {
-    return trimmed
-  }
-
-  return `${trimmed.slice(0, 157).trimEnd()}...`
-}
-
 const usersMatch = (a, b) => {
   if (!a || !b) return false
   if (a.id && b.id) return a.id === b.id
@@ -39,19 +25,10 @@ function EventCard({ event }) {
     event?.time ||
     [event?.startTime, event?.endTime].filter(Boolean).join(" - ") ||
     "TBA"
-  const descriptionPreview = buildDescriptionPreview(event?.description)
   const mapsQuery = encodeURIComponent(event.locationAddress || event.location || "")
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${mapsQuery}`
 
   const attendeeUsers = event?.attendees || event?.rsvpUsers || event?.goingUsers || []
-
-  const parsedRsvpCount = Number.parseInt(String(event?.rsvp || "").replace(/\D/g, ""), 10)
-
-  const goingCount =
-    event?.rsvpCount ??
-    event?.goingCount ??
-    attendeeUsers.length ??
-    (Number.isFinite(parsedRsvpCount) ? parsedRsvpCount : 24)
 
   const mutualAttendees = (mutualUsers || []).filter((mutualUser) =>
     attendeeUsers.some((attendee) => usersMatch(attendee, mutualUser))
@@ -82,38 +59,97 @@ function EventCard({ event }) {
               draggable={false}
               onError={applyEventImageFallback}
             />
-            <EventCreatorBadge event={event} className="event-card-creator" compact />
+            <div className="event-card-front-gradient" />
 
-            <div className="event-card-social-proof">
-              <div className="event-card-going-pill">
-                <span>{goingCount} going</span>
+            <div className="event-card-top-meta">
+              <div className="event-card-top-meta-cluster">
+                <EventCreatorBadge event={event} className="event-card-creator" compact />
+
+                <button
+                  type="button"
+                  className="event-card-mutual-inline"
+                  onClick={openMutuals}
+                  aria-label={`View ${mutualCount} mutuals going`}
+                >
+                  {mutualAttendees.length > 0 ? (
+                    <div className="event-card-mutual-inline-avatars">
+                      {mutualAttendees.slice(0, 3).map((person, index) => (
+                        <img
+                          key={person.id || person.username || index}
+                          src={sanitizeAvatarUrl(person.image || person.avatar, DEFAULT_AVATAR_URL)}
+                          alt={person.name || "Mutual attendee"}
+                          className="event-card-mutual-inline-avatar"
+                          onError={(eventClick) => {
+                            eventClick.currentTarget.src = DEFAULT_AVATAR_URL
+                          }}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="event-card-mutual-inline-empty" aria-hidden="true">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                        <path
+                          d="M16 20v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                        <circle
+                          cx="9.5"
+                          cy="7"
+                          r="3"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                        />
+                        <path
+                          d="M23 20v-1a4 4 0 0 0-3-3.87"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                        <path
+                          d="M16 3.13a3 3 0 0 1 0 5.74"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </span>
+                  )}
+                  <span className="event-card-mutual-inline-count">{mutualCount}</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="event-card-info-pills">
+              <div className="event-card-info-pill event-card-info-pill-title">{eventTitle}</div>
+
+              <div className="event-card-info-pill">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                  <rect
+                    x="3.75"
+                    y="4.75"
+                    width="16.5"
+                    height="15.5"
+                    rx="3.2"
+                    stroke="currentColor"
+                    strokeWidth="1.7"
+                  />
+                  <path d="M8 2.8v3.3M16 2.8v3.3M3.75 9.5h16.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+                </svg>
+                <span>{displayDate}</span>
               </div>
 
-              <button
-                type="button"
-                className="event-card-mutuals"
-                onClick={openMutuals}
-                aria-label={`View ${mutualCount} mutuals going`}
-              >
-                <div className="event-card-mutual-bubbles">
-                  {mutualAttendees.slice(0, 3).map((person, index) => (
-                    <img
-                      key={person.id || index}
-                      src={sanitizeAvatarUrl(
-                        person.image || person.avatar,
-                        DEFAULT_AVATAR_URL
-                      )}
-                      alt={person.name || "Mutual attendee"}
-                      className="event-card-mutual-avatar"
-                      onError={(eventClick) => {
-                        eventClick.currentTarget.src = DEFAULT_AVATAR_URL
-                      }}
-                    />
-                  ))}
-                </div>
-
-                <span className="event-card-mutual-text">{mutualCount} mutuals</span>
-              </button>
+              <div className="event-card-info-pill">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="8.6" stroke="currentColor" strokeWidth="1.7" />
+                  <path d="M12 7.8v4.6l3.2 2" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                <span>{displayTime}</span>
+              </div>
             </div>
           </div>
 
@@ -122,7 +158,6 @@ function EventCard({ event }) {
               <div className="discover-event-back-header">
                 <span className="discover-event-back-kicker">Event Details</span>
                 <h2>{eventTitle}</h2>
-                <p className="discover-event-back-description">{descriptionPreview}</p>
               </div>
 
               <div className="discover-event-back-details">
@@ -140,35 +175,18 @@ function EventCard({ event }) {
                 </div>
               </div>
 
-              <div className="discover-event-back-stats">
-                <div className="discover-event-back-stat">
-                  <span>Going</span>
-                  <strong>{goingCount}</strong>
-                </div>
-
-                {mutualCount > 0 ? (
-                  <button
-                    type="button"
-                    className="discover-event-back-stat interactive"
-                    onClick={openMutuals}
-                    aria-label={`View ${mutualCount} mutuals going`}
-                  >
-                    <span>Mutuals</span>
-                    <strong>{mutualCount}</strong>
-                  </button>
-                ) : null}
-              </div>
+              <p className="discover-event-back-note">
+                Open the event details to view the full description and schedule.
+              </p>
 
               <div className="discover-event-back-actions">
-                {mutualCount > 0 ? (
-                  <button
-                    type="button"
-                    className="map-btn secondary"
-                    onClick={openMutuals}
-                  >
-                    See Mutuals
-                  </button>
-                ) : null}
+                <button
+                  type="button"
+                  className="map-btn secondary"
+                  onClick={openMutuals}
+                >
+                  View Mutuals
+                </button>
 
                 <div className="discover-event-back-actions-spacer" />
 

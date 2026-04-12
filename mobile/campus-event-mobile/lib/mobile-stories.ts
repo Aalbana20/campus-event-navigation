@@ -266,8 +266,11 @@ export const recordStoryView = async ({
     error: authError,
   } = await supabase.auth.getUser();
 
+  console.log('[recordStoryView] auth user id:', user?.id || null);
+  console.log('[recordStoryView] story id:', storyId);
+
   if (authError) {
-    console.error('Unable to resolve authenticated story viewer:', authError);
+    console.error('Unable to resolve authenticated user for story view:', authError);
     return;
   }
 
@@ -276,13 +279,17 @@ export const recordStoryView = async ({
     return;
   }
 
+  const payload = {
+    story_id: storyId,
+    viewer_id: user.id,
+  };
+
+  console.log('[recordStoryView] upsert payload:', payload);
+
   const { error } = await supabase
     .from('story_views')
     .upsert(
-      {
-        story_id: storyId,
-        viewer_id: user.id,
-      },
+      payload,
       {
         onConflict: 'story_id,viewer_id',
         ignoreDuplicates: true,
