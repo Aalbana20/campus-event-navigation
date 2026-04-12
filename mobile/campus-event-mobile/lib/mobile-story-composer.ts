@@ -177,8 +177,23 @@ export const uploadStoryMedia = async ({
     throw new Error('Stories are unavailable right now. Please try again later.');
   }
 
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError) {
+    console.error('Unable to resolve authenticated story author:', authError);
+  }
+
+  const effectiveAuthorId = user?.id || authorId;
+
+  if (!effectiveAuthorId) {
+    throw new Error('You need to be signed in to publish a story.');
+  }
+
   const extension = getFileExtension(media.fileName, media.mimeType, media.uri);
-  const filePath = `${STORY_MEDIA_FOLDER}/${authorId}/${Date.now()}.${extension}`;
+  const filePath = `${STORY_MEDIA_FOLDER}/${effectiveAuthorId}/${Date.now()}.${extension}`;
   const fileBody = await readFileAsArrayBuffer(media.uri);
 
   const { error: uploadError } = await supabase.storage
@@ -197,7 +212,7 @@ export const uploadStoryMedia = async ({
   const { data, error } = await supabase
     .from('stories')
     .insert({
-      author_id: authorId,
+      author_id: effectiveAuthorId,
       media_url: filePath,
       media_type: media.mediaType,
       caption: toTrimmedString(caption) || null,

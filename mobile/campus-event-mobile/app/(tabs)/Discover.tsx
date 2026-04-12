@@ -224,7 +224,7 @@ export default function DiscoverScreen() {
 
   const handleToggleStoryHeart = useCallback(
     async (story: StoryRecord) => {
-      if (!currentUser.id) return;
+      if (!effectiveStoryUserId) return;
 
       const isActive = reactedStoryIds.has(String(story.id));
 
@@ -243,7 +243,7 @@ export default function DiscoverScreen() {
       try {
         await toggleStoryHeart({
           storyId: story.id,
-          userId: currentUser.id,
+          userId: effectiveStoryUserId,
           nextActive: !isActive,
         });
       } catch {
@@ -262,7 +262,7 @@ export default function DiscoverScreen() {
         throw new Error('Unable to update story heart');
       }
     },
-    [currentUser.id, reactedStoryIds]
+    [effectiveStoryUserId, reactedStoryIds]
   );
 
   const handleReplyToStory = useCallback(
@@ -274,17 +274,17 @@ export default function DiscoverScreen() {
 
   const handleShareStory = useCallback(
     async (story: StoryRecord, recipient: ProfileRecord) => {
-      if (!currentUser.id) return;
+      if (!effectiveStoryUserId) return;
 
       await createStoryShare({
         storyId: story.id,
-        senderId: currentUser.id,
+        senderId: effectiveStoryUserId,
         recipientId: recipient.id,
       });
 
       await sendDmMessage(recipient.id, buildStoryShareMessage(story));
     },
-    [currentUser.id, sendDmMessage]
+    [effectiveStoryUserId, sendDmMessage]
   );
 
   const handleLoadViewers = useCallback(

@@ -181,6 +181,8 @@ const buildCreatorStatMap = (events) => {
       featuredMeta: [event?.date, event?.locationName || event?.location]
         .filter(Boolean)
         .join(" • "),
+      event: event,
+      eventId: String(event?.id || ""),
     }
 
     keys.forEach((key) => {
@@ -196,6 +198,8 @@ const buildCreatorStatMap = (events) => {
         totalGoing: current.totalGoing + nextStat.totalGoing,
         featuredTitle: current.featuredTitle || nextStat.featuredTitle,
         featuredMeta: current.featuredMeta || nextStat.featuredMeta,
+        event: current.event || nextStat.event,
+        eventId: current.eventId || nextStat.eventId,
       })
     })
   })
@@ -236,6 +240,12 @@ const upsertPerson = (collection, person, relation, statMap) => {
   collection.set(key, {
     ...current,
     ...base,
+    // Safely preserve rich profile data instead of overwriting with empty event fields
+    bio: base.bio || current?.bio || "",
+    location: base.location || current?.location || "",
+    name: base.name !== "Campus User" ? base.name : current?.name || base.name,
+    username: base.username || current?.username || "",
+    avatar: base.avatar && base.avatar !== DEFAULT_AVATAR_URL && !String(base.avatar).startsWith("data:image/svg+xml") ? base.avatar : current?.avatar || base.avatar,
     ...stats,
     relation: buildRelation(current?.relation, relation),
   })

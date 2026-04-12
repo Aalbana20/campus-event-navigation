@@ -384,12 +384,18 @@ export const toggleStoryHeart = async ({
   userId: string;
   nextActive: boolean;
 }) => {
-  if (!supabase || !storyId || !userId) return;
+  if (!supabase || !storyId) return;
+
+  const authenticatedUserId = (await loadAuthenticatedStoryUserId()) || userId;
+
+  if (!authenticatedUserId) {
+    throw new Error('No authenticated user found for story reaction.');
+  }
 
   if (nextActive) {
     const { error } = await supabase.from('story_reactions').insert({
       story_id: storyId,
-      user_id: userId,
+      user_id: authenticatedUserId,
       reaction_type: 'heart',
     });
 
@@ -405,7 +411,7 @@ export const toggleStoryHeart = async ({
     .from('story_reactions')
     .delete()
     .eq('story_id', storyId)
-    .eq('user_id', userId)
+    .eq('user_id', authenticatedUserId)
     .eq('reaction_type', 'heart');
 
   if (error) {
@@ -423,11 +429,17 @@ export const createStoryShare = async ({
   senderId: string;
   recipientId: string;
 }) => {
-  if (!supabase || !storyId || !senderId || !recipientId) return;
+  if (!supabase || !storyId || !recipientId) return;
+
+  const authenticatedSenderId = (await loadAuthenticatedStoryUserId()) || senderId;
+
+  if (!authenticatedSenderId) {
+    throw new Error('No authenticated user found for story share.');
+  }
 
   const { error } = await supabase.from('story_shares').insert({
     story_id: storyId,
-    sender_id: senderId,
+    sender_id: authenticatedSenderId,
     recipient_id: recipientId,
   });
 

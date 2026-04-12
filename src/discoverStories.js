@@ -35,7 +35,7 @@ const getFileExtension = (fileName = "", contentType = "") => {
   if (nameMatch?.[1]) return nameMatch[1]
   if (contentType && MIME_EXTENSION_MAP[contentType]) return MIME_EXTENSION_MAP[contentType]
 
-  return contentType.startsWith("video/") ? "mp4" : "jpg"
+  return (contentType || "").startsWith("video/") ? "mp4" : "jpg"
 }
 
 const normalizeStoryStoragePath = (value) => {
@@ -65,30 +65,6 @@ const formatRelativeStoryTime = (dateInput) => {
   if (mins < 60) return `${mins}m`
   if (hours < 24) return `${hours}h`
   return `${Math.max(1, days)}d`
-}
-
-const isUsableUserId = (value) => {
-  const trimmed = toTrimmedString(value)
-  return Boolean(trimmed && trimmed !== "current-user")
-}
-
-const getAuthenticatedStoryUser = async () => {
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser()
-
-  if (error) {
-    console.error("Unable to resolve authenticated story user:", error)
-    return null
-  }
-
-  return user || null
-}
-
-export const loadAuthenticatedDiscoverStoryUserId = async () => {
-  const user = await getAuthenticatedStoryUser()
-  return user?.id ? String(user.id) : ""
 }
 
 const createLookupKeys = ({ id, profileId, username }) =>
@@ -161,16 +137,7 @@ export const loadActiveDiscoverStories = async ({
   currentUser,
   baseItems = [],
 }) => {
-  const authUser = await getAuthenticatedStoryUser()
-
-  if (!authUser?.id && !isUsableUserId(currentUser?.id)) {
-    return []
-  }
-
-  const effectiveCurrentUser = {
-    ...currentUser,
-    id: isUsableUserId(currentUser?.id) ? currentUser.id : authUser?.id || "",
-  }
+  if (!currentUser?.id) return []
 
   const { data: storyRows, error: storyError } = await supabase
     .from("stories")
@@ -213,7 +180,7 @@ export const loadActiveDiscoverStories = async ({
     return normalizeStoryRecord({
       row,
       profile,
-      currentUser: String(effectiveCurrentUser.id || "") === authorId ? effectiveCurrentUser : null,
+      currentUser: String(currentUser.id) === authorId ? currentUser : null,
       baseItem,
     })
   })
@@ -307,11 +274,7 @@ export const uploadDiscoverStory = async ({
   file,
   caption,
 }) => {
-  const authUser = await getAuthenticatedStoryUser()
-  const effectiveAuthorId =
-    authUser?.id || (isUsableUserId(authorId) ? String(authorId) : "")
-
-  if (!effectiveAuthorId || !file) {
+  if (!authorId || !file) {
     throw new Error("Choose media before you share your story.")
   }
 
@@ -320,13 +283,13 @@ export const uploadDiscoverStory = async ({
   }
 
   const extension = getFileExtension(file.name, file.type || "")
-  const filePath = `${STORY_MEDIA_FOLDER}/${effectiveAuthorId}/${Date.now()}.${extension}`
+  const filePath = `${STORY_MEDIA_FOLDER}/${authorId}/${Date.now()}.${extension}`
 
   const { error: uploadError } = await supabase.storage
     .from(STORY_MEDIA_BUCKET)
     .upload(filePath, file, {
       cacheControl: "3600",
-      contentType: file.type || (file.type.startsWith("video/") ? "video/mp4" : "image/jpeg"),
+      contentType: file.type || ((file.type || "").startsWith("video/") ? "video/mp4" : "image/jpeg"),
       upsert: false,
     })
 
@@ -338,9 +301,9 @@ export const uploadDiscoverStory = async ({
   const { data, error } = await supabase
     .from("stories")
     .insert({
-      author_id: effectiveAuthorId,
+      author_id: authorId,
       media_url: filePath,
-      media_type: file.type.startsWith("video/") ? "video" : "image",
+      media_type: (file.type || "").startsWith("video/") ? "video" : "image",
       caption: toTrimmedString(caption) || null,
     })
     .select("id, author_id, media_url, media_type, caption, created_at, expires_at")
@@ -358,18 +321,14 @@ export const recordDiscoverStoryView = async ({
   storyId,
   viewerId,
 }) => {
-  const authUser = await getAuthenticatedStoryUser()
-  const effectiveViewerId =
-    authUser?.id || (isUsableUserId(viewerId) ? String(viewerId) : "")
-
-  if (!storyId || !effectiveViewerId) return
+  if (!storyId || !viewerId) return
 
   const { error } = await supabase
     .from("story_views")
     .upsert(
       {
         story_id: storyId,
-        viewer_id: effectiveViewerId,
+        viewer_id: viewerId,
       },
       {
         onConflict: "story_id,viewer_id",
@@ -382,19 +341,32 @@ export const recordDiscoverStoryView = async ({
   }
 }
 
+export const loadAuthenticatedDiscoverStoryUserId = async () => {
+  if (!supabase) return ""
+
+  const { data, error } = await supabase.auth.getUser()
+
+  if (error) {
+    console.error("Unable to resolve authenticated discover story user:", error)
+    return ""
+  }
+
+  return data?.user?.id ? String(data.user.id) : ""
+}
+
 export const loadDiscoverReactedStoryIds = async ({
   storyIds,
 }) => {
-  const authUser = await getAuthenticatedStoryUser()
+  const authenticatedUserId = await loadAuthenticatedDiscoverStoryUserId()
 
-  if (!authUser?.id || !Array.isArray(storyIds) || storyIds.length === 0) {
+  if (!authenticatedUserId || !Array.isArray(storyIds) || storyIds.length === 0) {
     return new Set()
   }
 
   const { data, error } = await supabase
     .from("story_reactions")
     .select("story_id")
-    .eq("user_id", authUser.id)
+    .eq("user_id", authenticatedUserId)
     .eq("reaction_type", "heart")
     .in("story_id", storyIds)
 
@@ -410,16 +382,16 @@ export const toggleDiscoverStoryHeart = async ({
   storyId,
   nextActive,
 }) => {
-  const authUser = await getAuthenticatedStoryUser()
+  const authenticatedUserId = await loadAuthenticatedDiscoverStoryUserId()
 
-  if (!storyId || !authUser?.id) {
+  if (!storyId || !authenticatedUserId) {
     throw new Error("You need to be signed in to react to stories.")
   }
 
   if (nextActive) {
     const { error } = await supabase.from("story_reactions").insert({
       story_id: storyId,
-      user_id: authUser.id,
+      user_id: authenticatedUserId,
       reaction_type: "heart",
     })
 
@@ -435,7 +407,7 @@ export const toggleDiscoverStoryHeart = async ({
     .from("story_reactions")
     .delete()
     .eq("story_id", storyId)
-    .eq("user_id", authUser.id)
+    .eq("user_id", authenticatedUserId)
     .eq("reaction_type", "heart")
 
   if (error) {
@@ -467,7 +439,7 @@ export const fetchDiscoverStoryViewers = async ({
   const { data: profiles, error: profileError } = viewerIds.length
     ? await supabase
         .from("profiles")
-        .select("id, name, username, avatar_url")
+        .select("id, name, username, avatar_url, avatar")
         .in("id", viewerIds)
     : { data: [], error: null }
 
@@ -488,7 +460,7 @@ export const fetchDiscoverStoryViewers = async ({
       viewedAt: row.viewed_at || "",
       name: toTrimmedString(profile?.name) || toTrimmedString(profile?.username) || "Campus User",
       username: toTrimmedString(profile?.username),
-      avatar: sanitizeAvatarUrl(profile?.avatar_url, DEFAULT_AVATAR_URL),
+    avatar: sanitizeAvatarUrl(profile?.avatar_url || profile?.avatar, DEFAULT_AVATAR_URL),
     }
   })
 }

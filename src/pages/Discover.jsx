@@ -22,6 +22,8 @@ import {
 } from "../discoverSocial"
 
 function Discover() {
+  const SWIPE_TRIGGER_PX = 110
+  const DRAG_INTENT_PX = 10
   const navigate = useNavigate()
   const {
     addEvent,
@@ -50,8 +52,17 @@ function Discover() {
   const [isStoryActivityOpen, setIsStoryActivityOpen] = useState(false)
   const [storyActionFeedback, setStoryActionFeedback] = useState("")
   const [authenticatedStoryUserId, setAuthenticatedStoryUserId] = useState("")
+  const [cardDragOffsetX, setCardDragOffsetX] = useState(0)
   const enterTimeoutRef = useRef(null)
   const swipeTimeoutRef = useRef(null)
+  const cardDragRef = useRef({
+    activePointerId: null,
+    startX: 0,
+    startY: 0,
+    isDragging: false,
+    ignoreGesture: false,
+  })
+  const suppressCardClickRef = useRef(false)
 
   const savedEventIds = useMemo(
     () => new Set((savedEvents || []).map((event) => String(event.id))),
@@ -123,6 +134,16 @@ function Discover() {
   const isActiveStoryLiked = activeStoryMedia
     ? likedStoryIds.has(String(activeStoryMedia.id))
     : false
+  const liveCardTilt = Math.max(Math.min(cardDragOffsetX / 16, 12), -12)
+  const liveCardOpacity = Math.max(0.88, 1 - Math.abs(cardDragOffsetX) / 420)
+  const cardDragStyle =
+    Math.abs(cardDragOffsetX) > 0 && !swipeDirection
+      ? {
+          transform: `translateX(${cardDragOffsetX}px) rotate(${liveCardTilt}deg)`,
+          opacity: liveCardOpacity,
+          transition: "none",
+        }
+      : undefined
 
   const prepareNextCard = useCallback((removedIndex, previousLength) => {
     const remainingLength = Math.max(previousLength - 1, 0)
@@ -207,6 +228,117 @@ function Discover() {
       setIsActionLocked(false)
     }, 300)
   }, [currentEvent, discoverEvents.length, isActionLocked, prepareNextCard, safeCurrentIndex])
+
+  const handleCardPointerDown = useCallback(
+    (event) => {
+      if (!currentEvent || isActionLocked || event.button !== 0) return
+
+      const target = event.target instanceof Element ? event.target : null
+      const isInteractiveTarget = Boolean(
+        target?.closest("button, a, input, textarea, select, [role='button']")
+      )
+
+      if (isInteractiveTarget) {
+        cardDragRef.current = {
+          activePointerId: null,
+          startX: 0,
+          startY: 0,
+          isDragging: false,
+          ignoreGesture: true,
+        }
+        return
+      }
+
+      suppressCardClickRef.current = false
+      cardDragRef.current = {
+        activePointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        isDragging: false,
+        ignoreGesture: false,
+      }
+
+      event.currentTarget.setPointerCapture?.(event.pointerId)
+    },
+    [currentEvent, isActionLocked]
+  )
+
+  const handleCardPointerMove = useCallback(
+    (event) => {
+      const dragState = cardDragRef.current
+
+      if (
+        !currentEvent ||
+        isActionLocked ||
+        dragState.ignoreGesture ||
+        dragState.activePointerId !== event.pointerId
+      ) {
+        return
+      }
+
+      const deltaX = event.clientX - dragState.startX
+      const deltaY = event.clientY - dragState.startY
+
+      if (!dragState.isDragging) {
+        if (Math.abs(deltaX) < DRAG_INTENT_PX) return
+        if (Math.abs(deltaY) > Math.abs(deltaX)) return
+
+        dragState.isDragging = true
+      }
+
+      event.preventDefault()
+      setCardDragOffsetX(Math.max(Math.min(deltaX, 180), -180))
+    },
+    [currentEvent, isActionLocked, DRAG_INTENT_PX]
+  )
+
+  const finishCardDrag = useCallback(
+    (event) => {
+      const dragState = cardDragRef.current
+
+      if (dragState.activePointerId !== event.pointerId) return
+
+      event.currentTarget.releasePointerCapture?.(event.pointerId)
+
+      const finalOffsetX = dragState.isDragging ? cardDragOffsetX : 0
+
+      cardDragRef.current = {
+        activePointerId: null,
+        startX: 0,
+        startY: 0,
+        isDragging: false,
+        ignoreGesture: false,
+      }
+      setCardDragOffsetX(0)
+
+      if (!dragState.isDragging) return
+
+      if (finalOffsetX >= SWIPE_TRIGGER_PX) {
+        suppressCardClickRef.current = true
+        handleAccept()
+        return
+      }
+
+      if (finalOffsetX <= -SWIPE_TRIGGER_PX) {
+        suppressCardClickRef.current = true
+        handleReject()
+        return
+      }
+      suppressCardClickRef.current = false
+    },
+    [cardDragOffsetX, handleAccept, handleReject, SWIPE_TRIGGER_PX]
+  )
+
+  const handleCardClickCapture = useCallback((event) => {
+    if (!suppressCardClickRef.current) return
+
+    event.preventDefault()
+    event.stopPropagation()
+
+    window.setTimeout(() => {
+      suppressCardClickRef.current = false
+    }, 0)
+  }, [])
 
   const handleOpenStory = useCallback((item) => {
     if (!item) return
@@ -537,7 +669,24 @@ function Discover() {
                     </div>
                   )}
 
-                  <div className={`discover-card-wrap ${swipeDirection} ${cardEntering ? "card-enter" : ""}`}>
+                  <div
+                    className={`discover-card-wrap ${swipeDirection} ${cardEntering ? "card-enter" : ""}`}
+                    onPointerDown={handleCardPointerDown}
+                    onPointerMove={handleCardPointerMove}
+                    onPointerUp={finishCardDrag}
+                    onPointerCancel={finishCardDrag}
+                    onClickCapture={handleCardClickCapture}
+                    style={{
+                      ...cardDragStyle,
+                      touchAction: "pan-y",
+                      cursor:
+                        Math.abs(cardDragOffsetX) > 0
+                          ? "grabbing"
+                          : currentEvent && !isActionLocked
+                            ? "grab"
+                            : "default",
+                    }}
+                  >
                     <EventCard event={currentEvent} />
                   </div>
                 </>

@@ -220,7 +220,7 @@ export function StoryComposerScreen() {
   };
 
   const handlePublish = async () => {
-    if (!selectedMedia || !currentUser.id || isPublishing) return;
+    if (!selectedMedia || isPublishing) return;
 
     setIsPublishing(true);
 

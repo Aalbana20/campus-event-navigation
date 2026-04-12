@@ -110,7 +110,9 @@ export function StoryViewerModal({
 
   const currentItem = activeItems[groupIndex] || null;
   const currentStory = currentItem?.stories[storyIndex] || null;
-  const isOwnStory = Boolean(currentStory && String(currentStory.authorId) === String(currentUserId));
+  const isOwnStory = Boolean(
+    currentStory && String(currentStory.authorId) === String(currentUserId)
+  );
   const hasHeart = Boolean(currentStory && reactedStoryIds.has(String(currentStory.id)));
   const currentViewers = currentStory ? viewersByStoryId[currentStory.id] || [] : [];
 
