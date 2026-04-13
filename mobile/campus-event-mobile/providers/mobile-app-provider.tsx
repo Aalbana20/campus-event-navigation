@@ -75,7 +75,9 @@ type MobileAppContextValue = {
   acceptDiscoverEvent: (eventId: string) => void;
   rejectDiscoverEvent: (eventId: string) => void;
   resetDiscoverDeck: () => void;
-  repostEvent: (eventId: string) => void;
+  repostEvent: (eventId: string) => Promise<void>;
+  unrepostEvent: (eventId: string) => Promise<void>;
+  repostedEventIds: Set<string>;
   followProfile: (profileId: string) => Promise<void>;
   unfollowProfile: (profileId: string) => Promise<void>;
   getEventById: (eventId: string) => EventRecord | undefined;
@@ -224,6 +226,7 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
   const [discoverDismissedIds, setDiscoverDismissedIds] = useState<string[]>([]);
   const [personalCalendarItems, setPersonalCalendarItems] = useState<PersonalCalendarItem[]>([]);
   const [localRepostsByEventId, setLocalRepostsByEventId] = useState<Record<string, string[]>>({});
+  const [repostedEventIds, setRepostedEventIds] = useState<Set<string>>(new Set());
   const [taggedMoments] = useState<TaggedMoment[]>([]);
   const sessionRef = useRef<Session | null>(null);
 
@@ -369,6 +372,7 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
           allRsvpsResult,
           dmParticipantResult,
           followsResult,
+          repostsResult,
         ] = await Promise.all([
           runStartupQuery(
             'refreshData.profiles',
@@ -394,6 +398,10 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
               .order('created_at', { ascending: false })
           ),
           runStartupQuery('refreshData.follows', supabase.from('follows').select('*')),
+          runStartupQuery(
+            'refreshData.reposts',
+            supabase.from('reposts').select('event_id').eq('user_id', userId)
+          ),
         ]);
 
         let rsvpRows = (allRsvpsResult.data || []) as Array<{
@@ -504,6 +512,13 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
           )
         );
         setRecentDmProfileIds(dmProfileIds);
+        setRepostedEventIds(
+          new Set(
+            ((repostsResult.data || []) as Array<{ event_id: string }>).map((r) =>
+              String(r.event_id)
+            )
+          )
+        );
         setAuthError(null);
         logStartup('refreshData:completed', {
           profiles: normalizedProfiles.length,
@@ -853,7 +868,6 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
         creator_username: currentUser.username,
         going_count: 0,
         privacy: input.privacy,
-        is_private: input.privacy === 'private',
       };
 
       const { data, error } = await supabase
@@ -1028,16 +1042,51 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const repostEvent = useCallback(
-    (eventId: string) => {
-      if (!currentUser.id) return;
+    async (eventId: string) => {
+      if (!supabase || !currentUser.id) return;
 
+      setRepostedEventIds((current) => new Set([...current, eventId]));
       setLocalRepostsByEventId((currentMap) => ({
         ...currentMap,
-        [eventId]: uniqueValues([
-          ...(currentMap[eventId] || []),
-          currentUser.id,
-        ]),
+        [eventId]: uniqueValues([...(currentMap[eventId] || []), currentUser.id]),
       }));
+
+      const { error } = await supabase
+        .from('reposts')
+        .insert({ user_id: currentUser.id, event_id: eventId });
+
+      if (error && error.code !== '23505') {
+        console.error('Unable to repost event:', error);
+        setRepostedEventIds((current) => {
+          const next = new Set(current);
+          next.delete(eventId);
+          return next;
+        });
+      }
+    },
+    [currentUser.id]
+  );
+
+  const unrepostEvent = useCallback(
+    async (eventId: string) => {
+      if (!supabase || !currentUser.id) return;
+
+      setRepostedEventIds((current) => {
+        const next = new Set(current);
+        next.delete(eventId);
+        return next;
+      });
+
+      const { error } = await supabase
+        .from('reposts')
+        .delete()
+        .eq('user_id', currentUser.id)
+        .eq('event_id', eventId);
+
+      if (error) {
+        console.error('Unable to unrepost event:', error);
+        setRepostedEventIds((current) => new Set([...current, eventId]));
+      }
     },
     [currentUser.id]
   );
@@ -1290,6 +1339,8 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
       rejectDiscoverEvent,
       resetDiscoverDeck,
       repostEvent,
+      unrepostEvent,
+      repostedEventIds,
       followProfile,
       unfollowProfile,
       getEventById,
@@ -1336,6 +1387,8 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
       refreshData,
       rejectDiscoverEvent,
       repostEvent,
+      unrepostEvent,
+      repostedEventIds,
       resetDiscoverDeck,
       savedEventIds,
       session,

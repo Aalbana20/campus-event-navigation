@@ -34,6 +34,7 @@ import {
   recordStoryView,
   toggleStoryHeart,
 } from '@/lib/mobile-stories';
+import { supabase } from '@/lib/supabase';
 import { useMobileApp } from '@/providers/mobile-app-provider';
 import { useMobileInbox } from '@/providers/mobile-inbox-provider';
 import type { EventRecord, ProfileRecord, StoryRecord } from '@/types/models';
@@ -170,10 +171,6 @@ export default function DiscoverScreen() {
     [animateDismiss, currentEvent]
   );
 
-  const handleCardComment = useCallback((event: EventRecord) => {
-    setActiveCommentEvent(event);
-  }, []);
-
   const handleCardSaveForLater = useCallback((event: EventRecord) => {
     const eventId = String(event.id);
     setSavedForLaterIds((currentValue) => {
@@ -197,29 +194,83 @@ export default function DiscoverScreen() {
     setIsMutualsSheetVisible(false);
   }, []);
 
+  const loadComments = useCallback(async (eventId: string) => {
+    if (!supabase) return;
+    const { data, error } = await supabase
+      .from('event_comments')
+      .select('id, body, created_at, user_id, profiles(name, username)')
+      .eq('event_id', eventId)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      console.error('Unable to load comments:', error);
+      return;
+    }
+
+    const normalized: EventCommentRecord[] = (data || []).map((row: any) => ({
+      id: String(row.id),
+      authorName: row.profiles?.name || row.profiles?.username || 'Campus User',
+      authorUsername: row.profiles?.username || '',
+      body: row.body,
+      createdAt: row.created_at,
+    }));
+
+    setCommentsByEventId((current) => ({ ...current, [eventId]: normalized }));
+  }, []);
+
   const handleCloseComments = useCallback(() => {
     setActiveCommentEvent(null);
     setCommentDraft('');
   }, []);
 
-  const handleSubmitComment = useCallback(() => {
-    if (!activeCommentEvent || !commentDraft.trim()) return;
+  const handleCardComment = useCallback((event: EventRecord) => {
+    setActiveCommentEvent(event);
+    void loadComments(String(event.id));
+  }, [loadComments]);
+
+  const handleSubmitComment = useCallback(async () => {
+    if (!supabase || !activeCommentEvent || !commentDraft.trim()) return;
 
     const eventId = String(activeCommentEvent.id);
-    const nextComment: EventCommentRecord = {
-      id: `${eventId}-${Date.now()}`,
+    const body = commentDraft.trim();
+    const tempId = `temp-${Date.now()}`;
+
+    const optimistic: EventCommentRecord = {
+      id: tempId,
       authorName: currentUser.name || currentUser.username || 'Campus User',
       authorUsername: currentUser.username || '',
-      body: commentDraft.trim(),
+      body,
       createdAt: new Date().toISOString(),
     };
 
-    setCommentsByEventId((currentValue) => ({
-      ...currentValue,
-      [eventId]: [...(currentValue[eventId] || []), nextComment],
+    setCommentsByEventId((current) => ({
+      ...current,
+      [eventId]: [...(current[eventId] || []), optimistic],
     }));
     setCommentDraft('');
-  }, [activeCommentEvent, commentDraft, currentUser.name, currentUser.username]);
+
+    const { data, error } = await supabase
+      .from('event_comments')
+      .insert({ event_id: eventId, user_id: currentUser.id, body })
+      .select('id')
+      .single();
+
+    if (error) {
+      console.error('Unable to save comment:', error);
+      setCommentsByEventId((current) => ({
+        ...current,
+        [eventId]: (current[eventId] || []).filter((c) => c.id !== tempId),
+      }));
+      return;
+    }
+
+    setCommentsByEventId((current) => ({
+      ...current,
+      [eventId]: (current[eventId] || []).map((c) =>
+        c.id === tempId ? { ...c, id: String(data.id) } : c
+      ),
+    }));
+  }, [activeCommentEvent, commentDraft, currentUser.id, currentUser.name, currentUser.username]);
 
   const panResponder = useMemo(
     () =>
