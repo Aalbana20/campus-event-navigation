@@ -851,9 +851,13 @@ function Discover() {
               disabled={!currentEvent || isActionLocked}
               aria-label="Skip current event"
             >
-              ↺
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M19 12H5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M11 6l-6 6 6 6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
             </button>
 
+            <div className="discover-card-group">
             <div className="discover-stack">
               {currentEvent ? (
                 <>
@@ -926,29 +930,19 @@ function Discover() {
               <aside className="discover-side-actions" aria-label="Event actions">
                 <button
                   type="button"
-                  className={`swipe-btn accept ${buttonFlash === "flash-accept" ? "active-flash-accept" : ""}`}
-                  onClick={handleAccept}
-                  disabled={isActionLocked}
-                  aria-label="Swipe right to RSVP"
-                  style={{ marginBottom: "16px" }}
-                >
-                  ✓
-                </button>
-
-                <button
-                  type="button"
                   className={`discover-side-action rsvp ${buttonFlash === "flash-accept" ? "active-flash-accept" : ""}`}
                   onClick={handleRsvpAction}
                   disabled={isActionLocked}
                   aria-label="RSVP to event"
                 >
                   <span className="discover-side-action-icon rsvp-icon" aria-hidden="true">
-                    <svg width="34" height="34" viewBox="0 0 24 24" fill="none">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
                       <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                      <circle cx="8.5" cy="7" r="4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                      <polyline points="14 11 16 13 21 8" stroke={buttonFlash === "flash-accept" ? "#34c759" : "currentColor"} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                      <circle cx="8.5" cy="7" r="4" stroke="currentColor" strokeWidth="1.8" />
+                      <polyline points="14 11 16 13 21 8" stroke={buttonFlash === "flash-accept" ? "#34c759" : "currentColor"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   </span>
+                  <span className="discover-side-action-count">{currentEvent.goingCount || 0}</span>
                 </button>
 
                 <button
@@ -960,8 +954,12 @@ function Discover() {
                   <span className="discover-side-action-icon" aria-hidden="true">
                     <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
                       <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                      <circle cx="9" cy="11.5" r="0.8" fill="currentColor" />
+                      <circle cx="12" cy="11.5" r="0.8" fill="currentColor" />
+                      <circle cx="15" cy="11.5" r="0.8" fill="currentColor" />
                     </svg>
                   </span>
+                  <span className="discover-side-action-count">{eventCommentsById[currentEventId]?.length || 0}</span>
                 </button>
 
                 <button
@@ -971,15 +969,30 @@ function Discover() {
                   aria-label="Save event for later"
                 >
                   <span className="discover-side-action-icon" aria-hidden="true">
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill={isCurrentEventSavedForLater ? "currentColor" : "none"}>
+                    <svg width="30" height="30" viewBox="0 0 24 24" fill={isCurrentEventSavedForLater ? "currentColor" : "none"}>
                       <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   </span>
+                  <span className="discover-side-action-count">0</span>
                 </button>
               </aside>
             ) : (
               <div className="discover-side-actions-placeholder" aria-hidden="true" />
             )}
+            </div>
+
+            <button
+              type="button"
+              className={`swipe-btn accept ${!currentEvent ? "inactive" : ""} ${buttonFlash === "flash-accept" ? "active-flash-accept" : ""}`}
+              onClick={handleAccept}
+              disabled={!currentEvent || isActionLocked}
+              aria-label="Accept event"
+            >
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M5 12h14" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
           </div>
         ) : (
           <DiscoverFriendsPanel

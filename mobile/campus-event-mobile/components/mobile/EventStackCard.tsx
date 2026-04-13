@@ -164,23 +164,27 @@ export function EventStackCard({
               <View style={styles.rsvpIconWrap}>
                 <Ionicons
                   name="person-outline"
-                  size={34}
+                  size={32}
                   color={isRsvped ? '#4ade80' : '#ffffff'}
                 />
-                <View style={styles.rsvpCheckBadge}>
-                  <Ionicons name="checkmark" size={14} color={isRsvped ? '#4ade80' : 'rgba(255,255,255,0.9)'} />
+                <View style={[styles.rsvpCheckBadge, isRsvped && styles.rsvpCheckBadgeActive]}>
+                  <Ionicons
+                    name="checkmark"
+                    size={11}
+                    color={isRsvped ? '#ffffff' : 'rgba(255,255,255,0.9)'}
+                  />
                 </View>
               </View>
             </Pressable>
 
             <Pressable style={styles.actionButton} onPress={handleCommentPress}>
-              <Ionicons name="chatbubble-outline" size={32} color="#ffffff" />
+              <Ionicons name="chatbubble-ellipses-outline" size={30} color="#ffffff" />
             </Pressable>
 
             <Pressable style={styles.actionButton} onPress={handleSavePress}>
               <Ionicons
                 name={isSavedForLater ? 'bookmark' : 'bookmark-outline'}
-                size={32}
+                size={30}
                 color="#ffffff"
               />
             </Pressable>

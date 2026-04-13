@@ -1,7 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import React, { useMemo, useState } from 'react';
 import {
   Alert,
+  Image,
   Pressable,
   StyleSheet,
   Text,
@@ -10,6 +12,7 @@ import {
 } from 'react-native';
 
 import { useAppTheme } from '@/lib/app-theme';
+import { supabase } from '@/lib/supabase';
 import { useMobileApp } from '@/providers/mobile-app-provider';
 import { CreateEventInput, EventPrivacy } from '@/types/models';
 
@@ -89,6 +92,58 @@ export function CreateEventComposer({ onPublished }: { onPublished?: () => void 
   const [organizer, setOrganizer] = useState('');
   const [dressCode, setDressCode] = useState('');
   const [imageUrl, setImageUrl] = useState('');
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+
+  const handlePickImage = async () => {
+    if (!supabase) return;
+
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Permission required', 'Allow access to your photo library to upload a flyer.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [4, 3] as [number, number],
+      quality: 0.8,
+    });
+
+    if (result.canceled || !result.assets[0]) return;
+
+    const asset = result.assets[0];
+    const fileExt = asset.uri.split('.').pop()?.toLowerCase() || 'jpg';
+    const fileName = `event-${Date.now()}.${fileExt}`;
+    const filePath = `events/${fileName}`;
+
+    setIsUploadingImage(true);
+
+    try {
+      const response = await fetch(asset.uri);
+      const blob = await response.blob();
+      const arrayBuffer = await blob.arrayBuffer();
+
+      const { error: uploadError } = await supabase.storage
+        .from('event-images')
+        .upload(filePath, arrayBuffer, {
+          contentType: asset.mimeType || `image/${fileExt}`,
+          upsert: true,
+        });
+
+      if (uploadError) {
+        Alert.alert('Upload failed', 'Could not upload the image. Try again.');
+        return;
+      }
+
+      const { data } = supabase.storage.from('event-images').getPublicUrl(filePath);
+      setImageUrl(data.publicUrl);
+    } catch {
+      Alert.alert('Upload failed', 'Something went wrong. Try again.');
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
 
   const suggestedTags = useMemo(() => {
     const haystack = [title, description, locationName, locationAddress, organizer].join(' ').toLowerCase();
@@ -337,17 +392,27 @@ export function CreateEventComposer({ onPublished }: { onPublished?: () => void 
         </Pressable>
       </View>
 
-      <Text style={styles.label}>Flyer / Image URL</Text>
-      <TextInput
-        value={imageUrl}
-        onChangeText={setImageUrl}
-        placeholder="https://..."
-        placeholderTextColor={theme.textMuted}
-        style={styles.input}
-      />
-      <Text style={styles.helperText}>
-        Native image upload can plug into Expo image picker next without changing the publish model.
-      </Text>
+      <Text style={styles.label}>Flyer / Image</Text>
+      <Pressable
+        style={[styles.imagePicker, isUploadingImage && styles.imagePickerUploading]}
+        onPress={() => void handlePickImage()}
+        disabled={isUploadingImage}>
+        {imageUrl ? (
+          <Image source={{ uri: imageUrl }} style={styles.imagePreview} resizeMode="cover" />
+        ) : (
+          <View style={styles.imagePickerPlaceholder}>
+            <Ionicons name="image-outline" size={28} color={theme.textMuted} />
+            <Text style={styles.imagePickerText}>
+              {isUploadingImage ? 'Uploading...' : 'Tap to choose a flyer'}
+            </Text>
+          </View>
+        )}
+      </Pressable>
+      {imageUrl ? (
+        <Pressable onPress={() => setImageUrl('')}>
+          <Text style={[styles.helperText, { color: theme.accent }]}>Remove image</Text>
+        </Pressable>
+      ) : null}
 
       <Pressable style={styles.publishButton} onPress={() => void handlePublish()}>
         <Text style={styles.publishButtonText}>Publish Event</Text>
@@ -511,6 +576,33 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     },
     segmentedTextActive: {
       color: theme.background,
+    },
+    imagePicker: {
+      borderWidth: 1,
+      borderColor: theme.border,
+      borderStyle: 'dashed',
+      borderRadius: 18,
+      overflow: 'hidden',
+      height: 160,
+    },
+    imagePickerUploading: {
+      opacity: 0.5,
+    },
+    imagePreview: {
+      width: '100%',
+      height: '100%',
+    },
+    imagePickerPlaceholder: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      backgroundColor: theme.surfaceAlt,
+    },
+    imagePickerText: {
+      color: theme.textMuted,
+      fontSize: 14,
+      fontWeight: '600',
     },
     publishButton: {
       marginTop: 10,

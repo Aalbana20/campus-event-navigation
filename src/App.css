@@ -1973,12 +1973,19 @@ body.theme-dark .discover-stories-panel {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 16px;
+  gap: 20px;
   margin-top: -6px;
 }
 
 .swipe-area.stack-empty {
   gap: 12px;
+}
+
+/* Groups card + side-actions so they sit flush together */
+.discover-card-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .discover-stack {
@@ -2079,15 +2086,14 @@ body.theme-dark .discover-stories-panel {
   box-shadow: none;
 }
 
-/* Unboxed Side Actions matching Mobile */
+/* Side actions — vertical column flush to the card's right edge */
 .discover-side-actions {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 24px;
-  margin-left: 0;
+  gap: 22px;
   align-self: flex-end;
-  margin-bottom: 64px;
+  margin-bottom: 60px;
 }
 
 .discover-side-action {
@@ -2102,8 +2108,9 @@ body.theme-dark .discover-stories-panel {
   cursor: pointer;
   transition: transform 0.2s ease, color 0.2s ease;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
+  gap: 3px;
 }
 
 .discover-side-action:hover {
@@ -2114,7 +2121,15 @@ body.theme-dark .discover-stories-panel {
   color: #fff;
 }
 
-/* Holds the card centered when there are no events (mirrors side-actions column width) */
+.discover-side-action-count {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.75);
+  line-height: 1;
+  letter-spacing: 0.01em;
+}
+
+/* Holds the card centered when there are no events — match accept btn width */
 .discover-side-actions-placeholder {
   width: 90px;
   flex-shrink: 0;
@@ -4537,6 +4552,12 @@ body.theme-dark .auth-error {
     margin-top: -6px;
   }
 
+  /* On narrow screens, card-group stacks vertically too */
+  .discover-card-group {
+    flex-direction: column;
+    gap: 12px;
+  }
+
   /* Side actions reflow to a centered horizontal strip below the card */
   .discover-side-actions {
     flex-direction: row;
@@ -4544,17 +4565,15 @@ body.theme-dark .auth-error {
     align-items: center;
     gap: 32px;
     margin-bottom: 0;
-    margin-left: 0;
   }
 
-  /* Accept button is smaller inside the bottom action bar */
-  .discover-side-actions .swipe-btn {
+  /* Both swipe buttons are smaller in the stacked layout */
+  .swipe-area .swipe-btn {
     width: 56px;
     height: 56px;
-    font-size: 22px;
   }
 
-  /* Placeholder matches the action bar so reject button stays centered too */
+  /* Placeholder matches the action bar */
   .discover-side-actions-placeholder {
     width: auto;
     height: 56px;
