@@ -124,11 +124,12 @@ function Profile() {
     deleteEvent,
     follow,
     unfollow,
+    repostedEventIds,
   } = useEvents()
 
-  const [name, setName] = useState("Success Myers")
-  const [username, setUsername] = useState("itzmesuccess1")
-  const [bio, setBio] = useState("UMES student • Event lover • Front-end builder")
+  const [name, setName] = useState("")
+  const [username, setUsername] = useState("")
+  const [bio, setBio] = useState("")
 
   const [activePanel, setActivePanel] = useState(null)
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false)
@@ -196,18 +197,15 @@ function Profile() {
       event.creatorUsername === ownerUsername
   )
   const rsvpGridEvents = savedEvents || []
-  const repostedEvents = allEvents.filter((event) => {
-    const repostedByIds = Array.isArray(event.repostedByIds) ? event.repostedByIds : []
-    const repostedByUsernames = Array.isArray(event.repostedByUsernames)
-      ? event.repostedByUsernames
-      : []
-
-    return (
-      repostedByIds.some((id) => String(id) === String(ownerId)) ||
-      repostedByUsernames.some((handle) => handle === ownerUsername)
-    )
+  const repostedEvents = allEvents.filter((event) =>
+    repostedEventIds?.has(String(event.id))
+  )
+  const taggedMoments = (savedEvents || []).filter((event) => {
+    const raw = event.date || event.eventDate
+    if (!raw) return false
+    const d = new Date(raw)
+    return !Number.isNaN(d.getTime()) && d < new Date()
   })
-  const taggedMoments = []
 
   const openPanel = (panelName) => {
     setActivePanel(panelName)
@@ -246,6 +244,33 @@ function Profile() {
     setActiveSettingsView("main")
   }
 
+  const handleSettingToggle = (setter, key, currentValue) => {
+    const next = !currentValue
+    setter(next)
+    const userId = JSON.parse(localStorage.getItem("user") || "{}").id
+    if (!userId) return
+    const updatedSettings = {
+      pushNotifications,
+      eventReminders,
+      followerAlerts,
+      dmAlerts,
+      messageRequests,
+      readReceipts,
+      showOnlineStatus,
+      privateProfile,
+      showActivityStatus,
+      followersOnlyDms,
+      [key]: next,
+    }
+    supabase
+      .from("profiles")
+      .update({ settings: updatedSettings })
+      .eq("id", userId)
+      .then(({ error }) => {
+        if (error) console.error("Failed to save settings:", error)
+      })
+  }
+
   const resolvedTheme = resolveThemeMode(themeMode)
 
   useEffect(() => {
@@ -259,7 +284,7 @@ function Profile() {
 
     supabase
       .from("profiles")
-      .select("name, username, bio, avatar_url")
+      .select("name, username, bio, avatar_url, settings")
       .eq("id", userId)
       .single()
       .then(({ data, error }) => {
@@ -270,6 +295,20 @@ function Profile() {
         const nextAvatarValue = sanitizeAvatarStorageValue(data.avatar_url, null) || ""
         setProfileImage(nextAvatarValue)
         localStorage.setItem("profileImage", nextAvatarValue)
+
+        if (data.settings && typeof data.settings === "object") {
+          const s = data.settings
+          if (typeof s.pushNotifications === "boolean") setPushNotifications(s.pushNotifications)
+          if (typeof s.eventReminders === "boolean") setEventReminders(s.eventReminders)
+          if (typeof s.followerAlerts === "boolean") setFollowerAlerts(s.followerAlerts)
+          if (typeof s.dmAlerts === "boolean") setDmAlerts(s.dmAlerts)
+          if (typeof s.messageRequests === "boolean") setMessageRequests(s.messageRequests)
+          if (typeof s.readReceipts === "boolean") setReadReceipts(s.readReceipts)
+          if (typeof s.showOnlineStatus === "boolean") setShowOnlineStatus(s.showOnlineStatus)
+          if (typeof s.privateProfile === "boolean") setPrivateProfile(s.privateProfile)
+          if (typeof s.showActivityStatus === "boolean") setShowActivityStatus(s.showActivityStatus)
+          if (typeof s.followersOnlyDms === "boolean") setFollowersOnlyDms(s.followersOnlyDms)
+        }
       })
   }, [defaultAvatar])
 
@@ -671,11 +710,29 @@ function Profile() {
 
               {activeProfileTab === "tagged" && (
                 taggedMoments.length > 0 ? (
-                  <div className="profile-tagged-grid" />
+                  <div className="profile-tab-event-grid">
+                    {taggedMoments.map((event) => (
+                      <div className="profile-tab-event-card static" key={event.id}>
+                        <div
+                          className="profile-tab-event-image"
+                          style={buildProfileEventImageStyle(event)}
+                        >
+                          <span className="profile-tab-event-pill">Attended</span>
+                        </div>
+                        <div className="profile-tab-event-body">
+                          <strong>{event.title || event.name || "Untitled Event"}</strong>
+                          <span>
+                            {[event.date, event.time || "TBA"].filter(Boolean).join(" · ")}
+                          </span>
+                          <span>{event.locationName || event.location || "No location"}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 ) : (
                   <div className="profile-tab-empty-state">
-                    <h3>Tagged moments will land here.</h3>
-                    <p>Photos and videos from events you attend will appear here.</p>
+                    <h3>No past events yet.</h3>
+                    <p>Events you RSVPd to that have already happened will appear here.</p>
                   </div>
                 )
               )}
@@ -1066,7 +1123,7 @@ function Profile() {
                       <button
                         type="button"
                         className={`settings-toggle ${pushNotifications ? "on" : ""}`}
-                        onClick={() => setPushNotifications((prev) => !prev)}
+                        onClick={() => handleSettingToggle(setPushNotifications, "pushNotifications", pushNotifications)}
                       >
                         <span />
                       </button>
@@ -1077,7 +1134,7 @@ function Profile() {
                       <button
                         type="button"
                         className={`settings-toggle ${eventReminders ? "on" : ""}`}
-                        onClick={() => setEventReminders((prev) => !prev)}
+                        onClick={() => handleSettingToggle(setEventReminders, "eventReminders", eventReminders)}
                       >
                         <span />
                       </button>
@@ -1088,7 +1145,7 @@ function Profile() {
                       <button
                         type="button"
                         className={`settings-toggle ${followerAlerts ? "on" : ""}`}
-                        onClick={() => setFollowerAlerts((prev) => !prev)}
+                        onClick={() => handleSettingToggle(setFollowerAlerts, "followerAlerts", followerAlerts)}
                       >
                         <span />
                       </button>
@@ -1099,7 +1156,7 @@ function Profile() {
                       <button
                         type="button"
                         className={`settings-toggle ${dmAlerts ? "on" : ""}`}
-                        onClick={() => setDmAlerts((prev) => !prev)}
+                        onClick={() => handleSettingToggle(setDmAlerts, "dmAlerts", dmAlerts)}
                       >
                         <span />
                       </button>
@@ -1128,7 +1185,7 @@ function Profile() {
                       <button
                         type="button"
                         className={`settings-toggle ${messageRequests ? "on" : ""}`}
-                        onClick={() => setMessageRequests((prev) => !prev)}
+                        onClick={() => handleSettingToggle(setMessageRequests, "messageRequests", messageRequests)}
                       >
                         <span />
                       </button>
@@ -1139,7 +1196,7 @@ function Profile() {
                       <button
                         type="button"
                         className={`settings-toggle ${readReceipts ? "on" : ""}`}
-                        onClick={() => setReadReceipts((prev) => !prev)}
+                        onClick={() => handleSettingToggle(setReadReceipts, "readReceipts", readReceipts)}
                       >
                         <span />
                       </button>
@@ -1150,7 +1207,7 @@ function Profile() {
                       <button
                         type="button"
                         className={`settings-toggle ${showOnlineStatus ? "on" : ""}`}
-                        onClick={() => setShowOnlineStatus((prev) => !prev)}
+                        onClick={() => handleSettingToggle(setShowOnlineStatus, "showOnlineStatus", showOnlineStatus)}
                       >
                         <span />
                       </button>
@@ -1179,7 +1236,7 @@ function Profile() {
                       <button
                         type="button"
                         className={`settings-toggle ${privateProfile ? "on" : ""}`}
-                        onClick={() => setPrivateProfile((prev) => !prev)}
+                        onClick={() => handleSettingToggle(setPrivateProfile, "privateProfile", privateProfile)}
                       >
                         <span />
                       </button>
@@ -1190,7 +1247,7 @@ function Profile() {
                       <button
                         type="button"
                         className={`settings-toggle ${showActivityStatus ? "on" : ""}`}
-                        onClick={() => setShowActivityStatus((prev) => !prev)}
+                        onClick={() => handleSettingToggle(setShowActivityStatus, "showActivityStatus", showActivityStatus)}
                       >
                         <span />
                       </button>
@@ -1201,7 +1258,7 @@ function Profile() {
                       <button
                         type="button"
                         className={`settings-toggle ${followersOnlyDms ? "on" : ""}`}
-                        onClick={() => setFollowersOnlyDms((prev) => !prev)}
+                        onClick={() => handleSettingToggle(setFollowersOnlyDms, "followersOnlyDms", followersOnlyDms)}
                       >
                         <span />
                       </button>

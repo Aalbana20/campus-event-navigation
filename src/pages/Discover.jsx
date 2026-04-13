@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
+import { supabase } from "../supabaseClient"
 import DiscoverFriendsPanel from "../components/DiscoverFriendsPanel"
 import DiscoverModeSwitch from "../components/DiscoverModeSwitch"
 import DiscoverCommentsDrawer from "../components/DiscoverCommentsDrawer"
@@ -24,15 +25,6 @@ import {
 
 const SAVED_FOR_LATER_KEY = "discover-saved-for-later-event-ids"
 
-const normalizeEventGoingCount = (event) => {
-  const parsedValue = Number.parseInt(String(event?.rsvp || "").replace(/\D/g, ""), 10)
-
-  if (Number.isFinite(Number(event?.goingCount))) return Number(event.goingCount)
-  if (Number.isFinite(Number(event?.rsvpCount))) return Number(event.rsvpCount)
-  if (Array.isArray(event?.attendees)) return event.attendees.length
-  if (Number.isFinite(parsedValue)) return parsedValue
-  return 0
-}
 
 const readSavedForLaterIds = () => {
   if (typeof window === "undefined") return new Set()
@@ -158,7 +150,6 @@ function Discover() {
     discoverEvents.length > safeCurrentIndex + 1 ? safeCurrentIndex + 1 : null
   const nextEvent = nextIndex !== null ? discoverEvents[nextIndex] : null
   const currentEventId = currentEvent ? String(currentEvent.id) : ""
-  const currentEventGoingCount = currentEvent ? normalizeEventGoingCount(currentEvent) : 0
   const isCurrentEventSavedForLater = currentEventId
     ? savedForLaterIds.has(currentEventId)
     : false
@@ -309,35 +300,86 @@ function Discover() {
     setDiscoverActionFeedback(nextSavedState ? "Saved for later." : "Removed from saved.")
   }, [currentEvent])
 
+  const loadComments = useCallback(async (eventId) => {
+    const { data, error } = await supabase
+      .from("event_comments")
+      .select("id, body, created_at, user_id, profiles(name, username, avatar_url)")
+      .eq("event_id", eventId)
+      .order("created_at", { ascending: true })
+
+    if (error) {
+      console.error("Failed to load comments:", error)
+      return
+    }
+
+    const normalized = (data || []).map((row) => ({
+      id: String(row.id),
+      authorName: row.profiles?.name || row.profiles?.username || "Campus User",
+      authorUsername: row.profiles?.username || "",
+      body: row.body,
+      createdAt: row.created_at,
+    }))
+
+    setEventCommentsById((prev) => ({ ...prev, [String(eventId)]: normalized }))
+  }, [])
+
   const handleOpenComments = useCallback(() => {
     if (!currentEvent) return
 
     setActiveCommentEventId(String(currentEvent.id))
     setCommentDraft("")
-  }, [currentEvent])
+    loadComments(String(currentEvent.id))
+  }, [currentEvent, loadComments])
 
   const handleCloseComments = useCallback(() => {
     setActiveCommentEventId(null)
     setCommentDraft("")
   }, [])
 
-  const handleSubmitComment = useCallback(() => {
+  const handleSubmitComment = useCallback(async () => {
     if (!activeCommentEvent || !commentDraft.trim()) return
 
     const eventId = String(activeCommentEvent.id)
-    const nextComment = {
-      id: `${eventId}-${Date.now()}`,
+    const userId = JSON.parse(localStorage.getItem("user") || "{}").id
+    const body = commentDraft.trim()
+
+    const optimisticComment = {
+      id: `optimistic-${Date.now()}`,
       authorName: currentUser?.name || currentUser?.username || "Campus User",
       authorUsername: currentUser?.username || "",
-      body: commentDraft.trim(),
+      body,
       createdAt: new Date().toISOString(),
     }
 
-    setEventCommentsById((currentValue) => ({
-      ...currentValue,
-      [eventId]: [...(currentValue[eventId] || []), nextComment],
+    setEventCommentsById((prev) => ({
+      ...prev,
+      [eventId]: [...(prev[eventId] || []), optimisticComment],
     }))
     setCommentDraft("")
+
+    if (!userId) return
+
+    const { data, error } = await supabase
+      .from("event_comments")
+      .insert({ event_id: eventId, user_id: userId, body })
+      .select("id")
+      .single()
+
+    if (error) {
+      console.error("Failed to save comment:", error)
+      setEventCommentsById((prev) => ({
+        ...prev,
+        [eventId]: (prev[eventId] || []).filter((c) => c.id !== optimisticComment.id),
+      }))
+      return
+    }
+
+    setEventCommentsById((prev) => ({
+      ...prev,
+      [eventId]: (prev[eventId] || []).map((c) =>
+        c.id === optimisticComment.id ? { ...c, id: String(data.id) } : c
+      ),
+    }))
   }, [activeCommentEvent, commentDraft, currentUser?.name, currentUser?.username])
 
   const handleCardPointerDown = useCallback(
