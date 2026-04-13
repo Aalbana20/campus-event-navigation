@@ -100,9 +100,10 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       elevation: 2,
     },
     shellDark: {
-      backgroundColor: 'rgba(255, 255, 255, 0.15)',
-      borderColor: 'rgba(255, 255, 255, 0.08)',
+      backgroundColor: 'transparent',
+      borderColor: 'transparent',
       shadowOpacity: 0,
+      elevation: 0,
     },
     indicator: {
       position: 'absolute',
@@ -118,7 +119,7 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       elevation: 2,
     },
     indicatorDark: {
-      backgroundColor: 'rgba(255, 255, 255, 0.2)',
+      backgroundColor: 'rgba(255, 255, 255, 0.25)',
       shadowOpacity: 0,
     },
     option: {
@@ -136,7 +137,7 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       fontWeight: '800',
     },
     optionTextDark: {
-      color: 'rgba(255, 255, 255, 0.6)',
+      color: 'rgba(255, 255, 255, 0.7)',
     },
     optionTextActive: {
       color: theme.text,

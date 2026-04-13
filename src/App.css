@@ -5540,6 +5540,31 @@ body.theme-dark .discover-mode-switch-option.active {
   color: var(--text-main);
 }
 
+/* Discover mode immersive switch styling */
+.discover-mode-switch[data-mode="friends"],
+body.theme-dark .discover-mode-switch[data-mode="friends"] {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: none;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.discover-mode-switch[data-mode="friends"] .discover-mode-switch-indicator,
+body.theme-dark .discover-mode-switch[data-mode="friends"] .discover-mode-switch-indicator {
+  background: rgba(255, 255, 255, 0.22);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+.discover-mode-switch[data-mode="friends"] .discover-mode-switch-option,
+body.theme-dark .discover-mode-switch[data-mode="friends"] .discover-mode-switch-option {
+  color: rgba(255, 255, 255, 0.85);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+.discover-mode-switch[data-mode="friends"] .discover-mode-switch-option.active,
+body.theme-dark .discover-mode-switch[data-mode="friends"] .discover-mode-switch-option.active {
+  color: #ffffff;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+
 body.theme-dark .discover-status-pill {
   background: rgba(19, 24, 33, 0.92);
   border-color: rgba(255, 255, 255, 0.08);
