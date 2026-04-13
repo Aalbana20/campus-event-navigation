@@ -66,6 +66,9 @@ export function EventStackCard({
   const eventTime = event.time || 'Time TBA';
   const mutualCount = mutualsGoing.length;
 
+  const creatorLabel = getEventCreatorLabel(event);
+  const creatorFirstName = creatorLabel.split(' ')[0] || creatorLabel;
+
   const stopEventPress = (eventPress: GestureResponderEvent) => {
     eventPress.stopPropagation();
   };
@@ -105,7 +108,7 @@ export function EventStackCard({
               <View style={styles.creatorIdentity}>
                 <Image source={getAvatarImageSource(event.creatorAvatar)} style={styles.creatorAvatar} />
                 <Text style={styles.creatorName} numberOfLines={1}>
-                  {getEventCreatorLabel(event)}
+                  {creatorFirstName}
                 </Text>
               </View>
 
@@ -167,7 +170,7 @@ export function EventStackCard({
                   size={32}
                   color={isRsvped ? '#4ade80' : '#ffffff'}
                 />
-                <View style={[styles.rsvpCheckBadge, isRsvped && styles.rsvpCheckBadgeActive]}>
+                <View style={[styles.rsvpCheckBadge, isRsvped ? styles.rsvpCheckBadgeActive : undefined]}>
                   <Ionicons
                     name="checkmark"
                     size={11}
@@ -175,10 +178,12 @@ export function EventStackCard({
                   />
                 </View>
               </View>
+              <Text style={styles.actionCount}>{event.attendees?.length ?? 0}</Text>
             </Pressable>
 
             <Pressable style={styles.actionButton} onPress={handleCommentPress}>
               <Ionicons name="chatbubble-ellipses-outline" size={30} color="#ffffff" />
+              <Text style={styles.actionCount}>0</Text>
             </Pressable>
 
             <Pressable style={styles.actionButton} onPress={handleSavePress}>
@@ -187,6 +192,7 @@ export function EventStackCard({
                 size={30}
                 color="#ffffff"
               />
+              <Text style={styles.actionCount}>0</Text>
             </Pressable>
           </View>
         </View>
@@ -361,9 +367,9 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     },
     actionRail: {
       alignItems: 'center',
-      gap: 22,
+      gap: 36,
       alignSelf: 'flex-end',
-      marginBottom: 2,
+      marginBottom: 24,
     },
     actionButton: {
       alignItems: 'center',
@@ -373,6 +379,14 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       shadowOpacity: 0.35,
       shadowRadius: 4,
       elevation: 5,
+    },
+    actionCount: {
+      color: 'rgba(255,255,255,0.85)',
+      fontSize: 12,
+      fontWeight: '600',
+      marginTop: 4,
+      textAlign: 'center',
+      minWidth: 20,
     },
     rsvpIconWrap: {
       width: 34,
@@ -387,6 +401,9 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: 'transparent',
+    },
+    rsvpCheckBadgeActive: {
+      opacity: 1,
     },
     bottomHintWrap: {
       zIndex: 3,

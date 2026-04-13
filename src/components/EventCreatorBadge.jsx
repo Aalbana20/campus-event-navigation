@@ -23,7 +23,7 @@ function EventCreatorBadge({ event, className = "", compact = false }) {
       />
 
       <div className="event-creator-copy">
-        <span className="event-creator-name">{creatorName}</span>
+        <span className="event-creator-name">{creatorName.split(' ')[0] || creatorName}</span>
         {creatorHandle && creatorHandle.toLowerCase() !== creatorName.toLowerCase() ? (
           <span className="event-creator-handle">{creatorHandle}</span>
         ) : null}

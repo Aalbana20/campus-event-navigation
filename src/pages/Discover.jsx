@@ -930,7 +930,7 @@ function Discover() {
               <aside className="discover-side-actions" aria-label="Event actions">
                 <button
                   type="button"
-                  className={`discover-side-action rsvp ${buttonFlash === "flash-accept" ? "active-flash-accept" : ""}`}
+                  className={`discover-side-action rsvp ${buttonFlash === "flash-accept" ? "active-flash-accept" : ""} ${savedEventIds.has(currentEventId) ? "is-rsvped" : ""}`}
                   onClick={handleRsvpAction}
                   disabled={isActionLocked}
                   aria-label="RSVP to event"
@@ -939,10 +939,10 @@ function Discover() {
                     <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
                       <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                       <circle cx="8.5" cy="7" r="4" stroke="currentColor" strokeWidth="1.8" />
-                      <polyline points="14 11 16 13 21 8" stroke={buttonFlash === "flash-accept" ? "#34c759" : "currentColor"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      <polyline points="14 11 16 13 21 8" stroke={buttonFlash === "flash-accept" || savedEventIds.has(currentEventId) ? "#34c759" : "currentColor"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   </span>
-                  <span className="discover-side-action-count">{currentEvent.goingCount || 0}</span>
+                  <span className="discover-side-action-count">{currentEvent.attendees?.length || currentEvent.rsvpUsers?.length || currentEvent.goingCount || 0}</span>
                 </button>
 
                 <button
