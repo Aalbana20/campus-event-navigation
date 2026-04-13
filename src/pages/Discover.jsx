@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { supabase } from "../supabaseClient"
-import DiscoverFriendsPanel from "../components/DiscoverFriendsPanel"
 import DiscoverModeSwitch from "../components/DiscoverModeSwitch"
 import DiscoverCommentsDrawer from "../components/DiscoverCommentsDrawer"
 import DiscoverStoryComposer from "../components/DiscoverStoryComposer"
 import DiscoverStoriesRow from "../components/DiscoverStoriesRow"
+import DiscoverVideoFeed from "../components/DiscoverVideoFeed"
 import EventCard from "../components/EventCard"
 import { useEvents } from "../context/EventContext"
 import {
@@ -56,6 +56,9 @@ function Discover() {
     followersList,
     savedEvents,
     unfollow,
+    repostedEventIds,
+    repostEvent,
+    unrepostEvent,
   } = useEvents()
 
   const [activeMode, setActiveMode] = useState("events")
@@ -821,23 +824,127 @@ function Discover() {
     [follow, unfollow]
   )
 
-  return (
-    <main className="discover">
-      <div className="discover-shell">
-        <div className="discover-topbar">
-          <button className="header-icon-btn" onClick={handleCreateEvent} aria-label="Create Event">
-            <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-            </svg>
-          </button>
-        </div>
+  const repostedIdSet = useMemo(
+    () => new Set(Array.from(repostedEventIds || []).map((value) => String(value))),
+    [repostedEventIds]
+  )
 
-        <DiscoverStoriesRow
-          items={storyItems}
-          onOpenStory={handleOpenStory}
-          onOpenSuggestion={handleOpenSuggestion}
-          onOpenCreateStory={handleOpenStoryComposer}
-        />
+  const handleFeedHeart = useCallback((event) => {
+    if (!event?.id) return
+
+    const eventId = String(event.id)
+    let nextSavedState = false
+
+    setSavedForLaterIds((currentValue) => {
+      const nextValue = new Set(currentValue)
+
+      if (nextValue.has(eventId)) {
+        nextValue.delete(eventId)
+        nextSavedState = false
+      } else {
+        nextValue.add(eventId)
+        nextSavedState = true
+      }
+
+      return nextValue
+    })
+
+    setDiscoverActionFeedback(nextSavedState ? "Saved for later." : "Removed from saved.")
+  }, [])
+
+  const handleFeedComment = useCallback(
+    (event) => {
+      if (!event?.id) return
+      setActiveCommentEventId(String(event.id))
+      setCommentDraft("")
+      loadComments(String(event.id))
+    },
+    [loadComments]
+  )
+
+  const handleFeedRepost = useCallback(
+    async (event) => {
+      if (!event?.id) return
+
+      const eventId = String(event.id)
+      if (repostedIdSet.has(eventId)) {
+        await unrepostEvent?.(eventId)
+        setDiscoverActionFeedback("Removed repost.")
+        return
+      }
+
+      await repostEvent?.(eventId)
+      setDiscoverActionFeedback("Reposted to your feed.")
+    },
+    [repostEvent, repostedIdSet, unrepostEvent]
+  )
+
+  const handleFeedShare = useCallback((event) => {
+    if (!event?.id) return
+
+    const shareUrl = `${window.location.origin}/#/event/${event.id}`
+    if (navigator.share) {
+      navigator
+        .share({ title: event.title || "Campus Event", url: shareUrl })
+        .catch(() => {
+          /* user cancelled */
+        })
+      return
+    }
+
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(shareUrl)
+      setDiscoverActionFeedback("Link copied to clipboard.")
+    }
+  }, [])
+
+  const handleFeedCreator = useCallback(
+    (event) => {
+      const creatorHandle =
+        event?.creatorUsername || event?.creatorHandle || event?.creatorId
+      if (!creatorHandle) return
+      navigate(`/profile/${creatorHandle}`)
+    },
+    [navigate]
+  )
+
+  const handleFeedFollow = useCallback(
+    async (event) => {
+      const creatorId = event?.creatorId || event?.creator_id
+      if (!creatorId) return
+      const creatorIdString = String(creatorId)
+      if (followingIdSet.has(creatorIdString)) {
+        await unfollow(creatorId)
+        return
+      }
+      await follow(creatorId)
+    },
+    [follow, followingIdSet, unfollow]
+  )
+
+  const isImmersiveFeed = activeMode === "friends"
+
+  return (
+    <main className={`discover ${isImmersiveFeed ? "immersive-feed" : ""}`}>
+      <div className="discover-shell">
+        {!isImmersiveFeed ? (
+          <>
+            <div className="discover-topbar">
+              <button className="header-icon-btn" onClick={handleCreateEvent} aria-label="Create Event">
+                <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                </svg>
+              </button>
+            </div>
+
+            <DiscoverStoriesRow
+              items={storyItems}
+              onOpenStory={handleOpenStory}
+              onOpenSuggestion={handleOpenSuggestion}
+              onOpenCreateStory={handleOpenStoryComposer}
+            />
+          </>
+        ) : null}
 
         <div className="discover-switch-wrap">
           <DiscoverModeSwitch activeMode={activeMode} onChange={handleChangeDiscoverMode} />
@@ -996,11 +1103,17 @@ function Discover() {
             </button>
           </div>
         ) : (
-          <DiscoverFriendsPanel
-            items={friendCards}
-            followingIds={followingIdSet}
-            onOpenPerson={handleOpenPerson}
-            onToggleFollow={handleToggleFollow}
+          <DiscoverVideoFeed
+            events={discoverEvents}
+            savedIds={savedForLaterIds}
+            repostedIds={repostedIdSet}
+            followingIdSet={followingIdSet}
+            onPressHeart={handleFeedHeart}
+            onPressComment={handleFeedComment}
+            onPressRepost={handleFeedRepost}
+            onPressShare={handleFeedShare}
+            onPressCreator={handleFeedCreator}
+            onPressFollow={handleFeedFollow}
           />
         )}
 

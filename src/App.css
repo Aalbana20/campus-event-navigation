@@ -6076,3 +6076,278 @@ body.theme-dark .calendar-modal-card .my-event-image {
 body.theme-dark .profile-rsvp-title {
   color: #e6ebf2;
 }
+
+/* =========================================================
+   WEB DISCOVER VIDEO FEED (IMMERSIVE — PHONE FRAME)
+========================================================= */
+.discover.immersive-feed .discover-shell {
+  align-items: center;
+  gap: 10px;
+}
+
+.discover.immersive-feed .discover-switch-wrap {
+  width: min(430px, 94vw);
+  margin: 2px auto 0;
+}
+
+.video-feed-empty {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.video-creator-avatar-btn {
+  position: relative;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: inline-flex;
+}
+
+.video-creator-badge {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #ff3b30;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #ffffff;
+}
+
+.video-creator-badge svg {
+  width: 12px;
+  height: 12px;
+}
+
+.discover-video-feed-container {
+  width: min(430px, 94vw);
+  height: min(860px, calc(100vh - 150px));
+  max-width: 100%;
+  margin: 0 auto;
+  background: #000;
+  overflow-y: scroll;
+  scroll-snap-type: y mandatory;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  position: relative;
+  border-radius: 36px;
+  box-shadow:
+    0 36px 90px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.07);
+}
+
+.discover-video-feed-container::-webkit-scrollbar {
+  display: none;
+}
+
+.video-feed-item {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  scroll-snap-align: start;
+  background: #111;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.video-feed-media {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.video-feed-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.85) 0%,
+    rgba(0, 0, 0, 0.4) 20%,
+    transparent 40%,
+    rgba(0, 0, 0, 0.15) 100%
+  );
+  pointer-events: none;
+}
+
+/* Right-side Action Rail */
+.video-feed-actions {
+  position: absolute;
+  right: 14px;
+  bottom: 110px;
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+  align-items: center;
+  z-index: 10;
+  pointer-events: auto;
+}
+
+.video-action-btn {
+  background: transparent;
+  border: none;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+  padding: 0;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));
+}
+
+.video-action-btn:hover {
+  transform: scale(1.1);
+}
+
+.video-action-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 50%;
+}
+
+.video-action-btn svg {
+  width: 22px;
+  height: 22px;
+  stroke-width: 2;
+}
+
+.video-action-btn.active.heart svg {
+  fill: #ff4040;
+  stroke: #ff4040;
+  color: #ff4040;
+}
+
+.video-action-btn.active.repost svg {
+  color: #00e676;
+  stroke: #00e676;
+}
+
+.video-action-count {
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+}
+
+/* Bottom-left Content Zone */
+.video-feed-info {
+  position: absolute;
+  left: 22px;
+  bottom: 32px;
+  right: 86px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  z-index: 10;
+  pointer-events: auto;
+}
+
+.video-creator-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+.video-creator-row .video-creator-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.video-creator-row .video-follow-btn {
+  flex-shrink: 0;
+}
+
+.video-creator-avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  object-fit: cover;
+}
+
+.video-creator-name {
+  font-size: 17px;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+}
+
+.video-follow-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  color: #fff;
+  border-radius: 999px;
+  padding: 5px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  transition: background 0.2s;
+}
+
+.video-follow-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.video-description {
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.95);
+  line-height: 1.45;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin: 0;
+}
+
+.video-audio-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.45);
+  padding: 6px 14px;
+  border-radius: 999px;
+  width: fit-content;
+  max-width: 100%;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  margin-top: 4px;
+}
+
+.video-audio-icon {
+  color: #fff;
+}
+
+.video-audio-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
