@@ -3,6 +3,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   Animated,
   PanResponder,
   Pressable,
@@ -17,6 +18,7 @@ import {
 import { AppScreen } from '@/components/mobile/AppScreen';
 import { DiscoverStoriesRow } from '@/components/mobile/DiscoverStoriesRow';
 import { DiscoverModeSwitch } from '@/components/mobile/DiscoverModeSwitch';
+import { DiscoverVideoFeed } from '@/components/mobile/DiscoverVideoFeed';
 import { EventCommentsSheet, type EventCommentRecord } from '@/components/mobile/EventCommentsSheet';
 import { EventMutualsSheet } from '@/components/mobile/EventMutualsSheet';
 import { EventStackCard } from '@/components/mobile/EventStackCard';
@@ -57,6 +59,7 @@ export default function DiscoverScreen() {
     refreshData,
     getProfileById,
     recentDmPeople,
+    repostEvent,
   } = useMobileApp();
   const { sendDmMessage, unreadNotificationCount } = useMobileInbox();
 
@@ -432,38 +435,58 @@ export default function DiscoverScreen() {
   );
 
   return (
-    <AppScreen style={styles.safeArea}>
-      <ScrollView
-        scrollEnabled={scrollEnabled}
-        contentContainerStyle={styles.container}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.textMuted} />}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.headerBar}>
+    <AppScreen style={[styles.safeArea, activeTab === 'friends' && { backgroundColor: '#000' }]}>
+      {activeTab === 'friends' ? (
+        <View style={[styles.headerBar, styles.headerBarAbsolute]}>
           <View style={styles.headerActionsLeft}>
-            <Pressable style={styles.headerIconButton} onPress={() => router.push('/(tabs)/events?tab=create')}>
-              <Ionicons name="add-outline" size={20} color={theme.text} />
+            <Pressable style={[styles.headerIconButton, styles.glassyIconButton]} onPress={() => router.push('/(tabs)/events?tab=create')}>
+              <Ionicons name="add-outline" size={20} color="#ffffff" />
             </Pressable>
           </View>
 
-          <DiscoverModeSwitch activeMode={activeTab} onChange={setActiveTab} />
+          <DiscoverModeSwitch activeMode={activeTab} onChange={setActiveTab} isDark={true} />
 
           <View style={styles.headerActions}>
-            <Pressable style={styles.headerIconButton} onPress={openNotifications}>
-              <Ionicons name="notifications-outline" size={18} color={theme.text} />
+            <Pressable style={[styles.headerIconButton, styles.glassyIconButton]} onPress={openNotifications}>
+              <Ionicons name="notifications-outline" size={18} color="#ffffff" />
               {unreadNotificationCount > 0 ? <View style={styles.headerBadge} /> : null}
             </Pressable>
           </View>
         </View>
+      ) : null}
 
-        <DiscoverStoriesRow
-          items={storyItems}
-          onOpenStory={handleOpenStory}
-          onOpenSuggestion={() => setActiveTab('friends')}
-          onOpenCreateStory={handleOpenCreateStory}
-        />
+      {activeTab === 'events' ? (
+        <ScrollView
+          scrollEnabled={scrollEnabled}
+          contentContainerStyle={styles.container}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.textMuted} />}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.headerBar}>
+            <View style={styles.headerActionsLeft}>
+              <Pressable style={styles.headerIconButton} onPress={() => router.push('/(tabs)/events?tab=create')}>
+                <Ionicons name="add-outline" size={20} color={theme.text} />
+              </Pressable>
+            </View>
 
-        <View style={styles.cardStage}>
+            <DiscoverModeSwitch activeMode={activeTab} onChange={setActiveTab} isDark={false} />
+
+            <View style={styles.headerActions}>
+              <Pressable style={styles.headerIconButton} onPress={openNotifications}>
+                <Ionicons name="notifications-outline" size={18} color={theme.text} />
+                {unreadNotificationCount > 0 ? <View style={styles.headerBadge} /> : null}
+              </Pressable>
+            </View>
+          </View>
+
+          <DiscoverStoriesRow
+            items={storyItems}
+            onOpenStory={handleOpenStory}
+            onOpenSuggestion={() => setActiveTab('friends')}
+            onOpenCreateStory={handleOpenCreateStory}
+          />
+
+          <View style={styles.cardStage}>
           {currentEvent ? (
             <View style={[styles.cardDeck, { minHeight: cardHeight + 22 }]}>
               <View style={[styles.cardBackdrop, { height: cardHeight - 18 }]} />
@@ -509,15 +532,30 @@ export default function DiscoverScreen() {
               </Pressable>
             </View>
           )}
-        </View>
-
-        {currentEvent ? (
-          <View style={styles.swipeHint}>
-            <Ionicons name="swap-horizontal-outline" size={16} color={theme.textMuted} />
-            <Text style={styles.swipeHintText}>Swipe left to pass or right to save</Text>
           </View>
-        ) : null}
-      </ScrollView>
+
+          {currentEvent ? (
+            <View style={styles.swipeHint}>
+              <Ionicons name="swap-horizontal-outline" size={16} color={theme.textMuted} />
+              <Text style={styles.swipeHintText}>Swipe left to pass or right to save</Text>
+            </View>
+          ) : null}
+        </ScrollView>
+      ) : (
+        <View style={styles.videoFeedContainer}>
+          <DiscoverVideoFeed
+            events={discoverEvents}
+            savedIds={savedForLaterIds}
+            onPressHeart={handleCardSaveForLater}
+            onPressComment={handleCardComment}
+            onPressShare={(event) => { Alert.alert('Share', `Share ${event.title}`); }}
+            onPressRepost={(event) => {
+              repostEvent?.(event.id);
+              Alert.alert('Reposted', 'Event reposted to your feed.');
+            }}
+          />
+        </View>
+      )}
 
       <EventCommentsSheet
         visible={Boolean(activeCommentEvent)}
@@ -600,6 +638,17 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       borderRadius: 3.5,
       backgroundColor: theme.success,
     },
+    headerBarAbsolute: {
+      position: 'absolute',
+      top: 54,
+      left: 16,
+      right: 16,
+      zIndex: 100,
+    },
+    glassyIconButton: {
+      backgroundColor: 'rgba(255, 255, 255, 0.15)',
+      borderColor: 'rgba(255, 255, 255, 0.08)',
+    },
     cardStage: {
       flex: 1,
       justifyContent: 'flex-start',
@@ -668,5 +717,9 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       color: theme.background,
       fontSize: 14,
       fontWeight: '800',
+    },
+    videoFeedContainer: {
+      flex: 1,
+      backgroundColor: '#000',
     },
   });

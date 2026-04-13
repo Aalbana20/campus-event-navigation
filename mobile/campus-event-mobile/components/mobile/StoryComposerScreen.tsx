@@ -28,11 +28,11 @@ import {
 import { useMobileApp } from '@/providers/mobile-app-provider';
 
 type ComposerStage = 'camera' | 'preview';
-type ComposerMode = 'Post' | 'Story' | 'Live';
+type ComposerMode = 'Post' | 'Story' | 'Event' | 'Live';
 
 const HOLD_TO_RECORD_DELAY_MS = 220;
 
-const MODES: ComposerMode[] = ['Post', 'Story', 'Live'];
+const MODES: ComposerMode[] = ['Post', 'Story', 'Event', 'Live'];
 
 export function StoryComposerScreen() {
   const router = useRouter();
@@ -46,7 +46,7 @@ export function StoryComposerScreen() {
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [microphonePermission, requestMicrophonePermission] = useMicrophonePermissions();
   const [stage, setStage] = useState<ComposerStage>('camera');
-  const [activeMode] = useState<ComposerMode>('Story');
+  const [activeMode, setActiveMode] = useState<ComposerMode>('Story');
   const [cameraFacing, setCameraFacing] = useState<CameraType>('back');
   const [flashMode, setFlashMode] = useState<FlashMode>('off');
   const [cameraMode, setCameraMode] = useState<'picture' | 'video'>('picture');
@@ -310,8 +310,9 @@ export function StoryComposerScreen() {
           <View style={styles.bottomComposer}>
             <View style={styles.modeBar}>
               {MODES.map((mode) => (
-                <View
+                <Pressable
                   key={mode}
+                  onPress={() => setActiveMode(mode)}
                   style={[
                     styles.modePill,
                     mode === activeMode && styles.modePillActive,
@@ -323,7 +324,7 @@ export function StoryComposerScreen() {
                     ]}>
                     {mode}
                   </Text>
-                </View>
+                </Pressable>
               ))}
             </View>
 

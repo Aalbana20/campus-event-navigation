@@ -15,6 +15,7 @@ type DiscoverMode = 'events' | 'friends';
 type DiscoverModeSwitchProps = {
   activeMode: DiscoverMode;
   onChange: (mode: DiscoverMode) => void;
+  isDark?: boolean;
 };
 
 const OPTIONS: { id: DiscoverMode; label: string }[] = [
@@ -25,6 +26,7 @@ const OPTIONS: { id: DiscoverMode; label: string }[] = [
 export function DiscoverModeSwitch({
   activeMode,
   onChange,
+  isDark,
 }: DiscoverModeSwitchProps) {
   const theme = useAppTheme();
   const styles = useMemo(() => buildStyles(theme), [theme]);
@@ -46,16 +48,14 @@ export function DiscoverModeSwitch({
   };
 
   return (
-    <View style={styles.shell} onLayout={handleLayout}>
+    <View style={[styles.shell, isDark && styles.shellDark]} onLayout={handleLayout}>
       {indicatorWidth > 0 ? (
         <Animated.View
           pointerEvents="none"
           style={[
             styles.indicator,
-            {
-              width: indicatorWidth,
-              transform: [{ translateX }],
-            },
+            isDark && styles.indicatorDark,
+            { width: indicatorWidth, transform: [{ translateX }] }
           ]}
         />
       ) : null}
@@ -68,7 +68,8 @@ export function DiscoverModeSwitch({
           <Text
             style={[
               styles.optionText,
-              activeMode === option.id && styles.optionTextActive,
+              isDark && styles.optionTextDark,
+              activeMode === option.id && (isDark ? styles.optionTextActiveDark : styles.optionTextActive),
             ]}>
             {option.label}
           </Text>
@@ -98,6 +99,11 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       shadowOffset: { width: 0, height: 10 },
       elevation: 2,
     },
+    shellDark: {
+      backgroundColor: 'rgba(255, 255, 255, 0.15)',
+      borderColor: 'rgba(255, 255, 255, 0.08)',
+      shadowOpacity: 0,
+    },
     indicator: {
       position: 'absolute',
           top: 2,
@@ -110,6 +116,10 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       shadowRadius: 12,
       shadowOffset: { width: 0, height: 6 },
       elevation: 2,
+    },
+    indicatorDark: {
+      backgroundColor: 'rgba(255, 255, 255, 0.2)',
+      shadowOpacity: 0,
     },
     option: {
       flex: 1,
@@ -125,7 +135,13 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
           fontSize: 12,
       fontWeight: '800',
     },
+    optionTextDark: {
+      color: 'rgba(255, 255, 255, 0.6)',
+    },
     optionTextActive: {
       color: theme.text,
+    },
+    optionTextActiveDark: {
+      color: '#ffffff',
     },
   });

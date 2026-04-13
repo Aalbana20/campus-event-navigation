@@ -1493,7 +1493,7 @@ body.theme-dark .explore-search-wrap .explore-search-input::placeholder {
 
 .discover-topbar {
   position: fixed;
-  top: 0;
+  top: 24px;
   left: 28px;
   height: 64px;
   z-index: 105;
