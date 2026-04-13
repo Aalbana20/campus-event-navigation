@@ -1,7 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useMemo } from 'react';
 import {
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -60,8 +62,11 @@ export function EventCommentsSheet({
       animationType="slide"
       statusBarTranslucent
       onRequestClose={onClose}>
-      <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable style={styles.sheet} onPress={() => {}}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.kavWrapper}>
+        <Pressable style={styles.overlay} onPress={onClose}>
+          <Pressable style={styles.sheet} onPress={() => {}}>
           <View style={styles.handle} />
 
           <View style={styles.headerRow}>
@@ -119,14 +124,18 @@ export function EventCommentsSheet({
               <Ionicons name="send" size={16} color={draft.trim() ? theme.background : theme.textMuted} />
             </Pressable>
           </View>
+          </Pressable>
         </Pressable>
-      </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
   StyleSheet.create({
+    kavWrapper: {
+      flex: 1,
+    },
     overlay: {
       flex: 1,
       justifyContent: 'flex-end',

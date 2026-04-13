@@ -858,6 +858,7 @@ function Discover() {
             </button>
 
             <div className="discover-card-group">
+              <div className="discover-side-actions-balance" aria-hidden="true" />
             <div className="discover-stack">
               {currentEvent ? (
                 <>

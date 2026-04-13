@@ -62,6 +62,7 @@ export default function DiscoverScreen() {
 
   const translate = useRef(new Animated.ValueXY()).current;
   const [refreshing, setRefreshing] = useState(false);
+  const [scrollEnabled, setScrollEnabled] = useState(true);
   const [activeTab, setActiveTab] = useState<'events' | 'friends'>('events');
   const [storyRecords, setStoryRecords] = useState<StoryRecord[]>([]);
   const [seenStoryIds, setSeenStoryIds] = useState<Set<string>>(new Set());
@@ -277,10 +278,12 @@ export default function DiscoverScreen() {
       PanResponder.create({
         onMoveShouldSetPanResponder: (_, gestureState) =>
           Math.abs(gestureState.dx) > 8 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy),
+        onPanResponderGrant: () => setScrollEnabled(false),
         onPanResponderMove: (_, gestureState) => {
           translate.setValue({ x: gestureState.dx, y: gestureState.dy * 0.08 });
         },
         onPanResponderRelease: (_, gestureState) => {
+          setScrollEnabled(true);
           if (gestureState.dx > 92) {
             animateDismiss('right');
             return;
@@ -297,6 +300,7 @@ export default function DiscoverScreen() {
             friction: 7,
           }).start();
         },
+        onPanResponderTerminate: () => setScrollEnabled(true),
       }),
     [animateDismiss, translate]
   );
@@ -430,6 +434,7 @@ export default function DiscoverScreen() {
   return (
     <AppScreen style={styles.safeArea}>
       <ScrollView
+        scrollEnabled={scrollEnabled}
         contentContainerStyle={styles.container}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.textMuted} />}
         showsVerticalScrollIndicator={false}

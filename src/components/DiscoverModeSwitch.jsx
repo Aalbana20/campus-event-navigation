@@ -2,7 +2,7 @@ import React from "react"
 
 const OPTIONS = [
   { id: "events", label: "Events" },
-  { id: "friends", label: "Friends" },
+  { id: "friends", label: "Discover" },
 ]
 
 function DiscoverModeSwitch({ activeMode, onChange }) {

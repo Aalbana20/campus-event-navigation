@@ -19,7 +19,7 @@ type DiscoverModeSwitchProps = {
 
 const OPTIONS: { id: DiscoverMode; label: string }[] = [
   { id: 'events', label: 'Events' },
-  { id: 'friends', label: 'Friends' },
+  { id: 'friends', label: 'Discover' },
 ];
 
 export function DiscoverModeSwitch({

@@ -1577,7 +1577,7 @@ body.theme-dark .explore-search-wrap .explore-search-input::placeholder {
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 16px;
+  margin-bottom: 6px;
 }
 
 .discover-status-pill {
@@ -2065,7 +2065,7 @@ body.theme-dark .discover-stories-panel {
   justify-content: center;
   cursor: pointer;
   transition: all 0.25s ease;
-  margin-top: -4px;
+  margin-top: -56px;
 }
 
 .swipe-btn.inactive {
@@ -2136,6 +2136,12 @@ body.theme-dark .discover-stories-panel {
 /* Holds the card centered when there are no events — match accept btn width */
 .discover-side-actions-placeholder {
   width: 90px;
+  flex-shrink: 0;
+}
+
+/* Left-side balance spacer — mirrors side-actions width so the card is visually centered */
+.discover-side-actions-balance {
+  width: 52px;
   flex-shrink: 0;
 }
 
