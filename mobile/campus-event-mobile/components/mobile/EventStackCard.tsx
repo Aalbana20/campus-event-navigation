@@ -168,7 +168,7 @@ export function EventStackCard({
                   color={isRsvped ? '#4ade80' : '#ffffff'}
                 />
                 <View style={styles.rsvpCheckBadge}>
-                  <Ionicons name="checkmark" size={16} color={isRsvped ? '#4ade80' : '#ffffff'} />
+                  <Ionicons name="checkmark" size={14} color={isRsvped ? '#4ade80' : 'rgba(255,255,255,0.9)'} />
                 </View>
               </View>
             </Pressable>
@@ -313,7 +313,7 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     bottomContent: {
       zIndex: 3,
       position: 'absolute',
-      bottom: 72,
+      bottom: 90,
       left: 16,
       right: 12,
       flexDirection: 'row',
@@ -378,8 +378,8 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     },
     rsvpCheckBadge: {
       position: 'absolute',
-      top: 11,
-      left: 10,
+      top: 13,
+      left: 8,
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: 'transparent',

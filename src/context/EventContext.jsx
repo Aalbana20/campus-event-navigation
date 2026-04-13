@@ -141,6 +141,7 @@ export function EventProvider({ children }) {
   const [allEvents, setAllEvents] = useState([])
   const [followingList, setFollowingList] = useState([])
   const [followersList, setFollowersList] = useState([])
+  const [repostedEventIds, setRepostedEventIds] = useState(new Set())
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined
@@ -167,7 +168,7 @@ export function EventProvider({ children }) {
 
     const loadData = async () => {
       try {
-        const [eventsResult, rsvpsResult, followingResult, followersResult] = await Promise.all([
+        const [eventsResult, rsvpsResult, followingResult, followersResult, repostsResult] = await Promise.all([
           supabase.from("events").select("*").order("created_at", { ascending: false }),
           userId
             ? supabase.from("rsvps").select("event_id").eq("user_id", userId)
@@ -177,6 +178,9 @@ export function EventProvider({ children }) {
             : Promise.resolve({ data: [], error: null }),
           userId
             ? supabase.from("follows").select("follower_id").eq("following_id", userId)
+            : Promise.resolve({ data: [], error: null }),
+          userId
+            ? supabase.from("reposts").select("event_id").eq("user_id", userId)
             : Promise.resolve({ data: [], error: null }),
         ])
 
@@ -278,6 +282,8 @@ export function EventProvider({ children }) {
         const matched = normalized.filter((e) => rsvpedIds.has(e.id))
 
         setSavedEvents(matched)
+
+        setRepostedEventIds(new Set((repostsResult.data || []).map((r) => String(r.event_id))))
 
         const toUserList = (profiles) =>
           (profiles || []).map((p) => ({
@@ -459,6 +465,38 @@ export function EventProvider({ children }) {
     }
   }
 
+  const repostEvent = async (eventId) => {
+    const userId = JSON.parse(localStorage.getItem("user") || "{}").id
+    if (!userId) return
+
+    const { error } = await supabase
+      .from("reposts")
+      .insert({ user_id: userId, event_id: eventId })
+
+    if (!error) {
+      setRepostedEventIds((prev) => new Set([...prev, String(eventId)]))
+    }
+  }
+
+  const unrepostEvent = async (eventId) => {
+    const userId = JSON.parse(localStorage.getItem("user") || "{}").id
+    if (!userId) return
+
+    const { error } = await supabase
+      .from("reposts")
+      .delete()
+      .eq("user_id", userId)
+      .eq("event_id", eventId)
+
+    if (!error) {
+      setRepostedEventIds((prev) => {
+        const next = new Set(prev)
+        next.delete(String(eventId))
+        return next
+      })
+    }
+  }
+
   const mutualUsers = useMemo(
     () =>
       followingList.filter((followingPerson) =>
@@ -482,6 +520,9 @@ export function EventProvider({ children }) {
         deleteEvent,
         follow,
         unfollow,
+        repostedEventIds,
+        repostEvent,
+        unrepostEvent,
       }}
     >
       {children}

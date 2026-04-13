@@ -6,40 +6,6 @@ import { useEvents } from "../context/EventContext"
 import { DEFAULT_AVATAR_URL, sanitizeAvatarUrl } from "../profileMedia"
 import { supabase } from "../supabaseClient"
 
-const suggestedPeopleSeed = [
-  {
-    id: "explore-nyc-nia",
-    username: "niaafterdark",
-    name: "Nia Coleman",
-    bio: "Concert scout chasing rooftop sets, warehouse parties, and late-night art pop-ups.",
-    location: "New York, NY",
-    image: "/default-avatar.png",
-  },
-  {
-    id: "explore-philly-mateo",
-    username: "mateomoves",
-    name: "Mateo Rivera",
-    bio: "Finds dance nights, food festivals, and weekend link-ups across new cities.",
-    location: "Philadelphia, PA",
-    image: "/default-avatar.png",
-  },
-  {
-    id: "explore-atl-jules",
-    username: "julesintransit",
-    name: "Jules Bennett",
-    bio: "Always searching for creative mixers, live music, and people worth following.",
-    location: "Atlanta, GA",
-    image: "/default-avatar.png",
-  },
-  {
-    id: "explore-la-sage",
-    username: "sagefromsunset",
-    name: "Sage Carter",
-    bio: "Tracks concerts, launch parties, and curated events outside the usual circle.",
-    location: "Los Angeles, CA",
-    image: "/default-avatar.png",
-  },
-]
 
 const EXPLORE_SECTION_DEFINITIONS = [
   {
@@ -256,6 +222,7 @@ function Explore() {
   const [expandedEvent, setExpandedEvent] = useState(null)
   const [followOverrides, setFollowOverrides] = useState({})
   const [remoteProfileResults, setRemoteProfileResults] = useState({ query: "", items: [] })
+  const [suggestedProfiles, setSuggestedProfiles] = useState([])
 
   const people = useMemo(() => {
     const fromContext = [...followingList, ...followersList].map((person, index) =>
@@ -273,11 +240,7 @@ function Explore() {
       )
     )
 
-    const extraPeople = suggestedPeopleSeed.map((person, index) =>
-      normalizePerson(person, fromContext.length + index, false)
-    )
-
-    const mergedPeople = [...fromContext, ...extraPeople]
+    const mergedPeople = [...fromContext, ...suggestedProfiles]
     const seen = new Set()
 
     return mergedPeople.filter((person) => {
@@ -291,7 +254,31 @@ function Explore() {
       seen.add(key)
       return true
     })
-  }, [currentUser, followersList, followingList])
+  }, [currentUser, followersList, followingList, suggestedProfiles])
+
+  const followingAndFollowerIds = useMemo(() => {
+    const ids = new Set()
+    followingList.forEach((p) => { if (p?.id) ids.add(String(p.id)) })
+    followersList.forEach((p) => { if (p?.id) ids.add(String(p.id)) })
+    return ids
+  }, [followingList, followersList])
+
+  useEffect(() => {
+    if (!currentUser?.id || currentUser.id === "current-user") return
+
+    supabase
+      .from("profiles")
+      .select("id, name, username, bio, avatar_url")
+      .neq("id", currentUser.id)
+      .limit(12)
+      .then(({ data }) => {
+        if (!data) return
+        const filtered = data.filter((p) => !followingAndFollowerIds.has(String(p.id)))
+        setSuggestedProfiles(
+          filtered.slice(0, 6).map((p, index) => normalizePerson(p, index, true))
+        )
+      })
+  }, [currentUser?.id, followingAndFollowerIds])
 
   const trimmedQuery = searchQuery.trim().toLowerCase()
 

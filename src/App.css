@@ -1845,6 +1845,127 @@ body.theme-dark .discover-stories-panel {
 }
 
 /* =========================================================
+   EVENT CARD — FRONT FACE: GRADIENT + TOP META + MUTUALS
+========================================================= */
+
+/* Full-card gradient so pills and creator are legible over any flyer */
+.event-card-front-gradient {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.28) 0%,
+    rgba(0, 0, 0, 0.00) 32%,
+    rgba(0, 0, 0, 0.00) 52%,
+    rgba(0, 0, 0, 0.62) 100%
+  );
+  pointer-events: none;
+  z-index: 1;
+  border-radius: inherit;
+}
+
+/* Positioned container for creator + mutuals row at top of card */
+.event-card-top-meta {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  right: 54px; /* leave room for three-dots trigger */
+  z-index: 4;
+}
+
+/* Flex row: creator pill + mutuals pill side by side */
+.event-card-top-meta-cluster {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+/* Mutuals inline pill button — matches mobile treatment */
+.event-card-mutual-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px 5px 6px;
+  border-radius: 999px;
+  background: rgba(8, 11, 16, 0.44);
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.18s ease;
+  color: #fff;
+}
+
+.event-card-mutual-inline:hover {
+  background: rgba(8, 11, 16, 0.62);
+}
+
+.event-card-mutual-inline-avatars {
+  display: flex;
+  align-items: center;
+}
+
+.event-card-mutual-inline-avatar {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  object-fit: cover;
+  border: 1.5px solid rgba(8, 11, 16, 0.9);
+  margin-left: -6px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.event-card-mutual-inline-avatar:first-child {
+  margin-left: 0;
+}
+
+.event-card-mutual-inline-count {
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1;
+}
+
+.event-card-mutual-inline-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  color: rgba(255, 255, 255, 0.76);
+}
+
+/* =========================================================
+   EVENT CARD — SIDE ACTION ICONS (WEB)
+========================================================= */
+
+.discover-side-action-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+/* Feedback toast below the stack */
+.discover-action-feedback {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 23, 42, 0.82);
+  backdrop-filter: blur(10px);
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 9px 18px;
+  border-radius: 999px;
+  pointer-events: none;
+  z-index: 1200;
+  white-space: nowrap;
+}
+
+/* =========================================================
    DISCOVER SWIPE AREA
 ========================================================= */
 .swipe-area {
@@ -1852,7 +1973,7 @@ body.theme-dark .discover-stories-panel {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 24px;
+  gap: 16px;
   margin-top: -6px;
 }
 
@@ -1964,9 +2085,9 @@ body.theme-dark .discover-stories-panel {
   flex-direction: column;
   align-items: center;
   gap: 24px;
-  margin-left: 12px;
+  margin-left: 0;
   align-self: flex-end;
-  margin-bottom: 72px;
+  margin-bottom: 64px;
 }
 
 .discover-side-action {
@@ -1993,6 +2114,12 @@ body.theme-dark .discover-stories-panel {
   color: #fff;
 }
 
+/* Holds the card centered when there are no events (mirrors side-actions column width) */
+.discover-side-actions-placeholder {
+  width: 90px;
+  flex-shrink: 0;
+}
+
 .reject {
   color: #d78672;
 }
@@ -2011,6 +2138,234 @@ body.theme-dark .discover-stories-panel {
   box-shadow: 0 0 0 10px rgba(110, 110, 115, 0.1),
     0 18px 40px rgba(110, 110, 115, 0.22);
   border-color: rgba(110, 110, 115, 0.35);
+}
+
+/* =========================================================
+   DISCOVER COMMENTS DRAWER (right-side panel on web)
+========================================================= */
+
+.discover-comments-drawer-wrap {
+  position: fixed;
+  inset: 0;
+  z-index: 1400;
+  display: flex;
+  justify-content: flex-end;
+  pointer-events: auto;
+}
+
+.discover-comments-drawer-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.26);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  border: none;
+  cursor: pointer;
+  width: 100%;
+  height: 100%;
+}
+
+.discover-comments-drawer {
+  position: relative;
+  width: min(400px, 94vw);
+  height: 100%;
+  background: var(--bg-main, #fff);
+  border-left: 1px solid rgba(0, 0, 0, 0.07);
+  box-shadow: -16px 0 48px rgba(0, 0, 0, 0.12);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 1;
+}
+
+.discover-comments-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 22px 22px 16px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  flex-shrink: 0;
+}
+
+.discover-comments-header-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.discover-comments-kicker {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-secondary, #6e6e73);
+}
+
+.discover-comments-header-copy h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-main, #111);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 280px;
+}
+
+.discover-comments-header-copy p {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--text-secondary, #6e6e73);
+}
+
+.discover-comments-close {
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.06);
+  font-size: 1.1rem;
+  color: var(--text-main, #111);
+  cursor: pointer;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  transition: background 0.16s ease;
+}
+
+.discover-comments-close:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.discover-comments-list {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 14px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.discover-comments-list::-webkit-scrollbar {
+  width: 0;
+}
+
+.discover-comments-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  padding: 32px 0;
+  gap: 6px;
+  text-align: center;
+  color: var(--text-secondary, #6e6e73);
+}
+
+.discover-comments-empty h4 {
+  margin: 0;
+  font-size: 0.96rem;
+  font-weight: 700;
+}
+
+.discover-comments-empty p {
+  margin: 0;
+  font-size: 0.84rem;
+}
+
+.discover-comment-card {
+  background: rgba(0, 0, 0, 0.03);
+  border-radius: 16px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.discover-comment-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.discover-comment-head strong {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--text-main, #111);
+}
+
+.discover-comment-head span {
+  font-size: 0.72rem;
+  color: var(--text-secondary, #6e6e73);
+  flex-shrink: 0;
+}
+
+.discover-comment-card p {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: var(--text-main, #111);
+}
+
+.discover-comments-compose {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  padding: 14px 18px 18px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  flex-shrink: 0;
+}
+
+.discover-comments-compose textarea {
+  flex: 1;
+  resize: none;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 16px;
+  padding: 11px 14px;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  font-family: inherit;
+  outline: none;
+  background: var(--bg-main, #fff);
+  color: var(--text-main, #111);
+  min-height: 44px;
+  max-height: 120px;
+  overflow-y: auto;
+  transition: border-color 0.16s ease;
+}
+
+.discover-comments-compose textarea:focus {
+  border-color: rgba(0, 0, 0, 0.28);
+}
+
+.discover-comments-send {
+  height: 40px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 999px;
+  background: #111;
+  color: #fff;
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.discover-comments-send:hover {
+  opacity: 0.82;
+}
+
+.discover-comments-send:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  transform: none;
 }
 
 /* =========================================================
@@ -2434,12 +2789,21 @@ body.theme-dark .discover-stories-panel {
   color: rgba(255, 255, 255, 0.78);
 }
 
-.event-card-creator,
+/* my-event-creator still needs absolute placement (used in MyEventCard) */
 .my-event-creator {
   position: absolute;
   top: 18px;
   left: 18px;
   z-index: 3;
+}
+
+/* event-card-creator lives inside .event-card-top-meta-cluster flex row — no absolute */
+.event-card-creator {
+  position: relative;
+  z-index: 3;
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: 68%;
 }
 
 .event-mutuals-overlay {
@@ -4173,6 +4537,29 @@ body.theme-dark .auth-error {
     margin-top: -6px;
   }
 
+  /* Side actions reflow to a centered horizontal strip below the card */
+  .discover-side-actions {
+    flex-direction: row;
+    align-self: center;
+    align-items: center;
+    gap: 32px;
+    margin-bottom: 0;
+    margin-left: 0;
+  }
+
+  /* Accept button is smaller inside the bottom action bar */
+  .discover-side-actions .swipe-btn {
+    width: 56px;
+    height: 56px;
+    font-size: 22px;
+  }
+
+  /* Placeholder matches the action bar so reject button stays centered too */
+  .discover-side-actions-placeholder {
+    width: auto;
+    height: 56px;
+  }
+
   .flip-card {
     width: min(92vw, 360px);
     height: 500px;
@@ -5189,6 +5576,54 @@ body.theme-dark .discover-friend-action.active {
   border-color: rgba(255, 255, 255, 0.08);
 }
 
+/* ── Comments drawer dark mode ── */
+body.theme-dark .discover-comments-drawer {
+  background: var(--bg-elevated);
+  border-left-color: var(--border-soft);
+  box-shadow: -16px 0 48px rgba(0, 0, 0, 0.36);
+}
+
+body.theme-dark .discover-comments-header {
+  border-bottom-color: var(--border-soft);
+}
+
+body.theme-dark .discover-comments-close {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text-main);
+}
+
+body.theme-dark .discover-comments-close:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+body.theme-dark .discover-comment-card {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+body.theme-dark .discover-comments-compose {
+  border-top-color: var(--border-soft);
+}
+
+body.theme-dark .discover-comments-compose textarea {
+  background: var(--bg-soft);
+  border-color: var(--border-soft);
+  color: var(--text-main);
+}
+
+body.theme-dark .discover-comments-compose textarea::placeholder {
+  color: var(--text-muted);
+}
+
+body.theme-dark .discover-comments-compose textarea:focus {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+body.theme-dark .discover-comments-send {
+  background: var(--text-main);
+  color: var(--bg-main);
+}
+
+/* ── Swipe buttons dark mode ── */
 body.theme-dark .swipe-btn {
   background: var(--bg-elevated);
   border-color: var(--border-soft);

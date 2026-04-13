@@ -24,7 +24,7 @@ const buildPreviewImageStyle = (event) =>
   )
 
 function EventActionControl({ event }) {
-  const { followingList, currentUser } = useEvents()
+  const { followingList, currentUser, repostedEventIds, repostEvent, unrepostEvent } = useEvents()
   const [isShareSheetOpen, setIsShareSheetOpen] = useState(false)
   const [shareSearch, setShareSearch] = useState("")
   const [shareFeedback, setShareFeedback] = useState("")
@@ -153,9 +153,20 @@ function EventActionControl({ event }) {
     }
   }
 
-  const handleRepostEvent = (eventClick) => {
+  const isReposted = repostedEventIds?.has(String(event?.id || ""))
+
+  const handleRepostEvent = async (eventClick) => {
     eventClick?.stopPropagation()
-    setShareFeedback("Event reposted.")
+    if (!event?.id) return
+
+    if (isReposted) {
+      await unrepostEvent(event.id)
+      setShareFeedback("Repost removed.")
+    } else {
+      await repostEvent(event.id)
+      setShareFeedback("Event reposted.")
+    }
+
     closeShareSheet()
   }
 
@@ -324,10 +335,10 @@ function EventActionControl({ event }) {
 
               <button
                 type="button"
-                className="event-share-action-btn"
+                className={`event-share-action-btn ${isReposted ? "active" : ""}`}
                 onClick={handleRepostEvent}
               >
-                Repost
+                {isReposted ? "Unrepost" : "Repost"}
               </button>
 
               <button

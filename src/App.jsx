@@ -359,57 +359,6 @@ function MainLayout() {
       }))
   }, [allEvents, defaultAvatar])
 
-  const mockNotifications = useMemo(
-    () => [
-      {
-        id: "mock-follow",
-        type: "follow",
-        category: "following",
-        text: "Jordan started following you",
-        time: "1d",
-        image: defaultAvatar,
-        username: followersList[0]?.username || followingList[0]?.username || "",
-      },
-      {
-        id: "mock-follow-accepted",
-        type: "follow_accepted",
-        category: "requests",
-        text: "Taylor accepted your follow request",
-        time: "2d",
-        image: defaultAvatar,
-        username: mutualUsers[0]?.username || followersList[0]?.username || "",
-      },
-      {
-        id: "mock-dm",
-        type: "dm_received",
-        category: "messages",
-        text: "Alex sent you a message",
-        time: "3h",
-        image: defaultAvatar,
-        threadId: dmThreads[0]?.id || null,
-      },
-      {
-        id: "mock-event-reminder",
-        type: "event_reminder",
-        category: "events",
-        text: "Hackathon Night starts tomorrow",
-        time: "1d",
-        image: defaultAvatar,
-        eventTab: "calendar",
-      },
-      {
-        id: "mock-event-update",
-        type: "event_update",
-        category: "events",
-        text: "Campus Party changed locations",
-        time: "4h",
-        image: defaultAvatar,
-        eventTab: "my-events",
-      },
-    ],
-    [defaultAvatar, dmThreads, followersList, followingList, mutualUsers]
-  )
-
   const notificationSeed = useMemo(() => {
     const mergedReal = [
       ...followNotifications,
@@ -417,14 +366,8 @@ function MainLayout() {
       ...eventUpdateNotifications,
     ]
 
-    if (mergedReal.length >= 5) {
-      return mergedReal.slice(0, 8).map((item) => ({ ...item, read: false }))
-    }
-
-    const byId = new Set(mergedReal.map((item) => item.id))
-    const missing = mockNotifications.filter((item) => !byId.has(item.id))
-    return [...mergedReal, ...missing].slice(0, 8).map((item) => ({ ...item, read: false }))
-  }, [eventUpdateNotifications, followNotifications, mockNotifications, upcomingEventNotifications])
+    return mergedReal.slice(0, 8).map((item) => ({ ...item, read: false }))
+  }, [eventUpdateNotifications, followNotifications, upcomingEventNotifications])
 
   const [readIds, setReadIds] = useState(new Set())
   const [deletedIds, setDeletedIds] = useState(new Set())
