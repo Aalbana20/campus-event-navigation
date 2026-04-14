@@ -46,21 +46,39 @@
   align-items: center;
   justify-content: flex-end;
   flex-shrink: 0;
+  gap: 10px;
 }
 
+.profile-edit-btn,
 .profile-delete-btn {
   appearance: none;
   border: none;
   border-radius: 999px;
-  background: #feeeed;
-  color: #b42318;
-  padding: 7px 14px;
+  padding: 8px 16px;
   font: inherit;
-  font-size: 0.78rem;
-  font-weight: 600;
+  font-size: 0.82rem;
+  font-weight: 700;
   line-height: 1;
   cursor: pointer;
-  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, color 0.2s ease;
+}
+
+.profile-edit-btn {
+  background: linear-gradient(180deg, #2c2c2e, #111318);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(0, 0, 0, 0.6);
+}
+
+.profile-edit-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  background: linear-gradient(180deg, #3a3a3c, #1a1c22);
+}
+
+.profile-delete-btn {
+  background: #feeeed;
+  color: #b42318;
 }
 
 .profile-delete-btn:hover {
@@ -213,6 +231,7 @@
 }
 
 .profile-delete-btn:disabled,
+.profile-edit-btn:disabled,
 .profile-confirm-cancel-btn:disabled,
 .profile-confirm-delete-btn:disabled {
   cursor: not-allowed;
@@ -244,6 +263,18 @@ body.theme-dark .profile-rsvp-item-main p,
 body.theme-dark .profile-rsvp-hint,
 body.theme-dark .profile-confirm-modal p {
   color: var(--text-muted);
+}
+
+body.theme-dark .profile-edit-btn {
+  background: linear-gradient(180deg, #ffffff, #e2e4e9);
+  color: #111318;
+  box-shadow: 0 4px 12px rgba(255, 255, 255, 0.08), inset 0 1px 0 rgba(255, 255, 255, 1);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+}
+
+body.theme-dark .profile-edit-btn:hover {
+  background: linear-gradient(180deg, #ffffff, #f0f2f5);
+  box-shadow: 0 6px 16px rgba(255, 255, 255, 0.15), inset 0 1px 0 rgba(255, 255, 255, 1);
 }
 
 body.theme-dark .profile-delete-btn {
