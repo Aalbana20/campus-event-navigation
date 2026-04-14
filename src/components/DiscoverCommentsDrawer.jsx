@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react"
+import React, { useMemo, useRef, useState } from "react"
 
 import { DEFAULT_AVATAR_URL, sanitizeAvatarUrl } from "../profileMedia"
 
@@ -42,12 +42,11 @@ function DiscoverCommentsDrawer({
   const [contextMenu, setContextMenu] = useState(null)
   const longPressTimerRef = useRef(null)
 
-  useEffect(() => {
-    if (!open) {
-      setReplyingTo(null)
-      setContextMenu(null)
-    }
-  }, [open])
+  const handleClose = () => {
+    setReplyingTo(null)
+    setContextMenu(null)
+    onClose?.()
+  }
 
   const { topLevel, repliesByParent } = useMemo(() => {
     const topLevelList = []
@@ -125,7 +124,7 @@ function DiscoverCommentsDrawer({
   const handleCopy = async (comment) => {
     try {
       await navigator.clipboard.writeText(comment.body)
-    } catch (copyError) {
+    } catch {
       window.prompt("Copy this comment:", comment.body)
     }
     closeContextMenu()
@@ -249,7 +248,7 @@ function DiscoverCommentsDrawer({
       <button
         type="button"
         className="discover-comments-drawer-backdrop"
-        onClick={onClose}
+        onClick={handleClose}
         aria-label="Close comments"
       />
 
@@ -264,7 +263,7 @@ function DiscoverCommentsDrawer({
           <button
             type="button"
             className="discover-comments-close"
-            onClick={onClose}
+            onClick={handleClose}
             aria-label="Close comments"
           >
             ×
