@@ -39,7 +39,11 @@ module.exports = ({ config }) => {
 
   return {
     ...resolvedConfig,
-    extra: {
+     plugins: [
+    ...((resolvedConfig.plugins || baseConfig.plugins || [])),
+    'expo-video',
+  ],
+  extra: {
       ...(resolvedConfig.extra || {}),
       supabaseUrl:
         env.EXPO_PUBLIC_SUPABASE_URL || env.VITE_SUPABASE_URL || '',
