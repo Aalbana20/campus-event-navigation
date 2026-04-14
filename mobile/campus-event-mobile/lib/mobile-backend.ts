@@ -95,6 +95,7 @@ type EventRow = {
   privacy?: EventPrivacy | null;
   is_private?: boolean | null;
   created_at?: string | null;
+  event_comments?: Array<{ count: number }> | null;
 };
 
 type FollowRow = {
@@ -354,6 +355,7 @@ export const normalizeEventRow = (
     createdBy: toStringValue(row.created_by),
     creatorUsername: normalizeUsername(toStringValue(row.creator_username)),
     goingCount: Math.max(Number(row.going_count || 0), attendeeIds.length),
+    commentCount: row.event_comments?.[0]?.count ?? 0,
     privacy,
     isPrivate: privacy === 'private',
     attendees: attendeeIds,

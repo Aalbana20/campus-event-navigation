@@ -321,6 +321,33 @@ export function EventProvider({ children }) {
     loadData()
   }, [currentUser?.id, refreshToken])
 
+  // Realtime — re-fetch on any remote event change.
+  // Requires the events table to have Realtime enabled in Supabase Dashboard → Database → Replication.
+  useEffect(() => {
+    if (!supabase) return
+
+    const channel = supabase
+      .channel('web-events-realtime')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'events' }, () => {
+        setRefreshToken((t) => t + 1)
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'events' }, () => {
+        setRefreshToken((t) => t + 1)
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'events' }, (payload) => {
+        const deletedId = payload.old?.id
+        if (deletedId) {
+          setAllEvents((prev) => prev.filter((e) => String(e.id) !== String(deletedId)))
+          setSavedEvents((prev) => prev.filter((e) => String(e.id) !== String(deletedId)))
+        }
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [])
+
   const addEvent = (event, attendeeUser) => {
     const attendee = attendeeUser || currentUser
 

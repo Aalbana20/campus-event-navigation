@@ -1,6 +1,9 @@
 import { useRouter } from 'expo-router';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+
+import { supabase } from '@/lib/supabase';
+import type { ProfileRecord } from '@/types/models';
 
 import { AppScreen } from '@/components/mobile/AppScreen';
 import { ExploreEventDetailModal } from '@/components/mobile/ExploreEventDetailModal';
@@ -240,15 +243,41 @@ export default function ExploreScreen() {
     [discoverableEvents, normalizedQuery]
   );
 
-  const peopleResults = useMemo(
-    () =>
-      normalizedQuery
-        ? peoplePool.filter((profile) =>
-            `${profile.name} ${profile.username} ${profile.bio}`.toLowerCase().includes(normalizedQuery)
-          )
-        : [],
-    [normalizedQuery, peoplePool]
-  );
+  const [remoteProfileResults, setRemoteProfileResults] = useState<ProfileRecord[]>([]);
+
+  useEffect(() => {
+    if (!normalizedQuery || !supabase) {
+      setRemoteProfileResults([]);
+      return;
+    }
+
+    const client = supabase;
+    const timer = setTimeout(async () => {
+      const { data } = await client
+        .from('profiles')
+        .select('id, name, username, bio, avatar_url')
+        .or(`name.ilike.%${normalizedQuery}%,username.ilike.%${normalizedQuery}%`)
+        .neq('id', currentUser.id)
+        .limit(20);
+
+      if (data) {
+        setRemoteProfileResults(
+          data.map((row) => ({
+            id: String(row.id),
+            name: String(row.name || row.username || 'Campus User'),
+            username: String(row.username || ''),
+            bio: String(row.bio || ''),
+            avatar: String(row.avatar_url || ''),
+            interests: [],
+          }))
+        );
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [normalizedQuery, currentUser.id]);
+
+  const peopleResults = remoteProfileResults;
 
   const curatedSections = useMemo(
     () => buildExploreSections(discoverableEvents),

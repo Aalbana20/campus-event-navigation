@@ -21,6 +21,7 @@ export type EventRecord = {
   creatorName?: string;
   creatorAvatar?: string;
   goingCount: number;
+  commentCount: number;
   privacy: EventPrivacy;
   isPrivate: boolean;
   attendees: string[];

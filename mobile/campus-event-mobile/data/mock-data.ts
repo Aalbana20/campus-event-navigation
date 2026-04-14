@@ -80,6 +80,7 @@ export const mockEvents: EventRecord[] = [
     isPrivate: false,
     attendees: [CURRENT_USER_ID, 'user-jordan', 'user-ava'],
     repostedByIds: [],
+    commentCount: 0,
   },
   {
     id: 'event-2',
@@ -105,6 +106,7 @@ export const mockEvents: EventRecord[] = [
     isPrivate: false,
     attendees: ['user-maya', 'user-ava'],
     repostedByIds: [CURRENT_USER_ID],
+    commentCount: 0,
   },
   {
     id: 'event-3',
@@ -130,6 +132,7 @@ export const mockEvents: EventRecord[] = [
     isPrivate: false,
     attendees: [CURRENT_USER_ID, 'user-maya'],
     repostedByIds: [],
+    commentCount: 0,
   },
   {
     id: 'event-4',
@@ -155,6 +158,7 @@ export const mockEvents: EventRecord[] = [
     isPrivate: false,
     attendees: ['user-jordan'],
     repostedByIds: [],
+    commentCount: 0,
   },
   {
     id: 'event-5',
@@ -180,6 +184,7 @@ export const mockEvents: EventRecord[] = [
     isPrivate: true,
     attendees: [CURRENT_USER_ID, 'user-maya'],
     repostedByIds: [],
+    commentCount: 0,
   },
   {
     id: 'event-6',
@@ -205,6 +210,7 @@ export const mockEvents: EventRecord[] = [
     isPrivate: false,
     attendees: [CURRENT_USER_ID, 'user-ava'],
     repostedByIds: [],
+    commentCount: 0,
   },
 ];
 
