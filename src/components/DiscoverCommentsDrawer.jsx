@@ -89,6 +89,14 @@ function DiscoverCommentsDrawer({
 
   const handleSubmit = () => {
     const parentId = replyingTo?.parentId || null
+    if (parentId) {
+      setExpandedThreads((prev) => {
+        if (prev.has(parentId)) return prev
+        const next = new Set(prev)
+        next.add(parentId)
+        return next
+      })
+    }
     onSubmit(parentId)
     setReplyingTo(null)
   }

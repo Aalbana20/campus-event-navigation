@@ -254,7 +254,11 @@ export default function DiscoverScreen() {
         };
       });
 
-      return { ...current, [eventId]: normalized };
+      const pendingOptimistic = (current[eventId] || []).filter((c) =>
+        c.id.startsWith('temp-')
+      );
+
+      return { ...current, [eventId]: [...normalized, ...pendingOptimistic] };
     });
   }, [currentUser.id]);
 
@@ -395,12 +399,25 @@ export default function DiscoverScreen() {
       return;
     }
 
-    setCommentsByEventId((current) => ({
-      ...current,
-      [eventId]: (current[eventId] || []).map((c) =>
-        c.id === tempId ? { ...c, id: String(data.id) } : c
-      ),
-    }));
+    setCommentsByEventId((current) => {
+      const list = current[eventId] || [];
+      const realId = String(data.id);
+      const hasOptimistic = list.some((c) => c.id === tempId);
+      const alreadyHasReal = list.some((c) => c.id === realId);
+
+      let nextList: EventCommentRecord[];
+      if (hasOptimistic) {
+        nextList = list.map((c) =>
+          c.id === tempId ? { ...c, id: realId } : c
+        );
+      } else if (alreadyHasReal) {
+        nextList = list;
+      } else {
+        nextList = [...list, { ...optimistic, id: realId }];
+      }
+
+      return { ...current, [eventId]: nextList };
+    });
 
     // Notify the event creator
     if (activeCommentEvent.createdBy && activeCommentEvent.createdBy !== currentUser.id) {

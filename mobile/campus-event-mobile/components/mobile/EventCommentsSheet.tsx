@@ -118,6 +118,14 @@ export function EventCommentsSheet({
 
   const handleSubmit = () => {
     const targetParentId = replyingTo?.parentId ? replyingTo.parentId : replyingTo?.id || null;
+    if (targetParentId) {
+      setExpandedThreads((prev) => {
+        if (prev.has(targetParentId)) return prev;
+        const next = new Set(prev);
+        next.add(targetParentId);
+        return next;
+      });
+    }
     onSubmit(targetParentId);
     setReplyingTo(null);
   };

@@ -359,7 +359,11 @@ function Discover() {
         }
       })
 
-      return { ...prev, [key]: normalized }
+      const pendingOptimistic = (prev[key] || []).filter((c) =>
+        String(c.id).startsWith("optimistic-")
+      )
+
+      return { ...prev, [key]: [...normalized, ...pendingOptimistic] }
     })
   }, [])
 
@@ -424,12 +428,25 @@ function Discover() {
       return
     }
 
-    setEventCommentsById((prev) => ({
-      ...prev,
-      [eventId]: (prev[eventId] || []).map((c) =>
-        c.id === optimisticComment.id ? { ...c, id: String(data.id) } : c
-      ),
-    }))
+    setEventCommentsById((prev) => {
+      const list = prev[eventId] || []
+      const realId = String(data.id)
+      const hasOptimistic = list.some((c) => c.id === optimisticComment.id)
+      const alreadyHasReal = list.some((c) => c.id === realId)
+
+      let nextList
+      if (hasOptimistic) {
+        nextList = list.map((c) =>
+          c.id === optimisticComment.id ? { ...c, id: realId } : c
+        )
+      } else if (alreadyHasReal) {
+        nextList = list
+      } else {
+        nextList = [...list, { ...optimisticComment, id: realId }]
+      }
+
+      return { ...prev, [eventId]: nextList }
+    })
   }, [activeCommentEvent, commentDraft, currentUser?.name, currentUser?.username, currentUser?.image, currentUser?.avatar])
 
   const handleToggleCommentLike = useCallback(
