@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo, useRef, useState 
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { mobileSettingsStorage } from '@/lib/mobile-file-storage';
+import { supabase } from '@/lib/supabase';
 
 export type ThemeMode = 'light' | 'dark' | 'device';
 
@@ -52,6 +53,7 @@ export function MobileSettingsProvider({ children }: { children: React.ReactNode
   const [settings, setSettings] = useState<MobileSettingsState>(initialSettings);
   const [themeMode, setThemeMode] = useState<ThemeMode>('device');
   const hasLoadedPersistedState = useRef(false);
+  const supabaseUserIdRef = useRef<string | null>(null);
 
   const resolvedThemeMode =
     themeMode === 'device' ? (deviceColorScheme === 'light' ? 'light' : 'dark') : themeMode;
@@ -80,6 +82,28 @@ export function MobileSettingsProvider({ children }: { children: React.ReactNode
         if (isThemeMode(storedThemeMode)) {
           setThemeMode(storedThemeMode);
         }
+
+        // Load from Supabase if signed in — Supabase value wins over local cache
+        if (supabase) {
+          const { data: { session } } = await supabase.auth.getSession();
+
+          if (session?.user?.id) {
+            supabaseUserIdRef.current = session.user.id;
+
+            const { data: profileRow } = await supabase
+              .from('profiles')
+              .select('settings')
+              .eq('id', session.user.id)
+              .maybeSingle();
+
+            if (profileRow?.settings && typeof profileRow.settings === 'object' && isMounted) {
+              setSettings((currentSettings) => ({
+                ...currentSettings,
+                ...(profileRow.settings as Partial<MobileSettingsState>),
+              }));
+            }
+          }
+        }
       } catch (error) {
         console.error('Unable to restore mobile settings:', error);
       } finally {
@@ -96,12 +120,54 @@ export function MobileSettingsProvider({ children }: { children: React.ReactNode
     };
   }, []);
 
+  // Sync userId ref when the auth state changes after mount
+  useEffect(() => {
+    if (!supabase) return;
+
+    const client = supabase;
+
+    const {
+      data: { subscription },
+    } = client.auth.onAuthStateChange(async (event, nextSession) => {
+      if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && nextSession?.user?.id) {
+        supabaseUserIdRef.current = nextSession.user.id;
+
+        const { data: profileRow } = await client
+          .from('profiles')
+          .select('settings')
+          .eq('id', nextSession.user.id)
+          .maybeSingle();
+
+        if (profileRow?.settings && typeof profileRow.settings === 'object') {
+          setSettings((currentSettings) => ({
+            ...currentSettings,
+            ...(profileRow.settings as Partial<MobileSettingsState>),
+          }));
+        }
+      } else if (event === 'SIGNED_OUT') {
+        supabaseUserIdRef.current = null;
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
   useEffect(() => {
     if (!hasLoadedPersistedState.current) return;
 
     void mobileSettingsStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings)).catch((error) => {
       console.error('Unable to persist mobile settings:', error);
     });
+
+    if (supabase && supabaseUserIdRef.current) {
+      void supabase
+        .from('profiles')
+        .update({ settings })
+        .eq('id', supabaseUserIdRef.current)
+        .then(({ error }) => {
+          if (error) console.error('Unable to sync settings to Supabase:', error);
+        });
+    }
   }, [settings]);
 
   useEffect(() => {

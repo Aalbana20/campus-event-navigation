@@ -141,7 +141,7 @@ export const loadReactedStoryIds = async ({
     .from('story_reactions')
     .select('story_id')
     .eq('user_id', userId)
-    .eq('reaction_type', 'heart')
+    .eq('reaction', 'heart')
     .in('story_id', storyIds);
 
   if (error) {
@@ -403,7 +403,7 @@ export const toggleStoryHeart = async ({
     const { error } = await supabase.from('story_reactions').insert({
       story_id: storyId,
       user_id: authenticatedUserId,
-      reaction_type: 'heart',
+      reaction: 'heart',
     });
 
     if (error) {
@@ -419,7 +419,7 @@ export const toggleStoryHeart = async ({
     .delete()
     .eq('story_id', storyId)
     .eq('user_id', authenticatedUserId)
-    .eq('reaction_type', 'heart');
+    .eq('reaction', 'heart');
 
   if (error) {
     console.error('Unable to unlike story:', error);

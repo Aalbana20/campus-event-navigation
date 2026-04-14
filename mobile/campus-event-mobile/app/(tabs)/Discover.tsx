@@ -15,6 +15,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 
+import { sendPushToUser } from '@/lib/mobile-push';
 import { AppScreen } from '@/components/mobile/AppScreen';
 import { DiscoverStoriesRow } from '@/components/mobile/DiscoverStoriesRow';
 import { DiscoverModeSwitch } from '@/components/mobile/DiscoverModeSwitch';
@@ -274,6 +275,15 @@ export default function DiscoverScreen() {
         c.id === tempId ? { ...c, id: String(data.id) } : c
       ),
     }));
+
+    // Notify the event creator
+    if (activeCommentEvent.createdBy && activeCommentEvent.createdBy !== currentUser.id) {
+      void sendPushToUser(
+        activeCommentEvent.createdBy,
+        'New comment',
+        `${currentUser.name || currentUser.username} commented on ${activeCommentEvent.title}`
+      );
+    }
   }, [activeCommentEvent, commentDraft, currentUser.id, currentUser.name, currentUser.username]);
 
   const panResponder = useMemo(

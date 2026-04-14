@@ -125,7 +125,7 @@ export function CreateEventComposer({ onPublished }: { onPublished?: () => void 
       const arrayBuffer = await blob.arrayBuffer();
 
       const { error: uploadError } = await supabase.storage
-        .from('event-images')
+        .from('event-image')
         .upload(filePath, arrayBuffer, {
           contentType: asset.mimeType || `image/${fileExt}`,
           upsert: true,
@@ -136,7 +136,7 @@ export function CreateEventComposer({ onPublished }: { onPublished?: () => void 
         return;
       }
 
-      const { data } = supabase.storage.from('event-images').getPublicUrl(filePath);
+      const { data } = supabase.storage.from('event-image').getPublicUrl(filePath);
       setImageUrl(data.publicUrl);
     } catch {
       Alert.alert('Upload failed', 'Something went wrong. Try again.');

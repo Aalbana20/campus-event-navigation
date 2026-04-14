@@ -39,6 +39,7 @@ import {
   type SelectedProfileImage,
   uploadProfileImage,
 } from '@/lib/mobile-profile-image';
+import { sendPushToUser } from '@/lib/mobile-push';
 import { SUPABASE_CONFIG_ERROR, supabase } from '@/lib/supabase';
 
 type MobileAppContextValue = {
@@ -385,7 +386,7 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
             'refreshData.events',
             supabase
               .from('events')
-              .select('*')
+              .select('*, event_comments(count)')
               .order('created_at', { ascending: false })
           ),
           runStartupQuery('refreshData.rsvps', supabase.from('rsvps').select('*')),
@@ -1012,13 +1013,22 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
             console.error('Unable to sync going count:', countError);
           }
         }
+
+        // Notify the event creator when someone RSVPs (not when they cancel)
+        if (!isSaved && updatedEvent?.createdBy && updatedEvent.createdBy !== currentUser.id) {
+          void sendPushToUser(
+            updatedEvent.createdBy,
+            'New RSVP',
+            `${currentUser.name || currentUser.username} is going to ${updatedEvent.title}`
+          );
+        }
       } catch (error) {
         console.error('Unable to update RSVP state:', error);
         setEventsState(previousEvents);
         setSavedEventIds(previousSavedIds);
       }
     },
-    [currentUser.id, eventsState, savedEventIds]
+    [currentUser.id, currentUser.name, currentUser.username, eventsState, savedEventIds]
   );
 
   const acceptDiscoverEvent = useCallback(
@@ -1295,6 +1305,88 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
     },
     []
   );
+
+  // Realtime — keep events in sync when other users create/update/delete.
+  // Requires the events table to have Realtime enabled in Supabase Dashboard → Database → Replication.
+  useEffect(() => {
+    if (!supabase || !session?.user?.id) return;
+
+    const client = supabase;
+    const channel = client
+      .channel(`mobile-events-${session.user.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'events' },
+        () => void refreshData()
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'events' },
+        () => void refreshData()
+      )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'events' },
+        (payload) => {
+          const deletedId = (payload.old as { id?: string })?.id;
+          if (deletedId) {
+            setEventsState((currentEvents) =>
+              currentEvents.filter((event) => event.id !== deletedId)
+            );
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void client.removeChannel(channel);
+    };
+  }, [session?.user?.id, refreshData]);
+
+  // Push notifications — register device token after sign-in.
+  // Run: npx expo install expo-notifications   (then restart the dev server)
+  const registerPushToken = useCallback(async (userId: string) => {
+    if (!supabase) return;
+
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const Notifications = require('expo-notifications') as typeof import('expo-notifications');
+      const { Platform } = require('react-native') as typeof import('react-native');
+
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+
+      if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+
+      if (finalStatus !== 'granted') {
+        console.info('[push] Permission not granted — skipping token registration.');
+        return;
+      }
+
+      const tokenData = await Notifications.getExpoPushTokenAsync();
+      const token = tokenData.data;
+
+      const { error } = await supabase
+        .from('push_tokens')
+        .upsert(
+          { user_id: userId, token, platform: Platform.OS },
+          { onConflict: 'user_id,token', ignoreDuplicates: true }
+        );
+
+      if (error) console.error('Unable to store push token:', error);
+    } catch (error) {
+      // expo-notifications not yet installed — safe to ignore until package is added
+      console.info('[push] expo-notifications unavailable:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    void registerPushToken(session.user.id);
+  }, [session?.user?.id, registerPushToken]);
 
   const signOut = useCallback(async () => {
     if (!supabase) {

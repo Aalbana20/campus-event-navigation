@@ -183,7 +183,7 @@ export function EventStackCard({
 
             <Pressable style={styles.actionButton} onPress={handleCommentPress}>
               <Ionicons name="chatbubble-ellipses-outline" size={30} color="#ffffff" />
-              <Text style={styles.actionCount}>0</Text>
+              <Text style={styles.actionCount}>{event.commentCount ?? 0}</Text>
             </Pressable>
 
             <Pressable style={styles.actionButton} onPress={handleSavePress}>

@@ -367,7 +367,7 @@ export const loadDiscoverReactedStoryIds = async ({
     .from("story_reactions")
     .select("story_id")
     .eq("user_id", authenticatedUserId)
-    .eq("reaction_type", "heart")
+    .eq("reaction", "heart")
     .in("story_id", storyIds)
 
   if (error) {
@@ -392,7 +392,7 @@ export const toggleDiscoverStoryHeart = async ({
     const { error } = await supabase.from("story_reactions").insert({
       story_id: storyId,
       user_id: authenticatedUserId,
-      reaction_type: "heart",
+      reaction: "heart",
     })
 
     if (error) {
@@ -408,7 +408,7 @@ export const toggleDiscoverStoryHeart = async ({
     .delete()
     .eq("story_id", storyId)
     .eq("user_id", authenticatedUserId)
-    .eq("reaction_type", "heart")
+    .eq("reaction", "heart")
 
   if (error) {
     console.error("Unable to remove story reaction:", error)
