@@ -306,7 +306,7 @@ function Discover() {
   const loadComments = useCallback(async (eventId) => {
     const { data, error } = await supabase
       .from("event_comments")
-      .select("id, body, created_at, user_id, profiles(name, username, avatar_url)")
+      .select("id, body, created_at, user_id, parent_id, profiles(name, username, avatar_url)")
       .eq("event_id", eventId)
       .order("created_at", { ascending: true })
 
@@ -316,24 +316,46 @@ function Discover() {
     }
 
     const key = String(eventId)
+    const rows = data || []
+    const commentIds = rows.map((row) => String(row.id))
+    const viewerId = JSON.parse(localStorage.getItem("user") || "{}").id
+
+    const likeCountByComment = new Map()
+    const likedByMe = new Set()
+
+    if (commentIds.length > 0) {
+      const { data: likeRows, error: likeError } = await supabase
+        .from("event_comment_likes")
+        .select("comment_id, user_id")
+        .in("comment_id", commentIds)
+
+      if (likeError) {
+        console.warn("Failed to load comment likes:", likeError)
+      } else {
+        ;(likeRows || []).forEach((row) => {
+          const cid = String(row.comment_id)
+          likeCountByComment.set(cid, (likeCountByComment.get(cid) || 0) + 1)
+          if (viewerId && String(row.user_id) === String(viewerId)) {
+            likedByMe.add(cid)
+          }
+        })
+      }
+    }
 
     setEventCommentsById((prev) => {
-      const previousById = new Map(
-        (prev[key] || []).map((comment) => [comment.id, comment])
-      )
-
-      const normalized = (data || []).map((row) => {
+      const normalized = rows.map((row) => {
         const id = String(row.id)
-        const prior = previousById.get(id)
         return {
           id,
           authorName: row.profiles?.name || row.profiles?.username || "Campus User",
           authorUsername: row.profiles?.username || "",
           authorAvatar: row.profiles?.avatar_url || "",
+          authorId: row.user_id ? String(row.user_id) : "",
           body: row.body,
           createdAt: row.created_at,
-          likeCount: prior?.likeCount || 0,
-          likedByMe: prior?.likedByMe || false,
+          likeCount: likeCountByComment.get(id) || 0,
+          likedByMe: likedByMe.has(id),
+          parentId: row.parent_id || null,
         }
       })
 
@@ -354,7 +376,7 @@ function Discover() {
     setCommentDraft("")
   }, [])
 
-  const handleSubmitComment = useCallback(async () => {
+  const handleSubmitComment = useCallback(async (parentId = null) => {
     if (!activeCommentEvent || !commentDraft.trim()) return
 
     const eventId = String(activeCommentEvent.id)
@@ -366,10 +388,12 @@ function Discover() {
       authorName: currentUser?.name || currentUser?.username || "Campus User",
       authorUsername: currentUser?.username || "",
       authorAvatar: currentUser?.image || currentUser?.avatar || "",
+      authorId: userId ? String(userId) : "",
       body,
       createdAt: new Date().toISOString(),
       likeCount: 0,
       likedByMe: false,
+      parentId: parentId || null,
     }
 
     setEventCommentsById((prev) => ({
@@ -382,7 +406,12 @@ function Discover() {
 
     const { data, error } = await supabase
       .from("event_comments")
-      .insert({ event_id: eventId, user_id: userId, body })
+      .insert({
+        event_id: eventId,
+        user_id: userId,
+        body,
+        parent_id: parentId || null,
+      })
       .select("id")
       .single()
 
@@ -404,9 +433,12 @@ function Discover() {
   }, [activeCommentEvent, commentDraft, currentUser?.name, currentUser?.username, currentUser?.image, currentUser?.avatar])
 
   const handleToggleCommentLike = useCallback(
-    (commentId) => {
+    async (commentId) => {
       if (!activeCommentEvent) return
       const key = String(activeCommentEvent.id)
+      const userId = JSON.parse(localStorage.getItem("user") || "{}").id
+
+      let nextLikedState = false
 
       setEventCommentsById((prev) => {
         const list = prev[key] || []
@@ -415,6 +447,7 @@ function Discover() {
           [key]: list.map((comment) => {
             if (comment.id !== commentId) return comment
             const nextLiked = !comment.likedByMe
+            nextLikedState = nextLiked
             const nextCount = Math.max(
               0,
               (comment.likeCount || 0) + (nextLiked ? 1 : -1)
@@ -423,8 +456,68 @@ function Discover() {
           }),
         }
       })
+
+      if (!userId || String(commentId).startsWith("optimistic-")) return
+
+      const { error } = nextLikedState
+        ? await supabase
+            .from("event_comment_likes")
+            .insert({ comment_id: commentId, user_id: userId })
+        : await supabase
+            .from("event_comment_likes")
+            .delete()
+            .eq("comment_id", commentId)
+            .eq("user_id", userId)
+
+      if (error && error.code !== "23505") {
+        console.warn("Failed to persist comment like:", error)
+        setEventCommentsById((prev) => {
+          const list = prev[key] || []
+          return {
+            ...prev,
+            [key]: list.map((comment) => {
+              if (comment.id !== commentId) return comment
+              const revertLiked = !nextLikedState
+              const revertCount = Math.max(
+                0,
+                (comment.likeCount || 0) + (revertLiked ? 1 : -1)
+              )
+              return { ...comment, likedByMe: revertLiked, likeCount: revertCount }
+            }),
+          }
+        })
+      }
     },
     [activeCommentEvent]
+  )
+
+  const handleDeleteComment = useCallback(
+    async (commentId) => {
+      if (!activeCommentEvent) return
+      const key = String(activeCommentEvent.id)
+      const userId = JSON.parse(localStorage.getItem("user") || "{}").id
+
+      setEventCommentsById((prev) => ({
+        ...prev,
+        [key]: (prev[key] || []).filter(
+          (c) => c.id !== commentId && c.parentId !== commentId
+        ),
+      }))
+
+      if (!userId || String(commentId).startsWith("optimistic-")) return
+
+      const { error } = await supabase
+        .from("event_comments")
+        .delete()
+        .eq("id", commentId)
+        .eq("user_id", userId)
+
+      if (error) {
+        console.warn("Failed to delete comment:", error)
+        loadComments(key)
+      }
+    },
+    [activeCommentEvent, loadComments]
   )
 
   const handleCardPointerDown = useCallback(
@@ -1171,10 +1264,12 @@ function Discover() {
         event={activeCommentEvent}
         comments={activeEventComments}
         draft={commentDraft}
+        currentUserId={currentUser?.id || ""}
         onDraftChange={setCommentDraft}
         onSubmit={handleSubmitComment}
         onClose={handleCloseComments}
         onToggleLike={handleToggleCommentLike}
+        onDeleteComment={handleDeleteComment}
       />
 
       {activeStoryItem ? (

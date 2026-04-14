@@ -2358,6 +2358,10 @@ body.theme-dark .discover-stories-panel {
   line-height: 1.45;
   color: var(--text-main, #111);
   word-break: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 6;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .discover-comment-like {
@@ -2400,13 +2404,271 @@ body.theme-dark .discover-stories-panel {
   color: #ff3b5f;
 }
 
+.discover-comment-footer {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 4px;
+}
+
+.discover-comment-action {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary, #6e6e73);
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.15s ease;
+}
+
+.discover-comment-action:hover {
+  color: var(--text-main, #111);
+}
+
+.discover-comment-card.reply {
+  margin-left: 46px;
+  padding: 6px 10px;
+  background: transparent;
+}
+
+.discover-comment-card.reply .discover-comment-avatar {
+  width: 26px;
+  height: 26px;
+}
+
+.discover-comment-view-replies {
+  margin-left: 56px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary, #6e6e73);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 4px 10px 10px;
+  text-align: left;
+}
+
+.discover-comment-view-replies:hover {
+  color: var(--text-main, #111);
+}
+
+.discover-comments-compose-wrapper {
+  display: flex;
+  flex-direction: column;
+}
+
+.discover-replying-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 18px 4px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-secondary, #6e6e73);
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.discover-replying-close {
+  background: transparent;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 2px 6px;
+}
+
+.discover-replying-close:hover {
+  color: var(--text-main, #111);
+}
+
 .discover-comments-compose {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 18px 18px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  flex-shrink: 0;
+}
+
+.discover-comments-compose-row {
   display: flex;
   align-items: flex-end;
   gap: 10px;
-  padding: 14px 18px 18px;
-  border-top: 1px solid rgba(0, 0, 0, 0.06);
-  flex-shrink: 0;
+}
+
+.discover-comments-reply-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.04);
+  font-size: 0.78rem;
+  color: var(--text-secondary, #6e6e73);
+}
+
+.discover-comments-reply-banner strong {
+  color: var(--text-main, #111);
+  font-weight: 700;
+}
+
+.discover-comments-reply-cancel {
+  background: transparent;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 999px;
+}
+
+.discover-comments-reply-cancel:hover {
+  color: var(--text-main, #111);
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.discover-comment-reply {
+  margin-left: 46px;
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.02);
+  border-radius: 14px;
+}
+
+.discover-comment-reply .discover-comment-avatar {
+  width: 28px;
+  height: 28px;
+}
+
+.discover-comment-thread-replies {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.discover-comment-thread-toggle {
+  margin: 2px 0 4px 56px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary, #6e6e73);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 4px 0;
+  text-align: left;
+}
+
+.discover-comment-thread-toggle:hover {
+  color: var(--text-main, #111);
+}
+
+.discover-comment-meta {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 4px;
+}
+
+.discover-comment-time {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-secondary, #6e6e73);
+}
+
+.discover-comment-reply-btn,
+.discover-comment-more-btn {
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--text-secondary, #6e6e73);
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.discover-comment-reply-btn:hover,
+.discover-comment-more-btn:hover {
+  color: var(--text-main, #111);
+}
+
+.discover-comment-more-btn {
+  margin-left: auto;
+  font-size: 0.9rem;
+  letter-spacing: 0.04em;
+}
+
+.discover-comments-context-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 9, 15, 0.55);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 120;
+  padding: 16px;
+}
+
+.discover-comments-context-menu {
+  width: min(360px, 100%);
+  background: #fff;
+  border-radius: 18px;
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.24);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.discover-comments-context-item {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: 13px 14px;
+  text-align: left;
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-main, #111);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.discover-comments-context-item:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.discover-comments-context-item.danger {
+  color: #b42318;
+}
+
+.discover-comments-context-item.danger:hover {
+  background: rgba(180, 35, 24, 0.08);
+}
+
+.discover-comments-context-cancel {
+  appearance: none;
+  border: none;
+  background: rgba(0, 0, 0, 0.04);
+  padding: 13px 14px;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-main, #111);
+  border-radius: 12px;
+  cursor: pointer;
+  margin-top: 4px;
+}
+
+.discover-comments-context-cancel:hover {
+  background: rgba(0, 0, 0, 0.08);
 }
 
 .discover-comments-compose textarea {
@@ -5734,9 +5996,75 @@ body.theme-dark .discover-comment-like.liked {
   color: #ff6680;
 }
 
+body.theme-dark .discover-comment-reply {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+body.theme-dark .discover-comments-reply-banner {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-muted);
+}
+
+body.theme-dark .discover-comments-reply-banner strong {
+  color: var(--text-main);
+}
+
+body.theme-dark .discover-comments-reply-cancel:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-main);
+}
+
+body.theme-dark .discover-comment-thread-toggle,
+body.theme-dark .discover-comment-time,
+body.theme-dark .discover-comment-reply-btn,
+body.theme-dark .discover-comment-more-btn {
+  color: var(--text-muted);
+}
+
+body.theme-dark .discover-comment-thread-toggle:hover,
+body.theme-dark .discover-comment-reply-btn:hover,
+body.theme-dark .discover-comment-more-btn:hover {
+  color: var(--text-main);
+}
+
+body.theme-dark .discover-comments-context-menu {
+  background: var(--bg-elevated);
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.55);
+}
+
+body.theme-dark .discover-comments-context-item {
+  color: var(--text-main);
+}
+
+body.theme-dark .discover-comments-context-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+body.theme-dark .discover-comments-context-item.danger {
+  color: #ffb4ad;
+}
+
+body.theme-dark .discover-comments-context-item.danger:hover {
+  background: rgba(255, 122, 122, 0.12);
+}
+
+body.theme-dark .discover-comments-context-cancel {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-main);
+}
+
+body.theme-dark .discover-comments-context-cancel:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
 body.theme-dark .discover-comments-compose {
   border-top-color: var(--border-soft);
 }
+
+body.theme-dark .discover-replying-banner {
+  border-top-color: var(--border-soft);
+}
+
 
 body.theme-dark .discover-comments-compose textarea {
   background: var(--bg-soft);

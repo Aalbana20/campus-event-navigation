@@ -1430,6 +1430,129 @@ function Profile() {
         </div>
       )}
 
+      {editingEventId && (
+        <div className="profile-overlay" onClick={closeEditEventModal}>
+          <div className="profile-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="profile-modal-header">
+              <h3>Edit Event</h3>
+              <button
+                type="button"
+                className="profile-modal-close"
+                onClick={closeEditEventModal}
+                aria-label="Close edit event"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="profile-modal-body">
+              <form className="edit-profile-form" onSubmit={(e) => e.preventDefault()}>
+                <label className="edit-event-field">
+                  <span>Title</span>
+                  <input
+                    type="text"
+                    value={editEventForm.title}
+                    onChange={handleEditEventFieldChange("title")}
+                    placeholder="Event title"
+                    maxLength={120}
+                  />
+                </label>
+
+                <label className="edit-event-field">
+                  <span>Description</span>
+                  <textarea
+                    value={editEventForm.description}
+                    onChange={handleEditEventFieldChange("description")}
+                    placeholder="Describe this event"
+                    rows={3}
+                    maxLength={600}
+                  />
+                </label>
+
+                <div className="edit-event-row">
+                  <label className="edit-event-field">
+                    <span>Date</span>
+                    <input
+                      type="text"
+                      value={editEventForm.date}
+                      onChange={handleEditEventFieldChange("date")}
+                      placeholder="e.g. Fri, Apr 19"
+                    />
+                  </label>
+                  <label className="edit-event-field">
+                    <span>Start</span>
+                    <input
+                      type="text"
+                      value={editEventForm.startTime}
+                      onChange={handleEditEventFieldChange("startTime")}
+                      placeholder="6:00 PM"
+                    />
+                  </label>
+                  <label className="edit-event-field">
+                    <span>End</span>
+                    <input
+                      type="text"
+                      value={editEventForm.endTime}
+                      onChange={handleEditEventFieldChange("endTime")}
+                      placeholder="9:00 PM"
+                    />
+                  </label>
+                </div>
+
+                <label className="edit-event-field">
+                  <span>Location</span>
+                  <input
+                    type="text"
+                    value={editEventForm.location}
+                    onChange={handleEditEventFieldChange("location")}
+                    placeholder="Venue name"
+                  />
+                </label>
+
+                <label className="edit-event-field">
+                  <span>Address</span>
+                  <input
+                    type="text"
+                    value={editEventForm.locationAddress}
+                    onChange={handleEditEventFieldChange("locationAddress")}
+                    placeholder="Street address"
+                  />
+                </label>
+
+                <label className="edit-event-field">
+                  <span>Tags</span>
+                  <input
+                    type="text"
+                    value={editEventForm.tags}
+                    onChange={handleEditEventFieldChange("tags")}
+                    placeholder="comma separated"
+                  />
+                </label>
+
+                <div className="edit-event-actions">
+                  <button
+                    type="button"
+                    className="edit-event-cancel"
+                    onClick={closeEditEventModal}
+                    disabled={isSavingEditEvent}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="edit-event-save"
+                    onClick={handleSaveEditEvent}
+                    disabled={isSavingEditEvent || !editEventForm.title.trim()}
+                  >
+                    {isSavingEditEvent ? "Saving..." : "Save"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
       {confirmModal.open && (
         <div className="profile-confirm-overlay" onClick={closeConfirmModal}>
           <div className="profile-confirm-modal" onClick={(e) => e.stopPropagation()}>

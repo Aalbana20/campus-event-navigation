@@ -203,7 +203,7 @@ export default function DiscoverScreen() {
     if (!supabase) return;
     const { data, error } = await supabase
       .from('event_comments')
-      .select('id, body, created_at, user_id, profiles(name, username, avatar_url)')
+      .select('id, body, created_at, user_id, parent_id, profiles(name, username, avatar_url)')
       .eq('event_id', eventId)
       .order('created_at', { ascending: true });
 
@@ -212,33 +212,59 @@ export default function DiscoverScreen() {
       return;
     }
 
-    setCommentsByEventId((current) => {
-      const previousForEvent = current[eventId] || [];
-      const previousById = new Map(previousForEvent.map((c) => [c.id, c]));
+    const rows = data || [];
+    const commentIds = rows.map((row: any) => String(row.id));
 
-      const normalized: EventCommentRecord[] = (data || []).map((row: any) => {
-        const existing = previousById.get(String(row.id));
+    const likeCountByComment = new Map<string, number>();
+    const likedByMe = new Set<string>();
+
+    if (commentIds.length > 0) {
+      const { data: likeRows, error: likeError } = await supabase
+        .from('event_comment_likes')
+        .select('comment_id, user_id')
+        .in('comment_id', commentIds);
+
+      if (likeError) {
+        console.warn('Unable to load comment likes:', likeError);
+      } else {
+        (likeRows || []).forEach((row: any) => {
+          const cid = String(row.comment_id);
+          likeCountByComment.set(cid, (likeCountByComment.get(cid) || 0) + 1);
+          if (String(row.user_id) === String(currentUser.id)) {
+            likedByMe.add(cid);
+          }
+        });
+      }
+    }
+
+    setCommentsByEventId((current) => {
+      const normalized: EventCommentRecord[] = rows.map((row: any) => {
+        const id = String(row.id);
         return {
-          id: String(row.id),
+          id,
           authorName: row.profiles?.name || row.profiles?.username || 'Campus User',
           authorUsername: row.profiles?.username || '',
           authorAvatar: row.profiles?.avatar_url || '',
+          authorId: row.user_id ? String(row.user_id) : undefined,
           body: row.body,
           createdAt: row.created_at,
-          // Client-side likes until a likes table is added — keep state across reloads.
-          likeCount: existing?.likeCount ?? 0,
-          likedByMe: existing?.likedByMe ?? false,
+          likeCount: likeCountByComment.get(id) || 0,
+          likedByMe: likedByMe.has(id),
+          parentId: row.parent_id || null,
         };
       });
 
       return { ...current, [eventId]: normalized };
     });
-  }, []);
+  }, [currentUser.id]);
 
   const handleToggleCommentLike = useCallback(
-    (commentId: string) => {
-      if (!activeCommentEvent) return;
+    async (commentId: string) => {
+      if (!activeCommentEvent || !supabase || !currentUser.id) return;
       const eventId = String(activeCommentEvent.id);
+
+      let nextLikedState = false;
+
       setCommentsByEventId((current) => {
         const forEvent = current[eventId] || [];
         return {
@@ -246,6 +272,7 @@ export default function DiscoverScreen() {
           [eventId]: forEvent.map((comment) => {
             if (comment.id !== commentId) return comment;
             const nextLiked = !comment.likedByMe;
+            nextLikedState = nextLiked;
             return {
               ...comment,
               likedByMe: nextLiked,
@@ -254,8 +281,67 @@ export default function DiscoverScreen() {
           }),
         };
       });
+
+      if (commentId.startsWith('temp-')) return;
+
+      const { error } = nextLikedState
+        ? await supabase
+            .from('event_comment_likes')
+            .insert({ comment_id: commentId, user_id: currentUser.id })
+        : await supabase
+            .from('event_comment_likes')
+            .delete()
+            .eq('comment_id', commentId)
+            .eq('user_id', currentUser.id);
+
+      if (error && error.code !== '23505') {
+        console.warn('Unable to persist comment like:', error);
+        setCommentsByEventId((current) => {
+          const forEvent = current[eventId] || [];
+          return {
+            ...current,
+            [eventId]: forEvent.map((comment) => {
+              if (comment.id !== commentId) return comment;
+              const revertLiked = !nextLikedState;
+              return {
+                ...comment,
+                likedByMe: revertLiked,
+                likeCount: Math.max(comment.likeCount + (revertLiked ? 1 : -1), 0),
+              };
+            }),
+          };
+        });
+      }
     },
-    [activeCommentEvent]
+    [activeCommentEvent, currentUser.id]
+  );
+
+  const handleDeleteComment = useCallback(
+    async (commentId: string) => {
+      if (!activeCommentEvent || !supabase) return;
+      const eventId = String(activeCommentEvent.id);
+
+      setCommentsByEventId((current) => ({
+        ...current,
+        [eventId]: (current[eventId] || []).filter(
+          (c) => c.id !== commentId && c.parentId !== commentId
+        ),
+      }));
+
+      if (commentId.startsWith('temp-')) return;
+
+      const { error } = await supabase
+        .from('event_comments')
+        .delete()
+        .eq('id', commentId)
+        .eq('user_id', currentUser.id);
+
+      if (error) {
+        console.warn('Unable to delete comment:', error);
+        void loadComments(eventId);
+      }
+    },
+    [activeCommentEvent, currentUser.id, loadComments]
   );
 
   const handleCloseComments = useCallback(() => {
@@ -268,7 +354,7 @@ export default function DiscoverScreen() {
     void loadComments(String(event.id));
   }, [loadComments]);
 
-  const handleSubmitComment = useCallback(async () => {
+  const handleSubmitComment = useCallback(async (parentId: string | null = null) => {
     if (!supabase || !activeCommentEvent || !commentDraft.trim()) return;
 
     const eventId = String(activeCommentEvent.id);
@@ -280,10 +366,12 @@ export default function DiscoverScreen() {
       authorName: currentUser.name || currentUser.username || 'Campus User',
       authorUsername: currentUser.username || '',
       authorAvatar: currentUser.avatar || '',
+      authorId: currentUser.id,
       body,
       createdAt: new Date().toISOString(),
       likeCount: 0,
       likedByMe: false,
+      parentId,
     };
 
     setCommentsByEventId((current) => ({
@@ -294,7 +382,7 @@ export default function DiscoverScreen() {
 
     const { data, error } = await supabase
       .from('event_comments')
-      .insert({ event_id: eventId, user_id: currentUser.id, body })
+      .insert({ event_id: eventId, user_id: currentUser.id, body, parent_id: parentId })
       .select('id')
       .single();
 
@@ -610,10 +698,12 @@ export default function DiscoverScreen() {
         event={activeCommentEvent}
         comments={activeComments}
         draft={commentDraft}
+        currentUserId={currentUser.id}
         onChangeDraft={setCommentDraft}
         onClose={handleCloseComments}
         onSubmit={handleSubmitComment}
         onToggleLike={handleToggleCommentLike}
+        onDeleteComment={handleDeleteComment}
       />
 
       <EventMutualsSheet
