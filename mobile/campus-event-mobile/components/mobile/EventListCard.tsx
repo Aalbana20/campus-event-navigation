@@ -8,12 +8,17 @@ import { EventRecord } from '@/types/models';
 
 import { EventActionTrigger } from './EventActionTrigger';
 
+type ActionTone = 'accent' | 'success' | 'danger' | 'muted';
+
 type EventListCardProps = {
   event: EventRecord;
   onPress?: () => void;
   actionLabel?: string;
   onActionPress?: () => void;
-  actionTone?: 'accent' | 'success' | 'danger' | 'muted';
+  actionTone?: ActionTone;
+  secondaryActionLabel?: string;
+  onSecondaryActionPress?: () => void;
+  secondaryActionTone?: ActionTone;
 };
 
 export function EventListCard({
@@ -22,9 +27,46 @@ export function EventListCard({
   actionLabel,
   onActionPress,
   actionTone = 'accent',
+  secondaryActionLabel,
+  onSecondaryActionPress,
+  secondaryActionTone = 'muted',
 }: EventListCardProps) {
   const theme = useAppTheme();
   const styles = useMemo(() => buildStyles(theme), [theme]);
+
+  const renderActionButton = (
+    label: string,
+    onPressHandler: (() => void) | undefined,
+    tone: ActionTone,
+    split: boolean
+  ) => (
+    <Pressable
+      style={[
+        styles.actionButton,
+        split && styles.actionButtonSplit,
+        tone === 'success'
+          ? styles.successButton
+          : tone === 'danger'
+            ? styles.dangerButton
+            : tone === 'muted'
+              ? styles.mutedButton
+              : styles.accentButton,
+      ]}
+      onPress={onPressHandler}>
+      <Text
+        style={[
+          styles.actionText,
+          tone === 'accent' ? styles.accentText : undefined,
+          tone === 'muted' ? styles.mutedText : undefined,
+        ]}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+
+  const hasPrimaryAction = Boolean(actionLabel);
+  const hasSecondaryAction = Boolean(secondaryActionLabel);
+  const isSplitFooter = hasPrimaryAction && hasSecondaryAction;
 
   return (
     <View style={styles.card}>
@@ -58,28 +100,25 @@ export function EventListCard({
         </View>
       </Pressable>
 
-      {actionLabel ? (
-        <Pressable
-          style={[
-            styles.actionButton,
-            actionTone === 'success'
-              ? styles.successButton
-              : actionTone === 'danger'
-                ? styles.dangerButton
-                : actionTone === 'muted'
-                  ? styles.mutedButton
-                  : styles.accentButton,
-          ]}
-          onPress={onActionPress}>
-          <Text
-            style={[
-              styles.actionText,
-              actionTone === 'accent' ? styles.accentText : undefined,
-              actionTone === 'muted' ? styles.mutedText : undefined,
-            ]}>
-            {actionLabel}
-          </Text>
-        </Pressable>
+      {hasPrimaryAction || hasSecondaryAction ? (
+        <View style={isSplitFooter ? styles.footerRow : undefined}>
+          {hasSecondaryAction
+            ? renderActionButton(
+                secondaryActionLabel!,
+                onSecondaryActionPress,
+                secondaryActionTone,
+                isSplitFooter
+              )
+            : null}
+          {hasPrimaryAction
+            ? renderActionButton(
+                actionLabel!,
+                onActionPress,
+                actionTone,
+                isSplitFooter
+              )
+            : null}
+        </View>
       ) : null}
     </View>
   );
@@ -166,11 +205,18 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       fontSize: 11,
       fontWeight: '700',
     },
+    footerRow: {
+      flexDirection: 'row',
+      gap: 10,
+    },
     actionButton: {
       alignItems: 'center',
       justifyContent: 'center',
       paddingVertical: 12,
       borderRadius: 16,
+    },
+    actionButtonSplit: {
+      flex: 1,
     },
     accentButton: {
       backgroundColor: theme.accent,

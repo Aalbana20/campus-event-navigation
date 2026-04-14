@@ -122,6 +122,7 @@ function Profile() {
     followersList,
     cancelRSVP,
     deleteEvent,
+    updateEvent,
     follow,
     unfollow,
     repostedEventIds,
@@ -155,6 +156,18 @@ function Profile() {
   })
   const [isConfirmingAction, setIsConfirmingAction] = useState(false)
   const [activeProfileTab, setActiveProfileTab] = useState("grid")
+  const [editingEventId, setEditingEventId] = useState(null)
+  const [editEventForm, setEditEventForm] = useState({
+    title: "",
+    description: "",
+    date: "",
+    startTime: "",
+    endTime: "",
+    location: "",
+    locationAddress: "",
+    tags: "",
+  })
+  const [isSavingEditEvent, setIsSavingEditEvent] = useState(false)
 
   const defaultAvatar = DEFAULT_AVATAR_URL
   const storedUser = JSON.parse(localStorage.getItem("user") || "{}")
@@ -446,6 +459,98 @@ function Profile() {
 
   const openDeleteModal = (event) => {
     setConfirmModal({ open: true, type: "delete", event })
+  }
+
+  const openEditEventModal = (event) => {
+    if (!event) return
+
+    const rawTags = Array.isArray(event.tags)
+      ? event.tags
+      : typeof event.tags === "string"
+        ? event.tags.split(",")
+        : []
+
+    setEditEventForm({
+      title: event.title || "",
+      description: event.description || "",
+      date: event.date || event.eventDate || "",
+      startTime: event.startTime || "",
+      endTime: event.endTime || "",
+      location: event.location || event.locationName || "",
+      locationAddress: event.locationAddress || "",
+      tags: rawTags
+        .map((tag) => String(tag).replace(/^#/, "").trim())
+        .filter(Boolean)
+        .join(", "),
+    })
+    setEditingEventId(event.id)
+  }
+
+  const closeEditEventModal = () => {
+    setEditingEventId(null)
+    setIsSavingEditEvent(false)
+  }
+
+  const handleEditEventFieldChange = (field) => (fieldEvent) => {
+    const nextValue = fieldEvent.target.value
+    setEditEventForm((prev) => ({ ...prev, [field]: nextValue }))
+  }
+
+  const handleSaveEditEvent = async () => {
+    if (!editingEventId || isSavingEditEvent) return
+
+    const title = editEventForm.title.trim()
+    if (!title) {
+      alert("Title is required.")
+      return
+    }
+
+    const parsedTags = editEventForm.tags
+      .split(",")
+      .map((tag) => tag.replace(/^#/, "").trim().toLowerCase())
+      .filter(Boolean)
+
+    const payload = {
+      title,
+      description: editEventForm.description.trim() || null,
+      location: editEventForm.location.trim() || null,
+      location_address: editEventForm.locationAddress.trim() || null,
+      date: editEventForm.date.trim() || null,
+      start_time: editEventForm.startTime.trim() || null,
+      end_time: editEventForm.endTime.trim() || null,
+      tags: parsedTags,
+    }
+
+    try {
+      setIsSavingEditEvent(true)
+
+      const { error } = await supabase
+        .from("events")
+        .update(payload)
+        .eq("id", editingEventId)
+
+      if (error) {
+        alert(error.message)
+        return
+      }
+
+      updateEvent(editingEventId, {
+        title: payload.title,
+        description: payload.description || "",
+        location: payload.location || "",
+        locationAddress: payload.location_address || "",
+        date: payload.date || "",
+        startTime: payload.start_time || "",
+        endTime: payload.end_time || "",
+        tags: parsedTags,
+      })
+
+      closeEditEventModal()
+    } catch (error) {
+      alert(error?.message || "Could not save the event.")
+    } finally {
+      setIsSavingEditEvent(false)
+    }
   }
 
   const openCancelRsvpModal = (event) => {

@@ -448,6 +448,18 @@ export function EventProvider({ children }) {
     setSavedEvents((prev) => prev.filter((event) => String(event.id) !== String(eventId)))
   }
 
+  const updateEvent = (eventId, patch) => {
+    const mergeAndNormalize = (existingEvent) => {
+      if (String(existingEvent.id) !== String(eventId)) return existingEvent
+
+      const merged = { ...existingEvent, ...patch }
+      return enrichEventWithCreator(normalizeEventTimes(merged), null, currentUser)
+    }
+
+    setAllEvents((prev) => prev.map(mergeAndNormalize))
+    setSavedEvents((prev) => prev.map(mergeAndNormalize))
+  }
+
   const follow = async (targetUserId) => {
     const userId = JSON.parse(localStorage.getItem("user") || "{}").id
     if (!userId) return
@@ -545,6 +557,7 @@ export function EventProvider({ children }) {
         createEvent,
         cancelRSVP,
         deleteEvent,
+        updateEvent,
         follow,
         unfollow,
         repostedEventIds,

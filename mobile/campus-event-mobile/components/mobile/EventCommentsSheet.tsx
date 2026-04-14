@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useMemo } from 'react';
 import {
+  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -13,14 +14,18 @@ import {
 } from 'react-native';
 
 import { useAppTheme } from '@/lib/app-theme';
+import { getAvatarImageSource } from '@/lib/mobile-media';
 import type { EventRecord } from '@/types/models';
 
 export type EventCommentRecord = {
   id: string;
   authorName: string;
   authorUsername?: string;
+  authorAvatar?: string;
   body: string;
   createdAt: string;
+  likeCount: number;
+  likedByMe: boolean;
 };
 
 type EventCommentsSheetProps = {
@@ -31,6 +36,7 @@ type EventCommentsSheetProps = {
   onChangeDraft: (value: string) => void;
   onClose: () => void;
   onSubmit: () => void;
+  onToggleLike?: (commentId: string) => void;
 };
 
 const formatCommentTime = (value: string) => {
@@ -51,6 +57,7 @@ export function EventCommentsSheet({
   onChangeDraft,
   onClose,
   onSubmit,
+  onToggleLike,
 }: EventCommentsSheetProps) {
   const theme = useAppTheme();
   const styles = useMemo(() => buildStyles(theme), [theme]);
@@ -87,16 +94,42 @@ export function EventCommentsSheet({
             showsVerticalScrollIndicator={false}>
             {comments.length > 0 ? (
               comments.map((comment) => (
-                <View key={comment.id} style={styles.commentCard}>
-                  <View style={styles.commentHeader}>
-                    <Text style={styles.commentName}>
-                      {comment.authorUsername
-                        ? `@${comment.authorUsername}`
-                        : comment.authorName || 'Campus User'}
-                    </Text>
-                    <Text style={styles.commentTime}>{formatCommentTime(comment.createdAt)}</Text>
+                <View key={comment.id} style={styles.commentRow}>
+                  <Image
+                    source={getAvatarImageSource(comment.authorAvatar)}
+                    style={styles.commentAvatar}
+                  />
+                  <View style={styles.commentBubble}>
+                    <View style={styles.commentHeader}>
+                      <Text style={styles.commentName} numberOfLines={1}>
+                        {comment.authorUsername
+                          ? `@${comment.authorUsername}`
+                          : comment.authorName || 'Campus User'}
+                      </Text>
+                      <Text style={styles.commentTime}>
+                        {formatCommentTime(comment.createdAt)}
+                      </Text>
+                    </View>
+                    <Text style={styles.commentBody}>{comment.body}</Text>
                   </View>
-                  <Text style={styles.commentBody}>{comment.body}</Text>
+                  <Pressable
+                    style={styles.likeButton}
+                    onPress={() => onToggleLike?.(comment.id)}
+                    hitSlop={8}
+                    accessibilityLabel={comment.likedByMe ? 'Unlike comment' : 'Like comment'}>
+                    <Ionicons
+                      name={comment.likedByMe ? 'heart' : 'heart-outline'}
+                      size={18}
+                      color={comment.likedByMe ? theme.accent : theme.textMuted}
+                    />
+                    <Text
+                      style={[
+                        styles.likeCount,
+                        comment.likedByMe && { color: theme.accent },
+                      ]}>
+                      {comment.likeCount > 0 ? comment.likeCount : ''}
+                    </Text>
+                  </Pressable>
                 </View>
               ))
             ) : (
@@ -199,24 +232,32 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       gap: 10,
       paddingBottom: 10,
     },
-    commentCard: {
-      paddingHorizontal: 12,
-      paddingVertical: 10,
-      borderRadius: 14,
+    commentRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 10,
+      paddingVertical: 8,
+    },
+    commentAvatar: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
       backgroundColor: theme.surfaceAlt,
-      borderWidth: 1,
-      borderColor: theme.border,
-      gap: 5,
+    },
+    commentBubble: {
+      flex: 1,
+      minWidth: 0,
+      gap: 3,
     },
     commentHeader: {
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'space-between',
       gap: 8,
     },
     commentName: {
+      flex: 1,
       color: theme.text,
-      fontSize: 12,
+      fontSize: 13,
       fontWeight: '700',
     },
     commentTime: {
@@ -229,6 +270,18 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       fontSize: 14,
       lineHeight: 19,
       fontWeight: '500',
+    },
+    likeButton: {
+      alignItems: 'center',
+      justifyContent: 'flex-start',
+      paddingTop: 2,
+      minWidth: 28,
+      gap: 2,
+    },
+    likeCount: {
+      color: theme.textMuted,
+      fontSize: 11,
+      fontWeight: '700',
     },
     emptyState: {
       paddingVertical: 26,

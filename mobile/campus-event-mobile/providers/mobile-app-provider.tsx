@@ -68,6 +68,10 @@ type MobileAppContextValue = {
     avatarImage?: SelectedProfileImage | null;
   }) => Promise<{ ok: boolean; error?: string }>;
   createEvent: (input: CreateEventInput) => Promise<EventRecord | null>;
+  updateEvent: (
+    eventId: string,
+    input: CreateEventInput
+  ) => Promise<EventRecord | null>;
   addPersonalCalendarItem: (
     input: CreatePersonalCalendarItemInput
   ) => PersonalCalendarItem;
@@ -128,7 +132,7 @@ const createProfilePayload = (
 const isNotFoundError = (error: { code?: string | null } | null) =>
   error?.code === 'PGRST116';
 
-const STARTUP_TIMEOUT_MS = 12000;
+const STARTUP_TIMEOUT_MS = 25000;
 
 const logStartup = (step: string, details?: Record<string, unknown>) => {
   if (details) {
@@ -138,6 +142,16 @@ const logStartup = (step: string, details?: Record<string, unknown>) => {
 
   console.info(`[mobile-app/startup] ${step}`);
 };
+
+class StartupTimeoutError extends Error {
+  readonly label: string;
+
+  constructor(label: string, timeoutMs: number) {
+    super(`${label} timed out after ${timeoutMs}ms`);
+    this.name = 'StartupTimeoutError';
+    this.label = label;
+  }
+}
 
 const createStartupError = (label: string, error: unknown) => {
   if (error instanceof Error) return error;
@@ -151,7 +165,7 @@ const withTimeout = async <T,>(
 ): Promise<T> =>
   new Promise<T>((resolve, reject) => {
     const timeoutId = setTimeout(() => {
-      reject(new Error(`${label} timed out after ${timeoutMs}ms`));
+      reject(new StartupTimeoutError(label, timeoutMs));
     }, timeoutMs);
 
     Promise.resolve(promise)
@@ -168,46 +182,74 @@ const withTimeout = async <T,>(
 type QueryResult<T> = {
   data: T | null;
   error: { message: string; code?: string | null } | null;
+  didTimeout?: boolean;
 };
+
+const now = () =>
+  typeof performance !== 'undefined' && typeof performance.now === 'function'
+    ? performance.now()
+    : Date.now();
 
 const runStartupQuery = async <T,>(
   label: string,
   query: PromiseLike<QueryResult<T>>
 ): Promise<QueryResult<T>> => {
+  const started = now();
   logStartup(`${label}:start`);
 
   try {
     const result = await withTimeout(label, query);
+    const durationMs = Math.round(now() - started);
 
     if (result.error) {
-      console.warn(`[mobile-app/startup] ${label}:query-error`, result.error);
+      console.warn(`[mobile-app/startup] ${label}:query-error`, {
+        durationMs,
+        error: result.error,
+      });
     } else {
-      logStartup(`${label}:done`);
+      logStartup(`${label}:done`, { durationMs });
     }
 
     return result;
   } catch (error) {
+    const durationMs = Math.round(now() - started);
     const startupError = createStartupError(label, error);
-    console.warn(`[mobile-app/startup] ${label}:failed`, startupError);
+    const didTimeout = startupError instanceof StartupTimeoutError;
+
+    console.warn(`[mobile-app/startup] ${label}:failed`, {
+      durationMs,
+      kind: didTimeout ? 'timeout' : 'error',
+      message: startupError.message,
+    });
+
     return {
       data: null,
       error: {
         message: startupError.message,
       },
+      didTimeout,
     };
   }
 };
 
 const runStartupStep = async (label: string, step: PromiseLike<void>) => {
+  const started = now();
   logStartup(`${label}:start`);
 
   try {
     await withTimeout(label, step);
-    logStartup(`${label}:done`);
+    logStartup(`${label}:done`, { durationMs: Math.round(now() - started) });
     return null;
   } catch (error) {
+    const durationMs = Math.round(now() - started);
     const startupError = createStartupError(label, error);
-    console.warn(`[mobile-app/startup] ${label}:failed`, startupError);
+    const didTimeout = startupError instanceof StartupTimeoutError;
+
+    console.warn(`[mobile-app/startup] ${label}:failed`, {
+      durationMs,
+      kind: didTimeout ? 'timeout' : 'error',
+      message: startupError.message,
+    });
     return startupError;
   }
 };
@@ -360,8 +402,12 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
       try {
         const authUser = nextUser || activeSession?.user;
 
+        // Kick off ensureProfileRow in parallel — do NOT block the main data
+        // fetches on it. Its result is only needed so the backend has a row
+        // for new users, and `ensureCurrentUserInProfiles` below still covers
+        // the UI case where the row hasn't landed yet.
         if (authUser) {
-          await runStartupStep(
+          void runStartupStep(
             'refreshData.ensureProfileRow',
             ensureProfileRowForUser(authUser)
           );
@@ -405,31 +451,44 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
           ),
         ]);
 
-        let rsvpRows = (allRsvpsResult.data || []) as Array<{
-          user_id: string;
-          event_id: string;
-        }>;
+        // RSVPs: only compute fresh rows when we have a usable response.
+        // If the primary query failed and the fallback also fails, leave the
+        // prior savedEventIds untouched instead of wiping them.
+        let rsvpRows: Array<{ user_id: string; event_id: string }> | null = null;
 
-        if (allRsvpsResult.error) {
+        if (!allRsvpsResult.error) {
+          rsvpRows = (allRsvpsResult.data || []) as Array<{
+            user_id: string;
+            event_id: string;
+          }>;
+        } else {
           const currentUserRsvpsResult = await runStartupQuery(
             'refreshData.currentUserRsvps',
             supabase.from('rsvps').select('*').eq('user_id', userId)
           );
 
-          const currentUserRsvps = currentUserRsvpsResult.data || [];
-          rsvpRows = currentUserRsvps as Array<{
-            user_id: string;
-            event_id: string;
-          }>;
+          if (!currentUserRsvpsResult.error) {
+            rsvpRows = (currentUserRsvpsResult.data || []) as Array<{
+              user_id: string;
+              event_id: string;
+            }>;
+          }
         }
 
-        let followRows = (followsResult.data || []) as Array<{
+        // Follows: same principle — preserve prior data on total failure.
+        let followRows: Array<{
           follower_id: string;
           following_id: string;
           created_at?: string | null;
-        }>;
+        }> | null = null;
 
-        if (followsResult.error) {
+        if (!followsResult.error) {
+          followRows = (followsResult.data || []) as Array<{
+            follower_id: string;
+            following_id: string;
+            created_at?: string | null;
+          }>;
+        } else {
           const [followingResult, followerResult] = await Promise.all([
             runStartupQuery(
               'refreshData.followingForUser',
@@ -441,95 +500,167 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
             ),
           ]);
 
-          followRows = uniqueValues([
-            ...((followingResult.data || []) as Array<{
-              follower_id: string;
-              following_id: string;
-              created_at?: string | null;
-            }>).map((row) => JSON.stringify(row)),
-            ...((followerResult.data || []) as Array<{
-              follower_id: string;
-              following_id: string;
-              created_at?: string | null;
-            }>).map((row) => JSON.stringify(row)),
-          ]).map((row) => JSON.parse(row));
+          if (!followingResult.error || !followerResult.error) {
+            followRows = uniqueValues([
+              ...((followingResult.data || []) as Array<{
+                follower_id: string;
+                following_id: string;
+                created_at?: string | null;
+              }>).map((row) => JSON.stringify(row)),
+              ...((followerResult.data || []) as Array<{
+                follower_id: string;
+                following_id: string;
+                created_at?: string | null;
+              }>).map((row) => JSON.stringify(row)),
+            ]).map((row) => JSON.parse(row));
+          }
         }
-
-        const normalizedProfiles = normalizeProfiles(
-          ((profilesResult.data || []) as Array<{
-            id: string;
-            name?: string | null;
-            username?: string | null;
-            bio?: string | null;
-            avatar_url?: string | null;
-            phone_number?: string | null;
-            birthday?: string | null;
-            interests?: string[] | string | null;
-            email?: string | null;
-          }>)
-        );
-
-        const rsvpMap = buildRsvpMap(rsvpRows);
-        const normalizedEvents = (((eventsResult.data || []) as Array<{
-          id: string;
-        }>)).map((row) =>
-          normalizeEventRow(
-            row as Parameters<typeof normalizeEventRow>[0],
-            rsvpMap[String(row.id)] || []
-          )
-        ).map((event) => ({
-          ...event,
-          image: getEventImageUri(event.image),
-        }));
-
-        const dmProfileIds = uniqueValues(
-          ((dmParticipantResult.data || []) as Array<{
-            sender_id: string;
-            recipient_id: string;
-          }>).map((message) =>
-            message.sender_id === userId ? message.recipient_id : message.sender_id
-          )
-        );
 
         const fallbackCurrentUser =
           nextUser || activeSession?.user
             ? createProfileFromAuthUser((nextUser || activeSession?.user) as User)
             : null;
 
-        setProfilesState(
-          fallbackCurrentUser
-            ? ensureCurrentUserInProfiles(normalizedProfiles, fallbackCurrentUser)
-            : normalizedProfiles
-        );
-        setEventsState(normalizedEvents);
-        setFollowRelationships(
-          followRows.map((row) => normalizeFollowRow(row))
-        );
-        setSavedEventIds(
-          uniqueValues(
-            rsvpRows
-              .filter((row) => String(row.user_id) === String(userId))
-              .map((row) => String(row.event_id))
-          )
-        );
-        setRecentDmProfileIds(dmProfileIds);
-        setRepostedEventIds(
-          new Set(
-            ((repostsResult.data || []) as Array<{ event_id: string }>).map((r) =>
-              String(r.event_id)
+        // Profiles — preserve prior state on error.
+        if (!profilesResult.error) {
+          const normalizedProfiles = normalizeProfiles(
+            ((profilesResult.data || []) as Array<{
+              id: string;
+              name?: string | null;
+              username?: string | null;
+              bio?: string | null;
+              avatar_url?: string | null;
+              phone_number?: string | null;
+              birthday?: string | null;
+              interests?: string[] | string | null;
+              email?: string | null;
+            }>)
+          );
+
+          setProfilesState(
+            fallbackCurrentUser
+              ? ensureCurrentUserInProfiles(normalizedProfiles, fallbackCurrentUser)
+              : normalizedProfiles
+          );
+          logStartup('refreshData:profiles:applied', {
+            count: normalizedProfiles.length,
+          });
+        } else {
+          logStartup('refreshData:profiles:preserved-prev', {
+            didTimeout: Boolean(profilesResult.didTimeout),
+          });
+        }
+
+        // Events — preserve prior state on error. RSVP map only applied when
+        // we have fresh rsvpRows, otherwise leave attendees as-is (they'll be
+        // computed from whatever state previously held them).
+        if (!eventsResult.error) {
+          const rsvpMap = rsvpRows ? buildRsvpMap(rsvpRows) : {};
+          const normalizedEvents = (((eventsResult.data || []) as Array<{
+            id: string;
+          }>)).map((row) =>
+            normalizeEventRow(
+              row as Parameters<typeof normalizeEventRow>[0],
+              rsvpMap[String(row.id)] || []
             )
-          )
-        );
-        setAuthError(null);
+          ).map((event) => ({
+            ...event,
+            image: getEventImageUri(event.image),
+          }));
+
+          setEventsState(normalizedEvents);
+          logStartup('refreshData:events:applied', { count: normalizedEvents.length });
+        } else {
+          logStartup('refreshData:events:preserved-prev', {
+            didTimeout: Boolean(eventsResult.didTimeout),
+          });
+        }
+
+        // Follows
+        if (followRows !== null) {
+          setFollowRelationships(followRows.map((row) => normalizeFollowRow(row)));
+          logStartup('refreshData:follows:applied', { count: followRows.length });
+        } else {
+          logStartup('refreshData:follows:preserved-prev', {
+            didTimeout: Boolean(followsResult.didTimeout),
+          });
+        }
+
+        // Saved (current-user RSVPs)
+        if (rsvpRows !== null) {
+          setSavedEventIds(
+            uniqueValues(
+              rsvpRows
+                .filter((row) => String(row.user_id) === String(userId))
+                .map((row) => String(row.event_id))
+            )
+          );
+          logStartup('refreshData:savedEvents:applied');
+        } else {
+          logStartup('refreshData:savedEvents:preserved-prev', {
+            didTimeout: Boolean(allRsvpsResult.didTimeout),
+          });
+        }
+
+        // Recent DM partners
+        if (!dmParticipantResult.error) {
+          const dmProfileIds = uniqueValues(
+            ((dmParticipantResult.data || []) as Array<{
+              sender_id: string;
+              recipient_id: string;
+            }>).map((message) =>
+              message.sender_id === userId ? message.recipient_id : message.sender_id
+            )
+          );
+          setRecentDmProfileIds(dmProfileIds);
+          logStartup('refreshData:messages:applied', { count: dmProfileIds.length });
+        } else {
+          logStartup('refreshData:messages:preserved-prev', {
+            didTimeout: Boolean(dmParticipantResult.didTimeout),
+          });
+        }
+
+        // Reposts
+        if (!repostsResult.error) {
+          setRepostedEventIds(
+            new Set(
+              ((repostsResult.data || []) as Array<{ event_id: string }>).map((r) =>
+                String(r.event_id)
+              )
+            )
+          );
+          logStartup('refreshData:reposts:applied');
+        } else {
+          logStartup('refreshData:reposts:preserved-prev', {
+            didTimeout: Boolean(repostsResult.didTimeout),
+          });
+        }
+
+        const anyQuerySucceeded =
+          !profilesResult.error ||
+          !eventsResult.error ||
+          !allRsvpsResult.error ||
+          !dmParticipantResult.error ||
+          !followsResult.error ||
+          !repostsResult.error;
+
+        // Only clear the auth-error banner if something actually came back —
+        // a full-wipe failure should not masquerade as a successful refresh.
+        if (anyQuerySucceeded) {
+          setAuthError(null);
+        }
+
         logStartup('refreshData:completed', {
-          profiles: normalizedProfiles.length,
-          events: normalizedEvents.length,
-          savedEvents: rsvpRows.filter((row) => String(row.user_id) === String(userId)).length,
-          dmThreads: dmProfileIds.length,
-          follows: followRows.length,
+          anyQuerySucceeded,
+          profilesOk: !profilesResult.error,
+          eventsOk: !eventsResult.error,
+          rsvpsOk: !allRsvpsResult.error,
+          messagesOk: !dmParticipantResult.error,
+          followsOk: !followsResult.error,
+          repostsOk: !repostsResult.error,
         });
       } catch (error) {
-        console.error('Unable to refresh mobile backend data:', error);
+        console.warn('Unable to refresh mobile backend data:', error);
       } finally {
         setIsReady(true);
         logStartup('refreshData:ready');
@@ -575,6 +706,24 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
         logStartup('initializeSession:no-session');
       } catch (error) {
         if (!isMounted) return;
+
+        // A timeout here is recoverable: Supabase may still resolve the session
+        // shortly after, and onAuthStateChange will refresh data once it does.
+        // Treat only truly invalid/errored sessions as fatal — otherwise continue
+        // booting in a safe signed-out-ready state without wiping runtime data.
+        const isTimeout = error instanceof StartupTimeoutError;
+
+        if (isTimeout) {
+          console.warn(
+            '[mobile-app/startup] auth.getSession timed out — continuing in signed-out-ready state:',
+            error instanceof Error ? error.message : error
+          );
+          setIsReady(true);
+          logStartup('initializeSession:timeout', {
+            message: error instanceof Error ? error.message : 'Session restore timed out',
+          });
+          return;
+        }
 
         console.error('Unable to restore mobile Supabase session:', error);
         resetRuntimeData();
@@ -891,6 +1040,81 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
       return createdEvent;
     },
     [currentUser.id, currentUser.name, currentUser.username, profiles]
+  );
+
+  const updateEvent = useCallback(
+    async (eventId: string, input: CreateEventInput) => {
+      if (!supabase || !currentUser.id) return null;
+
+      const title = input.title.trim() || 'New Campus Event';
+      const description =
+        input.description.trim() || 'A new event just dropped on campus.';
+      const locationName = input.locationName.trim() || 'Campus Event Space';
+      const locationAddress = input.locationAddress.trim() || locationName;
+      const organizer = input.organizer.trim() || currentUser.name;
+      const dressCode = input.dressCode.trim() || 'Open';
+      const sanitizedImage = sanitizeMediaUrl(input.image?.trim(), '');
+
+      const payload = {
+        title,
+        description,
+        location: locationName,
+        location_address: locationAddress,
+        date: input.date || formatDateLabel(input.eventDate),
+        event_date: input.eventDate,
+        start_time: input.startTime,
+        end_time: input.endTime,
+        organizer,
+        dress_code: dressCode,
+        image: sanitizedImage || null,
+        tags: input.tags,
+        privacy: input.privacy,
+      };
+
+      const previousEvent = eventsState.find((ev) => ev.id === eventId);
+
+      const { data, error } = await supabase
+        .from('events')
+        .update(payload)
+        .eq('id', eventId)
+        .eq('created_by', currentUser.id)
+        .select('*')
+        .single();
+
+      if (error || !data) {
+        console.error('Unable to update event:', error);
+        return null;
+      }
+
+      const rawEvent = normalizeEventRow(
+        data,
+        previousEvent?.attendees || [],
+        previousEvent?.repostedByIds || []
+      );
+      rawEvent.image = getEventImageUri(rawEvent.image);
+      const updatedEvent = enrichEventWithCreator(rawEvent, profiles);
+
+      setEventsState((currentEvents) =>
+        currentEvents.map((ev) => (ev.id === eventId ? updatedEvent : ev))
+      );
+
+      // Notify every user who RSVP'd (excluding the editor/creator) that the
+      // event changed. Reuses the same push helper as RSVP/comment pings.
+      const recipientIds = (updatedEvent.attendees || []).filter(
+        (attendeeId) => attendeeId && attendeeId !== currentUser.id
+      );
+
+      for (const recipientId of recipientIds) {
+        void sendPushToUser(
+          recipientId,
+          'Event updated',
+          `${updatedEvent.title} was updated`
+        );
+      }
+
+      return updatedEvent;
+    },
+    [currentUser.id, currentUser.name, eventsState, profiles]
   );
 
   const addPersonalCalendarItem = useCallback(
@@ -1424,6 +1648,7 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
       signOut,
       updateProfile,
       createEvent,
+      updateEvent,
       addPersonalCalendarItem,
       deleteEvent,
       toggleSaveEvent,
@@ -1453,6 +1678,7 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
       addPersonalCalendarItem,
       authError,
       createEvent,
+      updateEvent,
       currentUser,
       deleteEvent,
       discoverDismissedIds,

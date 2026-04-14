@@ -21,6 +21,7 @@ import {
   type SelectedProfileImage,
 } from '@/lib/mobile-profile-image';
 import { useMobileApp } from '@/providers/mobile-app-provider';
+import type { EventPrivacy, EventRecord } from '@/types/models';
 
 import { AppScreen } from './AppScreen';
 import { EventListCard } from './EventListCard';
@@ -38,6 +39,41 @@ type EditFormState = {
   bio: string;
   avatarUrl: string;
 };
+type EditEventFormState = {
+  title: string;
+  description: string;
+  eventDate: string;
+  startTime: string;
+  endTime: string;
+  locationName: string;
+  locationAddress: string;
+  organizer: string;
+  dressCode: string;
+  tagsText: string;
+  privacy: EventPrivacy;
+  image: string;
+};
+
+const toEditEventForm = (event: EventRecord): EditEventFormState => ({
+  title: event.title || '',
+  description: event.description || '',
+  eventDate: event.eventDate || '',
+  startTime: event.startTime || '',
+  endTime: event.endTime || '',
+  locationName: event.locationName || '',
+  locationAddress: event.locationAddress || '',
+  organizer: event.organizer || '',
+  dressCode: event.dressCode || '',
+  tagsText: (event.tags || []).join(', '),
+  privacy: event.privacy || 'public',
+  image: event.image || '',
+});
+
+const parseEditEventTags = (value: string): string[] =>
+  value
+    .split(',')
+    .map((tag) => tag.trim().toLowerCase().replace(/^#/, '').replace(/\s+/g, '-'))
+    .filter(Boolean);
 
 function StatButton({
   label,
@@ -96,6 +132,7 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
     followProfile,
     unfollowProfile,
     deleteEvent,
+    updateEvent,
     updateProfile,
   } = useMobileApp();
   const [activeList, setActiveList] = useState<ActiveList>(null);
@@ -113,6 +150,11 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
     bio: '',
     avatarUrl: '',
   });
+
+  // Edit Event State (for Created Events → Edit)
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
+  const [editEventForm, setEditEventForm] = useState<EditEventFormState | null>(null);
+  const [isSavingEvent, setIsSavingEvent] = useState(false);
 
   const isOwnProfile = !username || username === currentUser.username;
 
@@ -198,6 +240,52 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
     } finally {
       setIsPickingAvatar(false);
     }
+  };
+
+  const handleOpenEditEvent = (event: EventRecord) => {
+    setEditingEventId(event.id);
+    setEditEventForm(toEditEventForm(event));
+    setActiveList(null);
+  };
+
+  const handleCloseEditEvent = () => {
+    if (isSavingEvent) return;
+    setEditingEventId(null);
+    setEditEventForm(null);
+  };
+
+  const handleSaveEditEvent = async () => {
+    if (!editingEventId || !editEventForm) return;
+
+    setIsSavingEvent(true);
+    const result = await updateEvent(editingEventId, {
+      title: editEventForm.title,
+      description: editEventForm.description,
+      date: '',
+      eventDate: editEventForm.eventDate,
+      startTime: editEventForm.startTime,
+      endTime: editEventForm.endTime,
+      locationName: editEventForm.locationName,
+      locationAddress: editEventForm.locationAddress,
+      organizer: editEventForm.organizer,
+      dressCode: editEventForm.dressCode,
+      tags: parseEditEventTags(editEventForm.tagsText),
+      privacy: editEventForm.privacy,
+      image: editEventForm.image,
+    });
+    setIsSavingEvent(false);
+
+    if (!result) {
+      Alert.alert('Unable to save', 'The event could not be updated right now.');
+      return;
+    }
+
+    setEditingEventId(null);
+    setEditEventForm(null);
+    Alert.alert(
+      'Event updated',
+      'RSVP\u2019d guests will be notified of the changes.'
+    );
   };
 
   const handleSaveEdit = async () => {
@@ -419,11 +507,16 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
                     event={event}
                     actionLabel={isOwnProfile ? 'Delete' : 'Open'}
                     actionTone={isOwnProfile ? 'danger' : 'muted'}
+                    secondaryActionLabel={isOwnProfile ? 'Edit' : undefined}
+                    secondaryActionTone="muted"
                     onPress={() =>
                       router.push({
                         pathname: '/event/[id]',
                         params: { id: event.id },
                       })
+                    }
+                    onSecondaryActionPress={
+                      isOwnProfile ? () => handleOpenEditEvent(event) : undefined
                     }
                     onActionPress={() => {
                       if (!isOwnProfile) {
@@ -552,6 +645,172 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
                 </Pressable>
               </View>
             </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={editingEventId !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={handleCloseEditEvent}>
+        <Pressable style={styles.modalOverlay} onPress={handleCloseEditEvent}>
+          <Pressable style={styles.modalSheet} onPress={(eventPress) => eventPress.stopPropagation()}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>Edit Event</Text>
+
+            {editEventForm ? (
+              <ScrollView
+                contentContainerStyle={styles.modalContent}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled">
+                <Text style={styles.editLabel}>Title</Text>
+                <TextInput
+                  style={styles.editInput}
+                  value={editEventForm.title}
+                  onChangeText={(text) =>
+                    setEditEventForm((form) => (form ? { ...form, title: text } : form))
+                  }
+                  placeholder="Event title"
+                  placeholderTextColor={theme.textMuted}
+                />
+
+                <Text style={styles.editLabel}>Description</Text>
+                <TextInput
+                  style={[styles.editInput, styles.editTextarea]}
+                  value={editEventForm.description}
+                  onChangeText={(text) =>
+                    setEditEventForm((form) => (form ? { ...form, description: text } : form))
+                  }
+                  multiline
+                  textAlignVertical="top"
+                  placeholder="What's the vibe?"
+                  placeholderTextColor={theme.textMuted}
+                />
+
+                <Text style={styles.editLabel}>Date (YYYY-MM-DD)</Text>
+                <TextInput
+                  style={styles.editInput}
+                  value={editEventForm.eventDate}
+                  onChangeText={(text) =>
+                    setEditEventForm((form) => (form ? { ...form, eventDate: text } : form))
+                  }
+                  placeholder="2026-05-01"
+                  placeholderTextColor={theme.textMuted}
+                />
+
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.editLabel}>Start Time</Text>
+                    <TextInput
+                      style={styles.editInput}
+                      value={editEventForm.startTime}
+                      onChangeText={(text) =>
+                        setEditEventForm((form) =>
+                          form ? { ...form, startTime: text } : form
+                        )
+                      }
+                      placeholder="19:00"
+                      placeholderTextColor={theme.textMuted}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.editLabel}>End Time</Text>
+                    <TextInput
+                      style={styles.editInput}
+                      value={editEventForm.endTime}
+                      onChangeText={(text) =>
+                        setEditEventForm((form) =>
+                          form ? { ...form, endTime: text } : form
+                        )
+                      }
+                      placeholder="21:00"
+                      placeholderTextColor={theme.textMuted}
+                    />
+                  </View>
+                </View>
+
+                <Text style={styles.editLabel}>Location Name</Text>
+                <TextInput
+                  style={styles.editInput}
+                  value={editEventForm.locationName}
+                  onChangeText={(text) =>
+                    setEditEventForm((form) =>
+                      form ? { ...form, locationName: text } : form
+                    )
+                  }
+                  placeholder="Student Center Ballroom"
+                  placeholderTextColor={theme.textMuted}
+                />
+
+                <Text style={styles.editLabel}>Address</Text>
+                <TextInput
+                  style={styles.editInput}
+                  value={editEventForm.locationAddress}
+                  onChangeText={(text) =>
+                    setEditEventForm((form) =>
+                      form ? { ...form, locationAddress: text } : form
+                    )
+                  }
+                  placeholder="Campus address"
+                  placeholderTextColor={theme.textMuted}
+                />
+
+                <Text style={styles.editLabel}>Organizer</Text>
+                <TextInput
+                  style={styles.editInput}
+                  value={editEventForm.organizer}
+                  onChangeText={(text) =>
+                    setEditEventForm((form) =>
+                      form ? { ...form, organizer: text } : form
+                    )
+                  }
+                  placeholder="Organizer"
+                  placeholderTextColor={theme.textMuted}
+                />
+
+                <Text style={styles.editLabel}>Dress Code</Text>
+                <TextInput
+                  style={styles.editInput}
+                  value={editEventForm.dressCode}
+                  onChangeText={(text) =>
+                    setEditEventForm((form) =>
+                      form ? { ...form, dressCode: text } : form
+                    )
+                  }
+                  placeholder="Casual"
+                  placeholderTextColor={theme.textMuted}
+                />
+
+                <Text style={styles.editLabel}>Tags (comma separated)</Text>
+                <TextInput
+                  style={styles.editInput}
+                  value={editEventForm.tagsText}
+                  onChangeText={(text) =>
+                    setEditEventForm((form) =>
+                      form ? { ...form, tagsText: text } : form
+                    )
+                  }
+                  autoCapitalize="none"
+                  placeholder="music, social, campus"
+                  placeholderTextColor={theme.textMuted}
+                />
+
+                <View style={styles.actionRow}>
+                  <Pressable style={styles.secondaryButton} onPress={handleCloseEditEvent}>
+                    <Text style={styles.secondaryButtonText}>Cancel</Text>
+                  </Pressable>
+                  <Pressable
+                    style={styles.primaryButton}
+                    onPress={handleSaveEditEvent}
+                    disabled={isSavingEvent}>
+                    <Text style={styles.primaryButtonText}>
+                      {isSavingEvent ? 'Saving...' : 'Save Changes'}
+                    </Text>
+                  </Pressable>
+                </View>
+              </ScrollView>
+            ) : null}
           </Pressable>
         </Pressable>
       </Modal>

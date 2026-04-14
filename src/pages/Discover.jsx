@@ -315,15 +315,30 @@ function Discover() {
       return
     }
 
-    const normalized = (data || []).map((row) => ({
-      id: String(row.id),
-      authorName: row.profiles?.name || row.profiles?.username || "Campus User",
-      authorUsername: row.profiles?.username || "",
-      body: row.body,
-      createdAt: row.created_at,
-    }))
+    const key = String(eventId)
 
-    setEventCommentsById((prev) => ({ ...prev, [String(eventId)]: normalized }))
+    setEventCommentsById((prev) => {
+      const previousById = new Map(
+        (prev[key] || []).map((comment) => [comment.id, comment])
+      )
+
+      const normalized = (data || []).map((row) => {
+        const id = String(row.id)
+        const prior = previousById.get(id)
+        return {
+          id,
+          authorName: row.profiles?.name || row.profiles?.username || "Campus User",
+          authorUsername: row.profiles?.username || "",
+          authorAvatar: row.profiles?.avatar_url || "",
+          body: row.body,
+          createdAt: row.created_at,
+          likeCount: prior?.likeCount || 0,
+          likedByMe: prior?.likedByMe || false,
+        }
+      })
+
+      return { ...prev, [key]: normalized }
+    })
   }, [])
 
   const handleOpenComments = useCallback(() => {
@@ -350,8 +365,11 @@ function Discover() {
       id: `optimistic-${Date.now()}`,
       authorName: currentUser?.name || currentUser?.username || "Campus User",
       authorUsername: currentUser?.username || "",
+      authorAvatar: currentUser?.image || currentUser?.avatar || "",
       body,
       createdAt: new Date().toISOString(),
+      likeCount: 0,
+      likedByMe: false,
     }
 
     setEventCommentsById((prev) => ({
@@ -383,7 +401,31 @@ function Discover() {
         c.id === optimisticComment.id ? { ...c, id: String(data.id) } : c
       ),
     }))
-  }, [activeCommentEvent, commentDraft, currentUser?.name, currentUser?.username])
+  }, [activeCommentEvent, commentDraft, currentUser?.name, currentUser?.username, currentUser?.image, currentUser?.avatar])
+
+  const handleToggleCommentLike = useCallback(
+    (commentId) => {
+      if (!activeCommentEvent) return
+      const key = String(activeCommentEvent.id)
+
+      setEventCommentsById((prev) => {
+        const list = prev[key] || []
+        return {
+          ...prev,
+          [key]: list.map((comment) => {
+            if (comment.id !== commentId) return comment
+            const nextLiked = !comment.likedByMe
+            const nextCount = Math.max(
+              0,
+              (comment.likeCount || 0) + (nextLiked ? 1 : -1)
+            )
+            return { ...comment, likedByMe: nextLiked, likeCount: nextCount }
+          }),
+        }
+      })
+    },
+    [activeCommentEvent]
+  )
 
   const handleCardPointerDown = useCallback(
     (event) => {
@@ -1132,6 +1174,7 @@ function Discover() {
         onDraftChange={setCommentDraft}
         onSubmit={handleSubmitComment}
         onClose={handleCloseComments}
+        onToggleLike={handleToggleCommentLike}
       />
 
       {activeStoryItem ? (

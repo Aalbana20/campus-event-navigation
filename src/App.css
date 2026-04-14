@@ -2311,8 +2311,26 @@ body.theme-dark .discover-stories-panel {
   border-radius: 16px;
   padding: 12px 14px;
   display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.discover-comment-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.discover-comment-bubble {
+  flex: 1;
+  min-width: 0;
+  display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
 }
 
 .discover-comment-head {
@@ -2339,6 +2357,47 @@ body.theme-dark .discover-stories-panel {
   font-size: 0.88rem;
   line-height: 1.45;
   color: var(--text-main, #111);
+  word-break: break-word;
+}
+
+.discover-comment-like {
+  background: transparent;
+  border: none;
+  padding: 2px 4px;
+  margin: 0;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 2px;
+  min-width: 26px;
+  cursor: pointer;
+  color: var(--text-secondary, #6e6e73);
+  flex-shrink: 0;
+  transition: color 0.15s ease, transform 0.15s ease;
+}
+
+.discover-comment-like:hover {
+  color: #ff3b5f;
+}
+
+.discover-comment-like:active {
+  transform: scale(0.92);
+}
+
+.discover-comment-like-icon {
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+.discover-comment-like-count {
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.discover-comment-like.liked {
+  color: #ff3b5f;
 }
 
 .discover-comments-compose {
@@ -5660,6 +5719,19 @@ body.theme-dark .discover-comments-close:hover {
 
 body.theme-dark .discover-comment-card {
   background: rgba(255, 255, 255, 0.04);
+}
+
+body.theme-dark .discover-comment-avatar {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+body.theme-dark .discover-comment-like {
+  color: var(--text-muted);
+}
+
+body.theme-dark .discover-comment-like:hover,
+body.theme-dark .discover-comment-like.liked {
+  color: #ff6680;
 }
 
 body.theme-dark .discover-comments-compose {
