@@ -1,6 +1,6 @@
 import React from 'react';
 import { Heart, MessageCircle, Repeat, Share2, Music, Plus } from 'lucide-react';
-import type { EventRecord } from '@/types/models';
+import type { EventRecord } from './types/models';
 
 interface DiscoverVideoFeedProps {
   events: EventRecord[];
