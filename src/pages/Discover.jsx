@@ -6,7 +6,6 @@ import DiscoverCommentsDrawer from "../components/DiscoverCommentsDrawer"
 import DiscoverStoryComposer from "../components/DiscoverStoryComposer"
 import DiscoverStoriesRow from "../components/DiscoverStoriesRow"
 import DiscoverVideoFeed from "../components/DiscoverVideoFeed"
-import DiscoverFriendsPanel from "../components/DiscoverFriendsPanel"
 import EventCard from "../components/EventCard"
 import { useEvents } from "../context/EventContext"
 import {
@@ -19,10 +18,7 @@ import {
   toggleDiscoverStoryHeart,
   uploadDiscoverStory,
 } from "../discoverStories"
-import {
-  buildDiscoverFriendCards,
-  buildDiscoverStoryItems,
-} from "../discoverSocial"
+import { buildDiscoverStoryItems } from "../discoverSocial"
 import { useToast } from "../context/ToastContext"
 
 const SAVED_FOR_LATER_KEY = "discover-saved-for-later-event-ids"
@@ -129,17 +125,6 @@ function Discover() {
       }),
     [baseStoryItems, currentUser, storyRecords]
   )
-  const friendCards = useMemo(
-    () =>
-      buildDiscoverFriendCards({
-        currentUser,
-        followingList,
-        followersList,
-        allEvents,
-      }),
-    [allEvents, currentUser, followersList, followingList]
-  )
-
   const discoverEvents = useMemo(
     () =>
       (allEvents || []).filter((event) => {
@@ -957,28 +942,6 @@ function Discover() {
     navigate("/create")
   }, [navigate])
 
-  const handleOpenPerson = useCallback(
-    (person) => {
-      if (!person?.routeKey) return
-      navigate(`/profile/${person.routeKey}`)
-    },
-    [navigate]
-  )
-
-  const handleToggleFollow = useCallback(
-    async (person, isFollowing) => {
-      if (!person?.profileId) return
-
-      if (isFollowing) {
-        await unfollow(person.profileId)
-        return
-      }
-
-      await follow(person.profileId)
-    },
-    [follow, unfollow]
-  )
-
   const repostedIdSet = useMemo(
     () => new Set(Array.from(repostedEventIds || []).map((value) => String(value))),
     [repostedEventIds]
@@ -1258,28 +1221,18 @@ function Discover() {
             </button>
           </div>
         ) : (
-          <div className="discover-friends-mode">
-            {friendCards.length > 0 && (
-              <DiscoverFriendsPanel
-                items={friendCards}
-                followingIds={followingIdSet}
-                onOpenPerson={handleOpenPerson}
-                onToggleFollow={handleToggleFollow}
-              />
-            )}
-            <DiscoverVideoFeed
-              events={discoverEvents}
-              savedIds={savedForLaterIds}
-              repostedIds={repostedIdSet}
-              followingIdSet={followingIdSet}
-              onPressHeart={handleFeedHeart}
-              onPressComment={handleFeedComment}
-              onPressRepost={handleFeedRepost}
-              onPressShare={handleFeedShare}
-              onPressCreator={handleFeedCreator}
-              onPressFollow={handleFeedFollow}
-            />
-          </div>
+          <DiscoverVideoFeed
+            events={discoverEvents}
+            savedIds={savedForLaterIds}
+            repostedIds={repostedIdSet}
+            followingIdSet={followingIdSet}
+            onPressHeart={handleFeedHeart}
+            onPressComment={handleFeedComment}
+            onPressRepost={handleFeedRepost}
+            onPressShare={handleFeedShare}
+            onPressCreator={handleFeedCreator}
+            onPressFollow={handleFeedFollow}
+          />
         )}
 
         {discoverActionFeedback ? (
