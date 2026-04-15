@@ -17,6 +17,8 @@ import {
   persistThemeMode,
   resolveThemeMode,
 } from "../theme"
+import { useToast } from "../context/ToastContext"
+import { registerPushNotifications, unregisterPushNotifications } from "../pushNotifications"
 import "./Profile.css"
 
 const createImage = (url) =>
@@ -114,6 +116,7 @@ const buildProfileEventImageStyle = (event) =>
 
 function Profile() {
   const navigate = useNavigate()
+  const { showToast } = useToast()
   const {
     currentUser,
     savedEvents,
@@ -282,6 +285,16 @@ function Profile() {
       .then(({ error }) => {
         if (error) console.error("Failed to save settings:", error)
       })
+
+    if (key === "pushNotifications") {
+      if (next) {
+        registerPushNotifications(userId).then((ok) => {
+          if (!ok) showToast("Could not enable push notifications in this browser.", "warning")
+        })
+      } else {
+        unregisterPushNotifications(userId)
+      }
+    }
   }
 
   const resolvedTheme = resolveThemeMode(themeMode)
@@ -365,6 +378,7 @@ function Profile() {
       await syncStoredUserFromSession(session)
     }
 
+    showToast("Profile saved.", "success")
     closeEditProfile()
   }
 
@@ -406,7 +420,7 @@ function Profile() {
       const userId = JSON.parse(localStorage.getItem("user") || "{}").id
       if (!userId) {
         setDraftProfileImagePreview("")
-        alert("You must be logged in to upload a profile picture.")
+        showToast("You must be logged in to upload a profile picture.", "error")
         return
       }
 
@@ -427,7 +441,7 @@ function Profile() {
     } catch (error) {
       setDraftProfileImagePreview("")
       console.error("Error cropping image:", error)
-      alert(error?.message || "Could not upload your photo. Please try again.")
+      showToast(error?.message || "Could not upload your photo. Please try again.", "error")
     }
   }
 
@@ -501,7 +515,7 @@ function Profile() {
 
     const title = editEventForm.title.trim()
     if (!title) {
-      alert("Title is required.")
+      showToast("Title is required.", "warning")
       return
     }
 
@@ -530,7 +544,7 @@ function Profile() {
         .eq("id", editingEventId)
 
       if (error) {
-        alert(error.message)
+        showToast(error.message, "error")
         return
       }
 
@@ -545,9 +559,10 @@ function Profile() {
         tags: parsedTags,
       })
 
+      showToast("Event saved.", "success")
       closeEditEventModal()
     } catch (error) {
-      alert(error?.message || "Could not save the event.")
+      showToast(error?.message || "Could not save the event.", "error")
     } finally {
       setIsSavingEditEvent(false)
     }
@@ -576,7 +591,7 @@ function Profile() {
           .eq("user_id", currentUser.id)
 
         if (rsvpError) {
-          alert(rsvpError.message)
+          showToast(rsvpError.message, "error")
           return
         }
 
@@ -588,7 +603,7 @@ function Profile() {
           .eq("id", event.id)
 
         if (eventUpdateError) {
-          alert(eventUpdateError.message)
+          showToast(eventUpdateError.message, "error")
           return
         }
 
@@ -602,7 +617,7 @@ function Profile() {
           .eq("event_id", event.id)
 
         if (rsvpsDeleteError) {
-          alert(rsvpsDeleteError.message)
+          showToast(rsvpsDeleteError.message, "error")
           return
         }
 
@@ -612,16 +627,17 @@ function Profile() {
           .eq("id", event.id)
 
         if (eventDeleteError) {
-          alert(eventDeleteError.message)
+          showToast(eventDeleteError.message, "error")
           return
         }
 
         deleteEvent(event.id)
+        showToast("Event deleted.", "success")
       }
 
       closeConfirmModal()
     } catch (error) {
-      alert(error.message || "Something went wrong.")
+      showToast(error.message || "Something went wrong.", "error")
     } finally {
       setIsConfirmingAction(false)
     }

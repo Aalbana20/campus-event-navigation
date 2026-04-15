@@ -94,6 +94,22 @@ body {
   justify-self: end;
 }
 
+.navbar-search-btn {
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: transparent;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #111;
+  transition: background 0.2s ease;
+  flex-shrink: 0;
+}
+.navbar-search-btn:hover { background: rgba(0,0,0,0.06); }
+
 .navbar-bell-btn {
   position: relative;
   width: 100%;
@@ -108,6 +124,133 @@ body {
   color: #111;
   transition: background 0.2s ease;
   text-decoration: none;
+}
+
+/* ── Global search overlay ───────────────────────────── */
+.global-search-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 8000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 72px;
+  padding: 72px 16px 16px;
+}
+
+.global-search-panel {
+  width: 100%;
+  max-width: 520px;
+  background: var(--card-bg, #1a1d2e);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+}
+
+.global-search-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  position: relative;
+}
+
+.global-search-icon { flex-shrink: 0; opacity: 0.5; color: #f5f7fb; }
+
+.global-search-input {
+  flex: 1;
+  background: none;
+  border: none;
+  outline: none;
+  font-size: 0.97rem;
+  color: var(--text-main, #f5f7fb);
+  font-weight: 500;
+}
+.global-search-input::placeholder { opacity: 0.4; }
+
+.global-search-spinner {
+  width: 16px; height: 16px;
+  border: 2px solid rgba(255,255,255,0.15);
+  border-top-color: rgba(255,255,255,0.6);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.global-search-results { padding: 8px 0 12px; max-height: 60vh; overflow-y: auto; }
+
+.global-search-group-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.4;
+  color: var(--text-main, #f5f7fb);
+  padding: 8px 16px 4px;
+}
+
+.global-search-result-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 9px 16px;
+  cursor: pointer;
+  text-align: left;
+  border-radius: 0;
+  transition: background 0.12s;
+}
+.global-search-result-item:hover { background: rgba(255,255,255,0.06); }
+
+.global-search-result-icon {
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.07);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  color: var(--text-main, #f5f7fb);
+}
+
+.global-search-result-avatar {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.global-search-result-text {
+  display: flex; flex-direction: column; gap: 2px; overflow: hidden;
+}
+
+.global-search-result-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-main, #f5f7fb);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.global-search-result-sub {
+  font-size: 0.78rem;
+  opacity: 0.5;
+  color: var(--text-main, #f5f7fb);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.global-search-empty {
+  padding: 16px;
+  font-size: 0.88rem;
+  opacity: 0.5;
+  color: var(--text-main, #f5f7fb);
+  text-align: center;
 }
 
 .navbar-profile-btn:hover,
@@ -843,6 +986,26 @@ body.theme-dark .explore-search-wrap .explore-search-input::placeholder {
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+.explore-see-all-btn {
+  align-self: flex-start;
+  background: none;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 20px;
+  color: var(--text-main, #f5f7fb);
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 6px 16px;
+  opacity: 0.7;
+  transition: opacity 0.15s;
+}
+.explore-see-all-btn:hover { opacity: 1; }
+
+.explore-load-sentinel {
+  height: 40px;
+  width: 100%;
 }
 
 .explore-feed {
