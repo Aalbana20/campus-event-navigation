@@ -355,6 +355,39 @@ create policy "Users can insert their own story shares"
 
 
 -- ============================================================
+-- 11b. DISCOVER POSTS
+-- Photo/video posts published into the Discover feed.
+-- Stored alongside profiles; reuses the "stories" storage bucket
+-- under the "posts/" folder prefix to avoid creating a new bucket.
+-- ============================================================
+create table if not exists discover_posts (
+  id          uuid primary key default gen_random_uuid(),
+  author_id   uuid not null references auth.users(id) on delete cascade,
+  media_url   text not null,
+  media_type  text not null default 'image', -- 'image' | 'video'
+  caption     text,
+  created_at  timestamptz not null default now()
+);
+
+create index if not exists discover_posts_author_id_idx  on discover_posts(author_id);
+create index if not exists discover_posts_created_at_idx on discover_posts(created_at desc);
+
+alter table discover_posts enable row level security;
+
+create policy "Discover posts are readable by authenticated users"
+  on discover_posts for select
+  using (auth.role() = 'authenticated');
+
+create policy "Users can insert their own discover posts"
+  on discover_posts for insert
+  with check (auth.uid() = author_id);
+
+create policy "Users can delete their own discover posts"
+  on discover_posts for delete
+  using (auth.uid() = author_id);
+
+
+-- ============================================================
 -- 12. PUSH TOKENS
 -- ============================================================
 create table if not exists push_tokens (

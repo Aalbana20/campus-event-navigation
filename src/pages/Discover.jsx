@@ -3,9 +3,10 @@ import { useNavigate } from "react-router-dom"
 import { supabase } from "../supabaseClient"
 import DiscoverModeSwitch from "../components/DiscoverModeSwitch"
 import DiscoverCommentsDrawer from "../components/DiscoverCommentsDrawer"
-import DiscoverStoryComposer from "../components/DiscoverStoryComposer"
+import DiscoverCreateComposer from "../components/DiscoverCreateComposer"
 import DiscoverStoriesRow from "../components/DiscoverStoriesRow"
-import DiscoverVideoFeed from "../components/DiscoverVideoFeed"
+import DiscoverPostsFeed from "../components/DiscoverPostsFeed"
+import { loadDiscoverPosts, uploadDiscoverPost } from "../discoverPosts"
 import EventCard from "../components/EventCard"
 import { useEvents } from "../context/EventContext"
 import {
@@ -30,15 +31,9 @@ function Discover() {
     addEvent,
     allEvents,
     currentUser,
-    follow,
     followingList,
     followersList,
     savedEvents,
-    unfollow,
-    cancelRSVP,
-    repostedEventIds,
-    repostEvent,
-    unrepostEvent,
   } = useEvents()
 
   const [activeMode, setActiveMode] = useState("events")
@@ -50,6 +45,8 @@ function Discover() {
   const [isActionLocked, setIsActionLocked] = useState(false)
   const [activeStoryItem, setActiveStoryItem] = useState(null)
   const [isStoryComposerOpen, setIsStoryComposerOpen] = useState(false)
+  const [createComposerMode, setCreateComposerMode] = useState(null)
+  const [discoverPosts, setDiscoverPosts] = useState([])
   const [storyRecords, setStoryRecords] = useState([])
   const [likedStoryIds, setLikedStoryIds] = useState(new Set())
   const [storyViewerRows, setStoryViewerRows] = useState([])
@@ -81,10 +78,6 @@ function Discover() {
   const dismissedEventIdSet = useMemo(
     () => new Set(dismissedEventIds.map((eventId) => String(eventId))),
     [dismissedEventIds]
-  )
-  const followingIdSet = useMemo(
-    () => new Set((followingList || []).map((person) => String(person.id))),
-    [followingList]
   )
   const baseStoryItems = useMemo(
     () =>
@@ -641,6 +634,7 @@ function Discover() {
   const handleOpenStory = useCallback((item) => {
     if (!item) return
     setIsStoryComposerOpen(false)
+    setCreateComposerMode(null)
     setIsStoryActivityOpen(false)
     setStoryActionFeedback("")
     setStoryViewerRows([])
@@ -656,15 +650,21 @@ function Discover() {
     setIsStoryViewerRowsLoading(false)
   }, [])
 
-  const handleOpenStoryComposer = useCallback(() => {
+  const handleOpenCreateComposer = useCallback((mode = "post") => {
     setActiveStoryItem(null)
     setIsStoryActivityOpen(false)
     setStoryActionFeedback("")
     setIsStoryComposerOpen(true)
+    setCreateComposerMode(mode)
   }, [])
+
+  const handleOpenStoryComposer = useCallback(() => {
+    handleOpenCreateComposer("story")
+  }, [handleOpenCreateComposer])
 
   const handleCloseStoryComposer = useCallback(() => {
     setIsStoryComposerOpen(false)
+    setCreateComposerMode(null)
   }, [])
 
   const loadStories = useCallback(async () => {
@@ -699,6 +699,7 @@ function Discover() {
 
         await loadStories()
         setIsStoryComposerOpen(false)
+        setCreateComposerMode(null)
         showToast("Story shared!", "success")
       } catch (error) {
         showToast(error?.message || "Could not share your story right now. Please try again.", "error")
@@ -706,6 +707,54 @@ function Discover() {
     },
     [currentUser, loadStories, showToast]
   )
+
+  const loadDiscoverPostsFeed = useCallback(async () => {
+    const nextPosts = await loadDiscoverPosts()
+    setDiscoverPosts(nextPosts)
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+
+    loadDiscoverPosts().then((nextPosts) => {
+      if (!cancelled) setDiscoverPosts(nextPosts)
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const handleSubmitPostComposer = useCallback(
+    async ({ file, caption }) => {
+      if (!file || !currentUser?.id) {
+        showToast("You need to be logged in to post.", "error")
+        return
+      }
+
+      try {
+        await uploadDiscoverPost({
+          authorId: currentUser.id,
+          file,
+          caption,
+        })
+
+        await loadDiscoverPostsFeed()
+        setIsStoryComposerOpen(false)
+        setCreateComposerMode(null)
+        showToast("Posted!", "success")
+      } catch (error) {
+        showToast(error?.message || "Could not publish your post right now. Please try again.", "error")
+      }
+    },
+    [currentUser, loadDiscoverPostsFeed, showToast]
+  )
+
+  const handleOpenEventFlowFromComposer = useCallback(() => {
+    setIsStoryComposerOpen(false)
+    setCreateComposerMode(null)
+    navigate("/create")
+  }, [navigate])
 
   const handleToggleStoryActivity = useCallback(() => {
     setIsStoryActivityOpen((prev) => !prev)
@@ -932,98 +981,8 @@ function Discover() {
   }, [])
 
   const handleCreateEvent = useCallback(() => {
-    navigate("/create")
-  }, [navigate])
-
-  const repostedIdSet = useMemo(
-    () => new Set(Array.from(repostedEventIds || []).map((value) => String(value))),
-    [repostedEventIds]
-  )
-
-  const handleFeedHeart = useCallback((event) => {
-    if (!event?.id) return
-
-    const eventId = String(event.id)
-    const isSaved = savedEventIds.has(eventId)
-
-    if (isSaved) {
-      cancelRSVP?.(eventId)
-      setDiscoverActionFeedback("Removed from saved.")
-    } else {
-      addEvent(event, currentUser)
-      setDiscoverActionFeedback("Saved for later.")
-    }
-  }, [savedEventIds, cancelRSVP, addEvent, currentUser])
-
-  const handleFeedComment = useCallback(
-    (event) => {
-      if (!event?.id) return
-      setActiveCommentEventId(String(event.id))
-      setCommentDraft("")
-      loadComments(String(event.id))
-    },
-    [loadComments]
-  )
-
-  const handleFeedRepost = useCallback(
-    async (event) => {
-      if (!event?.id) return
-
-      const eventId = String(event.id)
-      if (repostedIdSet.has(eventId)) {
-        await unrepostEvent?.(eventId)
-        setDiscoverActionFeedback("Removed repost.")
-        return
-      }
-
-      await repostEvent?.(eventId)
-      setDiscoverActionFeedback("Reposted to your feed.")
-    },
-    [repostEvent, repostedIdSet, unrepostEvent]
-  )
-
-  const handleFeedShare = useCallback((event) => {
-    if (!event?.id) return
-
-    const shareUrl = `${window.location.origin}/#/event/${event.id}`
-    if (navigator.share) {
-      navigator
-        .share({ title: event.title || "Campus Event", url: shareUrl })
-        .catch(() => {
-          /* user cancelled */
-        })
-      return
-    }
-
-    if (navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(shareUrl)
-      setDiscoverActionFeedback("Link copied to clipboard.")
-    }
-  }, [])
-
-  const handleFeedCreator = useCallback(
-    (event) => {
-      const creatorHandle =
-        event?.creatorUsername || event?.creatorHandle || event?.creatorId
-      if (!creatorHandle) return
-      navigate(`/profile/${creatorHandle}`)
-    },
-    [navigate]
-  )
-
-  const handleFeedFollow = useCallback(
-    async (event) => {
-      const creatorId = event?.creatorId || event?.creator_id
-      if (!creatorId) return
-      const creatorIdString = String(creatorId)
-      if (followingIdSet.has(creatorIdString)) {
-        await unfollow(creatorId)
-        return
-      }
-      await follow(creatorId)
-    },
-    [follow, followingIdSet, unfollow]
-  )
+    handleOpenCreateComposer("post")
+  }, [handleOpenCreateComposer])
 
   const isImmersiveFeed = activeMode === "friends"
 
@@ -1208,17 +1167,14 @@ function Discover() {
             </button>
           </div>
         ) : (
-          <DiscoverVideoFeed
-            events={discoverEvents}
-            savedIds={savedEventIds}
-            repostedIds={repostedIdSet}
-            followingIdSet={followingIdSet}
-            onPressHeart={handleFeedHeart}
-            onPressComment={handleFeedComment}
-            onPressRepost={handleFeedRepost}
-            onPressShare={handleFeedShare}
-            onPressCreator={handleFeedCreator}
-            onPressFollow={handleFeedFollow}
+          <DiscoverPostsFeed
+            posts={discoverPosts}
+            onPressCreator={(post) => {
+              const handle = post?.authorUsername || post?.authorId
+              if (!handle) return
+              navigate(`/profile/${handle}`)
+            }}
+            onPressCreate={() => handleOpenCreateComposer("post")}
           />
         )}
 
@@ -1883,10 +1839,13 @@ function Discover() {
         </div>
       ) : null}
 
-      <DiscoverStoryComposer
+      <DiscoverCreateComposer
         isOpen={isStoryComposerOpen}
+        initialMode={createComposerMode || "post"}
         onClose={handleCloseStoryComposer}
-        onSubmit={handleSubmitStoryComposer}
+        onSubmitPost={handleSubmitPostComposer}
+        onSubmitStory={handleSubmitStoryComposer}
+        onOpenEventFlow={handleOpenEventFlowFromComposer}
       />
     </main>
   )
