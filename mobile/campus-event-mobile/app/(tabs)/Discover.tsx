@@ -17,6 +17,7 @@ import {
 
 import { sendPushToUser } from '@/lib/mobile-push';
 import { AppScreen } from '@/components/mobile/AppScreen';
+import { DiscoverPostsFeed } from '@/components/mobile/DiscoverPostsFeed';
 import { DiscoverStoriesRow } from '@/components/mobile/DiscoverStoriesRow';
 import { DiscoverModeSwitch } from '@/components/mobile/DiscoverModeSwitch';
 import { DiscoverVideoFeed } from '@/components/mobile/DiscoverVideoFeed';
@@ -25,6 +26,10 @@ import { EventMutualsSheet } from '@/components/mobile/EventMutualsSheet';
 import { EventStackCard } from '@/components/mobile/EventStackCard';
 import { StoryViewerModal } from '@/components/mobile/StoryViewerModal';
 import { useAppTheme } from '@/lib/app-theme';
+import {
+  loadDiscoverPosts,
+  type DiscoverPostRecord,
+} from '@/lib/mobile-discover-posts';
 import {
   buildMobileStoryStripItems,
   buildStoryReplyMessage,
@@ -70,6 +75,7 @@ export default function DiscoverScreen() {
   const [scrollEnabled, setScrollEnabled] = useState(true);
   const [activeTab, setActiveTab] = useState<'events' | 'friends'>('events');
   const [storyRecords, setStoryRecords] = useState<StoryRecord[]>([]);
+  const [discoverPosts, setDiscoverPosts] = useState<DiscoverPostRecord[]>([]);
   const [seenStoryIds, setSeenStoryIds] = useState<Set<string>>(new Set());
   const [reactedStoryIds, setReactedStoryIds] = useState<Set<string>>(new Set());
   const [isStoryViewerVisible, setIsStoryViewerVisible] = useState(false);
@@ -83,6 +89,11 @@ export default function DiscoverScreen() {
   const [isMutualsSheetVisible, setIsMutualsSheetVisible] = useState(false);
   const [mutualSheetTitle, setMutualSheetTitle] = useState('');
   const [mutualSheetProfiles, setMutualSheetProfiles] = useState<ProfileRecord[]>([]);
+
+  const loadPosts = useCallback(async () => {
+    const nextPosts = await loadDiscoverPosts();
+    setDiscoverPosts(nextPosts);
+  }, []);
 
   const loadStories = useCallback(async () => {
     const nextStories = await loadActiveStoryRecords({
@@ -105,7 +116,8 @@ export default function DiscoverScreen() {
   useFocusEffect(
     useCallback(() => {
       void loadStories();
-    }, [loadStories])
+      void loadPosts();
+    }, [loadPosts, loadStories])
   );
 
   const handleOpenCreateStory = useCallback(() => {
@@ -496,8 +508,24 @@ export default function DiscoverScreen() {
     setRefreshing(true);
     await refreshData();
     await loadStories();
+    await loadPosts();
     setRefreshing(false);
-  }, [loadStories, refreshData]);
+  }, [loadPosts, loadStories, refreshData]);
+
+  const handleOpenPostAuthor = useCallback(
+    (post: DiscoverPostRecord) => {
+      if (!post.authorUsername) return;
+      if (post.authorUsername === currentUser.username) {
+        router.push('/(tabs)/profile');
+        return;
+      }
+      router.push({
+        pathname: '/profile/[username]',
+        params: { username: post.authorUsername },
+      });
+    },
+    [currentUser.username, router]
+  );
 
   const handleOpenStory = useCallback((item: { id: string; stories: StoryRecord[] }) => {
     if (!item.stories.length) return;
@@ -614,7 +642,7 @@ export default function DiscoverScreen() {
       {activeTab === 'friends' ? (
         <View style={[styles.headerBar, styles.headerBarAbsolute]}>
           <View style={styles.headerActionsLeft}>
-            <Pressable style={[styles.headerIconButton, styles.glassyIconButton]} onPress={() => router.push('/(tabs)/events?tab=create')}>
+            <Pressable style={[styles.headerIconButton, styles.glassyIconButton]} onPress={() => router.push('/story/create')}>
               <Ionicons name="add-outline" size={20} color="#ffffff" />
             </Pressable>
           </View>
@@ -639,7 +667,7 @@ export default function DiscoverScreen() {
         >
           <View style={styles.headerBar}>
             <View style={styles.headerActionsLeft}>
-              <Pressable style={styles.headerIconButton} onPress={() => router.push('/(tabs)/events?tab=create')}>
+              <Pressable style={styles.headerIconButton} onPress={() => router.push('/story/create')}>
                 <Ionicons name="add-outline" size={20} color={theme.text} />
               </Pressable>
             </View>
@@ -715,6 +743,11 @@ export default function DiscoverScreen() {
               <Text style={styles.swipeHintText}>Swipe left to pass or right to save</Text>
             </View>
           ) : null}
+
+          <DiscoverPostsFeed
+            posts={discoverPosts}
+            onPressAuthor={handleOpenPostAuthor}
+          />
         </ScrollView>
       ) : (
         <View style={styles.videoFeedContainer}>

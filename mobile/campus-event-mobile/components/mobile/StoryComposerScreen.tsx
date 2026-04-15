@@ -19,6 +19,7 @@ import {
 } from 'expo-camera';
 
 import { useAppTheme } from '@/lib/app-theme';
+import { uploadDiscoverPost } from '@/lib/mobile-discover-posts';
 import {
   createSelectedStoryMedia,
   pickStoryMediaFromLibrary,
@@ -75,6 +76,24 @@ export function StoryComposerScreen() {
     router.back();
   };
 
+  const modeLabel = activeMode === 'Post' ? 'Post' : 'Story';
+
+  const handleSwitchMode = (nextMode: ComposerMode) => {
+    if (nextMode === activeMode) return;
+
+    if (nextMode === 'Event') {
+      router.replace({ pathname: '/(tabs)/events', params: { tab: 'create' } });
+      return;
+    }
+
+    if (nextMode === 'Live') {
+      Alert.alert('Live', 'Live broadcasting is coming soon. Stay tuned.');
+      return;
+    }
+
+    setActiveMode(nextMode);
+  };
+
   const handleSelectFromLibrary = async () => {
     try {
       const media = await pickStoryMediaFromLibrary();
@@ -85,7 +104,7 @@ export function StoryComposerScreen() {
       setIsTextEditing(false);
     } catch (error) {
       Alert.alert(
-        'Story',
+        modeLabel,
         error instanceof Error
           ? error.message
           : 'Could not open your media library right now.'
@@ -116,7 +135,7 @@ export function StoryComposerScreen() {
       setStage('preview');
       setIsTextEditing(false);
     } catch {
-      Alert.alert('Story', 'Could not capture a photo right now.');
+      Alert.alert(modeLabel, 'Could not capture a photo right now.');
     }
   };
 
@@ -156,7 +175,7 @@ export function StoryComposerScreen() {
         setIsTextEditing(false);
       }
     } catch {
-      Alert.alert('Story', 'Could not record a video right now.');
+      Alert.alert(modeLabel, 'Could not record a video right now.');
     } finally {
       recordTriggeredRef.current = false;
       setIsRecording(false);
@@ -225,19 +244,27 @@ export function StoryComposerScreen() {
     setIsPublishing(true);
 
     try {
-      await uploadStoryMedia({
-        authorId: currentUser.id,
-        media: selectedMedia,
-        caption: overlayText,
-      });
+      if (activeMode === 'Post') {
+        await uploadDiscoverPost({
+          authorId: currentUser.id,
+          media: selectedMedia,
+          caption: overlayText,
+        });
+      } else {
+        await uploadStoryMedia({
+          authorId: currentUser.id,
+          media: selectedMedia,
+          caption: overlayText,
+        });
+      }
 
       router.back();
     } catch (error) {
       Alert.alert(
-        'Story',
+        modeLabel,
         error instanceof Error
           ? error.message
-          : 'Could not publish your story right now.'
+          : `Could not publish your ${modeLabel.toLowerCase()} right now.`
       );
     } finally {
       setIsPublishing(false);
@@ -312,7 +339,7 @@ export function StoryComposerScreen() {
               {MODES.map((mode) => (
                 <Pressable
                   key={mode}
-                  onPress={() => setActiveMode(mode)}
+                  onPress={() => handleSwitchMode(mode)}
                   style={[
                     styles.modePill,
                     mode === activeMode && styles.modePillActive,
@@ -371,7 +398,13 @@ export function StoryComposerScreen() {
               disabled={isPublishing}
               onPress={() => void handlePublish()}>
               <Text style={styles.publishButtonText}>
-                {isPublishing ? 'Posting...' : 'Share'}
+                {isPublishing
+                  ? activeMode === 'Post'
+                    ? 'Posting...'
+                    : 'Sharing...'
+                  : activeMode === 'Post'
+                    ? 'Post'
+                    : 'Share'}
               </Text>
             </Pressable>
           </View>
@@ -412,7 +445,9 @@ export function StoryComposerScreen() {
             <Pressable
               style={styles.previewPrimaryButton}
               onPress={() => void handlePublish()}>
-              <Text style={styles.previewPrimaryButtonText}>Post to Story</Text>
+              <Text style={styles.previewPrimaryButtonText}>
+                {activeMode === 'Post' ? 'Publish Post' : 'Post to Story'}
+              </Text>
             </Pressable>
           </View>
         </View>
