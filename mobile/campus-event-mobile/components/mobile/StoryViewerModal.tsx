@@ -118,28 +118,6 @@ export function StoryViewerModal({
     setIsViewersSheetVisible(false);
   }, [activeItems, initialItemId, visible]);
 
-  useEffect(() => {
-    if (!visible || !currentItem || !currentUserId) return;
-    
-    const story = currentItem.stories[storyIndex];
-    if (!story || String(story.authorId) !== String(currentUserId)) return;
-
-    const storyId = String(story.id);
-    if (loadedViewerStoryIdsRef.current.has(storyId)) return;
-
-    let isActive = true;
-    const fetchViewers = async () => {
-      try {
-        const viewers = await onLoadViewers(story);
-        if (!isActive) return;
-        setViewersByStoryId((currentValue) => ({ ...currentValue, [storyId]: viewers }));
-        loadedViewerStoryIdsRef.current.add(storyId);
-      } catch {}
-    };
-    void fetchViewers();
-    return () => { isActive = false; };
-  }, [currentItem, currentUserId, onLoadViewers, storyIndex, visible]);
-
   const currentItem = activeItems[groupIndex] || null;
   const currentStory = currentItem?.stories[storyIndex] || null;
   const isOwnStory = Boolean(
@@ -147,6 +125,28 @@ export function StoryViewerModal({
   );
   const hasHeart = Boolean(currentStory && reactedStoryIds.has(String(currentStory.id)));
   const currentViewers = currentStory ? viewersByStoryId[currentStory.id] || [] : [];
+
+  useEffect(() => {
+    if (!visible || !currentStory || !isOwnStory) return;
+
+    const storyId = String(currentStory.id);
+    if (loadedViewerStoryIdsRef.current.has(storyId)) return;
+
+    let isActive = true;
+    loadedViewerStoryIdsRef.current.add(storyId);
+    (async () => {
+      try {
+        const viewers = await onLoadViewers(currentStory);
+        if (!isActive) return;
+        setViewersByStoryId((currentValue) => ({ ...currentValue, [storyId]: viewers }));
+      } catch {
+        loadedViewerStoryIdsRef.current.delete(storyId);
+      }
+    })();
+    return () => {
+      isActive = false;
+    };
+  }, [currentStory, isOwnStory, onLoadViewers, visible]);
 
   const recipientProfiles = useMemo(() => {
     const allPeople = getUniqueProfiles([...recentDmPeople, ...followingProfiles]);

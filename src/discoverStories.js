@@ -439,7 +439,7 @@ export const fetchDiscoverStoryViewers = async ({
   const { data: profiles, error: profileError } = viewerIds.length
     ? await supabase
         .from("profiles")
-        .select("id, name, username, avatar_url, avatar")
+        .select("id, name, username, avatar_url")
         .in("id", viewerIds)
     : { data: [], error: null }
 
@@ -460,7 +460,7 @@ export const fetchDiscoverStoryViewers = async ({
       viewedAt: row.viewed_at || "",
       name: toTrimmedString(profile?.name),
       username: toTrimmedString(profile?.username),
-      avatar: sanitizeAvatarUrl(profile?.avatar_url || profile?.avatar, DEFAULT_AVATAR_URL),
+      avatar: sanitizeAvatarUrl(profile?.avatar_url, DEFAULT_AVATAR_URL),
     }
   })
 }
