@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react"
+import React, { lazy, Suspense, useEffect, useMemo, useState } from "react"
 import "./App.css"
 import {
   Routes,
@@ -11,19 +11,21 @@ import {
   useParams,
   useSearchParams,
 } from "react-router-dom"
-import Discover from "./pages/Discover"
-import Explore from "./pages/Explore"
-import Messages from "./pages/Messages"
-import MyEvents from "./pages/MyEvents"
-import Profile from "./pages/Profile"
-import PublicProfile from "./pages/PublicProfile"
-import SignUp from "./pages/SignUp"
-import Login from "./pages/Login"
-import Logout from "./pages/Logout"
+
+const Discover = lazy(() => import("./pages/Discover"))
+const Explore = lazy(() => import("./pages/Explore"))
+const Messages = lazy(() => import("./pages/Messages"))
+const MyEvents = lazy(() => import("./pages/MyEvents"))
+const Profile = lazy(() => import("./pages/Profile"))
+const PublicProfile = lazy(() => import("./pages/PublicProfile"))
+const SignUp = lazy(() => import("./pages/SignUp"))
+const Login = lazy(() => import("./pages/Login"))
+const Logout = lazy(() => import("./pages/Logout"))
 import { useEvents } from "./context/EventContext"
 import { DEFAULT_AVATAR_URL, sanitizeAvatarUrl, syncStoredUserFromSession } from "./profileMedia"
 import { supabase } from "./supabaseClient"
 import { applyThemeMode, getStoredThemeMode } from "./theme"
+import GlobalSearch from "./components/GlobalSearch"
 
 const MONTH_NAMES = [
   "January",
@@ -89,6 +91,7 @@ function MainLayout() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const [isInboxOpen, setIsInboxOpen] = useState(false)
+  const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [notificationFilter, setNotificationFilter] = useState("all")
   const [openNotificationMenuId, setOpenNotificationMenuId] = useState(null)
   const [activeDmThreadId, setActiveDmThreadId] = useState(null)
@@ -599,6 +602,17 @@ function MainLayout() {
         <div className="topbar-right">
           <button
             type="button"
+            className="navbar-search-btn"
+            aria-label="Search"
+            onClick={() => setIsSearchOpen(true)}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+          </button>
+          <button
+            type="button"
             className="navbar-bell-btn"
             aria-label="Open notifications"
             onClick={openInbox}
@@ -632,6 +646,8 @@ function MainLayout() {
           </button>
         </div>
       </nav>
+
+      {isSearchOpen && <GlobalSearch onClose={() => setIsSearchOpen(false)} />}
 
       {isInboxOpen && (
         <div className="inbox-overlay" onClick={closeInbox}>
@@ -892,6 +908,7 @@ function App() {
 
   return (
     <div className="app">
+      <Suspense fallback={<div className="app-page-loading" aria-label="Loading…" />}>
       <Routes>
         <Route path="/" element={<RootRedirect session={session} />} />
 
@@ -940,6 +957,7 @@ function App() {
 
         <Route path="*" element={<RootRedirect session={session} />} />
       </Routes>
+      </Suspense>
     </div>
   )
 }

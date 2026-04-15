@@ -1,10 +1,12 @@
-import React, { useEffect, useMemo, useState } from "react"
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import ExploreEventModal from "../components/ExploreEventModal"
 import ExploreEventTile from "../components/ExploreEventTile"
 import { useEvents } from "../context/EventContext"
 import { DEFAULT_AVATAR_URL, sanitizeAvatarUrl } from "../profileMedia"
 import { supabase } from "../supabaseClient"
+
+const PAGE_SIZE = 20
 
 
 const EXPLORE_SECTION_DEFINITIONS = [
@@ -223,6 +225,9 @@ function Explore() {
   const [followOverrides, setFollowOverrides] = useState({})
   const [remoteProfileResults, setRemoteProfileResults] = useState({ query: "", items: [] })
   const [suggestedProfiles, setSuggestedProfiles] = useState([])
+  const [searchPage, setSearchPage] = useState({ query: "", count: PAGE_SIZE })
+  const [expandedSections, setExpandedSections] = useState(new Set())
+  const sentinelRef = useRef(null)
 
   const people = useMemo(() => {
     const fromContext = [...followingList, ...followersList].map((person, index) =>
@@ -308,6 +313,40 @@ function Explore() {
       isActive = false
     }
   }, [trimmedQuery, currentUser?.id])
+
+  // Infinite scroll: load more events when sentinel enters viewport
+  useEffect(() => {
+    const sentinel = sentinelRef.current
+    if (!sentinel) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setSearchPage((prev) => ({ ...prev, count: prev.count + PAGE_SIZE }))
+        }
+      },
+      { rootMargin: "200px" }
+    )
+
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [trimmedQuery])
+
+  const toggleSectionExpanded = useCallback((sectionId) => {
+    setExpandedSections((prev) => {
+      const next = new Set(prev)
+      if (next.has(sectionId)) {
+        next.delete(sectionId)
+      } else {
+        next.add(sectionId)
+      }
+      return next
+    })
+  }, [])
+
+  // Derived visible count — resets to PAGE_SIZE automatically when query changes
+  const visibleEventCount =
+    searchPage.query === trimmedQuery ? searchPage.count : PAGE_SIZE
 
   const searchedProfiles = useMemo(() => {
     if (!trimmedQuery) return []
@@ -443,6 +482,8 @@ function Explore() {
     )
   }
 
+  const SECTION_DEFAULT_LIMIT = 6
+
   function renderPersonCard(person) {
     const isFollowing = isFollowingPerson(person)
 
@@ -515,6 +556,7 @@ function Explore() {
             onChange={(event) => {
               setExpandedEvent(null)
               setSearchQuery(event.target.value)
+              setSearchPage({ query: event.target.value.trim().toLowerCase(), count: PAGE_SIZE })
             }}
             className="explore-search-input"
           />
@@ -541,7 +583,12 @@ function Explore() {
                 })}
 
                 {filteredEvents.length > 0 ? (
-                  renderEventTiles(filteredEvents)
+                  <>
+                    {renderEventTiles(filteredEvents.slice(0, visibleEventCount))}
+                    {visibleEventCount < filteredEvents.length && (
+                      <div ref={sentinelRef} className="explore-load-sentinel" aria-hidden="true" />
+                    )}
+                  </>
                 ) : (
                   <p className="explore-empty-state">No events matched that search yet.</p>
                 )}
@@ -565,12 +612,25 @@ function Explore() {
             </>
           ) : (
             <>
-              {curatedSections.map((section) => (
-                <section className="explore-section" key={section.id}>
-                  {renderSectionHeader(section)}
-                  {renderEventTiles(section.items)}
-                </section>
-              ))}
+              {curatedSections.map((section) => {
+                const isExpanded = expandedSections.has(section.id)
+                const visibleItems = isExpanded ? section.items : section.items.slice(0, SECTION_DEFAULT_LIMIT)
+                return (
+                  <section className="explore-section" key={section.id}>
+                    {renderSectionHeader(section)}
+                    {renderEventTiles(visibleItems)}
+                    {section.items.length > SECTION_DEFAULT_LIMIT && (
+                      <button
+                        type="button"
+                        className="explore-see-all-btn"
+                        onClick={() => toggleSectionExpanded(section.id)}
+                      >
+                        {isExpanded ? "Show less" : `See all ${section.items.length}`}
+                      </button>
+                    )}
+                  </section>
+                )
+              })}
 
               <section className="explore-section">
                 {renderSectionHeader({
