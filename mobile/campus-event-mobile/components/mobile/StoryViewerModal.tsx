@@ -90,6 +90,7 @@ export function StoryViewerModal({
   const autoAdvancedStoryIdRef = useRef<string | null>(null);
   const viewersSheetTranslate = useRef(new Animated.Value(WINDOW_HEIGHT)).current;
   const viewersBackdropOpacity = useRef(new Animated.Value(0)).current;
+  const loadedViewerStoryIdsRef = useRef<Set<string>>(new Set());
 
   const activeItems = useMemo(
     () => items.filter((item) => !item.isPlaceholder && item.stories.length > 0),
@@ -114,6 +115,28 @@ export function StoryViewerModal({
     setShareQuery('');
     setIsViewersSheetVisible(false);
   }, [activeItems, initialItemId, visible]);
+
+  useEffect(() => {
+    if (!visible || !currentItem || !currentUserId) return;
+    
+    const story = currentItem.stories[storyIndex];
+    if (!story || String(story.authorId) !== String(currentUserId)) return;
+
+    const storyId = String(story.id);
+    if (loadedViewerStoryIdsRef.current.has(storyId)) return;
+
+    let isActive = true;
+    const fetchViewers = async () => {
+      try {
+        const viewers = await onLoadViewers(story);
+        if (!isActive) return;
+        setViewersByStoryId((currentValue) => ({ ...currentValue, [storyId]: viewers }));
+        loadedViewerStoryIdsRef.current.add(storyId);
+      } catch {}
+    };
+    void fetchViewers();
+    return () => { isActive = false; };
+  }, [currentItem, currentUserId, onLoadViewers, storyIndex, visible]);
 
   const currentItem = activeItems[groupIndex] || null;
   const currentStory = currentItem?.stories[storyIndex] || null;
@@ -279,11 +302,16 @@ export function StoryViewerModal({
     setIsViewersLoading(true);
 
     try {
+      if (loadedViewerStoryIdsRef.current.has(currentStory.id)) {
+        // Already loaded via auto-load
+        return;
+      }
       const viewers = await onLoadViewers(currentStory);
       setViewersByStoryId((currentValue) => ({
         ...currentValue,
         [currentStory.id]: viewers,
       }));
+      loadedViewerStoryIdsRef.current.add(currentStory.id);
     } finally {
       setIsViewersLoading(false);
     }
@@ -395,7 +423,21 @@ export function StoryViewerModal({
             {isOwnStory ? (
               <>
                 <Pressable style={styles.viewsButton} onPress={() => void handleOpenViewers()}>
-                  <Ionicons name="eye-outline" size={18} color="#ffffff" />
+                  <View style={styles.viewsAvatarStack}>
+                    {currentViewers.slice(0, 3).length > 0 ? (
+                      currentViewers.slice(0, 3).map((viewer, index) => (
+                        <Image
+                          key={viewer.id}
+                          source={getAvatarImageSource(viewer.avatar)}
+                          style={[styles.viewsAvatar, index > 0 && styles.viewsAvatarOverlap]}
+                        />
+                      ))
+                    ) : (
+                      <View style={styles.viewsAvatarEmpty}>
+                        <Ionicons name="eye-outline" size={14} color="#ffffff" />
+                      </View>
+                    )}
+                  </View>
                   <Text style={styles.viewsText}>
                     {currentViewers.length > 0 ? `${currentViewers.length} Views` : 'Views'}
                   </Text>
@@ -725,11 +767,36 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     viewsButton: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 8,
-      paddingHorizontal: 14,
+      gap: 10,
+      paddingLeft: 6,
+      paddingRight: 16,
       paddingVertical: 12,
       borderRadius: 999,
       backgroundColor: 'rgba(5, 7, 12, 0.42)',
+    },
+    viewsAvatarStack: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    viewsAvatar: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      borderWidth: 2,
+      borderColor: '#10141e',
+    },
+    viewsAvatarOverlap: {
+      marginLeft: -10,
+    },
+    viewsAvatarEmpty: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor: 'rgba(255,255,255,0.1)',
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 2,
+      borderColor: '#10141e',
     },
     viewsText: {
       color: '#ffffff',

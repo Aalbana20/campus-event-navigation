@@ -1287,12 +1287,19 @@ function Discover() {
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
+            gap: "24px",
             padding: "24px",
             background: "rgba(3, 5, 10, 0.82)",
             backdropFilter: "blur(18px)",
             WebkitBackdropFilter: "blur(18px)",
           }}
         >
+          <style>{`
+            @keyframes discover-story-viewers-panel-in {
+              from { opacity: 0; transform: translateX(20px); }
+              to { opacity: 1; transform: translateX(0); }
+            }
+          `}</style>
           <div
             aria-modal="true"
             role="dialog"
@@ -1307,6 +1314,8 @@ function Discover() {
                 "linear-gradient(180deg, rgba(12, 16, 26, 0.98), rgba(7, 10, 18, 0.98))",
               border: "1px solid rgba(255, 255, 255, 0.08)",
               boxShadow: "0 28px 70px rgba(0, 0, 0, 0.34)",
+              flexShrink: 0,
+              transition: "transform 0.3s ease",
             }}
           >
             <div
@@ -1524,11 +1533,10 @@ function Discover() {
                   type="button"
                   onClick={handleToggleStoryActivity}
                   style={{
-                    width: "100%",
-                    display: "flex",
+                    display: "inline-flex",
                     alignItems: "center",
-                    gap: "14px",
-                    padding: "12px 14px",
+                    gap: "10px",
+                    padding: "6px 16px 6px 6px",
                     borderRadius: "999px",
                     cursor: "pointer",
                     background: "rgba(255, 255, 255, 0.06)",
@@ -1540,7 +1548,6 @@ function Discover() {
                     style={{
                       display: "flex",
                       alignItems: "center",
-                      minWidth: "44px",
                     }}
                   >
                     {ownerPreviewViewers.length > 0 ? (
@@ -1557,7 +1564,7 @@ function Discover() {
                             height: "30px",
                             borderRadius: "50%",
                             objectFit: "cover",
-                            marginLeft: index === 0 ? 0 : "-10px",
+                            marginLeft: index === 0 ? 0 : "-12px",
                             border: "2px solid rgba(12, 16, 26, 0.96)",
                             boxShadow: "0 4px 14px rgba(0, 0, 0, 0.18)",
                           }}
@@ -1575,24 +1582,17 @@ function Discover() {
                           justifyContent: "center",
                           background: "rgba(255, 255, 255, 0.08)",
                           color: "rgba(248, 250, 252, 0.8)",
-                          fontSize: "0.76rem",
-                          fontWeight: 700,
+                          border: "2px solid rgba(12, 16, 26, 0.96)",
                         }}
                       >
-                        0
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
                       </div>
                     )}
                   </div>
 
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "flex-start",
-                      gap: "2px",
-                      minWidth: 0,
-                    }}
-                  >
                     <span
                       style={{
                         color: "var(--text-main, #f5f7fb)",
@@ -1601,38 +1601,11 @@ function Discover() {
                       }}
                     >
                       {isStoryViewerRowsLoading
-                        ? "Activity"
+                      ? "Loading..."
                         : storyViewerRows.length > 0
                           ? `${storyViewerRows.length} Views`
                           : "Views"}
                     </span>
-                    <span
-                      style={{
-                        color: "rgba(226, 232, 240, 0.68)",
-                        fontSize: "0.78rem",
-                        fontWeight: 600,
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}
-                    >
-                      {isStoryActivityOpen
-                        ? "Hide viewer list"
-                        : "Open viewer activity"}
-                    </span>
-                  </div>
-
-                  <span
-                    style={{
-                      marginLeft: "auto",
-                      color: "rgba(226, 232, 240, 0.76)",
-                      fontSize: "0.8rem",
-                      fontWeight: 700,
-                      flexShrink: 0,
-                    }}
-                  >
-                    {isStoryActivityOpen ? "Hide" : "Open"}
-                  </span>
                 </button>
               </div>
             ) : (
@@ -1729,80 +1702,29 @@ function Discover() {
               </div>
             )}
           </div>
-        </div>
-      ) : null}
 
-      {activeStoryItem && isViewingOwnStory && isStoryActivityOpen ? (
-        <>
-          <style>{`
-            @keyframes discover-story-viewers-sheet-up {
-              from { transform: translateY(100%); }
-              to { transform: translateY(0); }
-            }
-            @keyframes discover-story-viewers-backdrop-in {
-              from { opacity: 0; }
-              to { opacity: 1; }
-            }
-          `}</style>
-          <div
-            onClick={handleToggleStoryActivity}
-            aria-hidden="true"
-            style={{
-              position: "fixed",
-              inset: 0,
-              zIndex: 1700,
-              background: "rgba(3, 5, 10, 0.6)",
-              backdropFilter: "blur(6px)",
-              WebkitBackdropFilter: "blur(6px)",
-              animation: "discover-story-viewers-backdrop-in 220ms ease-out",
-            }}
-          />
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label="Story viewers"
-            onClick={(event) => event.stopPropagation()}
-            style={{
-              position: "fixed",
-              left: 0,
-              right: 0,
-              bottom: 0,
-              zIndex: 1701,
-              display: "flex",
-              justifyContent: "center",
-              pointerEvents: "none",
-            }}
-          >
+          {activeStoryItem && isViewingOwnStory && isStoryActivityOpen && (
             <div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Story viewers"
+              onClick={(event) => event.stopPropagation()}
               style={{
-                width: "min(480px, 100%)",
-                maxHeight: "72vh",
+                width: "min(360px, 100%)",
+                height: "100%",
+                maxHeight: "80vh",
+                borderRadius: "28px",
+                background: "linear-gradient(180deg, rgba(14, 18, 28, 0.98), rgba(8, 11, 20, 0.98))",
+                border: "1px solid rgba(255, 255, 255, 0.08)",
+                boxShadow: "0 28px 70px rgba(0, 0, 0, 0.34)",
+                padding: "20px",
                 display: "flex",
                 flexDirection: "column",
                 gap: "14px",
-                padding: "14px 18px 28px",
-                borderTopLeftRadius: "28px",
-                borderTopRightRadius: "28px",
-                background:
-                  "linear-gradient(180deg, rgba(14, 18, 28, 0.98), rgba(8, 11, 20, 0.98))",
-                border: "1px solid rgba(255, 255, 255, 0.08)",
-                borderBottom: "none",
-                boxShadow: "0 -24px 60px rgba(0, 0, 0, 0.45)",
-                animation: "discover-story-viewers-sheet-up 280ms ease-out",
-                pointerEvents: "auto",
+                animation: "discover-story-viewers-panel-in 280ms ease-out",
+                flexShrink: 0,
               }}
             >
-              <div
-                aria-hidden="true"
-                style={{
-                  alignSelf: "center",
-                  width: "44px",
-                  height: "5px",
-                  borderRadius: "999px",
-                  background: "rgba(255, 255, 255, 0.18)",
-                }}
-              />
-
               <div
                 style={{
                   display: "flex",
@@ -1856,10 +1778,12 @@ function Discover() {
               ) : storyViewerRows.length > 0 ? (
                 <div
                   style={{
-                    display: "grid",
+                    display: "flex",
+                    flexDirection: "column",
                     gap: "6px",
                     overflowY: "auto",
                     paddingRight: "4px",
+                    flex: 1,
                   }}
                 >
                   {storyViewerRows.map((viewer) => {
@@ -1878,7 +1802,10 @@ function Discover() {
                           alignItems: "center",
                           justifyContent: "space-between",
                           gap: "12px",
-                          padding: "8px 4px",
+                          padding: "8px 10px",
+                          borderRadius: "14px",
+                          background: "rgba(255, 255, 255, 0.02)",
+                          border: "1px solid rgba(255, 255, 255, 0.04)"
                         }}
                       >
                         <div
@@ -1897,8 +1824,8 @@ function Discover() {
                               event.currentTarget.src = "/default-avatar.png"
                             }}
                             style={{
-                              width: "44px",
-                              height: "44px",
+                              width: "40px",
+                              height: "40px",
                               borderRadius: "50%",
                               objectFit: "cover",
                               flexShrink: 0,
@@ -1938,8 +1865,8 @@ function Discover() {
 
                         <div
                           style={{
-                            color: "rgba(226, 232, 240, 0.68)",
-                            fontSize: "0.78rem",
+                            color: "rgba(226, 232, 240, 0.5)",
+                            fontSize: "0.75rem",
                             fontWeight: 600,
                             flexShrink: 0,
                           }}
@@ -1978,8 +1905,8 @@ function Discover() {
                 </div>
               )}
             </div>
-          </div>
-        </>
+          )}
+        </div>
       ) : null}
 
       <DiscoverStoryComposer
