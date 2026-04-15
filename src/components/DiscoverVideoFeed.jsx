@@ -1,5 +1,9 @@
 import React from "react"
-import { applyEventImageFallback, getEventImageSrc } from "../eventImages"
+import {
+  applyEventImageFallback,
+  getEventImageSrc,
+  isVideoMediaSrc,
+} from "../eventImages"
 import {
   DEFAULT_AVATAR_URL,
   getEventCreatorDisplay,
@@ -110,16 +114,30 @@ function DiscoverVideoFeed({
         const isFollowing = followingIdSet && creatorId
           ? followingIdSet.has(creatorId)
           : false
+        const mediaSrc = getEventImageSrc(event?.image)
+        const isVideo = isVideoMediaSrc(event?.image)
 
         return (
           <article key={eventId} className="video-feed-item">
-            <img
-              src={getEventImageSrc(event?.image)}
-              alt={event?.title || "Event"}
-              className="video-feed-media"
-              draggable={false}
-              onError={applyEventImageFallback}
-            />
+            {isVideo ? (
+              <video
+                className="video-feed-media"
+                src={mediaSrc}
+                autoPlay
+                muted
+                loop
+                playsInline
+                preload="metadata"
+              />
+            ) : (
+              <img
+                src={mediaSrc}
+                alt={event?.title || "Event"}
+                className="video-feed-media"
+                draggable={false}
+                onError={applyEventImageFallback}
+              />
+            )}
             <div className="video-feed-overlay" />
 
             <div className="video-feed-actions">

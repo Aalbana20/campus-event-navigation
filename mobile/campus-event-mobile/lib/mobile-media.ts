@@ -36,3 +36,12 @@ export const getEventImageSource = (
 ): ImageSourcePropType => ({
   uri: getEventImageUri(url),
 });
+
+const VIDEO_EXTENSIONS = ['.mp4', '.mov', '.m4v', '.webm', '.mkv'];
+
+export const isVideoMediaUrl = (url: string | null | undefined): boolean => {
+  if (!url || typeof url !== 'string') return false;
+  const normalized = url.trim().toLowerCase().split('?')[0].split('#')[0];
+  if (!normalized) return false;
+  return VIDEO_EXTENSIONS.some((extension) => normalized.endsWith(extension));
+};

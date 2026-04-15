@@ -733,6 +733,14 @@ export default function DiscoverScreen() {
               repostEvent?.(event.id);
               Alert.alert('Reposted', 'Event reposted to your feed.');
             }}
+            onPressCreator={(event) => {
+              const username = event.creatorUsername || event.createdBy || '';
+              if (!username) return;
+              router.push({
+                pathname: '/profile/[username]',
+                params: { username: String(username) },
+              });
+            }}
           />
         </View>
       )}

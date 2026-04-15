@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import React, { useMemo, useState } from 'react';
 import {
   FlatList,
@@ -12,7 +13,12 @@ import {
 
 import { useAppTheme } from '@/lib/app-theme';
 import { getEventCreatorLabel } from '@/lib/mobile-backend';
-import { getAvatarImageSource, getEventImageSource } from '@/lib/mobile-media';
+import {
+  getAvatarImageSource,
+  getEventImageSource,
+  getEventImageUri,
+  isVideoMediaUrl,
+} from '@/lib/mobile-media';
 import type { EventRecord } from '@/types/models';
 
 type DiscoverVideoFeedProps = {
@@ -22,6 +28,7 @@ type DiscoverVideoFeedProps = {
   onPressComment: (event: EventRecord) => void;
   onPressRepost: (event: EventRecord) => void;
   onPressShare: (event: EventRecord) => void;
+  onPressCreator?: (event: EventRecord) => void;
 };
 
 export function DiscoverVideoFeed({
@@ -31,10 +38,12 @@ export function DiscoverVideoFeed({
   onPressComment,
   onPressRepost,
   onPressShare,
+  onPressCreator,
 }: DiscoverVideoFeedProps) {
   const theme = useAppTheme();
   const styles = useMemo(() => buildStyles(theme), [theme]);
   const [feedHeight, setFeedHeight] = useState(0);
+  const [activeIndex, setActiveIndex] = useState(0);
 
   if (!events || events.length === 0) {
     return (
@@ -53,15 +62,22 @@ export function DiscoverVideoFeed({
         showsVerticalScrollIndicator={false}
         snapToAlignment="start"
         decelerationRate="fast"
-        renderItem={({ item }) => (
+        onMomentumScrollEnd={(e) => {
+          if (feedHeight <= 0) return;
+          const nextIndex = Math.round(e.nativeEvent.contentOffset.y / feedHeight);
+          setActiveIndex(nextIndex);
+        }}
+        renderItem={({ item, index }) => (
           <DiscoverVideoItem
             event={item}
             height={feedHeight}
             isSaved={savedIds.has(String(item.id))}
+            isActive={index === activeIndex}
             onPressHeart={onPressHeart}
             onPressComment={onPressComment}
             onPressRepost={onPressRepost}
             onPressShare={onPressShare}
+            onPressCreator={onPressCreator}
             styles={styles}
           />
         )}
@@ -74,79 +90,161 @@ function DiscoverVideoItem({
   event,
   height,
   isSaved,
+  isActive,
   onPressHeart,
   onPressComment,
   onPressRepost,
   onPressShare,
+  onPressCreator,
   styles,
 }: {
   event: EventRecord;
   height: number;
   isSaved: boolean;
+  isActive: boolean;
   onPressHeart: (event: EventRecord) => void;
   onPressComment: (event: EventRecord) => void;
   onPressRepost: (event: EventRecord) => void;
   onPressShare: (event: EventRecord) => void;
+  onPressCreator?: (event: EventRecord) => void;
+  styles: any;
+}) {
+  const rawUri = getEventImageUri(event.image);
+  const isVideo = isVideoMediaUrl(event.image);
+  const videoSource = isVideo ? rawUri : null;
+  const player = useVideoPlayer(videoSource, (instance) => {
+    instance.loop = true;
+    instance.muted = false;
+  });
+
+  React.useEffect(() => {
+    if (!isVideo || !player) return;
+    if (isActive) {
+      player.play();
+    } else {
+      player.pause();
+    }
+  }, [isActive, isVideo, player]);
+
+  return (
+    <View style={[{ height, width: '100%' }]}>
+      {isVideo ? (
+        <View style={styles.media}>
+          <VideoView
+            player={player}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+            nativeControls={false}
+            allowsFullscreen={false}
+            allowsPictureInPicture={false}
+          />
+          <View style={styles.gradientOverlay} />
+          <DiscoverVideoItemOverlay
+            event={event}
+            isSaved={isSaved}
+            onPressHeart={onPressHeart}
+            onPressComment={onPressComment}
+            onPressRepost={onPressRepost}
+            onPressShare={onPressShare}
+            onPressCreator={onPressCreator}
+            styles={styles}
+          />
+        </View>
+      ) : (
+        <ImageBackground
+          source={getEventImageSource(event.image)}
+          style={styles.media}
+          imageStyle={styles.mediaImage}
+        >
+          <View style={styles.gradientOverlay} />
+          <DiscoverVideoItemOverlay
+            event={event}
+            isSaved={isSaved}
+            onPressHeart={onPressHeart}
+            onPressComment={onPressComment}
+            onPressRepost={onPressRepost}
+            onPressShare={onPressShare}
+            onPressCreator={onPressCreator}
+            styles={styles}
+          />
+        </ImageBackground>
+      )}
+    </View>
+  );
+}
+
+function DiscoverVideoItemOverlay({
+  event,
+  isSaved,
+  onPressHeart,
+  onPressComment,
+  onPressRepost,
+  onPressShare,
+  onPressCreator,
+  styles,
+}: {
+  event: EventRecord;
+  isSaved: boolean;
+  onPressHeart: (event: EventRecord) => void;
+  onPressComment: (event: EventRecord) => void;
+  onPressRepost: (event: EventRecord) => void;
+  onPressShare: (event: EventRecord) => void;
+  onPressCreator?: (event: EventRecord) => void;
   styles: any;
 }) {
   return (
-    <View style={[{ height, width: '100%' }]}>
-      <ImageBackground
-        source={getEventImageSource(event.image)}
-        style={styles.media}
-        imageStyle={styles.mediaImage}
-      >
-        <View style={styles.gradientOverlay} />
+    <>
+      {/* Right Social Rail */}
+      <View style={styles.rightRail}>
+        <Pressable style={styles.actionButton} onPress={() => onPressHeart(event)}>
+          <Ionicons name={isSaved ? 'heart' : 'heart-outline'} size={32} color={isSaved ? '#ff3b30' : '#ffffff'} />
+          <Text style={styles.actionText}>{isSaved ? '1' : '0'}</Text>
+        </Pressable>
 
-        {/* Right Social Rail */}
-        <View style={styles.rightRail}>
-          <Pressable style={styles.actionButton} onPress={() => onPressHeart(event)}>
-            <Ionicons name={isSaved ? "heart" : "heart-outline"} size={32} color={isSaved ? "#ff3b30" : "#ffffff"} />
-            <Text style={styles.actionText}>{isSaved ? '1' : '0'}</Text>
-          </Pressable>
+        <Pressable style={styles.actionButton} onPress={() => onPressComment(event)}>
+          <Ionicons name="chatbubble-ellipses-outline" size={30} color="#ffffff" />
+          <Text style={styles.actionText}>0</Text>
+        </Pressable>
 
-          <Pressable style={styles.actionButton} onPress={() => onPressComment(event)}>
-            <Ionicons name="chatbubble-ellipses-outline" size={30} color="#ffffff" />
-            <Text style={styles.actionText}>0</Text>
-          </Pressable>
+        <Pressable style={styles.actionButton} onPress={() => onPressRepost(event)}>
+          <Ionicons name="repeat" size={32} color="#ffffff" />
+          <Text style={styles.actionText}>0</Text>
+        </Pressable>
 
-          <Pressable style={styles.actionButton} onPress={() => onPressRepost(event)}>
-            <Ionicons name="repeat" size={32} color="#ffffff" />
-            <Text style={styles.actionText}>0</Text>
-          </Pressable>
+        <Pressable style={styles.actionButton} onPress={() => onPressShare(event)}>
+          <Ionicons name="paper-plane-outline" size={30} color="#ffffff" />
+          <Text style={styles.actionText}>Share</Text>
+        </Pressable>
+      </View>
 
-          <Pressable style={styles.actionButton} onPress={() => onPressShare(event)}>
-            <Ionicons name="paper-plane-outline" size={30} color="#ffffff" />
-            <Text style={styles.actionText}>Share</Text>
-          </Pressable>
-        </View>
-
-        {/* Bottom Content/Meta Zone */}
-        <View style={styles.bottomArea}>
-          <View style={styles.profileRow}>
-            <View style={styles.avatarContainer}>
-              <Image source={getAvatarImageSource(event.creatorAvatar)} style={styles.avatar} />
-              <View style={styles.followBadge}>
-                <Ionicons name="add" size={12} color="#ffffff" />
-              </View>
+      {/* Bottom Content/Meta Zone */}
+      <View style={styles.bottomArea}>
+        <Pressable
+          style={styles.profileRow}
+          onPress={() => onPressCreator?.(event)}
+        >
+          <View style={styles.avatarContainer}>
+            <Image source={getAvatarImageSource(event.creatorAvatar)} style={styles.avatar} />
+            <View style={styles.followBadge}>
+              <Ionicons name="add" size={12} color="#ffffff" />
             </View>
-            <Text style={styles.creatorName}>{getEventCreatorLabel(event)}</Text>
           </View>
+          <Text style={styles.creatorName}>{getEventCreatorLabel(event)}</Text>
+        </Pressable>
 
-          <Text style={styles.title} numberOfLines={2}>{event.title}</Text>
-          {event.description ? (
-            <Text style={styles.description} numberOfLines={2}>{event.description}</Text>
-          ) : null}
+        <Text style={styles.title} numberOfLines={2}>{event.title}</Text>
+        {event.description ? (
+          <Text style={styles.description} numberOfLines={2}>{event.description}</Text>
+        ) : null}
 
-          <View style={styles.audioRow}>
-            <Ionicons name="musical-note" size={14} color="#ffffff" />
-            <Text style={styles.audioText} numberOfLines={1}>
-              Original Audio - {getEventCreatorLabel(event)}
-            </Text>
-          </View>
+        <View style={styles.audioRow}>
+          <Ionicons name="musical-note" size={14} color="#ffffff" />
+          <Text style={styles.audioText} numberOfLines={1}>
+            Original Audio - {getEventCreatorLabel(event)}
+          </Text>
         </View>
-      </ImageBackground>
-    </View>
+      </View>
+    </>
   );
 }
 

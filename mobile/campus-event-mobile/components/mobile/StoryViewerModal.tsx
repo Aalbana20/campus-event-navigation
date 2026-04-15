@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -40,7 +41,8 @@ type StoryViewerModalProps = {
   onLoadViewers: (story: StoryRecord) => Promise<StoryViewerRecord[]>;
 };
 
-const STORY_DURATION_MS = 5000;
+const IMAGE_STORY_DURATION_MS = 5000;
+const VIDEO_STORY_DURATION_MS = 15000;
 
 const toTrimmedString = (value: string | null | undefined) =>
   typeof value === 'string' ? value.trim() : '';
@@ -123,8 +125,17 @@ export function StoryViewerModal({
   const isOwnStory = Boolean(
     currentStory && String(currentStory.authorId) === String(currentUserId)
   );
+  const isVideoStory = currentStory?.mediaType === 'video';
+  const storyDurationMs = isVideoStory ? VIDEO_STORY_DURATION_MS : IMAGE_STORY_DURATION_MS;
   const hasHeart = Boolean(currentStory && reactedStoryIds.has(String(currentStory.id)));
   const currentViewers = currentStory ? viewersByStoryId[currentStory.id] || [] : [];
+
+  const videoSource = isVideoStory && currentStory?.mediaUrl ? currentStory.mediaUrl : null;
+  const videoPlayer = useVideoPlayer(videoSource, (player) => {
+    player.loop = true;
+    player.muted = false;
+    player.play();
+  });
 
   useEffect(() => {
     if (!visible || !currentStory || !isOwnStory) return;
@@ -226,7 +237,7 @@ export function StoryViewerModal({
       return;
 
     const interval = setInterval(() => {
-      setProgress((currentValue) => Math.min(currentValue + 50 / STORY_DURATION_MS, 1));
+      setProgress((currentValue) => Math.min(currentValue + 50 / storyDurationMs, 1));
     }, 50);
 
     return () => clearInterval(interval);
@@ -236,6 +247,32 @@ export function StoryViewerModal({
     isReplySheetVisible,
     isShareSheetVisible,
     isViewersSheetVisible,
+    storyDurationMs,
+    visible,
+  ]);
+
+  useEffect(() => {
+    if (!videoPlayer || !isVideoStory) return;
+
+    const shouldPause =
+      !visible ||
+      isPaused ||
+      isViewersSheetVisible ||
+      isReplySheetVisible ||
+      isShareSheetVisible;
+
+    if (shouldPause) {
+      videoPlayer.pause();
+    } else {
+      videoPlayer.play();
+    }
+  }, [
+    isVideoStory,
+    isPaused,
+    isReplySheetVisible,
+    isShareSheetVisible,
+    isViewersSheetVisible,
+    videoPlayer,
     visible,
   ]);
 
@@ -368,7 +405,18 @@ export function StoryViewerModal({
             </View>
 
             <View style={styles.identityRow}>
-              <View style={styles.identityBlock}>
+              <Pressable
+                style={styles.identityBlock}
+                onPress={() => {
+                  onClose();
+                  router.push({
+                    pathname: '/profile/[username]',
+                    params: {
+                      username: currentStory.authorUsername || currentStory.authorId,
+                    },
+                  });
+                }}
+              >
                 <Image
                   source={getAvatarImageSource(currentStory.authorAvatar)}
                   style={styles.identityAvatar}
@@ -381,7 +429,7 @@ export function StoryViewerModal({
                     {formatRelativeTime(currentStory.createdAt)}
                   </Text>
                 </View>
-              </View>
+              </Pressable>
 
               <Pressable style={styles.closeButton} onPress={onClose}>
                 <Ionicons name="close" size={22} color="#ffffff" />
@@ -390,13 +438,17 @@ export function StoryViewerModal({
           </View>
 
           <View style={styles.mediaStage}>
-            {currentStory.mediaType === 'image' ? (
-              <Image source={{ uri: currentStory.mediaUrl }} style={styles.media} />
+            {isVideoStory ? (
+              <VideoView
+                player={videoPlayer}
+                style={styles.media}
+                contentFit="cover"
+                nativeControls={false}
+                allowsFullscreen={false}
+                allowsPictureInPicture={false}
+              />
             ) : (
-              <View style={styles.videoFallback}>
-                <Ionicons name="videocam" size={42} color="#ffffff" />
-                <Text style={styles.videoFallbackText}>Video story</Text>
-              </View>
+              <Image source={{ uri: currentStory.mediaUrl }} style={styles.media} />
             )}
 
             {currentStory.caption ? (
@@ -733,19 +785,6 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       width: '100%',
       height: '100%',
       resizeMode: 'cover',
-    },
-    videoFallback: {
-      width: '100%',
-      height: '100%',
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: '#10141e',
-      gap: 10,
-    },
-    videoFallbackText: {
-      color: '#ffffff',
-      fontSize: 16,
-      fontWeight: '700',
     },
     captionWrap: {
       position: 'absolute',

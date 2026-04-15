@@ -34,6 +34,15 @@ export const hasEventImage = (image) => typeof image === "string" && image.trim(
 export const getEventImageSrc = (image) =>
   hasEventImage(image) ? image.trim() : EVENT_IMAGE_FALLBACK_SRC
 
+const VIDEO_EXTENSIONS = [".mp4", ".mov", ".m4v", ".webm", ".mkv"]
+
+export const isVideoMediaSrc = (value) => {
+  if (typeof value !== "string") return false
+  const normalized = value.trim().toLowerCase().split("?")[0].split("#")[0]
+  if (!normalized) return false
+  return VIDEO_EXTENSIONS.some((extension) => normalized.endsWith(extension))
+}
+
 export const applyEventImageFallback = (event) => {
   event.currentTarget.onerror = null
   event.currentTarget.src = EVENT_IMAGE_FALLBACK_SRC
