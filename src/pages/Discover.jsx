@@ -21,26 +21,6 @@ import {
 import { buildDiscoverStoryItems } from "../discoverSocial"
 import { useToast } from "../context/ToastContext"
 
-const SAVED_FOR_LATER_KEY = "discover-saved-for-later-event-ids"
-
-
-const readSavedForLaterIds = () => {
-  if (typeof window === "undefined") return new Set()
-
-  try {
-    const rawValue = window.localStorage.getItem(SAVED_FOR_LATER_KEY)
-    const parsedValue = rawValue ? JSON.parse(rawValue) : []
-
-    if (!Array.isArray(parsedValue)) {
-      return new Set()
-    }
-
-    return new Set(parsedValue.map((value) => String(value)))
-  } catch {
-    return new Set()
-  }
-}
-
 function Discover() {
   const SWIPE_TRIGGER_PX = 110
   const DRAG_INTENT_PX = 10
@@ -55,6 +35,7 @@ function Discover() {
     followersList,
     savedEvents,
     unfollow,
+    cancelRSVP,
     repostedEventIds,
     repostEvent,
     unrepostEvent,
@@ -76,7 +57,6 @@ function Discover() {
   const [isStoryActivityOpen, setIsStoryActivityOpen] = useState(false)
   const [storyActionFeedback, setStoryActionFeedback] = useState("")
   const [authenticatedStoryUserId, setAuthenticatedStoryUserId] = useState("")
-  const [savedForLaterIds, setSavedForLaterIds] = useState(() => readSavedForLaterIds())
   const [discoverActionFeedback, setDiscoverActionFeedback] = useState("")
   const [activeCommentEventId, setActiveCommentEventId] = useState(null)
   const [commentDraft, setCommentDraft] = useState("")
@@ -142,7 +122,7 @@ function Discover() {
   const nextEvent = nextIndex !== null ? discoverEvents[nextIndex] : null
   const currentEventId = currentEvent ? String(currentEvent.id) : ""
   const isCurrentEventSavedForLater = currentEventId
-    ? savedForLaterIds.has(currentEventId)
+    ? savedEventIds.has(currentEventId)
     : false
   const activeCommentEvent = useMemo(() => {
     if (!activeCommentEventId) return null
@@ -828,14 +808,6 @@ function Discover() {
   }, [storyActionFeedback])
 
   useEffect(() => {
-    if (typeof window === "undefined") return
-    window.localStorage.setItem(
-      SAVED_FOR_LATER_KEY,
-      JSON.stringify(Array.from(savedForLaterIds))
-    )
-  }, [savedForLaterIds])
-
-  useEffect(() => {
     if (!discoverActionFeedback) return undefined
 
     const timeoutId = window.setTimeout(() => {
@@ -972,24 +944,16 @@ function Discover() {
     if (!event?.id) return
 
     const eventId = String(event.id)
-    let nextSavedState = false
+    const isSaved = savedEventIds.has(eventId)
 
-    setSavedForLaterIds((currentValue) => {
-      const nextValue = new Set(currentValue)
-
-      if (nextValue.has(eventId)) {
-        nextValue.delete(eventId)
-        nextSavedState = false
-      } else {
-        nextValue.add(eventId)
-        nextSavedState = true
-      }
-
-      return nextValue
-    })
-
-    setDiscoverActionFeedback(nextSavedState ? "Saved for later." : "Removed from saved.")
-  }, [])
+    if (isSaved) {
+      cancelRSVP?.(eventId)
+      setDiscoverActionFeedback("Removed from saved.")
+    } else {
+      addEvent(event, currentUser)
+      setDiscoverActionFeedback("Saved for later.")
+    }
+  }, [savedEventIds, cancelRSVP, addEvent, currentUser])
 
   const handleFeedComment = useCallback(
     (event) => {
@@ -1220,7 +1184,9 @@ function Discover() {
                       <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   </span>
-                  <span className="discover-side-action-count">0</span>
+                  <span className="discover-side-action-count">
+                    {currentEvent.attendees?.length || currentEvent.rsvpUsers?.length || currentEvent.goingCount || 0}
+                  </span>
                 </button>
               </aside>
             ) : (
@@ -1244,7 +1210,7 @@ function Discover() {
         ) : (
           <DiscoverVideoFeed
             events={discoverEvents}
-            savedIds={savedForLaterIds}
+            savedIds={savedEventIds}
             repostedIds={repostedIdSet}
             followingIdSet={followingIdSet}
             onPressHeart={handleFeedHeart}

@@ -61,6 +61,7 @@ export default function DiscoverScreen() {
     getProfileById,
     recentDmPeople,
     repostEvent,
+    toggleSaveEvent,
   } = useMobileApp();
   const { sendDmMessage, unreadNotificationCount } = useMobileInbox();
 
@@ -74,7 +75,6 @@ export default function DiscoverScreen() {
   const [isStoryViewerVisible, setIsStoryViewerVisible] = useState(false);
   const [activeStoryItemId, setActiveStoryItemId] = useState<string | null>(null);
   const [authenticatedStoryUserId, setAuthenticatedStoryUserId] = useState('');
-  const [savedForLaterIds, setSavedForLaterIds] = useState<Set<string>>(new Set());
   const [activeCommentEvent, setActiveCommentEvent] = useState<EventRecord | null>(null);
   const [commentDraft, setCommentDraft] = useState('');
   const [commentsByEventId, setCommentsByEventId] = useState<Record<string, EventCommentRecord[]>>(
@@ -138,8 +138,9 @@ export default function DiscoverScreen() {
   const currentEvent = discoverEvents[0];
   const cardHeight = Math.max(540, Math.min(height * 0.76, 760));
   const isCurrentEventRsvped = Boolean(currentEvent && savedEventIds.includes(currentEvent.id));
+  const savedEventIdSet = useMemo(() => new Set(savedEventIds), [savedEventIds]);
   const isCurrentEventSavedForLater = Boolean(
-    currentEvent && savedForLaterIds.has(String(currentEvent.id))
+    currentEvent && savedEventIdSet.has(String(currentEvent.id))
   );
   const activeCommentEventId = activeCommentEvent?.id || '';
   const activeComments = activeCommentEventId
@@ -176,18 +177,12 @@ export default function DiscoverScreen() {
     [animateDismiss, currentEvent]
   );
 
-  const handleCardSaveForLater = useCallback((event: EventRecord) => {
-    const eventId = String(event.id);
-    setSavedForLaterIds((currentValue) => {
-      const nextValue = new Set(currentValue);
-      if (nextValue.has(eventId)) {
-        nextValue.delete(eventId);
-      } else {
-        nextValue.add(eventId);
-      }
-      return nextValue;
-    });
-  }, []);
+  const handleCardSaveForLater = useCallback(
+    (event: EventRecord) => {
+      void toggleSaveEvent(String(event.id));
+    },
+    [toggleSaveEvent]
+  );
 
   const handleOpenMutuals = useCallback((event: EventRecord, mutualProfiles: ProfileRecord[]) => {
     setMutualSheetTitle(event.title || 'Campus Event');
@@ -725,7 +720,7 @@ export default function DiscoverScreen() {
         <View style={styles.videoFeedContainer}>
           <DiscoverVideoFeed
             events={discoverEvents}
-            savedIds={savedForLaterIds}
+            savedIds={savedEventIdSet}
             onPressHeart={handleCardSaveForLater}
             onPressComment={handleCardComment}
             onPressShare={(event) => { Alert.alert('Share', `Share ${event.title}`); }}
