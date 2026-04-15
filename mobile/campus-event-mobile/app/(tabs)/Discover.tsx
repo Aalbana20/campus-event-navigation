@@ -203,7 +203,7 @@ export default function DiscoverScreen() {
     if (!supabase) return;
     const { data, error } = await supabase
       .from('event_comments')
-      .select('id, body, created_at, user_id, parent_id, profiles(name, username, avatar_url)')
+      .select('id, body, created_at, user_id, parent_id')
       .eq('event_id', eventId)
       .order('created_at', { ascending: true });
 
@@ -214,6 +214,30 @@ export default function DiscoverScreen() {
 
     const rows = data || [];
     const commentIds = rows.map((row: any) => String(row.id));
+    const authorIds = [
+      ...new Set(
+        rows
+          .map((row: any) => row.user_id)
+          .filter(Boolean)
+          .map((v: any) => String(v))
+      ),
+    ];
+
+    const profileById = new Map<string, any>();
+    if (authorIds.length > 0) {
+      const { data: profileRows, error: profileError } = await supabase
+        .from('profiles')
+        .select('id, name, username, avatar_url')
+        .in('id', authorIds);
+
+      if (profileError) {
+        console.warn('Unable to load comment author profiles:', profileError);
+      } else {
+        (profileRows || []).forEach((row: any) => {
+          profileById.set(String(row.id), row);
+        });
+      }
+    }
 
     const likeCountByComment = new Map<string, number>();
     const likedByMe = new Set<string>();
@@ -240,12 +264,14 @@ export default function DiscoverScreen() {
     setCommentsByEventId((current) => {
       const normalized: EventCommentRecord[] = rows.map((row: any) => {
         const id = String(row.id);
+        const authorId = row.user_id ? String(row.user_id) : undefined;
+        const profile = authorId ? profileById.get(authorId) : undefined;
         return {
           id,
-          authorName: row.profiles?.name || row.profiles?.username || 'Campus User',
-          authorUsername: row.profiles?.username || '',
-          authorAvatar: row.profiles?.avatar_url || '',
-          authorId: row.user_id ? String(row.user_id) : undefined,
+          authorName: profile?.name || profile?.username || 'Campus User',
+          authorUsername: profile?.username || '',
+          authorAvatar: profile?.avatar_url || '',
+          authorId,
           body: row.body,
           createdAt: row.created_at,
           likeCount: likeCountByComment.get(id) || 0,
