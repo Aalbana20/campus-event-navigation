@@ -818,7 +818,7 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       flex: 1,
     },
     container: {
-      flex: 1,
+      flexGrow: 1,
       paddingHorizontal: 16,
       paddingTop: 2,
       paddingBottom: 12,
@@ -869,7 +869,6 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       borderColor: 'rgba(255, 255, 255, 0.08)',
     },
     cardStage: {
-      flex: 1,
       justifyContent: 'flex-start',
     },
     cardDeck: {
