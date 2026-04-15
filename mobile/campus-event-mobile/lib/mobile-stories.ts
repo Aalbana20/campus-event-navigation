@@ -32,6 +32,7 @@ type ProfileRow = {
   name?: string | null;
   username?: string | null;
   avatar_url?: string | null;
+  avatar?: string | null;
 };
 
 export type MobileStoryStripItem = {
@@ -348,7 +349,7 @@ export const fetchStoryViewers = async ({
   const { data: profileRows, error: profileError } = viewerIds.length
     ? await supabase
         .from('profiles')
-        .select('id, name, username, avatar_url')
+        .select('id, name, username, avatar_url, avatar')
         .in('id', viewerIds)
     : { data: [], error: null };
 
@@ -373,6 +374,7 @@ export const fetchStoryViewers = async ({
       toTrimmedString(localProfile?.name);
     const avatar =
       toTrimmedString(profile?.avatar_url) ||
+      toTrimmedString(profile?.avatar) ||
       toTrimmedString(localProfile?.avatar);
 
     return {

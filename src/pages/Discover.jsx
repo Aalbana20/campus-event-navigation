@@ -1809,12 +1809,17 @@ function Discover() {
                         }}
                       >
                         <div
+                          onClick={() => {
+                            handleCloseStory()
+                            navigate(`/profile/${viewer.username || viewer.viewerId}`)
+                          }}
                           style={{
                             display: "flex",
                             alignItems: "center",
                             gap: "12px",
                             minWidth: 0,
                             flex: 1,
+                            cursor: "pointer",
                           }}
                         >
                           <img

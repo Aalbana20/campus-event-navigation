@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -70,6 +71,7 @@ export function StoryViewerModal({
   onShareStory,
   onLoadViewers,
 }: StoryViewerModalProps) {
+  const router = useRouter();
   const theme = useAppTheme();
   const styles = useMemo(() => buildStyles(theme), [theme]);
   const [groupIndex, setGroupIndex] = useState(0);
@@ -514,20 +516,30 @@ export function StoryViewerModal({
 
                   return (
                     <View key={viewer.id} style={styles.viewerRow}>
-                      <Image
-                        source={getAvatarImageSource(viewer.avatar)}
-                        style={styles.viewerAvatar}
-                      />
-                      <View style={styles.viewerCopy}>
-                        <Text style={styles.viewerName} numberOfLines={1}>
-                          {primaryLabel}
-                        </Text>
-                        {showSubtitle ? (
-                          <Text style={styles.viewerUsername} numberOfLines={1}>
-                            {viewer.name}
+                      <Pressable
+                        style={styles.viewerIdentityPressable}
+                        onPress={() => {
+                          onClose();
+                          router.push({
+                            pathname: '/profile/[username]',
+                            params: { username: viewer.username || viewer.viewerId },
+                          });
+                        }}>
+                        <Image
+                          source={getAvatarImageSource(viewer.avatar)}
+                          style={styles.viewerAvatar}
+                        />
+                        <View style={styles.viewerCopy}>
+                          <Text style={styles.viewerName} numberOfLines={1}>
+                            {primaryLabel}
                           </Text>
-                        ) : null}
-                      </View>
+                          {showSubtitle ? (
+                            <Text style={styles.viewerUsername} numberOfLines={1}>
+                              {viewer.name}
+                            </Text>
+                          ) : null}
+                        </View>
+                      </Pressable>
                       <Text style={styles.viewerTime}>
                         {viewer.viewedAt ? formatRelativeTime(viewer.viewedAt) : 'Recently'}
                       </Text>
@@ -902,6 +914,13 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       alignItems: 'center',
       gap: 12,
       paddingVertical: 10,
+    },
+    viewerIdentityPressable: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      flex: 1,
+      minWidth: 0,
     },
     viewerAvatar: {
       width: 42,
