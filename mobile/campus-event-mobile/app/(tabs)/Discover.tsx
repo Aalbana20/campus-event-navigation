@@ -280,7 +280,7 @@ export default function DiscoverScreen() {
             return {
               ...comment,
               likedByMe: nextLiked,
-              likeCount: Math.max(comment.likeCount + (nextLiked ? 1 : -1), 0),
+              likeCount: Math.max((comment.likeCount ?? 0) + (nextLiked ? 1 : -1), 0),
             };
           }),
         };
@@ -306,11 +306,12 @@ export default function DiscoverScreen() {
             ...current,
             [eventId]: forEvent.map((comment) => {
               if (comment.id !== commentId) return comment;
+              if (comment.likedByMe !== nextLikedState) return comment;
               const revertLiked = !nextLikedState;
               return {
                 ...comment,
                 likedByMe: revertLiked,
-                likeCount: Math.max(comment.likeCount + (revertLiked ? 1 : -1), 0),
+                likeCount: Math.max((comment.likeCount ?? 0) + (revertLiked ? 1 : -1), 0),
               };
             }),
           };

@@ -494,6 +494,7 @@ function Discover() {
             ...prev,
             [key]: list.map((comment) => {
               if (comment.id !== commentId) return comment
+              if (comment.likedByMe !== nextLikedState) return comment
               const revertLiked = !nextLikedState
               const revertCount = Math.max(
                 0,
