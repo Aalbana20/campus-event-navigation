@@ -6,6 +6,7 @@ import DiscoverCommentsDrawer from "../components/DiscoverCommentsDrawer"
 import DiscoverStoryComposer from "../components/DiscoverStoryComposer"
 import DiscoverStoriesRow from "../components/DiscoverStoriesRow"
 import DiscoverVideoFeed from "../components/DiscoverVideoFeed"
+import DiscoverFriendsPanel from "../components/DiscoverFriendsPanel"
 import EventCard from "../components/EventCard"
 import { useEvents } from "../context/EventContext"
 import {
@@ -22,6 +23,7 @@ import {
   buildDiscoverFriendCards,
   buildDiscoverStoryItems,
 } from "../discoverSocial"
+import { useToast } from "../context/ToastContext"
 
 const SAVED_FOR_LATER_KEY = "discover-saved-for-later-event-ids"
 
@@ -47,6 +49,7 @@ function Discover() {
   const SWIPE_TRIGGER_PX = 110
   const DRAG_INTENT_PX = 10
   const navigate = useNavigate()
+  const { showToast } = useToast()
   const {
     addEvent,
     allEvents,
@@ -311,7 +314,7 @@ function Discover() {
       .order("created_at", { ascending: true })
 
     if (error) {
-      console.error("Failed to load comments:", error)
+      showToast("Could not load comments. Please try again.", "error")
       return
     }
 
@@ -365,7 +368,7 @@ function Discover() {
 
       return { ...prev, [key]: [...normalized, ...pendingOptimistic] }
     })
-  }, [])
+  }, [showToast])
 
   const handleOpenComments = useCallback(() => {
     if (!currentEvent) return
@@ -420,7 +423,7 @@ function Discover() {
       .single()
 
     if (error) {
-      console.error("Failed to save comment:", error)
+      showToast("Could not post comment. Please try again.", "error")
       setEventCommentsById((prev) => ({
         ...prev,
         [eventId]: (prev[eventId] || []).filter((c) => c.id !== optimisticComment.id),
@@ -447,7 +450,7 @@ function Discover() {
 
       return { ...prev, [eventId]: nextList }
     })
-  }, [activeCommentEvent, commentDraft, currentUser?.name, currentUser?.username, currentUser?.image, currentUser?.avatar])
+  }, [activeCommentEvent, commentDraft, currentUser?.name, currentUser?.username, currentUser?.image, currentUser?.avatar, showToast])
 
   const handleToggleCommentLike = useCallback(
     async (commentId) => {
@@ -697,7 +700,7 @@ function Discover() {
   const handleSubmitStoryComposer = useCallback(
     async ({ file, caption }) => {
       if (!file || !currentUser?.id) {
-        window.alert("You need to be logged in to share a story.")
+        showToast("You need to be logged in to share a story.", "error")
         return
       }
 
@@ -710,13 +713,12 @@ function Discover() {
 
         await loadStories()
         setIsStoryComposerOpen(false)
+        showToast("Story shared!", "success")
       } catch (error) {
-        window.alert(
-          error?.message || "Could not share your story right now. Please try again."
-        )
+        showToast(error?.message || "Could not share your story right now. Please try again.", "error")
       }
     },
-    [currentUser, loadStories]
+    [currentUser, loadStories, showToast]
   )
 
   const handleToggleStoryActivity = useCallback(() => {
@@ -796,10 +798,10 @@ function Discover() {
       await navigator.clipboard.writeText(shareUrl)
       setStoryActionFeedback("Story link copied.")
     } catch {
-      window.prompt("Copy story link:", shareUrl)
+      showToast("Could not copy link. Try sharing manually.", "warning")
       setStoryActionFeedback("Story link ready to copy.")
     }
-  }, [activeStoryItem?.name, activeStoryMedia])
+  }, [activeStoryItem?.name, activeStoryMedia, showToast])
 
   useEffect(() => {
     const syncStories = async () => {
@@ -1256,18 +1258,28 @@ function Discover() {
             </button>
           </div>
         ) : (
-          <DiscoverVideoFeed
-            events={discoverEvents}
-            savedIds={savedForLaterIds}
-            repostedIds={repostedIdSet}
-            followingIdSet={followingIdSet}
-            onPressHeart={handleFeedHeart}
-            onPressComment={handleFeedComment}
-            onPressRepost={handleFeedRepost}
-            onPressShare={handleFeedShare}
-            onPressCreator={handleFeedCreator}
-            onPressFollow={handleFeedFollow}
-          />
+          <div className="discover-friends-mode">
+            {friendCards.length > 0 && (
+              <DiscoverFriendsPanel
+                items={friendCards}
+                followingIds={followingIdSet}
+                onOpenPerson={handleOpenPerson}
+                onToggleFollow={handleToggleFollow}
+              />
+            )}
+            <DiscoverVideoFeed
+              events={discoverEvents}
+              savedIds={savedForLaterIds}
+              repostedIds={repostedIdSet}
+              followingIdSet={followingIdSet}
+              onPressHeart={handleFeedHeart}
+              onPressComment={handleFeedComment}
+              onPressRepost={handleFeedRepost}
+              onPressShare={handleFeedShare}
+              onPressCreator={handleFeedCreator}
+              onPressFollow={handleFeedFollow}
+            />
+          </div>
         )}
 
         {discoverActionFeedback ? (

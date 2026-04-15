@@ -418,3 +418,44 @@ create policy "Allow authenticated story uploads"
 create policy "Allow public story reads"
   on storage.objects for select
   using (bucket_id = 'stories');
+
+-- ============================================================
+-- Story expiration cleanup
+-- ============================================================
+
+-- SQL function called by the Edge Function or pg_cron.
+-- Deletes cascade: story_views, story_reactions, story_shares → stories.
+create or replace function cleanup_expired_stories()
+returns integer
+language plpgsql
+security definer
+as $$
+declare
+  deleted_count integer;
+begin
+  delete from story_views
+  where story_id in (select id from stories where expires_at < now());
+
+  delete from story_reactions
+  where story_id in (select id from stories where expires_at < now());
+
+  delete from story_shares
+  where story_id in (select id from stories where expires_at < now());
+
+  delete from stories where expires_at < now();
+  get diagnostics deleted_count = row_count;
+
+  return deleted_count;
+end;
+$$;
+
+-- Schedule hourly cleanup via pg_cron (requires pg_cron extension).
+-- Enable in Supabase Dashboard → Database → Extensions → pg_cron, then run:
+--
+--   select cron.schedule(
+--     'cleanup-expired-stories',
+--     '0 * * * *',
+--     $$ select cleanup_expired_stories() $$
+--   );
+--
+-- Or trigger manually:  select cleanup_expired_stories();

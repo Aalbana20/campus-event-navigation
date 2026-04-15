@@ -3,9 +3,10 @@ import "./CreateEvent.css"
 import { useEvents } from "./context/EventContext"
 import { DEFAULT_AVATAR_URL, sanitizeAvatarUrl } from "./profileMedia"
 import { supabase } from "./supabaseClient"
+import { useToast } from "./context/ToastContext"
 
 const ADDRESS_AUTOCOMPLETE_PROVIDER = "google-places-new"
-const GOOGLE_PLACES_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ""
+const GOOGLE_PLACES_API_KEY = import.meta.env.VITE_GOOGLE_PLACES_API_KEY || ""
 const GOOGLE_PLACES_REGION = (import.meta.env.VITE_GOOGLE_PLACES_REGION || "us").toLowerCase()
 
 const BASE_TAG_SUGGESTIONS = ["campus", "community", "students"]
@@ -272,6 +273,7 @@ const getSpeechRecognitionConstructor = () => {
 
 function CreateEvent({ embedded = false }) {
   const { createEvent } = useEvents()
+  const { showToast } = useToast()
 
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
@@ -844,9 +846,9 @@ function CreateEvent({ embedded = false }) {
       setIsAddressLoading(false)
       setPlacesSessionToken(createPlacesSessionToken())
 
-      alert("Event published! Check Discover.")
+      showToast("Event published! Check Discover.", "success")
     } catch (error) {
-      alert("Failed to upload flyer or publish event: " + error.message)
+      showToast(error?.message || "Failed to publish event. Please try again.", "error")
     } finally {
       setIsUploading(false)
     }
