@@ -507,11 +507,15 @@ export function StoryViewerModal({
             ) : currentViewers.length > 0 ? (
               <ScrollView showsVerticalScrollIndicator={false}>
                 {currentViewers.map((viewer) => {
-                  const primaryLabel = viewer.username
-                    ? `@${viewer.username}`
-                    : viewer.name || 'Viewer';
+                  const primaryLabel =
+                    viewer.username
+                      ? `@${viewer.username}`
+                      : viewer.name
+                        ? viewer.name
+                        : 'Viewer';
+
                   const showSubtitle = Boolean(
-                    viewer.name && viewer.username && viewer.name !== viewer.username
+                    viewer.username && viewer.name && viewer.name !== viewer.username
                   );
 
                   return (
@@ -524,7 +528,8 @@ export function StoryViewerModal({
                             pathname: '/profile/[username]',
                             params: { username: viewer.username || viewer.viewerId },
                           });
-                        }}>
+                        }}
+                      >
                         <Image
                           source={getAvatarImageSource(viewer.avatar)}
                           style={styles.viewerAvatar}

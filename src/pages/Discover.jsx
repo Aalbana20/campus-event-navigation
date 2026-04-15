@@ -1787,12 +1787,17 @@ function Discover() {
                   }}
                 >
                   {storyViewerRows.map((viewer) => {
-                    const primaryLabel = viewer.username
-                      ? `@${viewer.username}`
-                      : viewer.name || "Viewer"
-                    const showSubtitle = Boolean(
-                      viewer.name && viewer.username && viewer.name !== viewer.username
-                    )
+                    const primaryLabel =
+                      viewer.username
+                        ? `@${viewer.username}`
+                        : viewer.name
+                          ? viewer.name
+                          : "Viewer";
+
+                    const secondaryLabel =
+                      viewer.username && viewer.name && viewer.name !== viewer.username
+                        ? viewer.name
+                        : "";
 
                     return (
                       <div
@@ -1810,8 +1815,8 @@ function Discover() {
                       >
                         <div
                           onClick={() => {
-                            handleCloseStory()
-                            navigate(`/profile/${viewer.username || viewer.viewerId}`)
+                            handleCloseStory();
+                            navigate(`/profile/${viewer.username || viewer.viewerId}`);
                           }}
                           style={{
                             display: "flex",
@@ -1824,25 +1829,24 @@ function Discover() {
                         >
                           <img
                             src={viewer.avatar || "/default-avatar.png"}
-                            alt={viewer.username || viewer.name || "Viewer"}
-                            onError={(event) => {
-                              event.currentTarget.src = "/default-avatar.png"
-                            }}
+                            alt={primaryLabel}
                             style={{
-                              width: "40px",
-                              height: "40px",
+                              width: 42,
+                              height: 42,
                               borderRadius: "50%",
                               objectFit: "cover",
                               flexShrink: 0,
-                              border: "1px solid rgba(255, 255, 255, 0.08)",
+                            }}
+                            onError={(event) => {
+                              event.currentTarget.src = "/default-avatar.png";
                             }}
                           />
-                          <div style={{ minWidth: 0 }}>
+                          <div style={{ minWidth: 0, flex: 1 }}>
                             <div
                               style={{
-                                color: "var(--text-main, #f5f7fb)",
                                 fontSize: "0.95rem",
                                 fontWeight: 700,
+                                color: "#fff",
                                 whiteSpace: "nowrap",
                                 overflow: "hidden",
                                 textOverflow: "ellipsis",
@@ -1850,19 +1854,18 @@ function Discover() {
                             >
                               {primaryLabel}
                             </div>
-                            {showSubtitle ? (
+                            {secondaryLabel ? (
                               <div
                                 style={{
-                                  marginTop: "2px",
-                                  color: "rgba(226, 232, 240, 0.68)",
-                                  fontSize: "0.8rem",
-                                  fontWeight: 600,
+                                  fontSize: "0.82rem",
+                                  color: "rgba(255,255,255,0.65)",
                                   whiteSpace: "nowrap",
                                   overflow: "hidden",
                                   textOverflow: "ellipsis",
+                                  marginTop: 2,
                                 }}
                               >
-                                {viewer.name}
+                                {secondaryLabel}
                               </div>
                             ) : null}
                           </div>
