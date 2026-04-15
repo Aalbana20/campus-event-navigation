@@ -3,6 +3,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
+  Animated,
+  Dimensions,
   Image,
   Modal,
   Pressable,
@@ -12,6 +14,8 @@ import {
   TextInput,
   View,
 } from 'react-native';
+
+const WINDOW_HEIGHT = Dimensions.get('window').height;
 
 import { useAppTheme } from '@/lib/app-theme';
 import { formatRelativeTime } from '@/lib/mobile-backend';
@@ -84,6 +88,8 @@ export function StoryViewerModal({
     {}
   );
   const autoAdvancedStoryIdRef = useRef<string | null>(null);
+  const viewersSheetTranslate = useRef(new Animated.Value(WINDOW_HEIGHT)).current;
+  const viewersBackdropOpacity = useRef(new Animated.Value(0)).current;
 
   const activeItems = useMemo(
     () => items.filter((item) => !item.isPlaceholder && item.stories.length > 0),
@@ -184,14 +190,44 @@ export function StoryViewerModal({
   }, [currentStory, onStoryOpen, visible]);
 
   useEffect(() => {
-    if (!visible || !currentStory || isPaused) return;
+    if (
+      !visible ||
+      !currentStory ||
+      isPaused ||
+      isViewersSheetVisible ||
+      isReplySheetVisible ||
+      isShareSheetVisible
+    )
+      return;
 
     const interval = setInterval(() => {
       setProgress((currentValue) => Math.min(currentValue + 50 / STORY_DURATION_MS, 1));
     }, 50);
 
     return () => clearInterval(interval);
-  }, [currentStory, isPaused, visible]);
+  }, [
+    currentStory,
+    isPaused,
+    isReplySheetVisible,
+    isShareSheetVisible,
+    isViewersSheetVisible,
+    visible,
+  ]);
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(viewersSheetTranslate, {
+        toValue: isViewersSheetVisible ? 0 : WINDOW_HEIGHT,
+        duration: 260,
+        useNativeDriver: true,
+      }),
+      Animated.timing(viewersBackdropOpacity, {
+        toValue: isViewersSheetVisible ? 1 : 0,
+        duration: 220,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [isViewersSheetVisible, viewersBackdropOpacity, viewersSheetTranslate]);
 
   useEffect(() => {
     if (!visible || !currentStory || progress < 1) return;
@@ -397,23 +433,27 @@ export function StoryViewerModal({
               </>
             )}
           </View>
-        </View>
-      </Modal>
 
-      <Modal
-        visible={isViewersSheetVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setIsViewersSheetVisible(false)}>
-        <Pressable
-          style={styles.sheetOverlay}
-          onPress={() => setIsViewersSheetVisible(false)}>
-          <Pressable
-            style={styles.sheet}
-            onPress={(eventPress) => eventPress.stopPropagation()}>
+          <Animated.View
+            pointerEvents={isViewersSheetVisible ? 'auto' : 'none'}
+            style={[StyleSheet.absoluteFill, { opacity: viewersBackdropOpacity }]}>
+            <Pressable
+              style={styles.inlineSheetBackdrop}
+              onPress={() => setIsViewersSheetVisible(false)}
+            />
+          </Animated.View>
+
+          <Animated.View
+            pointerEvents={isViewersSheetVisible ? 'auto' : 'none'}
+            style={[
+              styles.inlineSheet,
+              { transform: [{ translateY: viewersSheetTranslate }] },
+            ]}>
             <View style={styles.sheetHandle} />
             <Text style={styles.sheetTitle}>
-              {currentViewers.length > 0 ? `${currentViewers.length} Views` : 'Views'}
+              {currentViewers.length > 0
+                ? `${currentViewers.length} ${currentViewers.length === 1 ? 'view' : 'views'}`
+                : 'Views'}
             </Text>
 
             {isViewersLoading ? (
@@ -422,23 +462,36 @@ export function StoryViewerModal({
               </View>
             ) : currentViewers.length > 0 ? (
               <ScrollView showsVerticalScrollIndicator={false}>
-                {currentViewers.map((viewer) => (
-                  <View key={viewer.id} style={styles.viewerRow}>
-                    <Image
-                      source={getAvatarImageSource(viewer.avatar)}
-                      style={styles.viewerAvatar}
-                    />
-                    <View style={styles.viewerCopy}>
-                      <Text style={styles.viewerName}>{viewer.name}</Text>
-                      <Text style={styles.viewerUsername}>
-                        {viewer.username ? `@${viewer.username}` : 'Campus User'}
+                {currentViewers.map((viewer) => {
+                  const primaryLabel = viewer.username
+                    ? `@${viewer.username}`
+                    : viewer.name || 'Viewer';
+                  const showSubtitle = Boolean(
+                    viewer.name && viewer.username && viewer.name !== viewer.username
+                  );
+
+                  return (
+                    <View key={viewer.id} style={styles.viewerRow}>
+                      <Image
+                        source={getAvatarImageSource(viewer.avatar)}
+                        style={styles.viewerAvatar}
+                      />
+                      <View style={styles.viewerCopy}>
+                        <Text style={styles.viewerName} numberOfLines={1}>
+                          {primaryLabel}
+                        </Text>
+                        {showSubtitle ? (
+                          <Text style={styles.viewerUsername} numberOfLines={1}>
+                            {viewer.name}
+                          </Text>
+                        ) : null}
+                      </View>
+                      <Text style={styles.viewerTime}>
+                        {viewer.viewedAt ? formatRelativeTime(viewer.viewedAt) : 'Recently'}
                       </Text>
                     </View>
-                    <Text style={styles.viewerTime}>
-                      {viewer.viewedAt ? formatRelativeTime(viewer.viewedAt) : 'Recently'}
-                    </Text>
-                  </View>
-                ))}
+                  );
+                })}
               </ScrollView>
             ) : (
               <View style={styles.sheetState}>
@@ -448,8 +501,8 @@ export function StoryViewerModal({
                 </Text>
               </View>
             )}
-          </Pressable>
-        </Pressable>
+          </Animated.View>
+        </View>
       </Modal>
 
       <Modal
@@ -724,6 +777,29 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       borderTopRightRadius: 28,
       backgroundColor: theme.surface,
       gap: 14,
+    },
+    inlineSheetBackdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.55)',
+    },
+    inlineSheet: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      bottom: 0,
+      maxHeight: '72%',
+      paddingHorizontal: 16,
+      paddingTop: 12,
+      paddingBottom: 34,
+      borderTopLeftRadius: 28,
+      borderTopRightRadius: 28,
+      backgroundColor: theme.surface,
+      gap: 14,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: -6 },
+      shadowOpacity: 0.25,
+      shadowRadius: 16,
+      elevation: 24,
     },
     sheetHandle: {
       alignSelf: 'center',

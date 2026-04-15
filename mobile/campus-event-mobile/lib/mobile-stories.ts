@@ -365,19 +365,24 @@ export const fetchStoryViewers = async ({
     const profile = profileLookup.get(viewerId);
     const localProfile = getProfileById(viewerId);
 
+    const username =
+      toTrimmedString(profile?.username) ||
+      toTrimmedString(localProfile?.username);
+    const name =
+      toTrimmedString(profile?.name) ||
+      toTrimmedString(localProfile?.name);
+    const avatar =
+      toTrimmedString(profile?.avatar_url) ||
+      toTrimmedString(localProfile?.avatar);
+
     return {
       id: String(row.id),
       storyId: String(row.story_id),
       viewerId,
       viewedAt: row.viewed_at || '',
-      name:
-        profile?.name ||
-        localProfile?.name ||
-        profile?.username ||
-        localProfile?.username ||
-        'Campus User',
-      username: profile?.username || localProfile?.username || '',
-      avatar: profile?.avatar_url || localProfile?.avatar || '',
+      name,
+      username,
+      avatar,
     };
   });
 };

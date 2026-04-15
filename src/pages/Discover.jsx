@@ -1511,166 +1511,6 @@ function Discover() {
               </div>
             ) : null}
 
-            {isViewingOwnStory && isStoryActivityOpen ? (
-              <div
-                style={{
-                  marginTop: "16px",
-                  padding: "16px",
-                  borderRadius: "20px",
-                  border: "1px solid rgba(255, 255, 255, 0.08)",
-                  background: "rgba(255, 255, 255, 0.04)",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: "12px",
-                  }}
-                >
-                  <div
-                    style={{
-                      color: "rgba(248, 250, 252, 0.92)",
-                      fontSize: "0.8rem",
-                      fontWeight: 700,
-                      letterSpacing: "0.04em",
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    Viewer activity
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={handleToggleStoryActivity}
-                    style={{
-                      border: "none",
-                      padding: 0,
-                      cursor: "pointer",
-                      background: "transparent",
-                      color: "rgba(226, 232, 240, 0.76)",
-                      fontSize: "0.8rem",
-                      fontWeight: 700,
-                    }}
-                  >
-                    Hide
-                  </button>
-                </div>
-
-                {isStoryViewerRowsLoading ? (
-                  <div
-                    style={{
-                      marginTop: "12px",
-                      color: "rgba(226, 232, 240, 0.72)",
-                      fontSize: "0.88rem",
-                      lineHeight: 1.5,
-                    }}
-                  >
-                    Loading viewer activity...
-                  </div>
-                ) : storyViewerRows.length > 0 ? (
-                  <div
-                    style={{
-                      display: "grid",
-                      gap: "10px",
-                      marginTop: "12px",
-                      maxHeight: "220px",
-                      overflowY: "auto",
-                      paddingRight: "4px",
-                    }}
-                  >
-                    {storyViewerRows.map((viewer) => (
-                      <div
-                        key={viewer.id}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          gap: "12px",
-                        }}
-                      >
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "10px",
-                            minWidth: 0,
-                          }}
-                        >
-                          <img
-                            src={viewer.avatar || "/default-avatar.png"}
-                            alt={viewer.username || viewer.name}
-                            onError={(event) => {
-                              event.currentTarget.src = "/default-avatar.png"
-                            }}
-                            style={{
-                              width: "36px",
-                              height: "36px",
-                              borderRadius: "50%",
-                              objectFit: "cover",
-                              flexShrink: 0,
-                            }}
-                          />
-                          <div style={{ minWidth: 0 }}>
-                            <div
-                              style={{
-                                color: "var(--text-main, #f5f7fb)",
-                                fontSize: "0.88rem",
-                                fontWeight: 700,
-                                whiteSpace: "nowrap",
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                              }}
-                            >
-                              {viewer.name}
-                            </div>
-                            <div
-                              style={{
-                                marginTop: "2px",
-                                color: "rgba(226, 232, 240, 0.7)",
-                                fontSize: "0.78rem",
-                                fontWeight: 600,
-                              }}
-                            >
-                              {viewer.username ? `@${viewer.username}` : "Campus User"}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div
-                          style={{
-                            color: "rgba(226, 232, 240, 0.68)",
-                            fontSize: "0.76rem",
-                            fontWeight: 600,
-                            flexShrink: 0,
-                          }}
-                        >
-                          {viewer.viewedAt
-                            ? new Date(viewer.viewedAt).toLocaleTimeString([], {
-                                hour: "numeric",
-                                minute: "2-digit",
-                              })
-                            : "Recently"}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div
-                    style={{
-                      marginTop: "12px",
-                      color: "rgba(226, 232, 240, 0.72)",
-                      fontSize: "0.88rem",
-                      lineHeight: 1.5,
-                    }}
-                  >
-                    No viewers yet. When people open this story, they will appear here.
-                  </div>
-                )}
-              </div>
-            ) : null}
-
             {isViewingOwnStory ? (
               <div
                 style={{
@@ -1890,6 +1730,256 @@ function Discover() {
             )}
           </div>
         </div>
+      ) : null}
+
+      {activeStoryItem && isViewingOwnStory && isStoryActivityOpen ? (
+        <>
+          <style>{`
+            @keyframes discover-story-viewers-sheet-up {
+              from { transform: translateY(100%); }
+              to { transform: translateY(0); }
+            }
+            @keyframes discover-story-viewers-backdrop-in {
+              from { opacity: 0; }
+              to { opacity: 1; }
+            }
+          `}</style>
+          <div
+            onClick={handleToggleStoryActivity}
+            aria-hidden="true"
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 1700,
+              background: "rgba(3, 5, 10, 0.6)",
+              backdropFilter: "blur(6px)",
+              WebkitBackdropFilter: "blur(6px)",
+              animation: "discover-story-viewers-backdrop-in 220ms ease-out",
+            }}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Story viewers"
+            onClick={(event) => event.stopPropagation()}
+            style={{
+              position: "fixed",
+              left: 0,
+              right: 0,
+              bottom: 0,
+              zIndex: 1701,
+              display: "flex",
+              justifyContent: "center",
+              pointerEvents: "none",
+            }}
+          >
+            <div
+              style={{
+                width: "min(480px, 100%)",
+                maxHeight: "72vh",
+                display: "flex",
+                flexDirection: "column",
+                gap: "14px",
+                padding: "14px 18px 28px",
+                borderTopLeftRadius: "28px",
+                borderTopRightRadius: "28px",
+                background:
+                  "linear-gradient(180deg, rgba(14, 18, 28, 0.98), rgba(8, 11, 20, 0.98))",
+                border: "1px solid rgba(255, 255, 255, 0.08)",
+                borderBottom: "none",
+                boxShadow: "0 -24px 60px rgba(0, 0, 0, 0.45)",
+                animation: "discover-story-viewers-sheet-up 280ms ease-out",
+                pointerEvents: "auto",
+              }}
+            >
+              <div
+                aria-hidden="true"
+                style={{
+                  alignSelf: "center",
+                  width: "44px",
+                  height: "5px",
+                  borderRadius: "999px",
+                  background: "rgba(255, 255, 255, 0.18)",
+                }}
+              />
+
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "12px",
+                }}
+              >
+                <div
+                  style={{
+                    color: "var(--text-main, #f5f7fb)",
+                    fontSize: "1.1rem",
+                    fontWeight: 800,
+                  }}
+                >
+                  {storyViewerRows.length > 0
+                    ? `${storyViewerRows.length} ${storyViewerRows.length === 1 ? "view" : "views"}`
+                    : "Views"}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleToggleStoryActivity}
+                  aria-label="Close viewers"
+                  style={{
+                    width: "34px",
+                    height: "34px",
+                    border: "1px solid rgba(255, 255, 255, 0.08)",
+                    borderRadius: "999px",
+                    cursor: "pointer",
+                    color: "var(--text-main, #f5f7fb)",
+                    background: "rgba(255, 255, 255, 0.06)",
+                    fontSize: "1rem",
+                    fontWeight: 700,
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+
+              {isStoryViewerRowsLoading ? (
+                <div
+                  style={{
+                    padding: "18px 4px",
+                    color: "rgba(226, 232, 240, 0.72)",
+                    fontSize: "0.9rem",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  Loading viewers...
+                </div>
+              ) : storyViewerRows.length > 0 ? (
+                <div
+                  style={{
+                    display: "grid",
+                    gap: "6px",
+                    overflowY: "auto",
+                    paddingRight: "4px",
+                  }}
+                >
+                  {storyViewerRows.map((viewer) => {
+                    const primaryLabel = viewer.username
+                      ? `@${viewer.username}`
+                      : viewer.name || "Viewer"
+                    const showSubtitle = Boolean(
+                      viewer.name && viewer.username && viewer.name !== viewer.username
+                    )
+
+                    return (
+                      <div
+                        key={viewer.id}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: "12px",
+                          padding: "8px 4px",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "12px",
+                            minWidth: 0,
+                            flex: 1,
+                          }}
+                        >
+                          <img
+                            src={viewer.avatar || "/default-avatar.png"}
+                            alt={viewer.username || viewer.name || "Viewer"}
+                            onError={(event) => {
+                              event.currentTarget.src = "/default-avatar.png"
+                            }}
+                            style={{
+                              width: "44px",
+                              height: "44px",
+                              borderRadius: "50%",
+                              objectFit: "cover",
+                              flexShrink: 0,
+                              border: "1px solid rgba(255, 255, 255, 0.08)",
+                            }}
+                          />
+                          <div style={{ minWidth: 0 }}>
+                            <div
+                              style={{
+                                color: "var(--text-main, #f5f7fb)",
+                                fontSize: "0.95rem",
+                                fontWeight: 700,
+                                whiteSpace: "nowrap",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                              }}
+                            >
+                              {primaryLabel}
+                            </div>
+                            {showSubtitle ? (
+                              <div
+                                style={{
+                                  marginTop: "2px",
+                                  color: "rgba(226, 232, 240, 0.68)",
+                                  fontSize: "0.8rem",
+                                  fontWeight: 600,
+                                  whiteSpace: "nowrap",
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                }}
+                              >
+                                {viewer.name}
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+
+                        <div
+                          style={{
+                            color: "rgba(226, 232, 240, 0.68)",
+                            fontSize: "0.78rem",
+                            fontWeight: 600,
+                            flexShrink: 0,
+                          }}
+                        >
+                          {viewer.viewedAt
+                            ? new Date(viewer.viewedAt).toLocaleTimeString([], {
+                                hour: "numeric",
+                                minute: "2-digit",
+                              })
+                            : "Recently"}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <div
+                  style={{
+                    padding: "32px 8px",
+                    textAlign: "center",
+                    color: "rgba(226, 232, 240, 0.72)",
+                    fontSize: "0.9rem",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  No views yet.
+                  <div
+                    style={{
+                      marginTop: "6px",
+                      color: "rgba(226, 232, 240, 0.56)",
+                      fontSize: "0.82rem",
+                    }}
+                  >
+                    People who open this story will appear here.
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </>
       ) : null}
 
       <DiscoverStoryComposer

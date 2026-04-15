@@ -458,9 +458,9 @@ export const fetchDiscoverStoryViewers = async ({
       id: String(row.id),
       viewerId: String(row.viewer_id || ""),
       viewedAt: row.viewed_at || "",
-      name: toTrimmedString(profile?.name) || toTrimmedString(profile?.username) || "Campus User",
+      name: toTrimmedString(profile?.name),
       username: toTrimmedString(profile?.username),
-    avatar: sanitizeAvatarUrl(profile?.avatar_url || profile?.avatar, DEFAULT_AVATAR_URL),
+      avatar: sanitizeAvatarUrl(profile?.avatar_url || profile?.avatar, DEFAULT_AVATAR_URL),
     }
   })
 }
