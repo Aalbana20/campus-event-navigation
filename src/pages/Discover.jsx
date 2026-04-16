@@ -45,6 +45,7 @@ function Discover() {
   const [dismissedEventIds, setDismissedEventIds] = useState([])
   const [isActionLocked, setIsActionLocked] = useState(false)
   const [activeStoryItem, setActiveStoryItem] = useState(null)
+  const [activeStoryIndex, setActiveStoryIndex] = useState(0)
   const [isStoryComposerOpen, setIsStoryComposerOpen] = useState(false)
   const [createComposerMode, setCreateComposerMode] = useState(null)
   const [discoverPosts, setDiscoverPosts] = useState([])
@@ -60,8 +61,10 @@ function Discover() {
   const [commentDraft, setCommentDraft] = useState("")
   const [eventCommentsById, setEventCommentsById] = useState({})
   const [cardDragOffsetX, setCardDragOffsetX] = useState(0)
+  const [storyDragOffsetY, setStoryDragOffsetY] = useState(0)
   const enterTimeoutRef = useRef(null)
   const swipeTimeoutRef = useRef(null)
+  const storyDragRef = useRef({ startY: 0, isDragging: false })
   const cardDragRef = useRef({
     activePointerId: null,
     startX: 0,
@@ -132,8 +135,7 @@ function Discover() {
     : []
   const activeStoryMedia =
     Array.isArray(activeStoryItem?.stories) && activeStoryItem.stories.length > 0
-      ? activeStoryItem.stories[0]
-      : null
+      ? activeStoryItem.stories[
   const effectiveStoryUserId = authenticatedStoryUserId || currentUser?.id || ""
   const activeStoryAuthorId = activeStoryMedia?.authorId || ""
   const isViewingOwnStory =
@@ -641,6 +643,7 @@ function Discover() {
     setStoryViewerRows([])
     setIsStoryViewerRowsLoading(false)
     setActiveStoryItem(item)
+    setActiveStoryIndex(0)
   }, [])
 
   const handleCloseStory = useCallback(() => {
@@ -649,7 +652,68 @@ function Discover() {
     setStoryActionFeedback("")
     setStoryViewerRows([])
     setIsStoryViewerRowsLoading(false)
+    setStoryDragOffsetY(0)
   }, [])
+
+  const handleNextStory = useCallback((e) => {
+    if (e) e.stopPropagation();
+    if (!activeStoryItem) return;
+    if (activeStoryIndex < (activeStoryItem.stories?.length || 1) - 1) {
+      setActiveStoryIndex(prev => prev + 1);
+    } else {
+      const currentIndex = storyItems.findIndex(item => item.id === activeStoryItem.id);
+      if (currentIndex >= 0 && currentIndex < storyItems.length - 1) {
+        const nextItem = storyItems[currentIndex + 1];
+        if (nextItem && nextItem.stories && nextItem.stories.length > 0) {
+          setActiveStoryItem(nextItem);
+          setActiveStoryIndex(0);
+          return;
+        }
+      }
+      handleCloseStory();
+    }
+  }, [activeStoryItem, activeStoryIndex, storyItems, handleCloseStory]);
+
+  const handlePrevStory = useCallback((e) => {
+    if (e) e.stopPropagation();
+    if (!activeStoryItem) return;
+    if (activeStoryIndex > 0) {
+      setActiveStoryIndex(prev => prev - 1);
+    } else {
+      const currentIndex = storyItems.findIndex(item => item.id === activeStoryItem.id);
+      if (currentIndex > 0) {
+        const prevItem = storyItems[currentIndex - 1];
+        if (prevItem && prevItem.stories && prevItem.stories.length > 0) {
+          setActiveStoryItem(prevItem);
+          setActiveStoryIndex(prevItem.stories?.length - 1);
+          return;
+        }
+      }
+      handleCloseStory();
+    }
+  }, [activeStoryItem, activeStoryIndex, storyItems, handleCloseStory]);
+
+  const handleStoryPointerDown = useCallback((e) => {
+    storyDragRef.current = { startY: e.clientY, isDragging: true };
+  }, []);
+
+  const handleStoryPointerMove = useCallback((e) => {
+    if (!storyDragRef.current.isDragging) return;
+    const deltaY = e.clientY - storyDragRef.current.startY;
+    if (deltaY > 0) {
+      setStoryDragOffsetY(deltaY);
+    }
+  }, []);
+
+  const handleStoryPointerUp = useCallback((e) => {
+    if (!storyDragRef.current.isDragging) return;
+    storyDragRef.current.isDragging = false;
+    if (storyDragOffsetY > 100) {
+      handleCloseStory();
+    } else {
+      setStoryDragOffsetY(0);
+    }
+  }, [storyDragOffsetY, handleCloseStory]);
 
   const handleOpenCreateComposer = useCallback((mode = "post") => {
     setActiveStoryItem(null)
@@ -873,6 +937,8 @@ function Discover() {
         if (event.key === "Escape") {
           handleCloseStory()
         }
+        if (event.key === "ArrowRight") handleNextStory()
+        if (event.key === "ArrowLeft") handlePrevStory()
         return
       }
 
@@ -900,6 +966,8 @@ function Discover() {
     activeStoryItem,
     handleAccept,
     handleCloseStory,
+    handleNextStory,
+    handlePrevStory,
     handleCloseComments,
     handleCloseStoryComposer,
     handleReject,
@@ -1228,6 +1296,10 @@ function Discover() {
             role="dialog"
             aria-label={`${activeStoryItem.username || activeStoryItem.name} story`}
             onClick={(event) => event.stopPropagation()}
+            onPointerDown={handleStoryPointerDown}
+            onPointerMove={handleStoryPointerMove}
+            onPointerUp={handleStoryPointerUp}
+            onPointerCancel={handleStoryPointerUp}
             style={{
               width: "min(420px, 100%)",
               borderRadius: "28px",
@@ -1238,7 +1310,7 @@ function Discover() {
               border: "1px solid rgba(255, 255, 255, 0.08)",
               boxShadow: "0 28px 70px rgba(0, 0, 0, 0.34)",
               flexShrink: 0,
-              transition: "transform 0.3s ease",
+              transform::ff0 ? "transform 0.3s ease" : "none",
             }}
           >
             <div
@@ -1424,6 +1496,18 @@ function Discover() {
                       activeStoryItem.featuredMeta ||
                       "Story playback is not wired on web yet, so this lightweight preview keeps the story interaction connected here."}
                 </div>
+              </div>
+
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  display: "flex",
+                  zIndex: 10,
+                }}
+              >
+                <div style={{ flex: 1 }} onClick={handlePrevStory} />
+                <div style={{ flex: 1 }} onClick={handleNextStory} />
               </div>
             </div>
 

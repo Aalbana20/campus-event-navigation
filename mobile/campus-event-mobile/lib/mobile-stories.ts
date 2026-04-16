@@ -1,4 +1,4 @@
-import { formatRelativeTime } from '@/lib/mobile-backend';
+import { formatRelativeTime, DEFAULT_AVATAR } from '@/lib/mobile-backend';
 import { buildMobileDiscoverStoryItems } from '@/lib/mobile-discover-social';
 import { resolveStoryMediaUrl } from '@/lib/mobile-story-composer';
 import { supabase } from '@/lib/supabase';
@@ -76,7 +76,7 @@ const getProfileIdentity = (
   return {
     name: 'Campus User',
     username: '',
-    avatar: currentUser.avatar,
+      avatar: DEFAULT_AVATAR,
   };
 };
 

@@ -20,7 +20,6 @@ import { AppScreen } from '@/components/mobile/AppScreen';
 import { DiscoverPostsFeed } from '@/components/mobile/DiscoverPostsFeed';
 import { DiscoverStoriesRow } from '@/components/mobile/DiscoverStoriesRow';
 import { DiscoverModeSwitch } from '@/components/mobile/DiscoverModeSwitch';
-import { DiscoverVideoFeed } from '@/components/mobile/DiscoverVideoFeed';
 import { EventCommentsSheet, type EventCommentRecord } from '@/components/mobile/EventCommentsSheet';
 import { EventMutualsSheet } from '@/components/mobile/EventMutualsSheet';
 import { EventStackCard } from '@/components/mobile/EventStackCard';
@@ -638,26 +637,7 @@ export default function DiscoverScreen() {
   );
 
   return (
-    <AppScreen style={[styles.safeArea, activeTab === 'friends' && { backgroundColor: '#000' }]}>
-      {activeTab === 'friends' ? (
-        <View style={[styles.headerBar, styles.headerBarAbsolute]}>
-          <View style={styles.headerActionsLeft}>
-            <Pressable style={[styles.headerIconButton, styles.glassyIconButton]} onPress={() => router.push('/story/create')}>
-              <Ionicons name="add-outline" size={20} color="#ffffff" />
-            </Pressable>
-          </View>
-
-          <DiscoverModeSwitch activeMode={activeTab} onChange={setActiveTab} isDark={true} />
-
-          <View style={styles.headerActions}>
-            <Pressable style={[styles.headerIconButton, styles.glassyIconButton]} onPress={openNotifications}>
-              <Ionicons name="notifications-outline" size={18} color="#ffffff" />
-              {unreadNotificationCount > 0 ? <View style={styles.headerBadge} /> : null}
-            </Pressable>
-          </View>
-        </View>
-      ) : null}
-
+    <AppScreen style={styles.safeArea}>
       {activeTab === 'events' ? (
         <ScrollView
           scrollEnabled={scrollEnabled}
@@ -743,34 +723,34 @@ export default function DiscoverScreen() {
               <Text style={styles.swipeHintText}>Swipe left to pass or right to save</Text>
             </View>
           ) : null}
+        </ScrollView>
+      ) : (
+        <ScrollView
+          contentContainerStyle={[styles.container, { paddingBottom: 120 }]}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.textMuted} />}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.headerBar}>
+            <View style={styles.headerActionsLeft}>
+              <Pressable style={styles.headerIconButton} onPress={() => router.push('/story/create')}>
+                <Ionicons name="add-outline" size={20} color={theme.text} />
+              </Pressable>
+            </View>
 
+            <DiscoverModeSwitch activeMode={activeTab} onChange={setActiveTab} isDark={false} />
+
+            <View style={styles.headerActions}>
+              <Pressable style={styles.headerIconButton} onPress={openNotifications}>
+                <Ionicons name="notifications-outline" size={18} color={theme.text} />
+                {unreadNotificationCount > 0 ? <View style={styles.headerBadge} /> : null}
+              </Pressable>
+            </View>
+          </View>
           <DiscoverPostsFeed
             posts={discoverPosts}
             onPressAuthor={handleOpenPostAuthor}
           />
         </ScrollView>
-      ) : (
-        <View style={styles.videoFeedContainer}>
-          <DiscoverVideoFeed
-            events={discoverEvents}
-            savedIds={savedEventIdSet}
-            onPressHeart={handleCardSaveForLater}
-            onPressComment={handleCardComment}
-            onPressShare={(event) => { Alert.alert('Share', `Share ${event.title}`); }}
-            onPressRepost={(event) => {
-              repostEvent?.(event.id);
-              Alert.alert('Reposted', 'Event reposted to your feed.');
-            }}
-            onPressCreator={(event) => {
-              const username = event.creatorUsername || event.createdBy || '';
-              if (!username) return;
-              router.push({
-                pathname: '/profile/[username]',
-                params: { username: String(username) },
-              });
-            }}
-          />
-        </View>
       )}
 
       <EventCommentsSheet

@@ -9,6 +9,7 @@ import {
   Dimensions,
   Image,
   Modal,
+  PanResponder,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -95,6 +96,8 @@ export function StoryViewerModal({
   const viewersSheetTranslate = useRef(new Animated.Value(WINDOW_HEIGHT)).current;
   const viewersBackdropOpacity = useRef(new Animated.Value(0)).current;
   const loadedViewerStoryIdsRef = useRef<Set<string>>(new Set());
+  const panY = useRef(new Animated.Value(0)).current;
+  const [isSwiping, setIsSwiping] = useState(false);
 
   const activeItems = useMemo(
     () => items.filter((item) => !item.isPlaceholder && item.stories.length > 0),
@@ -118,6 +121,8 @@ export function StoryViewerModal({
     setIsShareSheetVisible(false);
     setShareQuery('');
     setIsViewersSheetVisible(false);
+    panY.setValue(0);
+    setIsSwiping(false);
   }, [activeItems, initialItemId, visible]);
 
   const currentItem = activeItems[groupIndex] || null;
@@ -230,6 +235,7 @@ export function StoryViewerModal({
       !visible ||
       !currentStory ||
       isPaused ||
+      isSwiping ||
       isViewersSheetVisible ||
       isReplySheetVisible ||
       isShareSheetVisible
@@ -246,6 +252,7 @@ export function StoryViewerModal({
     isPaused,
     isReplySheetVisible,
     isShareSheetVisible,
+    isSwiping,
     isViewersSheetVisible,
     storyDurationMs,
     visible,
@@ -257,6 +264,7 @@ export function StoryViewerModal({
     const shouldPause =
       !visible ||
       isPaused ||
+      isSwiping ||
       isViewersSheetVisible ||
       isReplySheetVisible ||
       isShareSheetVisible;
@@ -271,6 +279,7 @@ export function StoryViewerModal({
     isPaused,
     isReplySheetVisible,
     isShareSheetVisible,
+    isSwiping,
     isViewersSheetVisible,
     videoPlayer,
     visible,
@@ -378,6 +387,41 @@ export function StoryViewerModal({
     }
   };
 
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, gestureState) => {
+          return gestureState.dy > 10 && Math.abs(gestureState.dy) > Math.abs(gestureState.dx);
+        },
+        onPanResponderGrant: () => {
+          setIsSwiping(true);
+        },
+        onPanResponderMove: (_, gestureState) => {
+          if (gestureState.dy > 0) {
+            panY.setValue(gestureState.dy);
+          }
+        },
+        onPanResponderRelease: (_, gestureState) => {
+          setIsSwiping(false);
+          if (gestureState.dy > 150 || gestureState.vy > 1.5) {
+            Animated.timing(panY, {
+              toValue: WINDOW_HEIGHT,
+              duration: 200,
+              useNativeDriver: true,
+            }).start(() => {
+              onClose();
+            });
+          } else {
+            Animated.spring(panY, {
+              toValue: 0,
+              useNativeDriver: true,
+            }).start();
+          }
+        },
+      }),
+    [onClose, panY]
+  );
+
   if (!visible || !currentStory || !currentItem) return null;
 
   return (
@@ -388,7 +432,7 @@ export function StoryViewerModal({
         animationType="fade"
         statusBarTranslucent
         onRequestClose={onClose}>
-        <View style={styles.overlay}>
+        <Animated.View style={[styles.overlay, { transform: [{ translateY: panY }] }]} {...panResponder.panHandlers}>
           <View style={styles.header}>
             <View style={styles.progressRow}>
               {currentItem.stories.map((story, index) => {
@@ -613,7 +657,7 @@ export function StoryViewerModal({
               </View>
             )}
           </Animated.View>
-        </View>
+        </Animated.View>
       </Modal>
 
       <Modal
