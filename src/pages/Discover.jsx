@@ -135,7 +135,8 @@ function Discover() {
     : []
   const activeStoryMedia =
     Array.isArray(activeStoryItem?.stories) && activeStoryItem.stories.length > 0
-      ? activeStoryItem.stories[
+      ? activeStoryItem.stories[activeStoryIndex] || activeStoryItem.stories[0]
+      : null
   const effectiveStoryUserId = authenticatedStoryUserId || currentUser?.id || ""
   const activeStoryAuthorId = activeStoryMedia?.authorId || ""
   const isViewingOwnStory =
@@ -1310,7 +1311,8 @@ function Discover() {
               border: "1px solid rgba(255, 255, 255, 0.08)",
               boxShadow: "0 28px 70px rgba(0, 0, 0, 0.34)",
               flexShrink: 0,
-              transform::ff0 ? "transform 0.3s ease" : "none",
+              transform: `translateY(${storyDragOffsetY}px)`,
+              transition: storyDragOffsetY === 0 ? "transform 0.3s ease" : "none",
             }}
           >
             <div

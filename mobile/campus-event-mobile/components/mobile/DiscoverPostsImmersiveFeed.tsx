@@ -1,0 +1,311 @@
+import { Ionicons } from '@expo/vector-icons';
+import { useVideoPlayer, VideoView } from 'expo-video';
+import React, { useMemo, useState } from 'react';
+import { FlatList, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+
+import { useAppTheme } from '@/lib/app-theme';
+import { getAvatarImageSource } from '@/lib/mobile-media';
+import type { DiscoverPostRecord } from '@/lib/mobile-discover-posts';
+
+type DiscoverPostsImmersiveFeedProps = {
+  posts: DiscoverPostRecord[];
+  onPressLike: (post: DiscoverPostRecord) => void;
+  onPressComment: (post: DiscoverPostRecord) => void;
+  onPressRepost: (post: DiscoverPostRecord) => void;
+  onPressShare: (post: DiscoverPostRecord) => void;
+  onPressCreator?: (post: DiscoverPostRecord) => void;
+};
+
+export function DiscoverPostsImmersiveFeed({
+  posts,
+  onPressLike,
+  onPressComment,
+  onPressRepost,
+  onPressShare,
+  onPressCreator,
+}: DiscoverPostsImmersiveFeedProps) {
+  const theme = useAppTheme();
+  const styles = useMemo(() => buildStyles(theme), [theme]);
+  const [feedHeight, setFeedHeight] = useState(0);
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  if (!posts || posts.length === 0) {
+    return (
+      <View style={styles.emptyContainer}>
+        <Text style={styles.emptyText}>No videos right now.</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container} onLayout={(e) => setFeedHeight(e.nativeEvent.layout.height)}>
+      <FlatList
+        data={posts}
+        keyExtractor={(item) => item.id}
+        pagingEnabled
+        showsVerticalScrollIndicator={false}
+        snapToAlignment="start"
+        decelerationRate="fast"
+        onViewableItemsChanged={({ viewableItems }) => {
+          if (viewableItems.length > 0 && viewableItems[0].index !== null) {
+            setActiveIndex(viewableItems[0].index);
+          }
+        }}
+        viewabilityConfig={{
+          itemVisiblePercentThreshold: 50,
+        }}
+        renderItem={({ item, index }) => (
+          <DiscoverPostItem
+            post={item}
+            height={feedHeight}
+            isActive={index === activeIndex}
+            onPressLike={onPressLike}
+            onPressComment={onPressComment}
+            onPressRepost={onPressRepost}
+            onPressShare={onPressShare}
+            onPressCreator={onPressCreator}
+            styles={styles}
+          />
+        )}
+      />
+    </View>
+  );
+}
+
+function DiscoverPostItem({
+  post,
+  height,
+  isActive,
+  onPressLike,
+  onPressComment,
+  onPressRepost,
+  onPressShare,
+  onPressCreator,
+  styles,
+}: {
+  post: DiscoverPostRecord;
+  height: number;
+  isActive: boolean;
+  onPressLike: (post: DiscoverPostRecord) => void;
+  onPressComment: (post: DiscoverPostRecord) => void;
+  onPressRepost: (post: DiscoverPostRecord) => void;
+  onPressShare: (post: DiscoverPostRecord) => void;
+  onPressCreator?: (post: DiscoverPostRecord) => void;
+  styles: any;
+}) {
+  const isVideo = post.mediaType === 'video';
+  const videoSource = isVideo ? post.mediaUrl : null;
+  const player = useVideoPlayer(videoSource, (instance) => {
+    instance.loop = true;
+    instance.muted = false;
+  });
+
+  React.useEffect(() => {
+    if (!isVideo || !player) return;
+    if (isActive) {
+      player.play();
+    } else {
+      player.pause();
+      player.currentTime = 0;
+    }
+  }, [isActive, isVideo, player]);
+
+  return (
+    <View style={[{ height, width: '100%' }]}>
+      <View style={styles.media}>
+        {isVideo ? (
+          <VideoView
+            player={player}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+            nativeControls={false}
+          />
+        ) : (
+          <Image
+            source={{ uri: post.mediaUrl }}
+            style={StyleSheet.absoluteFill}
+            resizeMode="cover"
+          />
+        )}
+        <View style={styles.gradientOverlay} />
+        <DiscoverPostItemOverlay
+          post={post}
+          onPressLike={onPressLike}
+          onPressComment={onPressComment}
+          onPressRepost={onPressRepost}
+          onPressShare={onPressShare}
+          onPressCreator={onPressCreator}
+          styles={styles}
+        />
+      </View>
+    </View>
+  );
+}
+
+function DiscoverPostItemOverlay({
+  post,
+  onPressLike,
+  onPressComment,
+  onPressRepost,
+  onPressShare,
+  onPressCreator,
+  styles,
+}: {
+  post: DiscoverPostRecord;
+  onPressLike: (post: DiscoverPostRecord) => void;
+  onPressComment: (post: DiscoverPostRecord) => void;
+  onPressRepost: (post: DiscoverPostRecord) => void;
+  onPressShare: (post: DiscoverPostRecord) => void;
+  onPressCreator?: (post: DiscoverPostRecord) => void;
+  styles: any;
+}) {
+  // TODO: Wire up real like state
+  const isLiked = false;
+
+  return (
+    <>
+      {/* Right Social Rail */}
+      <View style={styles.rightRail}>
+        <Pressable style={styles.actionButton} onPress={() => onPressLike(post)}>
+          <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={32} color={isLiked ? '#ff3b30' : '#ffffff'} />
+          <Text style={styles.actionText}>0</Text>
+        </Pressable>
+
+        <Pressable style={styles.actionButton} onPress={() => onPressComment(post)}>
+          <Ionicons name="chatbubble-ellipses-outline" size={30} color="#ffffff" />
+          <Text style={styles.actionText}>0</Text>
+        </Pressable>
+
+        <Pressable style={styles.actionButton} onPress={() => onPressRepost(post)}>
+          <Ionicons name="repeat" size={32} color="#ffffff" />
+          <Text style={styles.actionText}>0</Text>
+        </Pressable>
+
+        <Pressable style={styles.actionButton} onPress={() => onPressShare(post)}>
+          <Ionicons name="paper-plane-outline" size={30} color="#ffffff" />
+          <Text style={styles.actionText}>Share</Text>
+        </Pressable>
+      </View>
+
+      {/* Bottom Content/Meta Zone */}
+      <View style={styles.bottomArea}>
+        <Pressable
+          style={styles.profileRow}
+          onPress={() => onPressCreator?.(post)}
+        >
+          <Image source={getAvatarImageSource(post.authorAvatar)} style={styles.avatar} />
+          <Text style={styles.creatorName}>{post.authorName}</Text>
+        </Pressable>
+
+        {post.caption ? (
+          <Text style={styles.description} numberOfLines={3}>{post.caption}</Text>
+        ) : null}
+
+        <View style={styles.audioRow}>
+          <Ionicons name="musical-note" size={14} color="#ffffff" />
+          <Text style={styles.audioText} numberOfLines={1}>
+            Original Audio - {post.authorName}
+          </Text>
+        </View>
+      </View>
+    </>
+  );
+}
+
+const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: '#000',
+    },
+    emptyContainer: {
+      flex: 1,
+      backgroundColor: '#000',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    emptyText: {
+      color: 'rgba(255,255,255,0.6)',
+      fontSize: 16,
+      fontWeight: '600',
+    },
+    media: {
+      flex: 1,
+      justifyContent: 'flex-end',
+    },
+    gradientOverlay: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: 'rgba(0,0,0,0.3)',
+    },
+    rightRail: {
+      position: 'absolute',
+      right: 12,
+      bottom: 90,
+      alignItems: 'center',
+      gap: 22,
+      zIndex: 10,
+    },
+    actionButton: {
+      alignItems: 'center',
+      gap: 4,
+    },
+    actionText: {
+      color: '#ffffff',
+      fontSize: 12,
+      fontWeight: '700',
+      textShadowColor: 'rgba(0,0,0,0.4)',
+      textShadowOffset: { width: 0, height: 1 },
+      textShadowRadius: 3,
+    },
+    bottomArea: {
+      paddingHorizontal: 16,
+      paddingBottom: 24,
+      paddingRight: 80,
+      gap: 12,
+      zIndex: 10,
+    },
+    profileRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    avatar: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      borderWidth: 1.5,
+      borderColor: '#ffffff',
+    },
+    creatorName: {
+      color: '#ffffff',
+      fontSize: 16,
+      fontWeight: '800',
+      textShadowColor: 'rgba(0,0,0,0.4)',
+      textShadowOffset: { width: 0, height: 1 },
+      textShadowRadius: 3,
+    },
+    description: {
+      color: 'rgba(255,255,255,0.9)',
+      fontSize: 14,
+      lineHeight: 20,
+      textShadowColor: 'rgba(0,0,0,0.4)',
+      textShadowOffset: { width: 0, height: 1 },
+      textShadowRadius: 3,
+    },
+    audioRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      alignSelf: 'flex-start',
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 999,
+      marginTop: 4,
+    },
+    audioText: {
+      color: '#ffffff',
+      fontSize: 12,
+      fontWeight: '600',
+    },
+  });

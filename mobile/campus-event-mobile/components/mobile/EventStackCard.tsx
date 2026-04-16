@@ -47,12 +47,37 @@ export function EventStackCard({
 }: EventStackCardProps) {
   const theme = useAppTheme();
   const styles = useMemo(() => buildStyles(theme), [theme]);
-  const { followingProfiles } = useMobileApp();
+  const { followingProfiles, profiles } = useMobileApp();
+
+  const attendeeIds = event.attendees ?? [];
 
   const mutualsGoing = useMemo(
-    () => followingProfiles.filter((profile) => event.attendees.includes(profile.id)),
-    [event.attendees, followingProfiles]
+    () => followingProfiles.filter((profile) => attendeeIds.includes(profile.id)),
+    [attendeeIds, followingProfiles]
   );
+
+  const orderedAttendees = useMemo(() => {
+    const seen = new Set<string>();
+    const ordered: ProfileRecord[] = [];
+
+    mutualsGoing.forEach((profile) => {
+      if (seen.has(profile.id)) return;
+      seen.add(profile.id);
+      ordered.push(profile);
+    });
+
+    attendeeIds.forEach((id) => {
+      if (seen.has(id)) return;
+      const profile = profiles.find((candidate) => candidate.id === id);
+      if (!profile) return;
+      seen.add(profile.id);
+      ordered.push(profile);
+    });
+
+    return ordered;
+  }, [attendeeIds, mutualsGoing, profiles]);
+
+  const goingCount = event.goingCount ?? attendeeIds.length ?? 0;
 
   const swipeFeedbackColor =
     swipeDirection === 'right'
@@ -64,7 +89,7 @@ export function EventStackCard({
   const eventTitle = event.title || 'Campus Event';
   const eventDate = event.date || 'Date TBA';
   const eventTime = event.time || 'Time TBA';
-  const mutualCount = mutualsGoing.length;
+  const visibleAttendees = orderedAttendees.slice(0, 2);
 
   const creatorLabel = getEventCreatorLabel(event);
   const creatorFirstName = creatorLabel.split(' ')[0] || creatorLabel;
@@ -75,7 +100,7 @@ export function EventStackCard({
 
   const handleMutualsPress = (eventPress: GestureResponderEvent) => {
     stopEventPress(eventPress);
-    onPressMutuals?.(event, mutualsGoing);
+    onPressMutuals?.(event, orderedAttendees);
   };
 
   const handleRsvpPress = (eventPress: GestureResponderEvent) => {
@@ -113,15 +138,15 @@ export function EventStackCard({
               </View>
 
               <Pressable style={styles.mutualInlineButton} onPress={handleMutualsPress}>
-                {mutualsGoing.length > 0 ? (
+                {visibleAttendees.length > 0 ? (
                   <View style={styles.mutualsInlineStack}>
-                    {mutualsGoing.slice(0, 3).map((mutual, index) => (
+                    {visibleAttendees.map((attendee, index) => (
                       <Image
-                        key={mutual.id}
-                        source={getAvatarImageSource(mutual.avatar)}
+                        key={attendee.id}
+                        source={getAvatarImageSource(attendee.avatar)}
                         style={[
                           styles.mutualInlineAvatar,
-                          { marginLeft: index > 0 ? -8 : 0, zIndex: 3 - index },
+                          { marginLeft: index > 0 ? -8 : 0, zIndex: 2 - index },
                         ]}
                       />
                     ))}
@@ -131,7 +156,7 @@ export function EventStackCard({
                     <Ionicons name="people-outline" size={14} color="rgba(255,255,255,0.76)" />
                   </View>
                 )}
-                <Text style={styles.mutualInlineCount}>{mutualCount}</Text>
+                <Text style={styles.mutualInlineCount}>{goingCount}</Text>
               </Pressable>
             </View>
 

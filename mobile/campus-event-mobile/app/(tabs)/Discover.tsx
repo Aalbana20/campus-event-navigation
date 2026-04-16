@@ -17,7 +17,7 @@ import {
 
 import { sendPushToUser } from '@/lib/mobile-push';
 import { AppScreen } from '@/components/mobile/AppScreen';
-import { DiscoverPostsFeed } from '@/components/mobile/DiscoverPostsFeed';
+import { DiscoverPostsImmersiveFeed } from '@/components/mobile/DiscoverPostsImmersiveFeed';
 import { DiscoverStoriesRow } from '@/components/mobile/DiscoverStoriesRow';
 import { DiscoverModeSwitch } from '@/components/mobile/DiscoverModeSwitch';
 import { EventCommentsSheet, type EventCommentRecord } from '@/components/mobile/EventCommentsSheet';
@@ -637,7 +637,25 @@ export default function DiscoverScreen() {
   );
 
   return (
-    <AppScreen style={styles.safeArea}>
+    <AppScreen style={[styles.safeArea, activeTab === 'friends' && { backgroundColor: '#000' }]}>
+      {activeTab === 'friends' ? (
+        <View style={[styles.headerBar, styles.headerBarAbsolute]}>
+          <View style={styles.headerActionsLeft}>
+            <Pressable style={[styles.headerIconButton, styles.glassyIconButton]} onPress={() => router.push('/story/create')}>
+              <Ionicons name="add-outline" size={20} color="#ffffff" />
+            </Pressable>
+          </View>
+
+          <DiscoverModeSwitch activeMode={activeTab} onChange={setActiveTab} isDark={true} />
+
+          <View style={styles.headerActions}>
+            <Pressable style={[styles.headerIconButton, styles.glassyIconButton]} onPress={openNotifications}>
+              <Ionicons name="notifications-outline" size={18} color="#ffffff" />
+              {unreadNotificationCount > 0 ? <View style={styles.headerBadge} /> : null}
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
       {activeTab === 'events' ? (
         <ScrollView
           scrollEnabled={scrollEnabled}
@@ -725,32 +743,16 @@ export default function DiscoverScreen() {
           ) : null}
         </ScrollView>
       ) : (
-        <ScrollView
-          contentContainerStyle={[styles.container, { paddingBottom: 120 }]}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.textMuted} />}
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.headerBar}>
-            <View style={styles.headerActionsLeft}>
-              <Pressable style={styles.headerIconButton} onPress={() => router.push('/story/create')}>
-                <Ionicons name="add-outline" size={20} color={theme.text} />
-              </Pressable>
-            </View>
-
-            <DiscoverModeSwitch activeMode={activeTab} onChange={setActiveTab} isDark={false} />
-
-            <View style={styles.headerActions}>
-              <Pressable style={styles.headerIconButton} onPress={openNotifications}>
-                <Ionicons name="notifications-outline" size={18} color={theme.text} />
-                {unreadNotificationCount > 0 ? <View style={styles.headerBadge} /> : null}
-              </Pressable>
-            </View>
-          </View>
-          <DiscoverPostsFeed
+        <View style={styles.videoFeedContainer}>
+          <DiscoverPostsImmersiveFeed
             posts={discoverPosts}
-            onPressAuthor={handleOpenPostAuthor}
+            onPressCreator={handleOpenPostAuthor}
+            onPressLike={(post) => Alert.alert('Like', `Liked ${post.id}`)}
+            onPressComment={(post) => Alert.alert('Comment', `Comment on ${post.id}`)}
+            onPressRepost={(post) => Alert.alert('Repost', `Reposted ${post.id}`)}
+            onPressShare={(post) => Alert.alert('Share', `Shared ${post.id}`)}
           />
-        </ScrollView>
+        </View>
       )}
 
       <EventCommentsSheet

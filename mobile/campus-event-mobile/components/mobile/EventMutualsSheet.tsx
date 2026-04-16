@@ -43,7 +43,7 @@ export function EventMutualsSheet({
 
           <View style={styles.headerRow}>
             <View style={styles.headerCopy}>
-              <Text style={styles.headerTitle}>Friends Going</Text>
+              <Text style={styles.headerTitle}>Going</Text>
               <Text style={styles.headerMeta} numberOfLines={1}>
                 {title}
               </Text>
@@ -73,9 +73,9 @@ export function EventMutualsSheet({
               ))
             ) : (
               <View style={styles.emptyState}>
-                <Text style={styles.emptyTitle}>No mutuals yet.</Text>
+                <Text style={styles.emptyTitle}>No one&apos;s going yet.</Text>
                 <Text style={styles.emptyCopy}>
-                  When friends RSVP, they will show up here.
+                  When people RSVP, they&apos;ll show up here.
                 </Text>
               </View>
             )}
