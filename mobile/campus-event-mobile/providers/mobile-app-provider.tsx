@@ -1568,7 +1568,6 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
   }, [session?.user?.id, refreshData]);
 
   // Push notifications — register device token after sign-in.
-  // Run: npx expo install expo-notifications   (then restart the dev server)
   const registerPushToken = useCallback(async (userId: string) => {
     if (!supabase) return;
 
@@ -1576,6 +1575,17 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const Notifications = require('expo-notifications') as typeof import('expo-notifications');
       const { Platform } = require('react-native') as typeof import('react-native');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const Constants = require('expo-constants').default as typeof import('expo-constants').default;
+
+      const projectId =
+        Constants.expoConfig?.extra?.eas?.projectId ??
+        Constants.easConfig?.projectId;
+
+      if (!projectId) {
+        console.info('[push] No EAS projectId found — add expo.extra.eas.projectId to app.json to enable push tokens.');
+        return;
+      }
 
       const { status: existingStatus } = await Notifications.getPermissionsAsync();
       let finalStatus = existingStatus;
@@ -1590,7 +1600,7 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      const tokenData = await Notifications.getExpoPushTokenAsync();
+      const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
       const token = tokenData.data;
 
       const { error } = await supabase
@@ -1602,8 +1612,7 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
 
       if (error) console.error('Unable to store push token:', error);
     } catch (error) {
-      // expo-notifications not yet installed — safe to ignore until package is added
-      console.info('[push] expo-notifications unavailable:', error);
+      console.info('[push] Push notification setup failed:', error);
     }
   }, []);
 

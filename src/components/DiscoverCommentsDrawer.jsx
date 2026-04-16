@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useState } from "react"
 
 import { DEFAULT_AVATAR_URL, sanitizeAvatarUrl } from "../profileMedia"
+import { useToast } from "../context/ToastContext"
 
 const formatCommentTime = (value) => {
   const parsedDate = new Date(value)
@@ -37,6 +38,7 @@ function DiscoverCommentsDrawer({
   onToggleLike,
   onDeleteComment,
 }) {
+  const { showToast } = useToast()
   const [replyingTo, setReplyingTo] = useState(null)
   const [expandedThreads, setExpandedThreads] = useState(() => new Set())
   const [contextMenu, setContextMenu] = useState(null)
@@ -132,8 +134,9 @@ function DiscoverCommentsDrawer({
   const handleCopy = async (comment) => {
     try {
       await navigator.clipboard.writeText(comment.body)
+      showToast("Comment copied.", "success")
     } catch {
-      window.prompt("Copy this comment:", comment.body)
+      showToast("Could not copy comment.", "error")
     }
     closeContextMenu()
   }
@@ -149,28 +152,27 @@ function DiscoverCommentsDrawer({
     } else {
       try {
         await navigator.clipboard.writeText(shareText)
-        window.alert("Comment copied to clipboard.")
+        showToast("Comment copied to clipboard.", "success")
       } catch {
-        window.prompt("Share this comment:", shareText)
+        showToast("Could not share comment.", "error")
       }
     }
     closeContextMenu()
   }
 
   const handleDelete = (comment) => {
-    if (window.confirm("Delete this comment?")) {
-      onDeleteComment?.(comment.id)
-    }
+    onDeleteComment?.(comment.id)
+    showToast("Comment deleted.", "info")
     closeContextMenu()
   }
 
   const handleReport = (comment) => {
-    window.alert(`Thanks for reporting @${comment.authorUsername || comment.authorName}'s comment.`)
+    showToast(`Thanks for reporting @${comment.authorUsername || comment.authorName}'s comment.`, "info")
     closeContextMenu()
   }
 
   const handleSave = (comment) => {
-    window.alert(`Saved "${comment.body.slice(0, 40)}".`)
+    showToast(`Saved "${comment.body.slice(0, 40)}".`, "success")
     closeContextMenu()
   }
 

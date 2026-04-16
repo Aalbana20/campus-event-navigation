@@ -29,6 +29,7 @@ function Discover() {
   const { showToast } = useToast()
   const {
     addEvent,
+    cancelRSVP,
     allEvents,
     currentUser,
     followingList,
@@ -245,24 +246,16 @@ function Discover() {
     if (!currentEvent) return
 
     const eventId = String(currentEvent.id)
-    let nextSavedState = false
+    const isAlreadySaved = savedEventIds.has(eventId)
 
-    setSavedForLaterIds((currentValue) => {
-      const nextValue = new Set(currentValue)
-
-      if (nextValue.has(eventId)) {
-        nextValue.delete(eventId)
-        nextSavedState = false
-      } else {
-        nextValue.add(eventId)
-        nextSavedState = true
-      }
-
-      return nextValue
-    })
-
-    setDiscoverActionFeedback(nextSavedState ? "Saved for later." : "Removed from saved.")
-  }, [currentEvent])
+    if (isAlreadySaved) {
+      cancelRSVP(eventId)
+      setDiscoverActionFeedback("Removed from saved.")
+    } else {
+      addEvent({ ...currentEvent, rsvpDate: new Date().toISOString() }, currentUser)
+      setDiscoverActionFeedback("Saved for later.")
+    }
+  }, [addEvent, cancelRSVP, currentEvent, currentUser, savedEventIds])
 
   const loadComments = useCallback(async (eventId) => {
     const { data, error } = await supabase
@@ -282,7 +275,9 @@ function Discover() {
     const authorIds = [
       ...new Set(rows.map((row) => row.user_id).filter(Boolean).map(String)),
     ]
-    const viewerId = JSON.parse(localStorage.getItem("user") || "{}").id
+    const viewerId = currentUser?.id && currentUser.id !== "current-user"
+      ? currentUser.id
+      : null
 
     const profileById = new Map()
     if (authorIds.length > 0) {
@@ -366,7 +361,9 @@ function Discover() {
     if (!activeCommentEvent || !commentDraft.trim()) return
 
     const eventId = String(activeCommentEvent.id)
-    const userId = JSON.parse(localStorage.getItem("user") || "{}").id
+    const userId = currentUser?.id && currentUser.id !== "current-user"
+      ? currentUser.id
+      : null
     const body = commentDraft.trim()
 
     const optimisticComment = {
@@ -435,7 +432,9 @@ function Discover() {
     async (commentId) => {
       if (!activeCommentEvent) return
       const key = String(activeCommentEvent.id)
-      const userId = JSON.parse(localStorage.getItem("user") || "{}").id
+      const userId = currentUser?.id && currentUser.id !== "current-user"
+        ? currentUser.id
+        : null
 
       let nextLikedState = false
 
@@ -495,7 +494,9 @@ function Discover() {
     async (commentId) => {
       if (!activeCommentEvent) return
       const key = String(activeCommentEvent.id)
-      const userId = JSON.parse(localStorage.getItem("user") || "{}").id
+      const userId = currentUser?.id && currentUser.id !== "current-user"
+        ? currentUser.id
+        : null
 
       setEventCommentsById((prev) => ({
         ...prev,
@@ -517,7 +518,7 @@ function Discover() {
         loadComments(key)
       }
     },
-    [activeCommentEvent, loadComments]
+    [activeCommentEvent, currentUser, loadComments]
   )
 
   const handleCardPointerDown = useCallback(
@@ -685,7 +686,7 @@ function Discover() {
 
   const handleSubmitStoryComposer = useCallback(
     async ({ file, caption }) => {
-      if (!file || !currentUser?.id) {
+      if (!file || !currentUser?.id || currentUser.id === "current-user") {
         showToast("You need to be logged in to share a story.", "error")
         return
       }

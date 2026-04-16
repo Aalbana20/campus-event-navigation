@@ -45,11 +45,8 @@ function PublicProfile() {
   const { username: viewedUsername } = useParams()
   const { allEvents, followingList, follow, unfollow, currentUser } = useEvents()
 
-  const storedUser = JSON.parse(localStorage.getItem("user") || "{}")
   const defaultAvatar = DEFAULT_AVATAR_URL
   const ownProfileTokens = [
-    storedUser.id,
-    storedUser.username,
     currentUser?.id,
     currentUser?.username,
   ]
@@ -265,8 +262,7 @@ function PublicProfile() {
       await navigator.clipboard.writeText(profileLink)
       setMenuFeedback("Profile link copied.")
     } catch {
-      window.prompt("Copy profile link:", profileLink)
-      setMenuFeedback("Profile link ready to copy.")
+      setMenuFeedback("Could not copy link.")
     }
 
     closeMenu()

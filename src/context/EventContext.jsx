@@ -351,7 +351,9 @@ export function EventProvider({ children }) {
   const addEvent = (event, attendeeUser) => {
     const attendee = attendeeUser || currentUser
 
-    const userId = JSON.parse(localStorage.getItem("user") || "{}").id
+    const userId = currentUser?.id && currentUser.id !== "current-user"
+      ? currentUser.id
+      : null
     if (userId && event.id) {
       supabase
         .from("rsvps")
@@ -441,6 +443,21 @@ export function EventProvider({ children }) {
         }
       })
     )
+
+    const userId = currentUser?.id && currentUser.id !== "current-user"
+      ? currentUser.id
+      : null
+
+    if (userId && eventId) {
+      supabase
+        .from("rsvps")
+        .delete()
+        .eq("user_id", userId)
+        .eq("event_id", eventId)
+        .then(({ error }) => {
+          if (error) console.error("Failed to cancel RSVP:", error)
+        })
+    }
   }
 
   const deleteEvent = (eventId) => {
@@ -461,8 +478,10 @@ export function EventProvider({ children }) {
   }
 
   const follow = async (targetUserId) => {
-    const userId = JSON.parse(localStorage.getItem("user") || "{}").id
-    if (!userId) return
+    const userId = currentUser?.id && currentUser.id !== "current-user"
+      ? currentUser.id
+      : null
+    if (!userId || targetUserId === userId) return
 
     const { error } = await supabase
       .from("follows")
@@ -490,7 +509,9 @@ export function EventProvider({ children }) {
   }
 
   const unfollow = async (targetUserId) => {
-    const userId = JSON.parse(localStorage.getItem("user") || "{}").id
+    const userId = currentUser?.id && currentUser.id !== "current-user"
+      ? currentUser.id
+      : null
     if (!userId) return
 
     const { error } = await supabase
@@ -505,7 +526,9 @@ export function EventProvider({ children }) {
   }
 
   const repostEvent = async (eventId) => {
-    const userId = JSON.parse(localStorage.getItem("user") || "{}").id
+    const userId = currentUser?.id && currentUser.id !== "current-user"
+      ? currentUser.id
+      : null
     if (!userId) return
 
     const { error } = await supabase
@@ -518,7 +541,9 @@ export function EventProvider({ children }) {
   }
 
   const unrepostEvent = async (eventId) => {
-    const userId = JSON.parse(localStorage.getItem("user") || "{}").id
+    const userId = currentUser?.id && currentUser.id !== "current-user"
+      ? currentUser.id
+      : null
     if (!userId) return
 
     const { error } = await supabase

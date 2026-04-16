@@ -86,7 +86,7 @@ const parseEventDate = (event) => {
 }
 
 function MainLayout() {
-  const { savedEvents, allEvents, followingList, followersList } = useEvents()
+  const { savedEvents, allEvents, followingList, followersList, currentUser } = useEvents()
   const location = useLocation()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -100,7 +100,7 @@ function MainLayout() {
   const [dmMessagesByThread, setDmMessagesByThread] = useState({})
   const [unreadDmThreadIds, setUnreadDmThreadIds] = useState(new Set())
   const defaultAvatar = DEFAULT_AVATAR_URL
-  const currentUserId = JSON.parse(localStorage.getItem("user") || "{}").id
+  const currentUserId = currentUser?.id
 
   // Normalize old DM query params into the dedicated messages page.
   useEffect(() => {
@@ -162,7 +162,7 @@ function MainLayout() {
     const loadThreads = async () => {
       const { data: msgs } = await supabase
         .from("messages")
-        .select("sender_id, recipient_id")
+        .select("sender_id, recipient_id, read")
         .or(`sender_id.eq.${currentUserId},recipient_id.eq.${currentUserId}`)
 
       if (!msgs || msgs.length === 0) return
@@ -186,6 +186,16 @@ function MainLayout() {
           image: sanitizeAvatarUrl(p.avatar_url, defaultAvatar),
         }))
       )
+
+      // Seed unread state from DB — threads where any received message is unread
+      const unreadSenderIds = new Set(
+        msgs
+          .filter((m) => m.recipient_id === currentUserId && !m.read)
+          .map((m) => m.sender_id)
+      )
+      if (unreadSenderIds.size > 0) {
+        setUnreadDmThreadIds(unreadSenderIds)
+      }
     }
 
     loadThreads()
@@ -218,7 +228,7 @@ function MainLayout() {
     if (!currentUserId) return
 
     const channel = supabase
-      .channel("incoming-messages")
+      .channel(`incoming-messages-${currentUserId}`)
       .on(
         "postgres_changes",
         {
@@ -458,6 +468,17 @@ function MainLayout() {
       return next
     })
     navigate(`/messages?thread=${thread.id}`)
+
+    // Persist read state so unread dots don't reappear on reload
+    if (currentUserId) {
+      supabase
+        .from("messages")
+        .update({ read: true })
+        .eq("recipient_id", currentUserId)
+        .eq("sender_id", thread.id)
+        .eq("read", false)
+        .then(() => {})
+    }
   }
 
   const closeDmThread = () => {

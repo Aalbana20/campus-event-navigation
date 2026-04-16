@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react"
 import { useEvents } from "../context/EventContext"
 import { buildEventImageStyle } from "../eventImages"
+import { supabase } from "../supabaseClient"
 import "../pages/Profile.css"
 
 const DEFAULT_AVATAR = "/default-avatar.png"
@@ -120,8 +121,7 @@ function EventActionControl({ event }) {
       await navigator.clipboard.writeText(eventLink)
       setShareFeedback("Event link copied.")
     } catch {
-      window.prompt("Copy event link:", eventLink)
-      setShareFeedback("Event link ready to copy.")
+      setShareFeedback("Could not copy link.")
     }
 
     closeShareSheet()
@@ -173,20 +173,25 @@ function EventActionControl({ event }) {
   const handleMessageAction = (eventClick) => {
     eventClick?.stopPropagation()
 
-    if (normalizedFollowingPeople.length === 0) {
-      setShareFeedback("DM event sharing is ready for backend wiring.")
-      closeShareSheet()
-      return
-    }
-
     setShareSearch("")
     window.requestAnimationFrame(() => {
       shareSearchInputRef.current?.focus()
     })
   }
 
-  const handleSendEventToPerson = (person, eventClick) => {
+  const handleSendEventToPerson = async (person, eventClick) => {
     eventClick?.stopPropagation()
+
+    const senderId = currentUser?.id && currentUser.id !== "current-user"
+      ? currentUser.id
+      : null
+
+    if (senderId && person.id) {
+      const messageText = `Check out ${eventTitle} — ${eventLink}`
+      await supabase
+        .from("messages")
+        .insert({ sender_id: senderId, recipient_id: person.id, content: messageText })
+    }
 
     const personHandle = person.username ? `@${person.username}` : person.name
     setShareFeedback(`Event sent to ${personHandle}.`)

@@ -351,7 +351,9 @@ function Profile() {
     setProfileImage(nextProfileImageValue)
     localStorage.setItem("profileImage", nextProfileImageValue)
 
-    const userId = JSON.parse(localStorage.getItem("user") || "{}").id
+    const userId = currentUser?.id && currentUser.id !== "current-user"
+      ? currentUser.id
+      : null
     if (userId) {
       await supabase.auth.updateUser({
         data: {
@@ -417,7 +419,9 @@ function Profile() {
       setZoom(1)
       setCroppedAreaPixels(null)
 
-      const userId = JSON.parse(localStorage.getItem("user") || "{}").id
+      const userId = currentUser?.id && currentUser.id !== "current-user"
+        ? currentUser.id
+        : null
       if (!userId) {
         setDraftProfileImagePreview("")
         showToast("You must be logged in to upload a profile picture.", "error")
@@ -462,7 +466,7 @@ function Profile() {
       setShareMessage("Profile link copied!")
       setTimeout(() => setShareMessage(""), 2500)
     } catch {
-      window.prompt("Copy your profile link:", profileLink)
+      showToast("Could not copy profile link.", "error")
     }
   }
 
@@ -1606,126 +1610,6 @@ function Profile() {
         </div>
       )}
 
-      {editingEventId && (
-        <div className="profile-overlay" onClick={closeEditEventModal}>
-          <div className="profile-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="profile-modal-header">
-              <h3>Edit Event</h3>
-              <button
-                type="button"
-                className="profile-modal-close"
-                onClick={closeEditEventModal}
-                aria-label="Close edit event"
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="profile-modal-body">
-              <form className="edit-profile-form">
-                <label className="edit-profile-field">
-                  <span>Title</span>
-                  <input
-                    type="text"
-                    value={editEventForm.title}
-                    onChange={handleEditEventFieldChange("title")}
-                    placeholder="Event title"
-                  />
-                </label>
-
-                <label className="edit-profile-field">
-                  <span>Description</span>
-                  <textarea
-                    rows="3"
-                    value={editEventForm.description}
-                    onChange={handleEditEventFieldChange("description")}
-                    placeholder="What's the vibe?"
-                  />
-                </label>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                  <label className="edit-profile-field">
-                    <span>Date</span>
-                    <input
-                      type="date"
-                      value={editEventForm.date}
-                      onChange={handleEditEventFieldChange("date")}
-                    />
-                  </label>
-                  <div style={{ display: 'flex', gap: '10px' }}>
-                    <label className="edit-profile-field" style={{ flex: 1 }}>
-                      <span>Start Time</span>
-                      <input
-                        type="time"
-                        value={editEventForm.startTime}
-                        onChange={handleEditEventFieldChange("startTime")}
-                      />
-                    </label>
-                    <label className="edit-profile-field" style={{ flex: 1 }}>
-                      <span>End Time</span>
-                      <input
-                        type="time"
-                        value={editEventForm.endTime}
-                        onChange={handleEditEventFieldChange("endTime")}
-                      />
-                    </label>
-                  </div>
-                </div>
-
-                <label className="edit-profile-field">
-                  <span>Location Name</span>
-                  <input
-                    type="text"
-                    value={editEventForm.location}
-                    onChange={handleEditEventFieldChange("location")}
-                    placeholder="Student Center Ballroom"
-                  />
-                </label>
-                
-                <label className="edit-profile-field">
-                  <span>Address</span>
-                  <input
-                    type="text"
-                    value={editEventForm.locationAddress}
-                    onChange={handleEditEventFieldChange("locationAddress")}
-                    placeholder="Campus address"
-                  />
-                </label>
-
-                <label className="edit-profile-field">
-                  <span>Tags (comma separated)</span>
-                  <input
-                    type="text"
-                    value={editEventForm.tags}
-                    onChange={handleEditEventFieldChange("tags")}
-                    placeholder="music, social, campus"
-                  />
-                </label>
-
-                <div className="edit-profile-actions">
-                  <button
-                    type="button"
-                    className="profile-action-btn secondary"
-                    onClick={closeEditEventModal}
-                    disabled={isSavingEditEvent}
-                  >
-                    Cancel
-                  </button>
-
-                  <button
-                    type="button"
-                    className="profile-action-btn"
-                    onClick={handleSaveEditEvent}
-                    disabled={isSavingEditEvent}
-                  >
-                    {isSavingEditEvent ? "Saving..." : "Save Changes"}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
     </main>
   )
 }
