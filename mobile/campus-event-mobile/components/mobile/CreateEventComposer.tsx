@@ -170,6 +170,11 @@ export function CreateEventComposer({ onPublished }: { onPublished?: () => void 
   };
 
   const handlePublish = async () => {
+    if (!title.trim()) {
+      Alert.alert('Title required', 'Give your event a name before publishing.');
+      return;
+    }
+
     const payload: CreateEventInput = {
       title,
       description,

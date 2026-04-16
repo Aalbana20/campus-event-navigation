@@ -95,7 +95,7 @@ export function MobileInboxProvider({ children }: { children: React.ReactNode })
     const loadMessages = async () => {
       const { data, error } = await client
         .from('messages')
-        .select('id, sender_id, recipient_id, content, created_at')
+        .select('id, sender_id, recipient_id, content, created_at, read')
         .or(`sender_id.eq.${session.user.id},recipient_id.eq.${session.user.id}`)
         .order('created_at', { ascending: true });
 
@@ -112,8 +112,8 @@ export function MobileInboxProvider({ children }: { children: React.ReactNode })
       if (!hasInitializedUnreadThreads.current) {
         const nextUnread = new Set<string>();
 
-        nextRows.forEach((message) => {
-          if (message.recipient_id === session.user.id) {
+        nextRows.forEach((message: MessageRow & { read?: boolean }) => {
+          if (message.recipient_id === session.user.id && !message.read) {
             nextUnread.add(message.sender_id);
           }
         });
@@ -387,6 +387,15 @@ export function MobileInboxProvider({ children }: { children: React.ReactNode })
       nextIds.delete(threadId);
       return nextIds;
     });
+
+    if (supabase && session?.user?.id) {
+      void supabase
+        .from('messages')
+        .update({ read: true })
+        .eq('recipient_id', session.user.id)
+        .eq('sender_id', threadId)
+        .eq('read', false);
+    }
   };
 
   const sendDmMessage = async (threadId: string, text: string) => {

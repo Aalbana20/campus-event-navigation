@@ -2,7 +2,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useMemo } from 'react';
 import {
-  Alert,
   Image,
   Linking,
   Pressable,
@@ -41,7 +40,7 @@ export default function EventDetailScreen() {
     );
   }
 
-  const isSaved = savedEventIds.includes(event.id);
+  const isSaved = savedEventIds.includes(String(event.id));
   const detailTags = (event.tags || []).filter(Boolean);
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
     event.locationAddress || event.locationName
@@ -122,15 +121,13 @@ export default function EventDetailScreen() {
             <Pressable style={styles.primaryButton} onPress={() => toggleSaveEvent(event.id)}>
               <Text style={styles.primaryButtonText}>{isSaved ? 'Going' : 'RSVP'}</Text>
             </Pressable>
-            <Pressable
-              style={styles.secondaryButton}
-              onPress={() =>
-                Linking.openURL(mapsUrl).catch(() =>
-                  Alert.alert('Map', 'Map link is unavailable.')
-                )
-              }>
-              <Text style={styles.secondaryButtonText}>View Map</Text>
-            </Pressable>
+            {(event.locationAddress || event.locationName) ? (
+              <Pressable
+                style={styles.secondaryButton}
+                onPress={() => Linking.openURL(mapsUrl).catch(() => {})}>
+                <Text style={styles.secondaryButtonText}>View Map</Text>
+              </Pressable>
+            ) : null}
           </View>
         </View>
       </ScrollView>

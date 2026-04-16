@@ -1,7 +1,7 @@
+import * as Clipboard from 'expo-clipboard';
 import * as ExpoLinking from 'expo-linking';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Alert,
   Image,
   Modal,
   Pressable,
@@ -63,8 +63,8 @@ export function EventActionSheet({ event, visible, onClose }: EventActionSheetPr
       `${profile.name} ${profile.username}`.toLowerCase().includes(normalizedQuery)
   );
 
-  const handleCopyLink = () => {
-    Alert.alert('Event Link', `${eventLink}\n\nClipboard support can be wired with expo-clipboard next.`);
+  const handleCopyLink = async () => {
+    await Clipboard.setStringAsync(eventLink);
     onClose();
   };
 
@@ -84,17 +84,13 @@ export function EventActionSheet({ event, visible, onClose }: EventActionSheetPr
 
   const handleMessage = () => {
     if (allPeople.length === 0) {
-      Alert.alert('Message', 'DM sharing is ready for thread wiring next.');
       onClose();
-      return;
     }
-
-    Alert.alert('Message', 'Pick a person below to send this event in-app.');
+    // People list is rendered below — tapping a person sends the event via handleSendToProfile
   };
 
   const handleRepost = () => {
     repostEvent(event.id);
-    Alert.alert('Reposted', 'Event reposted.');
     onClose();
   };
 
@@ -106,7 +102,6 @@ export function EventActionSheet({ event, visible, onClose }: EventActionSheetPr
         .join(' • ')}`
     );
 
-    Alert.alert('Sent', `Event sent to @${profile.username}.`);
     onClose();
   };
 

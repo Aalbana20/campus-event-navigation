@@ -272,7 +272,7 @@ const getSpeechRecognitionConstructor = () => {
 }
 
 function CreateEvent({ embedded = false }) {
-  const { createEvent } = useEvents()
+  const { createEvent, currentUser: contextUser } = useEvents()
   const { showToast } = useToast()
 
   const [title, setTitle] = useState("")
@@ -303,10 +303,9 @@ function CreateEvent({ embedded = false }) {
   const recognitionRef = useRef(null)
   const addressBlurTimeoutRef = useRef(null)
 
-  const currentUser = JSON.parse(localStorage.getItem("user") || "{}")
-  const creatorUsername = currentUser.username || ""
-  const creatorName = currentUser.name || currentUser.username || "Campus User"
-  const supportsVoiceInput = Boolean(getSpeechRecognitionConstructor())
+  const creatorUsername = contextUser?.username || ""
+  const creatorName = contextUser?.name || contextUser?.username || "Campus User"
+  const supportsVoiceInput = useMemo(() => Boolean(getSpeechRecognitionConstructor()), [])
   const isGooglePlacesConfigured = Boolean(GOOGLE_PLACES_API_KEY)
 
   const suggestedTagOptions = useMemo(
@@ -780,10 +779,10 @@ function CreateEvent({ embedded = false }) {
         dressCode: cleanDressCode,
         capacity,
         tags: normalizedTags,
-        createdBy: currentUser.id || creatorUsername,
+        createdBy: contextUser?.id || creatorUsername,
         creatorUsername,
         creatorName,
-        creatorAvatar: sanitizeAvatarUrl(currentUser.image || currentUser.avatar, DEFAULT_AVATAR_URL),
+        creatorAvatar: sanitizeAvatarUrl(contextUser?.image || contextUser?.avatar, DEFAULT_AVATAR_URL),
         createdAt: new Date().toISOString(),
         attendees: [],
         goingCount: 0,
@@ -804,7 +803,7 @@ function CreateEvent({ embedded = false }) {
         dress_code: newEvent.dressCode,
         image: newEvent.image,
         tags: newEvent.tags,
-        created_by: currentUser.id || null,
+        created_by: contextUser?.id || null,
         creator_username: newEvent.creatorUsername,
         going_count: 0,
       }
@@ -815,7 +814,7 @@ function CreateEvent({ embedded = false }) {
         .select()
 
       if (error) {
-        alert("Failed to publish event: " + error.message)
+        showToast(error.message || "Failed to publish event.", "error")
         return
       }
 

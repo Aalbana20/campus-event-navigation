@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from "react"
+import { useToast } from "../context/ToastContext"
 
 function DiscoverStoryComposer({ isOpen, onClose, onSubmit }) {
+  const { showToast } = useToast()
   const fileInputRef = useRef(null)
   const [selectedFile, setSelectedFile] = useState(null)
   const [previewUrl, setPreviewUrl] = useState("")
@@ -56,7 +58,7 @@ function DiscoverStoryComposer({ isOpen, onClose, onSubmit }) {
       file.type.startsWith("image/") || file.type.startsWith("video/")
 
     if (!isSupported) {
-      window.alert("Choose an image or video file for your story.")
+      showToast("Choose an image or video file for your story.", "error")
       return
     }
 
