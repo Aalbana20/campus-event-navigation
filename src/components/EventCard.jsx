@@ -34,7 +34,27 @@ function EventCard({ event }) {
     attendeeUsers.some((attendee) => usersMatch(attendee, mutualUser))
   )
 
-  const mutualCount = event?.mutualCount ?? mutualAttendees.length
+  const orderedAttendees = (() => {
+    const seen = []
+    const ordered = []
+    const isSeen = (person) => seen.some((known) => usersMatch(known, person))
+
+    mutualAttendees.forEach((person) => {
+      if (isSeen(person)) return
+      seen.push(person)
+      ordered.push(person)
+    })
+    attendeeUsers.forEach((person) => {
+      if (isSeen(person)) return
+      seen.push(person)
+      ordered.push(person)
+    })
+
+    return ordered
+  })()
+
+  const visibleAttendees = orderedAttendees.slice(0, 2)
+  const goingCount = event?.goingCount ?? attendeeUsers.length ?? 0
 
   const openMutuals = (eventClick) => {
     eventClick.stopPropagation()
@@ -69,15 +89,15 @@ function EventCard({ event }) {
                   type="button"
                   className="event-card-mutual-inline"
                   onClick={openMutuals}
-                  aria-label={`View ${mutualCount} mutuals going`}
+                  aria-label={`View ${goingCount} people going`}
                 >
-                  {mutualAttendees.length > 0 ? (
+                  {visibleAttendees.length > 0 ? (
                     <div className="event-card-mutual-inline-avatars">
-                      {mutualAttendees.slice(0, 3).map((person, index) => (
+                      {visibleAttendees.map((person, index) => (
                         <img
                           key={person.id || person.username || index}
                           src={sanitizeAvatarUrl(person.image || person.avatar, DEFAULT_AVATAR_URL)}
-                          alt={person.name || "Mutual attendee"}
+                          alt={person.name || "Attendee"}
                           className="event-card-mutual-inline-avatar"
                           onError={(eventClick) => {
                             eventClick.currentTarget.src = DEFAULT_AVATAR_URL
@@ -119,7 +139,7 @@ function EventCard({ event }) {
                       </svg>
                     </span>
                   )}
-                  <span className="event-card-mutual-inline-count">{mutualCount}</span>
+                  <span className="event-card-mutual-inline-count">{goingCount}</span>
                 </button>
               </div>
             </div>
@@ -225,8 +245,8 @@ function EventCard({ event }) {
             </div>
 
             <div className="event-mutuals-list">
-              {mutualAttendees.length > 0 ? (
-                mutualAttendees.map((person, index) => (
+              {orderedAttendees.length > 0 ? (
+                orderedAttendees.map((person, index) => (
                   <div
                     className="event-mutuals-item"
                     key={person.id || person.username || index}
@@ -249,7 +269,7 @@ function EventCard({ event }) {
                 ))
               ) : (
                 <p className="event-mutuals-empty">
-                  None of your mutuals are going to this event yet.
+                  No one&apos;s RSVPed to this event yet.
                 </p>
               )}
             </div>

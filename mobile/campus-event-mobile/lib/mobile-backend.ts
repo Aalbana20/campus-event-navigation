@@ -354,7 +354,7 @@ export const normalizeEventRow = (
     tags: normalizeTags(row.tags),
     createdBy: toStringValue(row.created_by),
     creatorUsername: normalizeUsername(toStringValue(row.creator_username)),
-    goingCount: Math.max(Number(row.going_count || 0), attendeeIds.length),
+    goingCount: attendeeIds.length,
     commentCount: row.event_comments?.[0]?.count ?? 0,
     privacy,
     isPrivate: privacy === 'private',

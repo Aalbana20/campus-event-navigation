@@ -1197,7 +1197,7 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
         return {
           ...event,
           attendees,
-          goingCount: Math.max(isSaved ? event.goingCount - 1 : event.goingCount + 1, 0),
+          goingCount: attendees.length,
         };
       });
 

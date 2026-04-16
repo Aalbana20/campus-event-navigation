@@ -371,12 +371,17 @@ export function EventProvider({ children }) {
 
       const normalizedEvent = normalizeEventTimes(event)
       const enrichedEvent = enrichEventWithCreator(normalizedEvent)
+      const baseAttendees = enrichedEvent.attendees || []
+      const attendees = baseAttendees.some((person) => usersMatch(person, attendee))
+        ? baseAttendees
+        : [...baseAttendees, attendee]
 
       return [
         ...prev,
         {
           ...enrichedEvent,
-          attendees: [...(enrichedEvent.attendees || []), attendee],
+          attendees,
+          goingCount: attendees.length,
         },
       ]
     })
@@ -390,7 +395,7 @@ export function EventProvider({ children }) {
         if (alreadyGoing) return existingEvent
 
         const nextAttendees = [...attendees, attendee]
-        const nextCount = (existingEvent.goingCount || 0) + 1
+        const nextCount = nextAttendees.length
 
         return {
           ...existingEvent,
@@ -434,10 +439,14 @@ export function EventProvider({ children }) {
       prev.map((event) => {
         if (String(event.id) !== String(eventId)) return event
 
-        const nextGoingCount = Math.max((event.goingCount || 1) - 1, 0)
+        const attendees = (event.attendees || []).filter(
+          (person) => !usersMatch(person, currentUser)
+        )
+        const nextGoingCount = attendees.length
 
         return {
           ...event,
+          attendees,
           goingCount: nextGoingCount,
           rsvp: `${nextGoingCount} Going`,
         }
