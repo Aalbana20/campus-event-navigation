@@ -74,7 +74,7 @@ export default function SignUpScreen() {
       return;
     }
 
-    router.replace('/(tabs)/Discover');
+    router.replace('/(tabs)/home');
   };
 
   return (

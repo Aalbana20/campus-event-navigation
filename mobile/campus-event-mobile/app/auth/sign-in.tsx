@@ -36,7 +36,7 @@ export default function SignInScreen() {
       return;
     }
 
-    router.replace('/(tabs)/Discover');
+    router.replace('/(tabs)/home');
   };
 
   return (

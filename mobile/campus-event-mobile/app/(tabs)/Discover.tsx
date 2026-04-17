@@ -46,7 +46,17 @@ import { useMobileApp } from '@/providers/mobile-app-provider';
 import { useMobileInbox } from '@/providers/mobile-inbox-provider';
 import type { EventRecord, ProfileRecord, StoryRecord } from '@/types/models';
 
-export default function DiscoverScreen() {
+type DiscoverScreenProps = {
+  hideModeSwitch?: boolean;
+  initialMode?: 'events' | 'friends';
+  embedded?: boolean;
+};
+
+export default function DiscoverScreen({
+  hideModeSwitch = false,
+  initialMode = 'events',
+  embedded = false,
+}: DiscoverScreenProps = {}) {
   const router = useRouter();
   const theme = useAppTheme();
   const styles = useMemo(() => buildStyles(theme), [theme]);
@@ -72,7 +82,7 @@ export default function DiscoverScreen() {
   const translate = useRef(new Animated.ValueXY()).current;
   const [refreshing, setRefreshing] = useState(false);
   const [scrollEnabled, setScrollEnabled] = useState(true);
-  const [activeTab, setActiveTab] = useState<'events' | 'friends'>('events');
+  const [activeTab, setActiveTab] = useState<'events' | 'friends'>(initialMode || 'events');
   const [storyRecords, setStoryRecords] = useState<StoryRecord[]>([]);
   const [discoverPosts, setDiscoverPosts] = useState<DiscoverPostRecord[]>([]);
   const [seenStoryIds, setSeenStoryIds] = useState<Set<string>>(new Set());
@@ -637,8 +647,11 @@ export default function DiscoverScreen() {
   );
 
   return (
-    <AppScreen style={[styles.safeArea, activeTab === 'friends' && { backgroundColor: '#000' }]}>
-      {activeTab === 'friends' ? (
+    <AppScreen
+      style={[styles.safeArea, activeTab === 'friends' && { backgroundColor: '#000' }]}
+      edges={embedded ? [] : ['top']}
+    >
+      {activeTab === 'friends' && !hideModeSwitch ? (
         <View style={[styles.headerBar, styles.headerBarAbsolute]}>
           <View style={styles.headerActionsLeft}>
             <Pressable style={[styles.headerIconButton, styles.glassyIconButton]} onPress={() => router.push('/story/create')}>
@@ -670,7 +683,11 @@ export default function DiscoverScreen() {
               </Pressable>
             </View>
 
-            <DiscoverModeSwitch activeMode={activeTab} onChange={setActiveTab} isDark={false} />
+            {!hideModeSwitch ? (
+              <DiscoverModeSwitch activeMode={activeTab} onChange={setActiveTab} isDark={false} />
+            ) : (
+              <View style={{ flex: 1 }} />
+            )}
 
             <View style={styles.headerActions}>
               <Pressable style={styles.headerIconButton} onPress={openNotifications}>

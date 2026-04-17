@@ -31,24 +31,24 @@ export default function TabLayout() {
       }}>
       <Tabs.Screen name="index" options={{ href: null }} />
       <Tabs.Screen
-        name="Discover"
+        name="home"
         options={{
-          title: 'Discover',
-          tabBarIcon: ({ color, size }) => <Ionicons name="flame-outline" size={size} color={color} />,
+          title: 'Home',
+          tabBarIcon: ({ color, size }) => <Ionicons name="calendar-outline" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
-        name="explore"
+        name="video-posts"
         options={{
-          title: 'Explore',
-          tabBarIcon: ({ color, size }) => <Ionicons name="compass-outline" size={size} color={color} />,
+          title: 'Video/Posts',
+          tabBarIcon: ({ color, size }) => <Ionicons name="play" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
         name="messages"
         options={{
           title: 'DMs',
-          tabBarIcon: ({ color, size }) => <Ionicons name="paper-plane-outline" size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => <Ionicons name="chatbubble-ellipses-outline" size={size} color={color} />,
           tabBarBadge: unreadDmCount > 0 ? unreadDmCount : undefined,
           tabBarBadgeStyle: {
             backgroundColor: theme.text,
@@ -59,25 +59,22 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="events"
+        name="explore"
         options={{
-          title: 'Events',
-          tabBarIcon: ({ color, size }) => <Ionicons name="add-outline" size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="create"
-        options={{
-          href: null,
+          title: 'Explore',
+          tabBarIcon: ({ color, size }) => <Ionicons name="search-outline" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color, size }) => <Ionicons name="person-outline" size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => <Ionicons name="person-circle-outline" size={size} color={color} />,
         }}
       />
+      <Tabs.Screen name="Discover" options={{ href: null }} />
+      <Tabs.Screen name="events" options={{ href: null }} />
+      <Tabs.Screen name="create" options={{ href: null }} />
     </Tabs>
   );
 }
