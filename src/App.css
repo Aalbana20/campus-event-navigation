@@ -112,6 +112,10 @@ body {
   gap: 6px;
 }
 
+.app-rail-nav {
+  margin-top: clamp(28px, 6vh, 64px);
+}
+
 .app-rail-actions {
   padding-top: 12px;
   border-top: 1px solid var(--border-soft, rgba(15, 17, 21, 0.08));
@@ -1742,11 +1746,11 @@ body.theme-dark .explore-search-wrap .explore-search-input::placeholder {
 }
 
 .discover-shell {
-  width: min(980px, 100%);
+  width: min(1040px, 100%);
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
 .eyebrow {
@@ -1771,20 +1775,38 @@ body.theme-dark .explore-search-wrap .explore-search-input::placeholder {
 
 .discover-stories-panel {
   position: relative;
-  width: 100%;
-  padding: 0 0 12px 0;
+  width: min(860px, 100%);
+  margin: 0 auto;
+  padding: 14px 0 12px;
   background: transparent;
   border: none;
   box-shadow: none;
+  isolation: isolate;
+  --stories-fade: 14%;
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    #000 var(--stories-fade),
+    #000 calc(100% - var(--stories-fade)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    #000 var(--stories-fade),
+    #000 calc(100% - var(--stories-fade)),
+    transparent 100%
+  );
 }
 
 .discover-stories-track {
   display: flex;
-  gap: 10px;
+  justify-content: center;
+  gap: clamp(10px, 1.4vw, 16px);
   overflow-x: auto;
-  padding-bottom: 1px;
-  padding-left: 18px;
+  padding: 2px 12% 1px;
   scrollbar-width: none;
+  scroll-padding-inline: 50%;
 }
 
 .discover-stories-track::-webkit-scrollbar {
@@ -1803,6 +1825,7 @@ body.theme-dark .explore-search-wrap .explore-search-input::placeholder {
   gap: 4px;
   text-align: center;
   color: inherit;
+  flex: 0 0 auto;
 }
 
 .discover-story-avatar-shell {
@@ -2135,6 +2158,8 @@ body.theme-dark .discover-stories-panel {
   border: none;
   box-shadow: none;
 }
+
+/* ::before / ::after panel shapes removed — stories now use an invisible masked lane */
 
 .discover-friends-intro {
   display: flex;
@@ -7385,7 +7410,16 @@ body.theme-dark .calendar-modal-card .my-flip-card-back {
 }
 
 .calendar-filter-control {
-  width: min(290px, 100%);
+  width: 100%;
+  min-height: 36px;
+  padding: 3px;
+}
+
+.calendar-filter-control .calendar-segmented-btn {
+  min-height: 30px;
+  padding: 0 8px;
+  font-size: 0.78rem;
+  letter-spacing: 0.01em;
 }
 
 .calendar-view-control {
@@ -7542,11 +7576,82 @@ body.theme-dark .calendar-modal-card .my-flip-card-back {
 }
 
 .calendar-hero {
+  position: sticky;
+  top: 0;
+  z-index: 40;
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) auto minmax(200px, 1fr);
+  grid-template-columns: minmax(260px, 1fr) auto minmax(260px, 1fr);
   align-items: end;
   gap: 18px;
   padding: 10px 4px 18px;
+  transform: translateY(0);
+  opacity: 1;
+  transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.22s ease;
+  will-change: transform;
+}
+
+.calendar-hero-heading {
+  min-width: 0;
+}
+
+.calendar-hero-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  min-width: 0;
+  flex-wrap: nowrap;
+}
+
+.calendar-page-shell.hero-hidden .calendar-hero {
+  transform: translateY(calc(-100% - 12px));
+  opacity: 0;
+  pointer-events: none;
+}
+
+.calendar-search--inline {
+  width: clamp(160px, 22vw, 240px);
+  height: 38px;
+  padding: 0 12px;
+  font-size: 0.85rem;
+}
+
+.calendar-search--inline input {
+  font-size: 0.85rem;
+}
+
+.calendar-create-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: #111827;
+  color: #fff;
+  border-color: #111827;
+}
+
+.calendar-create-trigger:hover {
+  background: #0f1115;
+}
+
+.calendar-create-trigger-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  font-size: 1rem;
+  line-height: 1;
+  font-weight: 500;
+}
+
+.calendar-create-menu--panel {
+  position: static;
+  margin-top: 6px;
+  width: 100%;
+  min-width: 0;
 }
 
 .calendar-hero-kicker {
@@ -8096,10 +8201,20 @@ body.theme-dark .calendar-create-menu button {
   color: #f5f7fb;
 }
 
-body.theme-dark .calendar-command-btn.primary {
+body.theme-dark .calendar-command-btn.primary,
+body.theme-dark .calendar-create-trigger {
   background: #f5f7fb;
   color: #111318;
   border-color: #f5f7fb;
+}
+
+body.theme-dark .calendar-create-trigger:hover {
+  background: #ffffff;
+}
+
+body.theme-dark .calendar-create-trigger-icon {
+  background: rgba(17, 24, 39, 0.12);
+  color: #111318;
 }
 
 body.theme-dark .calendar-create-menu button:hover {

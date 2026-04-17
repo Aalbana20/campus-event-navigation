@@ -120,7 +120,8 @@ function AppRailIcon({ name }) {
     case "messages":
       return (
         <svg {...commonProps}>
-          <path d="M4 5.5h16v11H10.5L5 20.5v-4H4v-11Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+          <path d="M5 12h13.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <path d="m13 6.5 5.5 5.5-5.5 5.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       )
     case "explore":
@@ -661,9 +662,8 @@ function MainLayout() {
   }
 
   const navItems = [
-    { to: "/home", label: "Home", icon: "home" },
-    { to: "/events", label: "Events / Calendar", icon: "calendar" },
-    { to: "/video-posts", label: "Video / Posts", icon: "play" },
+    { to: "/home", label: "Event", icon: "calendar" },
+    { to: "/video-posts", label: "Play", icon: "play" },
     { to: "/messages", label: "Messages", icon: "messages" },
     { to: "/explore", label: "Explore", icon: "explore" },
     { to: "/profile", label: "Profile", icon: "profile" },

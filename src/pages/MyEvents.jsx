@@ -49,8 +49,8 @@ const HOUR_LABELS = [
 const EVENT_TABS = ["calendar", "create", "my-events"]
 const FILTER_OPTIONS = [
   { id: "all", label: "All" },
+  { id: "going", label: "Going" },
   { id: "created", label: "Created" },
-  { id: "attending", label: "Attending" },
 ]
 const VIEW_OPTIONS = [
   { id: "day", label: "Day" },
@@ -501,6 +501,9 @@ function MyEvents() {
     note: "",
   })
   const [isPersonalComposerOpen, setIsPersonalComposerOpen] = useState(false)
+  const [isCreateMenuOpen, setIsCreateMenuOpen] = useState(false)
+  const [isHeroHidden, setIsHeroHidden] = useState(false)
+  const createMenuRef = useRef(null)
 
   const now = new Date()
   const [anchorDate, setAnchorDate] = useState(
@@ -513,6 +516,54 @@ function MyEvents() {
   useEffect(() => {
     localStorage.setItem(PERSONAL_STORAGE_KEY, JSON.stringify(personalItems))
   }, [personalItems])
+
+  // Hide the calendar hero when the user scrolls down past the top zone;
+  // reveal it again as soon as they scroll back up.
+  useEffect(() => {
+    if (activeTab !== "calendar") {
+      setIsHeroHidden(false)
+      return undefined
+    }
+
+    let lastY = window.scrollY
+    let rafId = 0
+
+    const handleScroll = () => {
+      if (rafId) return
+      rafId = window.requestAnimationFrame(() => {
+        const currentY = window.scrollY
+        const delta = currentY - lastY
+
+        if (currentY < 80) {
+          setIsHeroHidden(false)
+        } else if (delta > 6) {
+          setIsHeroHidden(true)
+        } else if (delta < -6) {
+          setIsHeroHidden(false)
+        }
+
+        lastY = currentY
+        rafId = 0
+      })
+    }
+
+    window.addEventListener("scroll", handleScroll, { passive: true })
+    return () => {
+      window.removeEventListener("scroll", handleScroll)
+      if (rafId) window.cancelAnimationFrame(rafId)
+    }
+  }, [activeTab])
+
+  useEffect(() => {
+    if (!isCreateMenuOpen) return undefined
+    const handleDocClick = (event) => {
+      if (createMenuRef.current && !createMenuRef.current.contains(event.target)) {
+        setIsCreateMenuOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", handleDocClick)
+    return () => document.removeEventListener("mousedown", handleDocClick)
+  }, [isCreateMenuOpen])
 
   const changeTab = (nextTab) => {
     const normalizedTab = normalizeTab(nextTab)
@@ -610,7 +661,7 @@ function MyEvents() {
 
     if (calendarFilter === "created") {
       addItems(createdItems)
-    } else if (calendarFilter === "attending") {
+    } else if (calendarFilter === "going") {
       addItems(attendingItems)
     } else {
       addItems(createdItems)
@@ -805,9 +856,9 @@ function MyEvents() {
   }
 
   return (
-    <main className="calendar-page-shell">
+    <main className={`calendar-page-shell ${isHeroHidden ? "hero-hidden" : ""}`}>
       <section className="calendar-hero">
-        <div>
+        <div className="calendar-hero-heading">
           <p className="calendar-hero-kicker">{getViewSubtitle(calendarView, anchorDate)}</p>
           <h1>{getViewTitle(calendarView, anchorDate)}</h1>
         </div>
@@ -820,16 +871,34 @@ function MyEvents() {
           className="calendar-view-control"
         />
 
-        <div className="calendar-date-controls" aria-label="Calendar navigation">
-          <button type="button" onClick={goToPrevious} aria-label="Previous">
-            ‹
-          </button>
-          <button type="button" className="today-btn" onClick={() => setAnchorDate(startOfDay(new Date()))}>
-            Today
-          </button>
-          <button type="button" onClick={goToNext} aria-label="Next">
-            ›
-          </button>
+        <div className="calendar-hero-actions">
+          <label className="calendar-search calendar-search--inline">
+            <span aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
+                <path d="m20 20-3.8-3.8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+            </span>
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search calendar"
+              aria-label="Search calendar"
+            />
+          </label>
+
+          <div className="calendar-date-controls" aria-label="Calendar navigation">
+            <button type="button" onClick={goToPrevious} aria-label="Previous">
+              ‹
+            </button>
+            <button type="button" className="today-btn" onClick={() => setAnchorDate(startOfDay(new Date()))}>
+              Today
+            </button>
+            <button type="button" onClick={goToNext} aria-label="Next">
+              ›
+            </button>
+          </div>
         </div>
       </section>
 
@@ -846,35 +915,44 @@ function MyEvents() {
             />
           </div>
 
-          <div className="calendar-command-section">
+          <div className="calendar-command-section" ref={createMenuRef}>
             <span className="calendar-command-kicker">Create</span>
             <button
               type="button"
-              className="calendar-command-btn primary"
-              onClick={() => changeTab("create")}
+              className="calendar-command-btn calendar-create-trigger"
+              aria-haspopup="menu"
+              aria-expanded={isCreateMenuOpen}
+              onClick={() => setIsCreateMenuOpen((open) => !open)}
             >
-              Event
+              <span className="calendar-create-trigger-icon" aria-hidden="true">+</span>
+              <span>Create</span>
             </button>
-            <button type="button" className="calendar-command-btn" onClick={handleCreatePersonal}>
-              Personal
-            </button>
-          </div>
 
-          <label className="calendar-search">
-            <span aria-hidden="true">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
-                <path d="m20 20-3.8-3.8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              </svg>
-            </span>
-            <input
-              type="search"
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Search calendar"
-              aria-label="Search calendar"
-            />
-          </label>
+            {isCreateMenuOpen && (
+              <div className="calendar-create-menu calendar-create-menu--panel" role="menu">
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setIsCreateMenuOpen(false)
+                    changeTab("create")
+                  }}
+                >
+                  Event
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setIsCreateMenuOpen(false)
+                    handleCreatePersonal()
+                  }}
+                >
+                  Personal
+                </button>
+              </div>
+            )}
+          </div>
         </aside>
 
         <section
