@@ -1,6 +1,7 @@
 import type { User } from '@supabase/supabase-js';
 
 import { normalizeAvatarStorageValue } from '@/lib/avatar-storage';
+import { buildLegacyBirthday } from '@/lib/signup-data';
 import {
   EventPrivacy,
   EventRecord,
@@ -61,6 +62,23 @@ export const EMPTY_PROFILE: ProfileRecord = {
   phoneNumber: '',
   birthday: '',
   email: '',
+  accountType: 'regular',
+  firstName: '',
+  lastName: '',
+  birthMonth: null,
+  birthYear: null,
+  gender: '',
+  school: '',
+  schoolId: '',
+  studentVerified: false,
+  verificationStatus: 'unverified',
+  organizationName: '',
+  organizationType: '',
+  organizationDescription: '',
+  organizationWebsite: '',
+  parentOrganizationId: null,
+  parentOrganizationName: '',
+  logoUrl: '',
 };
 
 type ProfileRow = {
@@ -69,10 +87,27 @@ type ProfileRow = {
   username?: string | null;
   bio?: string | null;
   avatar_url?: string | null;
-  phone_number?: string | null;
+  phone?: string | null;
   birthday?: string | null;
   interests?: string[] | string | null;
   email?: string | null;
+  account_type?: 'student' | 'organization' | 'regular' | string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  birth_month?: number | null;
+  birth_year?: number | null;
+  gender?: 'Male' | 'Female' | string | null;
+  school?: string | null;
+  school_id?: string | null;
+  student_verified?: boolean | null;
+  verification_status?: 'unverified' | 'pending' | 'verified' | 'rejected' | string | null;
+  organization_name?: string | null;
+  organization_type?: string | null;
+  organization_description?: string | null;
+  organization_website?: string | null;
+  parent_organization_id?: string | null;
+  parent_organization_name?: string | null;
+  logo_url?: string | null;
 };
 
 type EventRow = {
@@ -166,6 +201,41 @@ const normalizeInterests = (value: ProfileRow['interests']) => {
   }
 
   return [];
+};
+
+const normalizeAccountType = (value: unknown): ProfileRecord['accountType'] => {
+  const normalized = toStringValue(value);
+
+  if (normalized === 'student' || normalized === 'organization' || normalized === 'regular') {
+    return normalized;
+  }
+
+  return 'regular';
+};
+
+const normalizeGender = (value: unknown): ProfileRecord['gender'] => {
+  const normalized = toStringValue(value);
+  return normalized === 'Male' || normalized === 'Female' ? normalized : '';
+};
+
+const normalizeVerificationStatus = (value: unknown): ProfileRecord['verificationStatus'] => {
+  const normalized = toStringValue(value);
+
+  if (
+    normalized === 'unverified' ||
+    normalized === 'pending' ||
+    normalized === 'verified' ||
+    normalized === 'rejected'
+  ) {
+    return normalized;
+  }
+
+  return 'unverified';
+};
+
+const numberOrNull = (value: unknown) => {
+  const numericValue = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(numericValue) ? numericValue : null;
 };
 
 export const formatTimeToAmPm = (rawTime?: string | null) => {
@@ -262,12 +332,20 @@ export const getDaysUntilDate = (eventDate?: string | null) => {
 
 export const createProfileFromAuthUser = (user: User): ProfileRecord => {
   const username = normalizeUsername(toStringValue(user.user_metadata?.username));
+  const accountType = normalizeAccountType(user.user_metadata?.account_type);
+  const firstName = toStringValue(user.user_metadata?.first_name);
+  const lastName = toStringValue(user.user_metadata?.last_name);
+  const organizationName = toStringValue(user.user_metadata?.organization_name);
+  const birthMonth = numberOrNull(user.user_metadata?.birth_month);
+  const birthYear = numberOrNull(user.user_metadata?.birth_year);
 
   return {
     id: user.id,
     name:
       toStringValue(user.user_metadata?.name) ||
       toStringValue(user.user_metadata?.full_name) ||
+      organizationName ||
+      [firstName, lastName].filter(Boolean).join(' ') ||
       username ||
       'Campus User',
     username,
@@ -277,8 +355,28 @@ export const createProfileFromAuthUser = (user: User): ProfileRecord => {
     ),
     interests: normalizeInterests(user.user_metadata?.interests),
     phoneNumber: toStringValue(user.user_metadata?.phone_number),
-    birthday: toStringValue(user.user_metadata?.birthday),
+    birthday:
+      toStringValue(user.user_metadata?.birthday) ||
+      buildLegacyBirthday(String(birthMonth || ''), String(birthYear || '')) ||
+      '',
     email: toStringValue(user.email),
+    accountType,
+    firstName,
+    lastName,
+    birthMonth,
+    birthYear,
+    gender: normalizeGender(user.user_metadata?.gender),
+    school: toStringValue(user.user_metadata?.school),
+    schoolId: toStringValue(user.user_metadata?.school_id),
+    studentVerified: Boolean(user.user_metadata?.student_verified),
+    verificationStatus: normalizeVerificationStatus(user.user_metadata?.verification_status),
+    organizationName,
+    organizationType: toStringValue(user.user_metadata?.organization_type),
+    organizationDescription: toStringValue(user.user_metadata?.organization_description),
+    organizationWebsite: toStringValue(user.user_metadata?.organization_website),
+    parentOrganizationId: null,
+    parentOrganizationName: toStringValue(user.user_metadata?.parent_organization_name),
+    logoUrl: normalizeAvatarStorageValue(toStringValue(user.user_metadata?.logo_url), ''),
   };
 };
 
@@ -289,9 +387,26 @@ export const normalizeProfileRow = (row: ProfileRow): ProfileRecord => ({
   bio: toStringValue(row.bio) || DEFAULT_PROFILE_BIO,
   avatar: normalizeAvatarStorageValue(toStringValue(row.avatar_url)),
   interests: normalizeInterests(row.interests),
-  phoneNumber: toStringValue(row.phone_number),
+  phoneNumber: toStringValue(row.phone),
   birthday: toStringValue(row.birthday),
   email: toStringValue(row.email),
+  accountType: normalizeAccountType(row.account_type),
+  firstName: toStringValue(row.first_name),
+  lastName: toStringValue(row.last_name),
+  birthMonth: numberOrNull(row.birth_month),
+  birthYear: numberOrNull(row.birth_year),
+  gender: normalizeGender(row.gender),
+  school: toStringValue(row.school),
+  schoolId: toStringValue(row.school_id),
+  studentVerified: Boolean(row.student_verified),
+  verificationStatus: normalizeVerificationStatus(row.verification_status),
+  organizationName: toStringValue(row.organization_name),
+  organizationType: toStringValue(row.organization_type),
+  organizationDescription: toStringValue(row.organization_description),
+  organizationWebsite: toStringValue(row.organization_website),
+  parentOrganizationId: toStringValue(row.parent_organization_id) || null,
+  parentOrganizationName: toStringValue(row.parent_organization_name),
+  logoUrl: normalizeAvatarStorageValue(toStringValue(row.logo_url), ''),
 });
 
 export const normalizeProfiles = (rows: ProfileRow[]) => {

@@ -41,6 +41,7 @@ import {
 } from '@/lib/mobile-profile-image';
 import { sendPushToUser } from '@/lib/mobile-push';
 import { SUPABASE_CONFIG_ERROR, supabase } from '@/lib/supabase';
+import { buildProfileSummary, sanitizePhoneNumber } from '@/lib/signup-data';
 
 type MobileAppContextValue = {
   session: Session | null;
@@ -119,7 +120,8 @@ const createProfilePayload = (
   userId: string,
   fullName: string,
   username: string,
-  avatarUrl: string
+  avatarUrl: string,
+  extra: Record<string, unknown> = {}
 ) => ({
   id: userId,
   name: fullName || username,
@@ -127,6 +129,7 @@ const createProfilePayload = (
   bio: DEFAULT_PROFILE_BIO,
   avatar_url: normalizeAvatarStorageValue(avatarUrl, null) || null,
   updated_at: new Date().toISOString(),
+  ...extra,
 });
 
 const isNotFoundError = (error: { code?: string | null } | null) =>
@@ -326,6 +329,42 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
     const fallbackProfile = createProfileFromAuthUser(user);
     const preferredUsername =
       normalizeUsername(fallbackProfile.username) || `user-${user.id.slice(0, 8)}`;
+    const metadata = user.user_metadata || {};
+    const accountType =
+      fallbackProfile.accountType === 'student' ||
+      fallbackProfile.accountType === 'organization' ||
+      fallbackProfile.accountType === 'regular'
+        ? fallbackProfile.accountType
+        : 'regular';
+    const profileExtra = {
+      bio:
+        fallbackProfile.bio ||
+        buildProfileSummary({
+          accountType,
+          firstName: fallbackProfile.firstName,
+          organizationName: fallbackProfile.organizationName,
+          interests: fallbackProfile.interests || [],
+        }),
+      email: user.email || '',
+      phone: fallbackProfile.phoneNumber || '',
+      interests: fallbackProfile.interests || [],
+      account_type: accountType,
+      first_name: fallbackProfile.firstName || null,
+      last_name: fallbackProfile.lastName || null,
+      birth_month: fallbackProfile.birthMonth || null,
+      birth_year: fallbackProfile.birthYear || null,
+      gender: fallbackProfile.gender || null,
+      school: fallbackProfile.school || null,
+      school_id: fallbackProfile.schoolId || null,
+      student_verified: Boolean(metadata.student_verified),
+      verification_status: String(metadata.verification_status || 'unverified'),
+      organization_name: fallbackProfile.organizationName || null,
+      organization_type: fallbackProfile.organizationType || null,
+      organization_description: fallbackProfile.organizationDescription || null,
+      organization_website: fallbackProfile.organizationWebsite || null,
+      parent_organization_name: fallbackProfile.parentOrganizationName || null,
+      logo_url: normalizeAvatarStorageValue(fallbackProfile.logoUrl || '', null) || null,
+    };
 
     const { data: existingProfile, error: existingProfileError } = await supabase
       .from('profiles')
@@ -364,7 +403,8 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
           user.id,
           fallbackProfile.name || nextUsername,
           nextUsername,
-          String(user.user_metadata?.avatar_url || '')
+          String(user.user_metadata?.avatar_url || ''),
+          profileExtra
         ),
         { onConflict: 'id' }
       );
@@ -530,7 +570,7 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
               username?: string | null;
               bio?: string | null;
               avatar_url?: string | null;
-              phone_number?: string | null;
+              phone?: string | null;
               birthday?: string | null;
               interests?: string[] | string | null;
               email?: string | null;
@@ -1425,7 +1465,7 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
   );
 
   const signUp = useCallback(
-    async ({ fullName, username, email, password, avatar }: SignUpInput) => {
+    async (input: SignUpInput) => {
       if (!supabase) {
         return {
           ok: false,
@@ -1436,10 +1476,30 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
       setIsReady(false);
       setAuthError(null);
 
-      const cleanUsername = normalizeUsername(username);
-      const cleanEmail = email.trim().toLowerCase();
-      const cleanFullName = fullName.trim() || cleanUsername;
-      const avatarUrl = normalizeAvatarStorageValue(avatar, null) || '';
+      const accountType = input.accountType || 'regular';
+      const cleanUsername = normalizeUsername(input.username);
+      const cleanEmail = input.email.trim().toLowerCase();
+      const cleanFirstName = String(input.firstName || '').trim();
+      const cleanLastName = String(input.lastName || '').trim();
+      const cleanOrganizationName = String(input.organizationName || '').trim();
+      const cleanFullName =
+        String(input.fullName || '').trim() ||
+        cleanOrganizationName ||
+        [cleanFirstName, cleanLastName].filter(Boolean).join(' ') ||
+        cleanUsername;
+      const cleanPhoneNumber = sanitizePhoneNumber(String(input.phoneNumber || ''));
+      const cleanInterests = Array.isArray(input.interests)
+        ? input.interests.map((interest) => String(interest).trim()).filter(Boolean)
+        : [];
+      const avatarUrl = normalizeAvatarStorageValue(input.avatar, null) || '';
+      const birthMonth = input.birthMonth ? Number(input.birthMonth) : null;
+      const birthYear = input.birthYear ? Number(input.birthYear) : null;
+      const profileBio = buildProfileSummary({
+        accountType,
+        firstName: cleanFirstName,
+        organizationName: cleanOrganizationName,
+        interests: cleanInterests,
+      });
 
       if (!cleanUsername) {
         setIsReady(true);
@@ -1468,13 +1528,37 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
         };
       }
 
+      // The handle_new_auth_user trigger (SECURITY DEFINER) reads this
+      // metadata blob and writes the full profiles row on auth.users INSERT.
+      // Snake-case keys here map 1:1 onto profiles columns — do not rename
+      // without updating the trigger.
       const { data, error } = await supabase.auth.signUp({
         email: cleanEmail,
-        password,
+        password: input.password,
         options: {
           data: {
             name: cleanFullName,
             username: cleanUsername,
+            email: cleanEmail,
+            phone_number: cleanPhoneNumber,
+            interests: cleanInterests,
+            bio: profileBio,
+            account_type: accountType,
+            first_name: accountType === 'organization' ? null : cleanFirstName,
+            last_name: accountType === 'organization' ? null : cleanLastName,
+            birth_month: birthMonth,
+            birth_year: birthYear,
+            gender: input.gender || null,
+            school: input.school || null,
+            school_id: input.schoolId || null,
+            student_verified: false,
+            verification_status: 'unverified',
+            organization_name: cleanOrganizationName || null,
+            organization_type: input.organizationType || null,
+            organization_description: input.organizationDescription || null,
+            organization_website: input.organizationWebsite || null,
+            parent_organization_name: input.parentOrganizationName || null,
+            logo_url: avatarUrl || null,
             avatar_url: avatarUrl || null,
           },
         },
@@ -1496,23 +1580,11 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
         };
       }
 
+      // The auth.users insert trigger has already populated every column on
+      // the profiles row from the metadata above. No client-side upsert is
+      // needed — attempting one when email confirmation is on would also fail
+      // RLS because there is no session yet.
       if (data.session) {
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .upsert(
-            createProfilePayload(
-              data.user.id,
-              cleanFullName,
-              cleanUsername,
-              avatarUrl
-            ),
-            { onConflict: 'id' }
-          );
-
-        if (profileError) {
-          console.error('Unable to create profile row during mobile sign up:', profileError);
-        }
-
         setSession(data.session);
         sessionRef.current = data.session;
       } else {

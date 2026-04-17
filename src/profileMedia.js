@@ -162,6 +162,61 @@ export const buildStoredUserFromSources = ({ authUser, profile }) => {
   }
 }
 
+const compactProfileValue = (value) => {
+  if (value === undefined || value === "") return null
+  return value
+}
+
+export const buildProfilePayloadFromAuthUser = (authUser) => {
+  const metadata = authUser?.user_metadata || {}
+  const username = toTrimmedString(metadata.username || metadata.user_name)
+  const accountType = toTrimmedString(metadata.account_type) || "regular"
+  const firstName = toTrimmedString(metadata.first_name)
+  const lastName = toTrimmedString(metadata.last_name)
+  const organizationName = toTrimmedString(metadata.organization_name)
+  const displayName =
+    toTrimmedString(metadata.name || metadata.full_name) ||
+    organizationName ||
+    [firstName, lastName].filter(Boolean).join(" ") ||
+    username ||
+    "Campus User"
+
+  return {
+    id: authUser.id,
+    name: displayName,
+    username,
+    bio: toTrimmedString(metadata.bio) || "Exploring campus events and new people.",
+    avatar_url: sanitizeAvatarStorageValue(
+      metadata.avatar_url || metadata.picture || metadata.image,
+      null
+    ),
+    email: authUser.email || toTrimmedString(metadata.email),
+    phone: toTrimmedString(metadata.phone_number || metadata.phone),
+    interests: Array.isArray(metadata.interests) ? metadata.interests : [],
+    account_type: accountType,
+    first_name: compactProfileValue(firstName),
+    last_name: compactProfileValue(lastName),
+    birth_month: metadata.birth_month ? Number(metadata.birth_month) : null,
+    birth_year: metadata.birth_year ? Number(metadata.birth_year) : null,
+    gender: compactProfileValue(toTrimmedString(metadata.gender)),
+    school: compactProfileValue(toTrimmedString(metadata.school)),
+    school_id: compactProfileValue(toTrimmedString(metadata.school_id)),
+    student_verified: Boolean(metadata.student_verified),
+    verification_status: toTrimmedString(metadata.verification_status) || "unverified",
+    organization_name: compactProfileValue(organizationName),
+    organization_type: compactProfileValue(toTrimmedString(metadata.organization_type)),
+    organization_description: compactProfileValue(
+      toTrimmedString(metadata.organization_description)
+    ),
+    organization_website: compactProfileValue(toTrimmedString(metadata.organization_website)),
+    parent_organization_name: compactProfileValue(
+      toTrimmedString(metadata.parent_organization_name)
+    ),
+    logo_url: sanitizeAvatarStorageValue(metadata.logo_url, null),
+    updated_at: new Date().toISOString(),
+  }
+}
+
 export const resolveCreatorIdentity = ({
   profileName,
   profileUsername,
@@ -213,7 +268,23 @@ export const syncStoredUserFromSession = async (session) => {
     return null
   }
 
-  const profile = await fetchProfileForUser(session.user.id)
+  let profile = await fetchProfileForUser(session.user.id)
+
+  if (!profile) {
+    const payload = buildProfilePayloadFromAuthUser(session.user)
+    const { data, error } = await supabase
+      .from("profiles")
+      .upsert(payload, { onConflict: "id" })
+      .select("id, name, username, bio, avatar_url")
+      .maybeSingle()
+
+    if (error) {
+      console.error("Unable to create profile from auth metadata:", error)
+    } else {
+      profile = data || null
+    }
+  }
+
   const storedUser = buildStoredUserFromSources({
     authUser: session.user,
     profile,

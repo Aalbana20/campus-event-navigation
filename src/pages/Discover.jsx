@@ -345,7 +345,7 @@ function Discover({ hideModeSwitch = false, initialMode = "events" } = {}) {
 
       return { ...prev, [key]: [...normalized, ...pendingOptimistic] }
     })
-  }, [showToast])
+  }, [currentUser, showToast])
 
   const handleOpenComments = useCallback(() => {
     if (!currentEvent) return
@@ -429,7 +429,7 @@ function Discover({ hideModeSwitch = false, initialMode = "events" } = {}) {
 
       return { ...prev, [eventId]: nextList }
     })
-  }, [activeCommentEvent, commentDraft, currentUser?.name, currentUser?.username, currentUser?.image, currentUser?.avatar, showToast])
+  }, [activeCommentEvent, commentDraft, currentUser, showToast])
 
   const handleToggleCommentLike = useCallback(
     async (commentId) => {
@@ -490,7 +490,7 @@ function Discover({ hideModeSwitch = false, initialMode = "events" } = {}) {
         })
       }
     },
-    [activeCommentEvent]
+    [activeCommentEvent, currentUser]
   )
 
   const handleDeleteComment = useCallback(
@@ -706,7 +706,7 @@ function Discover({ hideModeSwitch = false, initialMode = "events" } = {}) {
     }
   }, []);
 
-  const handleStoryPointerUp = useCallback((e) => {
+  const handleStoryPointerUp = useCallback(() => {
     if (!storyDragRef.current.isDragging) return;
     storyDragRef.current.isDragging = false;
     if (storyDragOffsetY > 100) {

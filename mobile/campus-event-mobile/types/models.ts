@@ -39,6 +39,23 @@ export type ProfileRecord = {
   phoneNumber?: string;
   birthday?: string;
   email?: string;
+  accountType?: 'student' | 'organization' | 'regular';
+  firstName?: string;
+  lastName?: string;
+  birthMonth?: number | null;
+  birthYear?: number | null;
+  gender?: 'Male' | 'Female' | '';
+  school?: string;
+  schoolId?: string;
+  studentVerified?: boolean;
+  verificationStatus?: 'unverified' | 'pending' | 'verified' | 'rejected';
+  organizationName?: string;
+  organizationType?: string;
+  organizationDescription?: string;
+  organizationWebsite?: string;
+  parentOrganizationId?: string | null;
+  parentOrganizationName?: string;
+  logoUrl?: string;
 };
 
 export type FollowRelationship = {
@@ -119,10 +136,24 @@ export type SignInInput = {
 };
 
 export type SignUpInput = {
-  fullName: string;
+  accountType?: 'student' | 'organization' | 'regular';
+  fullName?: string;
+  firstName?: string;
+  lastName?: string;
   username: string;
   email: string;
   password: string;
+  phoneNumber?: string;
+  birthMonth?: string;
+  birthYear?: string;
+  gender?: 'Male' | 'Female' | '';
+  school?: string;
+  schoolId?: string;
+  organizationName?: string;
+  organizationType?: string;
+  organizationDescription?: string;
+  organizationWebsite?: string;
+  parentOrganizationName?: string;
   avatar?: string;
   interests?: string[];
 };

@@ -20,6 +20,90 @@ alter table profiles add column if not exists birthday date;
 alter table profiles add column if not exists interests text[];
 alter table profiles add column if not exists email text;
 alter table profiles add column if not exists updated_at timestamptz default now();
+alter table profiles add column if not exists account_type text not null default 'regular';
+alter table profiles add column if not exists first_name text;
+alter table profiles add column if not exists last_name text;
+alter table profiles add column if not exists birth_month smallint;
+alter table profiles add column if not exists birth_year smallint;
+alter table profiles add column if not exists gender text;
+alter table profiles add column if not exists school text;
+alter table profiles add column if not exists school_id text;
+alter table profiles add column if not exists student_verified boolean not null default false;
+alter table profiles add column if not exists verification_status text not null default 'unverified';
+alter table profiles add column if not exists organization_name text;
+alter table profiles add column if not exists organization_type text;
+alter table profiles add column if not exists organization_description text;
+alter table profiles add column if not exists organization_website text;
+alter table profiles add column if not exists parent_organization_id uuid references profiles(id) on delete set null;
+alter table profiles add column if not exists parent_organization_name text;
+alter table profiles add column if not exists logo_url text;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'profiles_account_type_check'
+      and conrelid = 'profiles'::regclass
+  ) then
+    alter table profiles
+      add constraint profiles_account_type_check
+      check (account_type in ('student', 'organization', 'regular'));
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'profiles_gender_check'
+      and conrelid = 'profiles'::regclass
+  ) then
+    alter table profiles
+      add constraint profiles_gender_check
+      check (gender is null or gender in ('Male', 'Female'));
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'profiles_birth_month_check'
+      and conrelid = 'profiles'::regclass
+  ) then
+    alter table profiles
+      add constraint profiles_birth_month_check
+      check (birth_month is null or birth_month between 1 and 12);
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'profiles_verification_status_check'
+      and conrelid = 'profiles'::regclass
+  ) then
+    alter table profiles
+      add constraint profiles_verification_status_check
+      check (verification_status in ('unverified', 'pending', 'verified', 'rejected'));
+  end if;
+end $$;
+
+create index if not exists profiles_account_type_idx on profiles(account_type);
+create index if not exists profiles_school_id_idx on profiles(school_id) where school_id is not null;
+create index if not exists profiles_parent_organization_id_idx on profiles(parent_organization_id) where parent_organization_id is not null;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_indexes
+    where schemaname = 'public'
+      and tablename = 'profiles'
+      and indexname = 'profiles_username_unique_idx'
+  ) and not exists (
+    select 1
+    from profiles
+    where username is not null and length(trim(username)) > 0
+    group by lower(username)
+    having count(*) > 1
+  ) then
+    create unique index profiles_username_unique_idx
+      on profiles(lower(username))
+      where username is not null and length(trim(username)) > 0;
+  end if;
+end $$;
 
 -- Settings: stores all notification/privacy toggles as JSONB.
 alter table profiles

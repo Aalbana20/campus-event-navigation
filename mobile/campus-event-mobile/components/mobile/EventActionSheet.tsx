@@ -2,6 +2,7 @@ import * as Clipboard from 'expo-clipboard';
 import * as ExpoLinking from 'expo-linking';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
   Image,
   Modal,
   Pressable,
