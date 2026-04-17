@@ -22,7 +22,7 @@ import {
 import { buildDiscoverStoryItems } from "../discoverSocial"
 import { useToast } from "../context/ToastContext"
 
-function Discover() {
+function Discover({ hideModeSwitch = false, initialMode = "events" } = {}) {
   const SWIPE_TRIGGER_PX = 110
   const DRAG_INTENT_PX = 10
   const navigate = useNavigate()
@@ -37,7 +37,7 @@ function Discover() {
     savedEvents,
   } = useEvents()
 
-  const [activeMode, setActiveMode] = useState("events")
+  const [activeMode, setActiveMode] = useState(initialMode || "events")
   const [currentIndex, setCurrentIndex] = useState(0)
   const [swipeDirection, setSwipeDirection] = useState("")
   const [buttonFlash, setButtonFlash] = useState("")
@@ -1078,9 +1078,11 @@ function Discover() {
           </>
         ) : null}
 
-        <div className="discover-switch-wrap">
-          <DiscoverModeSwitch activeMode={activeMode} onChange={handleChangeDiscoverMode} />
-        </div>
+        {!hideModeSwitch ? (
+          <div className="discover-switch-wrap">
+            <DiscoverModeSwitch activeMode={activeMode} onChange={handleChangeDiscoverMode} />
+          </div>
+        ) : null}
 
         {activeMode === "events" ? (
           <div className={`swipe-area ${!currentEvent ? "stack-empty" : ""}`}>

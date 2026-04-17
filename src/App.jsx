@@ -3,7 +3,7 @@ import "./App.css"
 import {
   Routes,
   Route,
-  Link,
+  NavLink,
   Navigate,
   Outlet,
   useLocation,
@@ -12,6 +12,8 @@ import {
   useSearchParams,
 } from "react-router-dom"
 
+const Home = lazy(() => import("./pages/Home"))
+const VideoPosts = lazy(() => import("./pages/VideoPosts"))
 const Discover = lazy(() => import("./pages/Discover"))
 const Explore = lazy(() => import("./pages/Explore"))
 const Messages = lazy(() => import("./pages/Messages"))
@@ -580,44 +582,71 @@ function MainLayout() {
     <>
       <nav className="topbar">
         <div className="topbar-left">
-          <Link className="topbar-item" to="/discover">Discover</Link>
-          <Link className="topbar-item" to="/explore">Explore</Link>
-          <Link className="topbar-item topbar-item-with-icon" to="/messages">
-            <svg
-              className="topbar-item-icon"
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              aria-hidden="true"
-            >
+          <NavLink
+            to="/home"
+            className={({ isActive }) => `topbar-item-icon-nav ${isActive ? "active" : ""}`}
+            aria-label="Home"
+            title="Home"
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.8" />
+              <path d="M3 9h18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              <path d="M8 3v4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              <path d="M16 3v4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
+          </NavLink>
+
+          <NavLink
+            to="/video-posts"
+            className={({ isActive }) => `topbar-item-icon-nav ${isActive ? "active" : ""}`}
+            aria-label="Video and Posts"
+            title="Video / Posts"
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <polygon points="6 4 20 12 6 20 6 4" fill="currentColor" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+            </svg>
+          </NavLink>
+
+          <NavLink
+            to="/messages"
+            className={({ isActive }) => `topbar-item-icon-nav ${isActive ? "active" : ""}`}
+            aria-label="Messages"
+            title="Messages"
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path
-                d="M22 2 11 13"
+                d="M4 5h16a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1h-9l-5 4v-4H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"
                 stroke="currentColor"
                 strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <path
-                d="M22 2 15 22l-4-9-9-4 20-7Z"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <path
-                d="M11 13 15 22"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
                 strokeLinejoin="round"
               />
             </svg>
-            <span>DMs</span>
-          </Link>
-          <Link className="topbar-item" to="/events">Events</Link>
-          <Link className="topbar-item" to="/profile">Profile</Link>
+          </NavLink>
+
+          <NavLink
+            to="/explore"
+            className={({ isActive }) => `topbar-item-icon-nav ${isActive ? "active" : ""}`}
+            aria-label="Explore"
+            title="Explore"
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="1.8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
+          </NavLink>
+
+          <NavLink
+            to="/profile"
+            className={({ isActive }) => `topbar-item-icon-nav ${isActive ? "active" : ""}`}
+            aria-label="Profile"
+            title="Profile"
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8" />
+              <circle cx="12" cy="10" r="3" stroke="currentColor" strokeWidth="1.8" />
+              <path d="M5.5 19a7 7 0 0 1 13 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
+          </NavLink>
         </div>
 
         <div className="topbar-right">
@@ -820,11 +849,11 @@ function ProtectedRoute({ children, session }) {
 }
 
 function PublicRoute({ children, session }) {
-  return session ? <Navigate to="/discover" replace /> : children
+  return session ? <Navigate to="/home" replace /> : children
 }
 
 function RootRedirect({ session }) {
-  return <Navigate to={session ? "/discover" : "/auth/login"} replace />
+  return <Navigate to={session ? "/home" : "/auth/login"} replace />
 }
 
 function LegacyEventRedirect() {
@@ -940,7 +969,9 @@ function App() {
             </ProtectedRoute>
           }
         >
-          <Route path="/discover" element={<Discover />} />
+          <Route path="/home" element={<Home />} />
+          <Route path="/video-posts" element={<VideoPosts />} />
+          <Route path="/discover" element={<Navigate to="/home" replace />} />
           <Route path="/explore" element={<Explore />} />
           <Route path="/event/:eventId" element={<LegacyEventRedirect />} />
           <Route path="/events" element={<MyEvents />} />
