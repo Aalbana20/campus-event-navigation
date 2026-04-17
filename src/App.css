@@ -6909,7 +6909,7 @@ body.theme-dark .calendar-modal-card .my-flip-card-back {
   cursor: pointer;
 }
 
-.apple-calendar-day:nth-child(7n + 1) {
+.apple-calendar-day:nth-child(7n) {
   border-right: none;
 }
 
