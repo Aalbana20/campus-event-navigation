@@ -3,4 +3,20 @@ import react from "@vitejs/plugin-react"
 
 export default defineConfig({
   plugins: [react()],
+  optimizeDeps: {
+    entries: ["index.html", "src/**/*.{js,jsx,ts,tsx}"],
+  },
+  server: {
+    watch: {
+      ignored: [
+        "**/mobile/**",
+        "**/supabase/**",
+        "**/.git/**",
+        "**/node_modules/**",
+      ],
+    },
+    fs: {
+      deny: ["mobile/**"],
+    },
+  },
 })

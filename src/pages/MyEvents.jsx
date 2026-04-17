@@ -484,7 +484,6 @@ function MyEvents() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [selectedCalendarEvent, setSelectedCalendarEvent] = useState(null)
   const [selectedPersonalItem, setSelectedPersonalItem] = useState(null)
-  const [isCreateMenuOpen, setIsCreateMenuOpen] = useState(false)
   const [calendarFilter, setCalendarFilter] = useState("all")
   const [calendarView, setCalendarView] = useState("month")
   const [searchQuery, setSearchQuery] = useState("")
@@ -509,23 +508,11 @@ function MyEvents() {
   )
   const touchStartXRef = useRef(null)
   const mouseStartXRef = useRef(null)
-  const createMenuRef = useRef(null)
   const activeTab = normalizeTab(searchParams.get("tab"))
 
   useEffect(() => {
     localStorage.setItem(PERSONAL_STORAGE_KEY, JSON.stringify(personalItems))
   }, [personalItems])
-
-  useEffect(() => {
-    const handleClickAway = (event) => {
-      if (!createMenuRef.current?.contains(event.target)) {
-        setIsCreateMenuOpen(false)
-      }
-    }
-
-    document.addEventListener("mousedown", handleClickAway)
-    return () => document.removeEventListener("mousedown", handleClickAway)
-  }, [])
 
   const changeTab = (nextTab) => {
     const normalizedTab = normalizeTab(nextTab)
@@ -671,7 +658,6 @@ function MyEvents() {
       time: "",
       note: "",
     })
-    setIsCreateMenuOpen(false)
     setIsPersonalComposerOpen(true)
   }
 
@@ -820,45 +806,10 @@ function MyEvents() {
 
   return (
     <main className="calendar-page-shell">
-      <div className="calendar-topbar">
-        <div className="calendar-topbar-left">
-          <SegmentedControl
-            label="Calendar filter"
-            options={FILTER_OPTIONS}
-            value={calendarFilter}
-            onChange={setCalendarFilter}
-            className="calendar-filter-control"
-          />
-
-          <div className="calendar-create-wrap" ref={createMenuRef}>
-            <button
-              type="button"
-              className="calendar-plus-btn"
-              onClick={() => setIsCreateMenuOpen((isOpen) => !isOpen)}
-              aria-label="Create"
-              aria-expanded={isCreateMenuOpen}
-            >
-              +
-            </button>
-
-            {isCreateMenuOpen ? (
-              <div className="calendar-create-menu" role="menu">
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => {
-                    setIsCreateMenuOpen(false)
-                    changeTab("create")
-                  }}
-                >
-                  Event
-                </button>
-                <button type="button" role="menuitem" onClick={handleCreatePersonal}>
-                  Personal
-                </button>
-              </div>
-            ) : null}
-          </div>
+      <section className="calendar-hero">
+        <div>
+          <p className="calendar-hero-kicker">{getViewSubtitle(calendarView, anchorDate)}</p>
+          <h1>{getViewTitle(calendarView, anchorDate)}</h1>
         </div>
 
         <SegmentedControl
@@ -868,29 +819,6 @@ function MyEvents() {
           onChange={setCalendarView}
           className="calendar-view-control"
         />
-
-        <label className="calendar-search">
-          <span aria-hidden="true">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-              <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
-              <path d="m20 20-3.8-3.8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            </svg>
-          </span>
-          <input
-            type="search"
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="Search"
-            aria-label="Search calendar"
-          />
-        </label>
-      </div>
-
-      <section className="calendar-hero">
-        <div>
-          <p className="calendar-hero-kicker">{getViewSubtitle(calendarView, anchorDate)}</p>
-          <h1>{getViewTitle(calendarView, anchorDate)}</h1>
-        </div>
 
         <div className="calendar-date-controls" aria-label="Calendar navigation">
           <button type="button" onClick={goToPrevious} aria-label="Previous">
@@ -905,15 +833,60 @@ function MyEvents() {
         </div>
       </section>
 
-      <section
-        className={`calendar-main-surface view-${calendarView}`}
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
-        onMouseDown={handleMouseDown}
-        onMouseUp={handleMouseUp}
-      >
-        {renderCalendarView()}
-      </section>
+      <div className="calendar-workspace">
+        <aside className="calendar-command-panel" aria-label="Calendar controls">
+          <div className="calendar-command-section">
+            <span className="calendar-command-kicker">Scope</span>
+            <SegmentedControl
+              label="Calendar filter"
+              options={FILTER_OPTIONS}
+              value={calendarFilter}
+              onChange={setCalendarFilter}
+              className="calendar-filter-control"
+            />
+          </div>
+
+          <div className="calendar-command-section">
+            <span className="calendar-command-kicker">Create</span>
+            <button
+              type="button"
+              className="calendar-command-btn primary"
+              onClick={() => changeTab("create")}
+            >
+              Event
+            </button>
+            <button type="button" className="calendar-command-btn" onClick={handleCreatePersonal}>
+              Personal
+            </button>
+          </div>
+
+          <label className="calendar-search">
+            <span aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
+                <path d="m20 20-3.8-3.8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+            </span>
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search calendar"
+              aria-label="Search calendar"
+            />
+          </label>
+        </aside>
+
+        <section
+          className={`calendar-main-surface view-${calendarView}`}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+          onMouseDown={handleMouseDown}
+          onMouseUp={handleMouseUp}
+        >
+          {renderCalendarView()}
+        </section>
+      </div>
 
       {selectedCalendarEvent && (
         <div className="calendar-modal-overlay" onClick={() => setSelectedCalendarEvent(null)}>

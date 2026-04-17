@@ -87,6 +87,87 @@ const parseEventDate = (event) => {
   return null
 }
 
+function AppRailIcon({ name }) {
+  const commonProps = {
+    width: 22,
+    height: 22,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    xmlns: "http://www.w3.org/2000/svg",
+    "aria-hidden": "true",
+  }
+
+  switch (name) {
+    case "home":
+      return (
+        <svg {...commonProps}>
+          <path d="M4 11.5 12 5l8 6.5V20a1 1 0 0 1-1 1h-5v-6h-4v6H5a1 1 0 0 1-1-1v-8.5Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+        </svg>
+      )
+    case "calendar":
+      return (
+        <svg {...commonProps}>
+          <rect x="3.5" y="5" width="17" height="16" rx="2.5" stroke="currentColor" strokeWidth="1.8" />
+          <path d="M3.5 9.5h17M8 3.5v3M16 3.5v3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+        </svg>
+      )
+    case "play":
+      return (
+        <svg {...commonProps}>
+          <path d="m8 5 11 7-11 7V5Z" fill="currentColor" />
+        </svg>
+      )
+    case "messages":
+      return (
+        <svg {...commonProps}>
+          <path d="M4 5.5h16v11H10.5L5 20.5v-4H4v-11Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+        </svg>
+      )
+    case "explore":
+      return (
+        <svg {...commonProps}>
+          <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="1.8" />
+          <path d="m15.2 8.8-2.1 5.1-5.1 2.1 2.1-5.1 5.1-2.1Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+        </svg>
+      )
+    case "profile":
+      return (
+        <svg {...commonProps}>
+          <circle cx="12" cy="8.5" r="3.2" stroke="currentColor" strokeWidth="1.8" />
+          <path d="M5.5 20a6.7 6.7 0 0 1 13 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+        </svg>
+      )
+    case "search":
+      return (
+        <svg {...commonProps}>
+          <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="1.9" />
+          <path d="m20 20-3.8-3.8" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+        </svg>
+      )
+    case "bell":
+      return (
+        <svg {...commonProps}>
+          <path d="M12 4.5c-2.9 0-5.25 2.35-5.25 5.25v2.06c0 .63-.25 1.24-.69 1.69l-1.32 1.32a.75.75 0 0 0 .53 1.28h13.46a.75.75 0 0 0 .53-1.28l-1.32-1.32a2.4 2.4 0 0 1-.69-1.69V9.75A5.25 5.25 0 0 0 12 4.5Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M9.75 18a2.25 2.25 0 0 0 4.5 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+        </svg>
+      )
+    case "plus":
+      return (
+        <svg {...commonProps}>
+          <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      )
+    case "pin":
+      return (
+        <svg {...commonProps}>
+          <path d="m14.5 4 5.5 5.5-2.8 1.1-3.6 3.6.5 4.1L12.7 20 8.9 16.2 5 19.5 4.5 19l3.3-3.9L4 11.3l1.7-1.4 4.1.5 3.6-3.6L14.5 4Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+        </svg>
+      )
+    default:
+      return null
+  }
+}
+
 function MainLayout() {
   const { savedEvents, allEvents, followingList, followersList, currentUser } = useEvents()
   const location = useLocation()
@@ -94,6 +175,7 @@ function MainLayout() {
   const [searchParams] = useSearchParams()
   const [isInboxOpen, setIsInboxOpen] = useState(false)
   const [isSearchOpen, setIsSearchOpen] = useState(false)
+  const [isRailPinned, setIsRailPinned] = useState(false)
   const [notificationFilter, setNotificationFilter] = useState("all")
   const [openNotificationMenuId, setOpenNotificationMenuId] = useState(null)
   const [activeDmThreadId, setActiveDmThreadId] = useState(null)
@@ -578,265 +660,262 @@ function MainLayout() {
     handleSendDmMessage,
   }
 
+  const navItems = [
+    { to: "/home", label: "Home", icon: "home" },
+    { to: "/events", label: "Events / Calendar", icon: "calendar" },
+    { to: "/video-posts", label: "Video / Posts", icon: "play" },
+    { to: "/messages", label: "Messages", icon: "messages" },
+    { to: "/explore", label: "Explore", icon: "explore" },
+    { to: "/profile", label: "Profile", icon: "profile" },
+  ]
+
   return (
-    <>
-      <nav className="topbar">
-        <div className="topbar-left">
-          <NavLink
-            to="/home"
-            className={({ isActive }) => `topbar-item-icon-nav ${isActive ? "active" : ""}`}
-            aria-label="Home"
-            title="Home"
-          >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.8" />
-              <path d="M3 9h18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-              <path d="M8 3v4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-              <path d="M16 3v4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-            </svg>
-          </NavLink>
+    <div className={`web-app-shell ${isRailPinned ? "rail-pinned" : ""}`}>
+      <aside className={`app-rail ${isRailPinned ? "pinned" : ""}`} aria-label="Primary navigation">
+        <div className="app-rail-brand">
+          <span className="app-rail-logo" aria-hidden="true">C</span>
+          <span className="app-rail-label">Campus</span>
+        </div>
 
-          <NavLink
-            to="/video-posts"
-            className={({ isActive }) => `topbar-item-icon-nav ${isActive ? "active" : ""}`}
-            aria-label="Video and Posts"
-            title="Video / Posts"
-          >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <polygon points="6 4 20 12 6 20 6 4" fill="currentColor" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-            </svg>
-          </NavLink>
+        <nav className="app-rail-nav">
+          {navItems.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.to === "/home" || item.to === "/profile"}
+              className={({ isActive }) => `app-rail-item ${isActive ? "active" : ""}`}
+              aria-label={item.label}
+              title={item.label}
+            >
+              <span className="app-rail-icon">
+                <AppRailIcon name={item.icon} />
+              </span>
+              <span className="app-rail-label">{item.label}</span>
+            </NavLink>
+          ))}
+        </nav>
 
-          <NavLink
-            to="/messages"
-            className={({ isActive }) => `topbar-item-icon-nav ${isActive ? "active" : ""}`}
-            aria-label="Messages"
-            title="Messages"
+        <div className="app-rail-actions">
+          <button
+            type="button"
+            className="app-rail-item app-rail-button"
+            aria-label="Search"
+            title="Search"
+            onClick={() => setIsSearchOpen(true)}
           >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path
-                d="M4 5h16a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1h-9l-5 4v-4H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </NavLink>
+            <span className="app-rail-icon">
+              <AppRailIcon name="search" />
+            </span>
+            <span className="app-rail-label">Search</span>
+          </button>
 
-          <NavLink
-            to="/explore"
-            className={({ isActive }) => `topbar-item-icon-nav ${isActive ? "active" : ""}`}
-            aria-label="Explore"
-            title="Explore"
+          <button
+            type="button"
+            className="app-rail-item app-rail-button"
+            aria-label="Notifications"
+            title="Notifications"
+            onClick={openInbox}
           >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="1.8" />
-              <line x1="21" y1="21" x2="16.65" y2="16.65" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-            </svg>
-          </NavLink>
+            <span className="app-rail-icon app-rail-badge-anchor">
+              <AppRailIcon name="bell" />
+              {unreadNotificationCount > 0 && (
+                <span className="app-rail-badge">{unreadNotificationCount}</span>
+              )}
+            </span>
+            <span className="app-rail-label">Notifications</span>
+          </button>
+
+          <button
+            type="button"
+            className="app-rail-item app-rail-button app-rail-create"
+            aria-label="Create"
+            title="Create"
+            onClick={() => navigate("/events?tab=create")}
+          >
+            <span className="app-rail-icon">
+              <AppRailIcon name="plus" />
+            </span>
+            <span className="app-rail-label">Create</span>
+          </button>
+        </div>
+
+        <div className="app-rail-footer">
+          <button
+            type="button"
+            className={`app-rail-item app-rail-button ${isRailPinned ? "active" : ""}`}
+            aria-label={isRailPinned ? "Unpin navigation rail" : "Pin navigation rail"}
+            title={isRailPinned ? "Unpin rail" : "Pin rail"}
+            onClick={() => setIsRailPinned((isPinned) => !isPinned)}
+          >
+            <span className="app-rail-icon">
+              <AppRailIcon name="pin" />
+            </span>
+            <span className="app-rail-label">{isRailPinned ? "Pinned" : "Pin rail"}</span>
+          </button>
 
           <NavLink
             to="/profile"
-            className={({ isActive }) => `topbar-item-icon-nav ${isActive ? "active" : ""}`}
-            aria-label="Profile"
+            className={({ isActive }) => `app-rail-profile ${isActive ? "active" : ""}`}
+            aria-label="Open profile"
             title="Profile"
           >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8" />
-              <circle cx="12" cy="10" r="3" stroke="currentColor" strokeWidth="1.8" />
-              <path d="M5.5 19a7 7 0 0 1 13 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-            </svg>
+            <img
+              src={currentUser?.image || currentUser?.avatar || defaultAvatar}
+              alt=""
+              onError={(event) => {
+                event.currentTarget.src = defaultAvatar
+              }}
+            />
+            <span className="app-rail-profile-text">
+              <strong>{currentUser?.name || currentUser?.username || "Profile"}</strong>
+              <span>{currentUser?.username ? `@${currentUser.username}` : "View profile"}</span>
+            </span>
           </NavLink>
         </div>
+      </aside>
 
-        <div className="topbar-right">
-          <button
-            type="button"
-            className="navbar-search-btn"
-            aria-label="Search"
-            onClick={() => setIsSearchOpen(true)}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <circle cx="11" cy="11" r="8" />
-              <line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
-          </button>
-          <button
-            type="button"
-            className="navbar-bell-btn"
-            aria-label="Open notifications"
-            onClick={openInbox}
-          >
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              aria-hidden="true"
-            >
-              <path
-                d="M12 4.5c-2.9 0-5.25 2.35-5.25 5.25v2.06c0 .63-.25 1.24-.69 1.69l-1.32 1.32a.75.75 0 0 0 .53 1.28h13.46a.75.75 0 0 0 .53-1.28l-1.32-1.32a2.4 2.4 0 0 1-.69-1.69V9.75A5.25 5.25 0 0 0 12 4.5Z"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <path
-                d="M9.75 18a2.25 2.25 0 0 0 4.5 0"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-            {unreadNotificationCount > 0 && (
-              <span className="navbar-bell-badge">{unreadNotificationCount}</span>
-            )}
-          </button>
-        </div>
-      </nav>
+      <div className="web-app-main">
+        {isSearchOpen && <GlobalSearch onClose={() => setIsSearchOpen(false)} />}
 
-      {isSearchOpen && <GlobalSearch onClose={() => setIsSearchOpen(false)} />}
-
-      {isInboxOpen && (
-        <div className="inbox-overlay" onClick={closeInbox}>
-          <aside className="inbox-panel" onClick={(e) => e.stopPropagation()}>
-            <div className="inbox-header">
-              <h3>Notifications</h3>
-              <button
-                type="button"
-                className="activity-clear-all-btn"
-                onClick={clearAllNotifications}
-                disabled={!unreadNotificationCount}
-              >
-                Clear all
-              </button>
-            </div>
-
-            <button
-              type="button"
-              className="inbox-close-btn inbox-close-floating"
-              onClick={closeInbox}
-              aria-label="Close activity panel"
-            >
-              ×
-            </button>
-
-            <div className="inbox-body">
-              <div className="notification-filters">
+        {isInboxOpen && (
+          <div className="inbox-overlay" onClick={closeInbox}>
+            <aside className="inbox-panel" onClick={(e) => e.stopPropagation()}>
+              <div className="inbox-header">
+                <h3>Notifications</h3>
                 <button
                   type="button"
-                  className={`notification-filter-chip ${notificationFilter === "all" ? "active" : ""}`}
-                  onClick={() => setNotificationFilter("all")}
+                  className="activity-clear-all-btn"
+                  onClick={clearAllNotifications}
+                  disabled={!unreadNotificationCount}
                 >
-                  All
-                </button>
-                <button
-                  type="button"
-                  className={`notification-filter-chip ${notificationFilter === "following" ? "active" : ""}`}
-                  onClick={() => setNotificationFilter("following")}
-                >
-                  Following
-                </button>
-                <button
-                  type="button"
-                  className={`notification-filter-chip ${notificationFilter === "messages" ? "active" : ""}`}
-                  onClick={() => setNotificationFilter("messages")}
-                >
-                  Messages
-                </button>
-                <button
-                  type="button"
-                  className={`notification-filter-chip ${notificationFilter === "events" ? "active" : ""}`}
-                  onClick={() => setNotificationFilter("events")}
-                >
-                  Events
-                </button>
-                <button
-                  type="button"
-                  className={`notification-filter-chip ${notificationFilter === "requests" ? "active" : ""}`}
-                  onClick={() => setNotificationFilter("requests")}
-                >
-                  Requests
+                  Clear all
                 </button>
               </div>
 
-              {filteredNotifications.length > 0 ? (
-                <div className="inbox-list">
-                  {filteredNotifications.map((item) => (
-                    <div
-                      className={`inbox-item notification-item ${item.read ? "read" : "unread"}`}
-                      key={item.id}
-                      onClick={() => handleNotificationSelect(item)}
-                    >
-                      <img
-                        className="inbox-item-avatar"
-                        src={item.image || defaultAvatar}
-                        alt=""
-                        onError={(e) => {
-                          e.currentTarget.src = defaultAvatar
-                        }}
-                      />
-                      <div className="inbox-item-main">
-                        <span className="inbox-item-text">{item.text}</span>
-                        <span className="inbox-item-time">{item.time}</span>
-                      </div>
-                      {!item.read && <span className="notification-unread-dot" aria-hidden="true" />}
+              <button
+                type="button"
+                className="inbox-close-btn inbox-close-floating"
+                onClick={closeInbox}
+                aria-label="Close activity panel"
+              >
+                ×
+              </button>
 
-                      <button
-                        type="button"
-                        className="notification-more-btn"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          toggleNotificationMenu(item.id)
-                        }}
-                        aria-label="More options"
+              <div className="inbox-body">
+                <div className="notification-filters">
+                  <button
+                    type="button"
+                    className={`notification-filter-chip ${notificationFilter === "all" ? "active" : ""}`}
+                    onClick={() => setNotificationFilter("all")}
+                  >
+                    All
+                  </button>
+                  <button
+                    type="button"
+                    className={`notification-filter-chip ${notificationFilter === "following" ? "active" : ""}`}
+                    onClick={() => setNotificationFilter("following")}
+                  >
+                    Following
+                  </button>
+                  <button
+                    type="button"
+                    className={`notification-filter-chip ${notificationFilter === "messages" ? "active" : ""}`}
+                    onClick={() => setNotificationFilter("messages")}
+                  >
+                    Messages
+                  </button>
+                  <button
+                    type="button"
+                    className={`notification-filter-chip ${notificationFilter === "events" ? "active" : ""}`}
+                    onClick={() => setNotificationFilter("events")}
+                  >
+                    Events
+                  </button>
+                  <button
+                    type="button"
+                    className={`notification-filter-chip ${notificationFilter === "requests" ? "active" : ""}`}
+                    onClick={() => setNotificationFilter("requests")}
+                  >
+                    Requests
+                  </button>
+                </div>
+
+                {filteredNotifications.length > 0 ? (
+                  <div className="inbox-list">
+                    {filteredNotifications.map((item) => (
+                      <div
+                        className={`inbox-item notification-item ${item.read ? "read" : "unread"}`}
+                        key={item.id}
+                        onClick={() => handleNotificationSelect(item)}
                       >
-                        •••
-                      </button>
+                        <img
+                          className="inbox-item-avatar"
+                          src={item.image || defaultAvatar}
+                          alt=""
+                          onError={(e) => {
+                            e.currentTarget.src = defaultAvatar
+                          }}
+                        />
+                        <div className="inbox-item-main">
+                          <span className="inbox-item-text">{item.text}</span>
+                          <span className="inbox-item-time">{item.time}</span>
+                        </div>
+                        {!item.read && <span className="notification-unread-dot" aria-hidden="true" />}
 
-                      {openNotificationMenuId === item.id && (
-                        <div className="notification-more-menu" onClick={(e) => e.stopPropagation()}>
-                          {!item.read && (
+                        <button
+                          type="button"
+                          className="notification-more-btn"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            toggleNotificationMenu(item.id)
+                          }}
+                          aria-label="More options"
+                        >
+                          •••
+                        </button>
+
+                        {openNotificationMenuId === item.id && (
+                          <div className="notification-more-menu" onClick={(e) => e.stopPropagation()}>
+                            {!item.read && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  markNotificationRead(item.id)
+                                  closeNotificationMenu()
+                                }}
+                              >
+                                Mark as read
+                              </button>
+                            )}
+
                             <button
                               type="button"
+                              className="danger"
                               onClick={() => {
-                                markNotificationRead(item.id)
+                                deleteNotification(item.id)
                                 closeNotificationMenu()
                               }}
                             >
-                              Mark as read
+                              Delete notification
                             </button>
-                          )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="notification-empty-state">
+                    No notifications in this category yet.
+                  </p>
+                )}
+              </div>
+            </aside>
+          </div>
+        )}
 
-                          <button
-                            type="button"
-                            className="danger"
-                            onClick={() => {
-                              deleteNotification(item.id)
-                              closeNotificationMenu()
-                            }}
-                          >
-                            Delete notification
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="notification-empty-state">
-                  No notifications in this category yet.
-                </p>
-              )}
-            </div>
-          </aside>
-        </div>
-      )}
-
-      <Outlet context={outletContext} />
-    </>
+        <Outlet context={outletContext} />
+      </div>
+    </div>
   )
 }
 
