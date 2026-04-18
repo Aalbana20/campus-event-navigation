@@ -638,7 +638,7 @@ function MainLayout() {
 
     if ((item.type === "event_reminder" || item.type === "event_update") && item.eventTab) {
       closeInbox()
-      navigate(`/events?tab=${item.eventTab}`)
+      navigate("/events")
       return
     }
 
@@ -735,7 +735,7 @@ function MainLayout() {
             className="app-rail-item app-rail-button app-rail-create"
             aria-label="Create"
             title="Create"
-            onClick={() => navigate("/events?tab=create")}
+            onClick={() => navigate("/events?create=event")}
           >
             <span className="app-rail-icon">
               <AppRailIcon name="plus" />
@@ -1061,7 +1061,7 @@ function App() {
           <Route path="/events" element={<MyEvents />} />
           <Route path="/events/:eventId" element={<MyEvents />} />
           <Route path="/messages" element={<Messages />} />
-          <Route path="/create" element={<Navigate to="/events?tab=create" replace />} />
+          <Route path="/create" element={<Navigate to="/events?create=event" replace />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/profile/:username" element={<PublicProfile />} />
         </Route>

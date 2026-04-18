@@ -8689,3 +8689,1270 @@ body.theme-dark .profile-rsvp-title {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* =========================================================
+   MY EVENTS LANE (inside calendar command panel)
+========================================================= */
+.my-events-lane {
+  position: relative;
+  width: 100%;
+  --lane-fade: 10%;
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    #000 var(--lane-fade),
+    #000 calc(100% - var(--lane-fade)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    #000 var(--lane-fade),
+    #000 calc(100% - var(--lane-fade)),
+    transparent 100%
+  );
+}
+
+.my-events-lane-track {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 4px 8%;
+  scrollbar-width: none;
+  scroll-padding-inline: 16px;
+}
+
+.my-events-lane-track::-webkit-scrollbar {
+  display: none;
+}
+
+.my-events-lane-card {
+  flex: 0 0 auto;
+  width: 104px;
+  padding: 8px;
+  border: 1px solid rgba(17, 24, 39, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.84);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  cursor: pointer;
+  transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+  text-align: left;
+  color: #111827;
+}
+
+.my-events-lane-card:hover {
+  transform: translateY(-1px);
+  background: #fff;
+  border-color: rgba(17, 24, 39, 0.18);
+}
+
+.my-events-lane-thumb {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 10px;
+  overflow: hidden;
+  background: linear-gradient(135deg, #6366f1, #ec4899);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 800;
+  font-size: 1.2rem;
+}
+
+.my-events-lane-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.my-events-lane-thumb-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.my-events-lane-title {
+  width: 100%;
+  font-size: 0.74rem;
+  font-weight: 720;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  color: #111827;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.my-events-lane-meta {
+  font-size: 0.64rem;
+  font-weight: 740;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #6b7280;
+}
+
+.my-events-lane-card.created .my-events-lane-meta {
+  color: #0f766e;
+}
+
+.my-events-lane-card.attending .my-events-lane-meta {
+  color: #2563eb;
+}
+
+.my-events-lane-empty {
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(17, 24, 39, 0.04);
+  color: #6b7280;
+  font-size: 0.78rem;
+}
+
+.my-events-lane-empty p {
+  margin: 0;
+}
+
+body.theme-dark .my-events-lane-card {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: #f5f7fb;
+}
+
+body.theme-dark .my-events-lane-card:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+body.theme-dark .my-events-lane-title {
+  color: #f5f7fb;
+}
+
+body.theme-dark .my-events-lane-meta {
+  color: rgba(245, 247, 251, 0.6);
+}
+
+body.theme-dark .my-events-lane-empty {
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(245, 247, 251, 0.6);
+}
+
+/* =========================================================
+   CREATE EVENT MODAL
+========================================================= */
+.create-event-modal-overlay {
+  align-items: flex-start;
+  overflow-y: auto;
+  padding: 28px 16px;
+}
+
+.create-event-modal {
+  position: relative;
+  width: min(1040px, 100%);
+  max-height: calc(100vh - 56px);
+  overflow-y: auto;
+  padding: 26px 24px 28px;
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(17, 24, 39, 0.08);
+  box-shadow: 0 40px 90px rgba(15, 23, 42, 0.22);
+  color: #111827;
+  animation: popCard 0.28s ease-out;
+}
+
+.create-event-modal-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(17, 24, 39, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #111827;
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+
+.create-event-modal-close:hover {
+  background: #fff;
+}
+
+.create-modal-heading {
+  margin-bottom: 14px;
+}
+
+.create-modal-heading h2 {
+  margin: 2px 0 0;
+  font-size: 1.6rem;
+  letter-spacing: -0.02em;
+  color: #111827;
+}
+
+.create-event-modal .create-page {
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  min-height: 0;
+}
+
+.create-event-modal .create-layout.modal {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 18px;
+}
+
+.create-event-modal .create-layout.modal .flyer-card {
+  order: -1;
+}
+
+@media (min-width: 960px) {
+  .create-event-modal .create-layout.modal {
+    grid-template-columns: minmax(320px, 0.9fr) minmax(320px, 1.1fr);
+  }
+  .create-event-modal .create-layout.modal .flyer-card {
+    order: 0;
+  }
+}
+
+body.theme-dark .create-event-modal {
+  background: rgba(24, 24, 30, 0.96);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: #f5f7fb;
+}
+
+body.theme-dark .create-event-modal-close {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: #f5f7fb;
+}
+
+body.theme-dark .create-modal-heading h2 {
+  color: #f5f7fb;
+}
+
+/* =========================================================
+   FLYER SEARCH + PRIVATE INVITE
+========================================================= */
+.flyer-search {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.flyer-search-label {
+  margin: 0;
+  font-size: 0.74rem;
+  font-weight: 820;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8b92a1;
+}
+
+.flyer-search-categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.flyer-search-chip {
+  border: 1px solid rgba(17, 24, 39, 0.1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: #111827;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 720;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+
+.flyer-search-chip:hover {
+  background: #fff;
+}
+
+.flyer-search-chip.active {
+  background: #111827;
+  color: #fff;
+  border-color: #111827;
+}
+
+.flyer-search-input {
+  width: 100%;
+  border: 1px solid rgba(17, 24, 39, 0.1);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: rgba(248, 250, 252, 0.9);
+  color: #111827;
+  font: inherit;
+  font-size: 0.88rem;
+  outline: none;
+}
+
+.flyer-search-input:focus {
+  border-color: rgba(17, 24, 39, 0.3);
+  background: #fff;
+}
+
+.flyer-search-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
+  gap: 8px;
+}
+
+.flyer-search-tile {
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 12px;
+  overflow: hidden;
+  background: none;
+  cursor: pointer;
+  aspect-ratio: 1 / 1;
+  transition: transform 0.18s ease, border-color 0.18s ease;
+}
+
+.flyer-search-tile:hover {
+  transform: translateY(-1px);
+}
+
+.flyer-search-tile.selected {
+  border-color: #111827;
+}
+
+.flyer-search-tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.flyer-search-empty {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #6b7280;
+  font-size: 0.82rem;
+}
+
+.flyer-invite-section {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(17, 24, 39, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.flyer-invite-help {
+  margin: 0;
+  color: #6b7280;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.flyer-invite-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.flyer-invite-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #111827;
+  color: #fff;
+  border: none;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 680;
+  cursor: pointer;
+}
+
+.flyer-invite-chip span {
+  opacity: 0.8;
+}
+
+.flyer-invite-suggestions {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  border: 1px solid rgba(17, 24, 39, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.92);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.flyer-invite-suggestions li button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  color: #111827;
+  font: inherit;
+}
+
+.flyer-invite-suggestions li button:hover {
+  background: rgba(17, 24, 39, 0.06);
+}
+
+.flyer-invite-suggestions img {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.flyer-invite-suggestions strong {
+  display: block;
+  font-size: 0.86rem;
+  font-weight: 740;
+}
+
+.flyer-invite-suggestions em {
+  font-style: normal;
+  font-size: 0.74rem;
+  color: #6b7280;
+}
+
+.flyer-invite-link-btn {
+  align-self: flex-start;
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(17, 24, 39, 0.12);
+  background: rgba(255, 255, 255, 0.92);
+  color: #111827;
+  font: inherit;
+  font-weight: 740;
+  cursor: pointer;
+}
+
+.flyer-invite-link-btn:hover {
+  background: #fff;
+}
+
+body.theme-dark .flyer-search-chip {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: #f5f7fb;
+}
+
+body.theme-dark .flyer-search-chip.active {
+  background: #f5f7fb;
+  border-color: #f5f7fb;
+  color: #111318;
+}
+
+body.theme-dark .flyer-search-input {
+  background: rgba(20, 20, 26, 0.86);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: #f5f7fb;
+}
+
+body.theme-dark .flyer-search-tile.selected {
+  border-color: #f5f7fb;
+}
+
+body.theme-dark .flyer-search-empty,
+body.theme-dark .flyer-invite-help,
+body.theme-dark .flyer-invite-suggestions em {
+  color: rgba(245, 247, 251, 0.6);
+}
+
+body.theme-dark .flyer-invite-section {
+  border-top-color: rgba(255, 255, 255, 0.08);
+}
+
+body.theme-dark .flyer-invite-suggestions {
+  background: rgba(30, 29, 36, 0.8);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+body.theme-dark .flyer-invite-suggestions li button {
+  color: #f5f7fb;
+}
+
+body.theme-dark .flyer-invite-suggestions li button:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+body.theme-dark .flyer-invite-link-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: #f5f7fb;
+}
+
+body.theme-dark .flyer-invite-chip {
+  background: #f5f7fb;
+  color: #111318;
+}
+
+/* --- Apple-inspired Event time card --- */
+.event-time-card {
+  background: rgba(245, 247, 251, 0.72);
+  border: 1px solid rgba(17, 19, 24, 0.06);
+  border-radius: 18px;
+  padding: 6px 16px;
+  box-shadow: 0 1px 2px rgba(17, 19, 24, 0.04);
+  margin-bottom: 20px;
+}
+
+.event-time-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  min-height: 44px;
+  border-bottom: 1px solid rgba(17, 19, 24, 0.06);
+}
+
+.event-time-row:last-child {
+  border-bottom: 0;
+}
+
+.event-time-label {
+  font-size: 15px;
+  font-weight: 500;
+  color: #111318;
+  letter-spacing: -0.01em;
+}
+
+.event-time-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.event-time-pill {
+  appearance: none;
+  -webkit-appearance: none;
+  background: #ffffff;
+  border: 1px solid rgba(17, 19, 24, 0.08);
+  border-radius: 12px;
+  padding: 8px 14px;
+  font-size: 15px;
+  font-weight: 500;
+  color: #111318;
+  min-height: 36px;
+  box-shadow: 0 1px 1px rgba(17, 19, 24, 0.03);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.event-time-pill:focus {
+  outline: none;
+  border-color: rgba(10, 132, 255, 0.55);
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.18);
+}
+
+.event-time-pill::-webkit-calendar-picker-indicator {
+  opacity: 0.55;
+  cursor: pointer;
+}
+
+.event-time-toggle {
+  position: relative;
+  display: inline-flex;
+  width: 50px;
+  height: 30px;
+  cursor: pointer;
+}
+
+.event-time-toggle input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  margin: 0;
+  cursor: pointer;
+}
+
+.event-time-toggle-ui {
+  flex: 1;
+  background: rgba(120, 120, 128, 0.24);
+  border-radius: 999px;
+  position: relative;
+  transition: background 180ms ease;
+}
+
+.event-time-toggle-ui::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 2px 4px rgba(17, 19, 24, 0.2);
+  transition: transform 180ms ease;
+}
+
+.event-time-toggle input:checked + .event-time-toggle-ui {
+  background: #34c759;
+}
+
+.event-time-toggle input:checked + .event-time-toggle-ui::after {
+  transform: translateX(20px);
+}
+
+body.theme-dark .event-time-card {
+  background: rgba(28, 28, 30, 0.72);
+  border-color: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+body.theme-dark .event-time-row {
+  border-bottom-color: rgba(255, 255, 255, 0.06);
+}
+
+body.theme-dark .event-time-label {
+  color: #f5f7fb;
+}
+
+body.theme-dark .event-time-pill {
+  background: rgba(58, 58, 60, 0.6);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: #f5f7fb;
+  box-shadow: none;
+}
+
+body.theme-dark .event-time-pill:focus {
+  border-color: rgba(10, 132, 255, 0.7);
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.22);
+}
+
+body.theme-dark .event-time-pill::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  opacity: 0.65;
+}
+
+body.theme-dark .event-time-toggle-ui {
+  background: rgba(120, 120, 128, 0.36);
+}
+
+/* --- Compact flyer card --- */
+.flyer-card--compact {
+  gap: 12px;
+}
+
+.flyer-preview--compact {
+  aspect-ratio: 4 / 3;
+  min-height: 0;
+  max-height: 260px;
+  border-radius: 18px;
+}
+
+.flyer-preview--compact .flyer-image {
+  border-radius: 18px;
+}
+
+.flyer-card--compact .flyer-actions {
+  gap: 10px;
+}
+
+.flyer-card--compact .upload-btn,
+.flyer-card--compact .ai-btn {
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* --- Post-publish step --- */
+.post-publish-step {
+  display: flex;
+  justify-content: center;
+  padding: 4px 0 8px;
+}
+
+.post-publish-card {
+  width: 100%;
+  max-width: 520px;
+  background: rgba(245, 247, 251, 0.72);
+  border: 1px solid rgba(17, 19, 24, 0.06);
+  border-radius: 22px;
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.post-publish-preview {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+
+.post-publish-preview img {
+  width: 72px;
+  height: 72px;
+  border-radius: 14px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.post-publish-kicker {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(17, 19, 24, 0.55);
+  margin: 0 0 2px;
+}
+
+.post-publish-preview h3 {
+  margin: 0 0 4px;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #111318;
+}
+
+.post-publish-meta {
+  margin: 0;
+  font-size: 13px;
+  color: rgba(17, 19, 24, 0.6);
+}
+
+.post-publish-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.post-publish-section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #111318;
+  margin: 0;
+}
+
+.post-publish-help {
+  font-size: 13px;
+  color: rgba(17, 19, 24, 0.6);
+  margin: 0;
+}
+
+.post-publish-send-btn {
+  align-self: flex-start;
+  background: #0a84ff;
+  color: #ffffff;
+  border: 0;
+  border-radius: 12px;
+  padding: 10px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 120ms ease, opacity 120ms ease;
+}
+
+.post-publish-send-btn:hover {
+  background: #0a74e0;
+}
+
+.post-publish-send-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.post-publish-divider {
+  height: 1px;
+  background: rgba(17, 19, 24, 0.06);
+}
+
+.post-publish-done-btn {
+  align-self: flex-end;
+  background: transparent;
+  color: #0a84ff;
+  border: 0;
+  padding: 8px 14px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+body.theme-dark .post-publish-card {
+  background: rgba(28, 28, 30, 0.72);
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
+body.theme-dark .post-publish-kicker {
+  color: rgba(245, 247, 251, 0.55);
+}
+
+body.theme-dark .post-publish-preview h3 {
+  color: #f5f7fb;
+}
+
+body.theme-dark .post-publish-meta,
+body.theme-dark .post-publish-help {
+  color: rgba(245, 247, 251, 0.6);
+}
+
+body.theme-dark .post-publish-section-title {
+  color: #f5f7fb;
+}
+
+body.theme-dark .post-publish-divider {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* --- Modal padding reset (voice buttons are gone) --- */
+.create-page.modal .create-field-shell input {
+  padding-right: 16px;
+}
+
+/* =========================================================
+   APPLE CALENDAR POLISH — Create Event Modal (web only)
+   Scoped under .create-event-modal so nothing else is touched.
+   Mobile styles remain untouched.
+========================================================= */
+.create-event-modal {
+  padding: 30px 30px 32px;
+  border-radius: 26px;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid rgba(17, 24, 39, 0.06);
+  box-shadow: 0 30px 80px rgba(15, 23, 42, 0.18);
+}
+
+.create-event-modal .create-modal-heading {
+  margin-bottom: 22px;
+}
+
+.create-event-modal .create-modal-heading h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.create-event-modal .personal-modal-kicker {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(17, 19, 24, 0.48);
+}
+
+.create-event-modal .create-layout.modal {
+  gap: 22px;
+}
+
+@media (min-width: 960px) {
+  .create-event-modal .create-layout.modal {
+    grid-template-columns: minmax(0, 1.05fr) minmax(280px, 0.85fr);
+    align-items: start;
+  }
+}
+
+/* Unified card surface for form + flyer */
+.create-event-modal .create-form-card,
+.create-event-modal .flyer-card {
+  background: rgba(245, 247, 251, 0.6);
+  border: 1px solid rgba(17, 19, 24, 0.06);
+  border-radius: 20px;
+  padding: 22px;
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Form labels */
+.create-event-modal .form-group label {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  color: rgba(17, 19, 24, 0.7);
+  margin-bottom: 6px;
+}
+
+/* Unified input + textarea + select look (Apple-ish) */
+.create-event-modal .form-group input,
+.create-event-modal .form-group textarea,
+.create-event-modal .form-group select,
+.create-event-modal .create-address-shell input,
+.create-event-modal .create-event-tag-entry input {
+  background: #ffffff;
+  border: 1px solid rgba(17, 19, 24, 0.08);
+  border-radius: 12px;
+  padding: 11px 14px;
+  font-size: 15px;
+  font-weight: 500;
+  color: #111318;
+  min-height: 42px;
+  box-shadow: 0 1px 1px rgba(17, 19, 24, 0.02);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.create-event-modal .form-group textarea {
+  min-height: 96px;
+  padding: 12px 14px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.create-event-modal .form-group input:focus,
+.create-event-modal .form-group textarea:focus,
+.create-event-modal .form-group select:focus,
+.create-event-modal .create-address-shell input:focus {
+  outline: none;
+  border-color: rgba(10, 132, 255, 0.55);
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.18);
+}
+
+/* Time card — grid layout, never wraps weirdly */
+.create-event-modal .event-time-card {
+  background: #ffffff;
+  border: 1px solid rgba(17, 19, 24, 0.06);
+  border-radius: 16px;
+  padding: 2px 16px;
+  margin: 0;
+}
+
+.create-event-modal .event-time-row {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  min-height: 46px;
+  border-bottom: 1px solid rgba(17, 19, 24, 0.06);
+}
+
+.create-event-modal .event-time-row:last-child {
+  border-bottom: 0;
+}
+
+.create-event-modal .event-time-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(17, 19, 24, 0.72);
+  letter-spacing: -0.005em;
+}
+
+.create-event-modal .event-time-controls {
+  display: flex;
+  gap: 8px;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.create-event-modal .event-time-pill {
+  flex: 1 1 0;
+  min-width: 0;
+  background: rgba(245, 247, 251, 0.9);
+  border: 1px solid rgba(17, 19, 24, 0.06);
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #111318;
+  min-height: 34px;
+  box-shadow: none;
+}
+
+/* Tag entry wrap */
+.create-event-modal .create-event-tags-input-wrap {
+  background: #ffffff;
+  border: 1px solid rgba(17, 19, 24, 0.08);
+  border-radius: 14px;
+  padding: 10px 12px;
+  box-shadow: 0 1px 1px rgba(17, 19, 24, 0.02);
+}
+
+.create-event-modal .create-event-tag-entry input {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  min-height: 36px;
+  padding: 6px 4px;
+}
+
+.create-event-modal .create-event-tag-entry input:focus {
+  box-shadow: none;
+}
+
+/* Segmented control */
+.create-event-modal .create-segmented-control {
+  background: rgba(17, 19, 24, 0.05);
+  border-radius: 12px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.create-event-modal .create-segmented-option {
+  border-radius: 9px;
+  padding: 8px 12px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.create-event-modal .create-segmented-option.active {
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(17, 19, 24, 0.08);
+  color: #111318;
+}
+
+/* Publish button */
+.create-event-modal .publish-btn {
+  background: #0a84ff;
+  border: 0;
+  border-radius: 14px;
+  padding: 13px 18px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #ffffff;
+  box-shadow: 0 6px 18px rgba(10, 132, 255, 0.25);
+  transition: background 120ms ease, transform 80ms ease;
+}
+
+.create-event-modal .publish-btn:hover {
+  background: #0a74e0;
+}
+
+.create-event-modal .publish-btn:active {
+  transform: scale(0.99);
+}
+
+/* Flyer card — smaller, cohesive */
+.create-event-modal .flyer-card--compact {
+  gap: 14px;
+}
+
+.create-event-modal .flyer-preview--compact {
+  height: clamp(300px, 34vw, 340px);
+  aspect-ratio: auto;
+  max-height: none;
+  border-radius: 16px;
+  background: rgba(245, 247, 251, 0.9);
+  border: 1px dashed rgba(17, 19, 24, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(17, 19, 24, 0.4);
+  font-size: 14px;
+}
+
+.create-event-modal .flyer-preview--compact .flyer-image {
+  border-radius: 16px;
+  object-fit: cover;
+  width: 100%;
+  height: 100%;
+}
+
+.create-event-modal .flyer-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.create-event-modal .flyer-card--compact .upload-btn,
+.create-event-modal .flyer-card--compact .ai-btn {
+  border-radius: 12px;
+  padding: 11px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.create-event-modal .flyer-card--compact .upload-btn {
+  background: #0a84ff;
+  color: #ffffff;
+  border: 0;
+}
+
+.create-event-modal .flyer-card--compact .ai-btn {
+  background: rgba(17, 19, 24, 0.05);
+  border: 1px solid rgba(17, 19, 24, 0.06);
+  color: #111318;
+}
+
+.create-event-modal .flyer-search {
+  background: #ffffff;
+  border: 1px solid rgba(17, 19, 24, 0.06);
+  border-radius: 14px;
+  padding: 14px;
+  gap: 10px;
+}
+
+.create-event-modal .flyer-search-chip {
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  background: rgba(17, 19, 24, 0.04);
+  border: 1px solid transparent;
+  color: #111318;
+}
+
+.create-event-modal .flyer-search-chip.active {
+  background: #111318;
+  color: #ffffff;
+}
+
+.create-event-modal .flyer-search-input {
+  border-radius: 10px;
+  padding: 9px 12px;
+  font-size: 13px;
+}
+
+/* ---------- DARK MODE (Apple Calendar feel) ---------- */
+body.theme-dark .create-event-modal {
+  background: rgba(28, 28, 30, 0.98);
+  border-color: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
+  color: #f5f7fb;
+}
+
+body.theme-dark .create-event-modal .personal-modal-kicker {
+  color: rgba(245, 247, 251, 0.5);
+}
+
+body.theme-dark .create-event-modal .create-form-card,
+body.theme-dark .create-event-modal .flyer-card {
+  background: rgba(44, 44, 46, 0.6);
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
+body.theme-dark .create-event-modal .form-group label {
+  color: rgba(245, 247, 251, 0.72);
+}
+
+body.theme-dark .create-event-modal .form-group input,
+body.theme-dark .create-event-modal .form-group textarea,
+body.theme-dark .create-event-modal .form-group select,
+body.theme-dark .create-event-modal .create-address-shell input,
+body.theme-dark .create-event-modal .create-event-tags-input-wrap,
+body.theme-dark .create-event-modal .create-event-tag-entry input {
+  background: rgba(58, 58, 60, 0.55);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: #f5f7fb;
+  box-shadow: none;
+}
+
+body.theme-dark .create-event-modal .form-group input::placeholder,
+body.theme-dark .create-event-modal .form-group textarea::placeholder,
+body.theme-dark .create-event-modal .create-address-shell input::placeholder,
+body.theme-dark .create-event-modal .create-event-tag-entry input::placeholder {
+  color: rgba(245, 247, 251, 0.35);
+}
+
+body.theme-dark .create-event-modal .form-group input:focus,
+body.theme-dark .create-event-modal .form-group textarea:focus,
+body.theme-dark .create-event-modal .form-group select:focus,
+body.theme-dark .create-event-modal .create-address-shell input:focus {
+  border-color: rgba(10, 132, 255, 0.7);
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.22);
+}
+
+body.theme-dark .create-event-modal .event-time-card {
+  background: rgba(58, 58, 60, 0.55);
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
+body.theme-dark .create-event-modal .event-time-row {
+  border-bottom-color: rgba(255, 255, 255, 0.06);
+}
+
+body.theme-dark .create-event-modal .event-time-label {
+  color: rgba(245, 247, 251, 0.72);
+}
+
+body.theme-dark .create-event-modal .event-time-pill {
+  background: rgba(99, 99, 102, 0.28);
+  border-color: rgba(255, 255, 255, 0.06);
+  color: #f5f7fb;
+}
+
+body.theme-dark .create-event-modal .event-time-pill::-webkit-calendar-picker-indicator,
+body.theme-dark .create-event-modal input[type="date"]::-webkit-calendar-picker-indicator,
+body.theme-dark .create-event-modal input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  opacity: 0.65;
+}
+
+body.theme-dark .create-event-modal .create-segmented-control {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+body.theme-dark .create-event-modal .create-segmented-option {
+  color: rgba(245, 247, 251, 0.75);
+  background: transparent;
+  border: 0;
+}
+
+body.theme-dark .create-event-modal .create-segmented-option.active {
+  background: rgba(99, 99, 102, 0.5);
+  color: #f5f7fb;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+body.theme-dark .create-event-modal .flyer-preview--compact {
+  background: rgba(44, 44, 46, 0.45);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: rgba(245, 247, 251, 0.5);
+}
+
+body.theme-dark .create-event-modal .flyer-card--compact .ai-btn {
+  background: rgba(99, 99, 102, 0.3);
+  border-color: rgba(255, 255, 255, 0.06);
+  color: #f5f7fb;
+}
+
+body.theme-dark .create-event-modal .flyer-search {
+  background: rgba(44, 44, 46, 0.6);
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
+body.theme-dark .create-event-modal .flyer-search-chip {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(245, 247, 251, 0.85);
+}
+
+body.theme-dark .create-event-modal .flyer-search-chip.active {
+  background: #f5f7fb;
+  color: #111318;
+}
+
+/* Scrollbar polish inside the modal */
+.create-event-modal::-webkit-scrollbar {
+  width: 10px;
+}
+.create-event-modal::-webkit-scrollbar-thumb {
+  background: rgba(17, 19, 24, 0.12);
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+body.theme-dark .create-event-modal::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  background-clip: padding-box;
+}

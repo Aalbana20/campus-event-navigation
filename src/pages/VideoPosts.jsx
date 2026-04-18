@@ -104,7 +104,7 @@ function VideoPosts() {
 
   const handleOpenEventFlow = () => {
     setIsComposerOpen(false)
-    navigate("/events?tab=create")
+    navigate("/events?create=event")
   }
 
   const visiblePosts = activeView === "video" ? videoPosts : imagePosts

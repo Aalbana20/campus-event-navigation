@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react"
 import { useSearchParams } from "react-router-dom"
 import CreateEvent from "../CreateEvent"
 import MyEventCard from "../components/MyEventCard"
+import { applyEventImageFallback, getEventImageSrc } from "../eventImages"
 import { useEvents } from "../context/EventContext"
 
 const MONTH_NAMES = [
@@ -46,7 +47,6 @@ const HOUR_LABELS = [
   "10 PM",
   "11 PM",
 ]
-const EVENT_TABS = ["calendar", "create", "my-events"]
 const FILTER_OPTIONS = [
   { id: "all", label: "All" },
   { id: "going", label: "Going" },
@@ -59,8 +59,6 @@ const VIEW_OPTIONS = [
   { id: "year", label: "Year" },
 ]
 const PERSONAL_STORAGE_KEY = "campus-personal-calendar-items"
-
-const normalizeTab = (value) => (EVENT_TABS.includes(value) ? value : "calendar")
 
 const startOfDay = (date) =>
   new Date(date.getFullYear(), date.getMonth(), date.getDate())
@@ -479,6 +477,53 @@ function PersonalItemModal({ item, onClose }) {
   )
 }
 
+function MyEventsLane({ items, onOpenItem, emptyMessage }) {
+  if (!items.length) {
+    return (
+      <div className="my-events-lane-empty">
+        <p>{emptyMessage}</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="my-events-lane" aria-label="My events">
+      <div className="my-events-lane-track">
+        {items.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            className={`my-events-lane-card ${item.source}`}
+            onClick={() => onOpenItem(item)}
+          >
+            <span className="my-events-lane-thumb" aria-hidden="true">
+              {item.image ? (
+                <img
+                  src={getEventImageSrc(item.image)}
+                  alt=""
+                  onError={applyEventImageFallback}
+                />
+              ) : (
+                <span className="my-events-lane-thumb-fallback">
+                  {item.title.slice(0, 1).toUpperCase()}
+                </span>
+              )}
+            </span>
+            <span className="my-events-lane-title">{item.title}</span>
+            <span className="my-events-lane-meta">
+              {item.source === "created"
+                ? "Created"
+                : item.source === "personal"
+                  ? "Personal"
+                  : "Going"}
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function MyEvents() {
   const { savedEvents, allEvents, currentUser } = useEvents()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -505,26 +550,32 @@ function MyEvents() {
   const [isHeroHidden, setIsHeroHidden] = useState(false)
   const createMenuRef = useRef(null)
 
+  const isCreateEventOpen = searchParams.get("create") === "event"
+
   const now = new Date()
   const [anchorDate, setAnchorDate] = useState(
     () => new Date(now.getFullYear(), now.getMonth(), now.getDate())
   )
   const touchStartXRef = useRef(null)
   const mouseStartXRef = useRef(null)
-  const activeTab = normalizeTab(searchParams.get("tab"))
 
   useEffect(() => {
     localStorage.setItem(PERSONAL_STORAGE_KEY, JSON.stringify(personalItems))
   }, [personalItems])
 
+  // Normalize legacy ?tab=... links from earlier iterations of this page.
+  useEffect(() => {
+    const legacyTab = searchParams.get("tab")
+    if (!legacyTab) return
+    const next = new URLSearchParams(searchParams)
+    next.delete("tab")
+    if (legacyTab === "create") next.set("create", "event")
+    setSearchParams(next, { replace: true })
+  }, [searchParams, setSearchParams])
+
   // Hide the calendar hero when the user scrolls down past the top zone;
   // reveal it again as soon as they scroll back up.
   useEffect(() => {
-    if (activeTab !== "calendar") {
-      setIsHeroHidden(false)
-      return undefined
-    }
-
     let lastY = window.scrollY
     let rafId = 0
 
@@ -552,7 +603,7 @@ function MyEvents() {
       window.removeEventListener("scroll", handleScroll)
       if (rafId) window.cancelAnimationFrame(rafId)
     }
-  }, [activeTab])
+  }, [])
 
   useEffect(() => {
     if (!isCreateMenuOpen) return undefined
@@ -565,17 +616,16 @@ function MyEvents() {
     return () => document.removeEventListener("mousedown", handleDocClick)
   }, [isCreateMenuOpen])
 
-  const changeTab = (nextTab) => {
-    const normalizedTab = normalizeTab(nextTab)
-    const nextParams = new URLSearchParams(searchParams)
+  const openCreateEventModal = () => {
+    const next = new URLSearchParams(searchParams)
+    next.set("create", "event")
+    setSearchParams(next, { replace: true })
+  }
 
-    if (normalizedTab === "calendar") {
-      nextParams.delete("tab")
-    } else {
-      nextParams.set("tab", normalizedTab)
-    }
-
-    setSearchParams(nextParams, { replace: true })
+  const closeCreateEventModal = () => {
+    const next = new URLSearchParams(searchParams)
+    next.delete("create")
+    setSearchParams(next, { replace: true })
   }
 
   const goToPrevious = () => {
@@ -677,6 +727,21 @@ function MyEvents() {
       .sort((left, right) => left.date.getTime() - right.date.getTime())
   }, [allEvents, calendarFilter, currentUser, personalItems, savedEvents, searchQuery])
 
+  const laneItems = useMemo(() => {
+    return calendarItems
+      .filter((item) => item.itemType === "event")
+      .map((item) => ({
+        ...item,
+        image: item.event?.image || "",
+      }))
+  }, [calendarItems])
+
+  const laneEmptyMessage = useMemo(() => {
+    if (calendarFilter === "created") return "You haven't created any events yet."
+    if (calendarFilter === "going") return "No events you're going to yet."
+    return "No events yet. Create one or RSVP from Discover."
+  }, [calendarFilter])
+
   const itemsByDate = useMemo(() => {
     return calendarItems.reduce((collection, item) => {
       const list = collection.get(item.dateKey) || []
@@ -772,89 +837,6 @@ function MyEvents() {
     )
   }
 
-  if (activeTab !== "calendar") {
-    return (
-      <main className="my-events-page">
-        <div className="events-page-header">
-          <p className="eyebrow">One place for going, planning, and creating</p>
-          <div className="events-page-title-row">
-            <div className="events-page-copy">
-              <h1>Events</h1>
-              <p className="events-page-subtitle">
-                Keep your RSVP&apos;d plans, calendar, and create flow in one cleaner home.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="events-tabs" role="tablist" aria-label="Events sections">
-          <button
-            type="button"
-            className={`events-tab-btn ${activeTab === "calendar" ? "active" : ""}`}
-            onClick={() => changeTab("calendar")}
-            aria-pressed={activeTab === "calendar"}
-          >
-            Calendar
-          </button>
-          <button
-            type="button"
-            className={`events-tab-btn ${activeTab === "create" ? "active" : ""}`}
-            onClick={() => changeTab("create")}
-            aria-pressed={activeTab === "create"}
-          >
-            Create
-          </button>
-          <button
-            type="button"
-            className={`events-tab-btn ${activeTab === "my-events" ? "active" : ""}`}
-            onClick={() => changeTab("my-events")}
-            aria-pressed={activeTab === "my-events"}
-          >
-            My Events
-          </button>
-        </div>
-
-        <div className="events-tab-panel">
-          {activeTab === "create" && (
-            <>
-              <div className="events-summary-card">
-                <h2>Create Event</h2>
-                <p>
-                  Keep building the next event from the same Events space. Calendar-to-create hooks
-                  can layer in later without changing this layout.
-                </p>
-              </div>
-
-              <CreateEvent embedded />
-            </>
-          )}
-
-          {activeTab === "my-events" && (
-            <>
-              <div className="events-summary-card">
-                <h2>My Events</h2>
-                <p>Events you&apos;re going to stay here for quick access and planning.</p>
-              </div>
-
-              {savedEvents.length === 0 ? (
-                <div className="events-empty-state">
-                  <h3>No events saved yet.</h3>
-                  <p>Swipe right on Discover or add from Explore to start building your lineup.</p>
-                </div>
-              ) : (
-                <div className="cards-scroll">
-                  {savedEvents.map((event) => (
-                    <MyEventCard key={event.id} event={event} />
-                  ))}
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      </main>
-    )
-  }
-
   return (
     <main className={`calendar-page-shell ${isHeroHidden ? "hero-hidden" : ""}`}>
       <section className="calendar-hero">
@@ -935,7 +917,7 @@ function MyEvents() {
                   role="menuitem"
                   onClick={() => {
                     setIsCreateMenuOpen(false)
-                    changeTab("create")
+                    openCreateEventModal()
                   }}
                 >
                   Event
@@ -952,6 +934,15 @@ function MyEvents() {
                 </button>
               </div>
             )}
+          </div>
+
+          <div className="calendar-command-section">
+            <span className="calendar-command-kicker">My Events</span>
+            <MyEventsLane
+              items={laneItems}
+              onOpenItem={handleOpenCalendarItem}
+              emptyMessage={laneEmptyMessage}
+            />
           </div>
         </aside>
 
@@ -1031,6 +1022,28 @@ function MyEvents() {
               <button type="submit">Add</button>
             </div>
           </form>
+        </div>
+      ) : null}
+
+      {isCreateEventOpen ? (
+        <div className="calendar-modal-overlay create-event-modal-overlay" onClick={closeCreateEventModal}>
+          <div
+            className="create-event-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Create event"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="create-event-modal-close"
+              onClick={closeCreateEventModal}
+              aria-label="Close"
+            >
+              ×
+            </button>
+            <CreateEvent embedded modal onPublished={closeCreateEventModal} />
+          </div>
         </div>
       ) : null}
     </main>

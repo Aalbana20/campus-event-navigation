@@ -266,13 +266,39 @@ const fetchPlaceDetails = async ({ placeId, signal }) => {
   return response.json()
 }
 
-const getSpeechRecognitionConstructor = () => {
-  if (typeof window === "undefined") return null
-  return window.SpeechRecognition || window.webkitSpeechRecognition || null
+const FLYER_CATEGORIES = [
+  { id: "party", label: "Party" },
+  { id: "concert", label: "Concert" },
+  { id: "sports", label: "Sports" },
+  { id: "movie", label: "Movie" },
+  { id: "campus", label: "Campus" },
+  { id: "social", label: "Social" },
+]
+
+const FLYER_LIBRARY = [
+  { id: "party-1", category: "party", label: "Neon house party", image: "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=900&q=80" },
+  { id: "party-2", category: "party", label: "Rooftop celebration", image: "https://images.unsplash.com/photo-1530103862676-de8c9debad1d?auto=format&fit=crop&w=900&q=80" },
+  { id: "concert-1", category: "concert", label: "Live concert stage", image: "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?auto=format&fit=crop&w=900&q=80" },
+  { id: "concert-2", category: "concert", label: "DJ set crowd", image: "https://images.unsplash.com/photo-1506157786151-b8491531f063?auto=format&fit=crop&w=900&q=80" },
+  { id: "sports-1", category: "sports", label: "Stadium lights", image: "https://images.unsplash.com/photo-1521417531039-75e91e12cd8d?auto=format&fit=crop&w=900&q=80" },
+  { id: "sports-2", category: "sports", label: "Court game night", image: "https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&w=900&q=80" },
+  { id: "movie-1", category: "movie", label: "Outdoor movie night", image: "https://images.unsplash.com/photo-1542204165-65bf26472b9b?auto=format&fit=crop&w=900&q=80" },
+  { id: "movie-2", category: "movie", label: "Classic cinema", image: "https://images.unsplash.com/photo-1517604931442-7e0c8ed2963c?auto=format&fit=crop&w=900&q=80" },
+  { id: "campus-1", category: "campus", label: "Campus quad", image: "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&w=900&q=80" },
+  { id: "campus-2", category: "campus", label: "Lecture hall", image: "https://images.unsplash.com/photo-1498243691581-b145c3f54a5a?auto=format&fit=crop&w=900&q=80" },
+  { id: "social-1", category: "social", label: "Friends gathering", image: "https://images.unsplash.com/photo-1543007630-9710e4a00a20?auto=format&fit=crop&w=900&q=80" },
+  { id: "social-2", category: "social", label: "Coffee meetup", image: "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?auto=format&fit=crop&w=900&q=80" },
+]
+
+const buildInviteLink = (eventId) => {
+  if (typeof window === "undefined") return ""
+  const origin = window.location.origin || ""
+  const path = window.location.pathname || "/"
+  return `${origin}${path}#/events/${eventId}?invite=1`
 }
 
-function CreateEvent({ embedded = false }) {
-  const { createEvent, currentUser: contextUser } = useEvents()
+function CreateEvent({ embedded = false, modal = false, onPublished }) {
+  const { createEvent, currentUser: contextUser, followingList } = useEvents()
   const { showToast } = useToast()
 
   const [title, setTitle] = useState("")
@@ -292,20 +318,25 @@ function CreateEvent({ embedded = false }) {
   const [tags, setTags] = useState([])
   const [organizer, setOrganizer] = useState("")
   const [dressCode, setDressCode] = useState("")
-  const [voiceFeedback, setVoiceFeedback] = useState("")
-  const [listeningField, setListeningField] = useState("")
   const [addressMeta, setAddressMeta] = useState(() => buildAddressDraft())
   const [addressSuggestions, setAddressSuggestions] = useState([])
   const [isAddressLoading, setIsAddressLoading] = useState(false)
   const [isAddressDropdownOpen, setIsAddressDropdownOpen] = useState(false)
   const [placesSessionToken, setPlacesSessionToken] = useState(createPlacesSessionToken)
+  const [flyerSearchCategory, setFlyerSearchCategory] = useState("")
+  const [flyerSearchQuery, setFlyerSearchQuery] = useState("")
+  const [isFlyerSearchOpen, setIsFlyerSearchOpen] = useState(false)
+  const [invitedUsers, setInvitedUsers] = useState([])
+  const [inviteSearch, setInviteSearch] = useState("")
+  const [publishedInviteLink, setPublishedInviteLink] = useState("")
+  const [inviteLinkCopied, setInviteLinkCopied] = useState(false)
+  const [endDate, setEndDate] = useState("")
+  const [postPublishInfo, setPostPublishInfo] = useState(null)
 
-  const recognitionRef = useRef(null)
   const addressBlurTimeoutRef = useRef(null)
 
   const creatorUsername = contextUser?.username || ""
   const creatorName = contextUser?.name || contextUser?.username || "Campus User"
-  const supportsVoiceInput = useMemo(() => Boolean(getSpeechRecognitionConstructor()), [])
   const isGooglePlacesConfigured = Boolean(GOOGLE_PLACES_API_KEY)
 
   const suggestedTagOptions = useMemo(
@@ -333,30 +364,11 @@ function CreateEvent({ embedded = false }) {
 
   useEffect(() => {
     return () => {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop()
-        recognitionRef.current = null
-      }
-    }
-  }, [])
-
-  useEffect(() => {
-    return () => {
       if (addressBlurTimeoutRef.current) {
         window.clearTimeout(addressBlurTimeoutRef.current)
       }
     }
   }, [])
-
-  useEffect(() => {
-    if (!voiceFeedback) return undefined
-
-    const timeoutId = window.setTimeout(() => {
-      setVoiceFeedback("")
-    }, 2600)
-
-    return () => window.clearTimeout(timeoutId)
-  }, [voiceFeedback])
 
   useEffect(() => {
     const trimmedAddress = locationAddress.trim()
@@ -487,117 +499,6 @@ function CreateEvent({ embedded = false }) {
     return publicUrlData.publicUrl
   }
 
-  const appendVoiceTranscriptToField = (fieldName, transcript) => {
-    const mergeValue = (currentValue, nextTranscript) =>
-      currentValue.trim() ? `${currentValue.trim()} ${nextTranscript}` : nextTranscript
-
-    switch (fieldName) {
-      case "title":
-        setTitle((prev) => mergeValue(prev, transcript))
-        return
-      case "description":
-        setDescription((prev) => mergeValue(prev, transcript))
-        return
-      case "locationName":
-        setLocationName((prev) => mergeValue(prev, transcript))
-        setAddressMeta((prev) =>
-          buildAddressDraft(mergeValue(locationName, transcript), locationAddress, {
-            ...prev,
-            displayName: mergeValue(prev.displayName || locationName, transcript),
-          })
-        )
-        return
-      case "locationAddress":
-        setLocationAddress((prev) => {
-          const merged = mergeValue(prev, transcript)
-          setAddressMeta((current) =>
-            buildAddressDraft(locationName, merged, {
-              ...current,
-              status: "typing",
-              input: merged,
-              formattedAddress: merged,
-              placeId: "",
-              placeName: "",
-              coordinates: null,
-              sessionToken: placesSessionToken,
-            })
-          )
-          return merged
-        })
-        return
-      case "organizer":
-        setOrganizer((prev) => mergeValue(prev, transcript))
-        return
-      case "dressCode":
-        setDressCode((prev) => mergeValue(prev, transcript))
-        return
-      default:
-    }
-  }
-
-  const handleVoiceInput = (fieldName) => {
-    const SpeechRecognitionConstructor = getSpeechRecognitionConstructor()
-
-    if (!SpeechRecognitionConstructor) {
-      setVoiceFeedback("Voice input is not supported in this browser yet.")
-      return
-    }
-
-    if (recognitionRef.current && listeningField === fieldName) {
-      recognitionRef.current.stop()
-      return
-    }
-
-    if (recognitionRef.current) {
-      recognitionRef.current.stop()
-      recognitionRef.current = null
-    }
-
-    const recognition = new SpeechRecognitionConstructor()
-    recognition.lang = "en-US"
-    recognition.interimResults = false
-    recognition.maxAlternatives = 1
-
-    recognition.onstart = () => {
-      setListeningField(fieldName)
-      setVoiceFeedback("Listening...")
-    }
-
-    recognition.onresult = (event) => {
-      const transcript = Array.from(event.results || [])
-        .map((result) => result[0]?.transcript || "")
-        .join(" ")
-        .trim()
-
-      if (!transcript) {
-        setVoiceFeedback("No voice input was captured.")
-        return
-      }
-
-      appendVoiceTranscriptToField(fieldName, transcript)
-      setVoiceFeedback("Voice text added.")
-    }
-
-    recognition.onerror = (event) => {
-      const nextMessage =
-        event.error === "not-allowed"
-          ? "Microphone access was denied."
-          : "Voice input had trouble capturing that."
-
-      setVoiceFeedback(nextMessage)
-      setListeningField("")
-      recognitionRef.current = null
-    }
-
-    recognition.onend = () => {
-      setListeningField("")
-      recognitionRef.current = null
-    }
-
-    recognitionRef.current = recognition
-    recognition.start()
-  }
-
   const clearAddressBlurTimeout = () => {
     if (addressBlurTimeoutRef.current) {
       window.clearTimeout(addressBlurTimeoutRef.current)
@@ -710,27 +611,116 @@ function CreateEvent({ embedded = false }) {
     }
   }
 
-  const renderVoiceButton = (fieldName) => (
-    <button
-      type="button"
-      className={`create-voice-icon-btn ${listeningField === fieldName ? "listening" : ""}`}
-      onClick={(event) => {
-        event.preventDefault()
-        event.stopPropagation()
-        handleVoiceInput(fieldName)
-      }}
-      aria-pressed={listeningField === fieldName}
-      aria-label={`Use voice input for ${fieldName}`}
-      title={supportsVoiceInput ? "Use voice input" : "Voice input is not supported in this browser yet"}
-    >
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M12 3.75A2.75 2.75 0 0 1 14.75 6.5V11.5A2.75 2.75 0 0 1 9.25 11.5V6.5A2.75 2.75 0 0 1 12 3.75Z" />
-        <path d="M7.5 10.75V11.5A4.5 4.5 0 0 0 16.5 11.5V10.75" />
-        <path d="M12 16V20.25" />
-        <path d="M9 20.25H15" />
-      </svg>
-    </button>
-  )
+  const filteredFlyers = useMemo(() => {
+    const normalizedQuery = flyerSearchQuery.trim().toLowerCase()
+    return FLYER_LIBRARY.filter((flyer) => {
+      if (flyerSearchCategory && flyer.category !== flyerSearchCategory) return false
+      if (!normalizedQuery) return true
+      return (
+        flyer.label.toLowerCase().includes(normalizedQuery) ||
+        flyer.category.toLowerCase().includes(normalizedQuery)
+      )
+    })
+  }, [flyerSearchCategory, flyerSearchQuery])
+
+  const inviteSuggestions = useMemo(() => {
+    const invitedIds = new Set(invitedUsers.map((user) => String(user.id || user.username)))
+    const normalizedQuery = inviteSearch.trim().toLowerCase()
+
+    return (followingList || [])
+      .filter((user) => {
+        const key = String(user.id || user.username)
+        if (invitedIds.has(key)) return false
+        if (!normalizedQuery) return true
+        const haystack = `${user.name || ""} ${user.username || ""}`.toLowerCase()
+        return haystack.includes(normalizedQuery)
+      })
+      .slice(0, 6)
+  }, [followingList, invitedUsers, inviteSearch])
+
+  const handleSelectStockFlyer = (flyer) => {
+    if (flyerPreview && flyerPreview.startsWith("blob:")) {
+      URL.revokeObjectURL(flyerPreview)
+    }
+    setFlyerFile(null)
+    setFlyerPreview(flyer.image)
+  }
+
+  const handleToggleInvitedUser = (user) => {
+    const key = String(user.id || user.username)
+    setInvitedUsers((current) => {
+      if (current.some((existing) => String(existing.id || existing.username) === key)) {
+        return current.filter((existing) => String(existing.id || existing.username) !== key)
+      }
+      return [...current, user]
+    })
+    setInviteSearch("")
+  }
+
+  const handleCopyInviteLink = async () => {
+    const linkToCopy = postPublishInfo?.inviteLink || publishedInviteLink
+    if (!linkToCopy) return
+    try {
+      if (typeof navigator !== "undefined" && navigator.clipboard) {
+        await navigator.clipboard.writeText(linkToCopy)
+      }
+      setInviteLinkCopied(true)
+      window.setTimeout(() => setInviteLinkCopied(false), 1800)
+    } catch {
+      setInviteLinkCopied(false)
+    }
+  }
+
+  const resetEventForm = () => {
+    setTitle("")
+    setDescription("")
+    setDate("")
+    setTime("")
+    setEndTime("")
+    setEndDate("")
+    setLocationName("")
+    setLocationAddress("")
+    setEventType("Free")
+    setIsPrivate(false)
+    setCapacity("")
+    setTagInput("")
+    setTags([])
+    setOrganizer("")
+    setDressCode("")
+    setFlyerPreview("")
+    setFlyerFile(null)
+    setAddressMeta(buildAddressDraft())
+    setAddressSuggestions([])
+    setIsAddressDropdownOpen(false)
+    setIsAddressLoading(false)
+    setPlacesSessionToken(createPlacesSessionToken())
+    setFlyerSearchCategory("")
+    setFlyerSearchQuery("")
+    setIsFlyerSearchOpen(false)
+    setInvitedUsers([])
+    setInviteSearch("")
+  }
+
+  const dispatchPrivateInvites = async ({ invitees, invitedLink, event }) => {
+    if (!invitees.length || !contextUser?.id) return
+
+    const senderId = contextUser.id
+    const messageRows = invitees
+      .filter((invitee) => invitee?.id)
+      .map((invitee) => ({
+        sender_id: senderId,
+        recipient_id: invitee.id,
+        content: `You're invited to ${event.title || "a private event"} on ${event.date || ""}. ${invitedLink}`,
+      }))
+
+    if (!messageRows.length) return
+
+    try {
+      await supabase.from("messages").insert(messageRows)
+    } catch (error) {
+      showToast(error?.message || "Couldn't send invites. Share the link manually.", "error")
+    }
+  }
 
   const handlePublish = async () => {
     try {
@@ -748,6 +738,8 @@ function CreateEvent({ embedded = false }) {
 
       if (flyerFile) {
         uploadedImageUrl = await uploadFlyerToSupabase(flyerFile)
+      } else if (flyerPreview && !flyerPreview.startsWith("blob:")) {
+        uploadedImageUrl = flyerPreview
       }
 
       const finalAddressMeta = buildAddressDraft(shortLocation, fullAddress, {
@@ -819,37 +811,50 @@ function CreateEvent({ embedded = false }) {
       }
 
       const realId = insertedRows?.[0]?.id || newEvent.id
-      createEvent({ ...newEvent, id: realId })
+      const publishedEvent = { ...newEvent, id: realId }
+      createEvent(publishedEvent)
 
-      setTitle("")
-      setDescription("")
-      setDate("")
-      setTime("")
-      setEndTime("")
-      setLocationName("")
-      setLocationAddress("")
-      setEventType("Free")
-      setIsPrivate(false)
-      setCapacity("")
-      setTagInput("")
-      setTags([])
-      setOrganizer("")
-      setDressCode("")
-      setFlyerPreview("")
-      setFlyerFile(null)
-      setListeningField("")
-      setVoiceFeedback("")
-      setAddressMeta(buildAddressDraft())
-      setAddressSuggestions([])
-      setIsAddressDropdownOpen(false)
-      setIsAddressLoading(false)
-      setPlacesSessionToken(createPlacesSessionToken())
+      const inviteLink = buildInviteLink(realId)
+      setPublishedInviteLink(inviteLink)
 
-      showToast("Event published! Check Discover.", "success")
+      if (isPrivate) {
+        setPostPublishInfo({ event: publishedEvent, inviteLink })
+        showToast("Event published! Choose how to share it.", "success")
+      } else {
+        resetEventForm()
+        showToast("Event published! Check Discover.", "success")
+        if (typeof onPublished === "function") {
+          onPublished({ event: publishedEvent, inviteLink, invitedUsers: [] })
+        }
+      }
     } catch (error) {
       showToast(error?.message || "Failed to publish event. Please try again.", "error")
     } finally {
       setIsUploading(false)
+    }
+  }
+
+  const handleSendInvitesNow = async () => {
+    if (!postPublishInfo || invitedUsers.length === 0) return
+    await dispatchPrivateInvites({
+      invitees: invitedUsers,
+      invitedLink: postPublishInfo.inviteLink,
+      event: postPublishInfo.event,
+    })
+    showToast(`Invites sent to ${invitedUsers.length} ${invitedUsers.length === 1 ? "person" : "people"}.`, "success")
+  }
+
+  const handleFinishPostPublish = () => {
+    const finalInfo = postPublishInfo
+    const finalInvitees = [...invitedUsers]
+    setPostPublishInfo(null)
+    resetEventForm()
+    if (typeof onPublished === "function" && finalInfo) {
+      onPublished({
+        event: finalInfo.event,
+        inviteLink: finalInfo.inviteLink,
+        invitedUsers: finalInvitees,
+      })
     }
   }
 
@@ -863,10 +868,6 @@ function CreateEvent({ embedded = false }) {
 
     setFlyerFile(file)
     setFlyerPreview(URL.createObjectURL(file))
-  }
-
-  const handleGenerateWithAI = () => {
-    setVoiceFeedback("AI event drafting is coming soon.")
   }
 
   const handleAddTag = (rawValue = tagInput) => {
@@ -912,7 +913,7 @@ function CreateEvent({ embedded = false }) {
   }
 
   return (
-    <div className={`create-page ${embedded ? "embedded" : ""}`}>
+    <div className={`create-page ${embedded ? "embedded" : ""} ${modal ? "modal" : ""}`}>
       {!embedded && (
         <div className="create-header">
           <p>Create and customize your event</p>
@@ -920,83 +921,194 @@ function CreateEvent({ embedded = false }) {
         </div>
       )}
 
-      <div className={`create-layout ${embedded ? "embedded" : ""}`}>
-        <div className="create-form-card">
-          {voiceFeedback ? (
-            <div className="create-voice-feedback">{voiceFeedback}</div>
-          ) : null}
+      {modal ? (
+        <div className="create-modal-heading">
+          <span className="personal-modal-kicker">Event</span>
+          <h2>{postPublishInfo ? "Share Your Event" : "Create Event"}</h2>
+        </div>
+      ) : null}
 
+      {postPublishInfo ? (
+        <div className="post-publish-step">
+          <div className="post-publish-card">
+            <div className="post-publish-preview">
+              {postPublishInfo.event?.image ? (
+                <img src={postPublishInfo.event.image} alt="" />
+              ) : null}
+              <div>
+                <p className="post-publish-kicker">Private event published</p>
+                <h3>{postPublishInfo.event?.title || "Your event"}</h3>
+                <p className="post-publish-meta">
+                  {postPublishInfo.event?.date}
+                  {postPublishInfo.event?.time && postPublishInfo.event.time !== "TBA"
+                    ? ` · ${postPublishInfo.event.time}`
+                    : ""}
+                </p>
+              </div>
+            </div>
+
+            <div className="post-publish-section">
+              <p className="post-publish-section-title">Send to selected users</p>
+              <p className="post-publish-help">
+                They&apos;ll get an invitation card in their DMs.
+              </p>
+
+              {invitedUsers.length > 0 ? (
+                <div className="flyer-invite-chips">
+                  {invitedUsers.map((user) => (
+                    <button
+                      type="button"
+                      key={String(user.id || user.username)}
+                      className="flyer-invite-chip"
+                      onClick={() => handleToggleInvitedUser(user)}
+                      aria-label={`Remove ${user.name || user.username}`}
+                    >
+                      {user.name || user.username}
+                      <span aria-hidden="true">×</span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+
+              <input
+                type="search"
+                className="flyer-search-input"
+                placeholder="Search people to invite"
+                value={inviteSearch}
+                onChange={(event) => setInviteSearch(event.target.value)}
+              />
+
+              {inviteSuggestions.length > 0 ? (
+                <ul className="flyer-invite-suggestions">
+                  {inviteSuggestions.map((user) => (
+                    <li key={String(user.id || user.username)}>
+                      <button type="button" onClick={() => handleToggleInvitedUser(user)}>
+                        <img
+                          src={user.image || user.avatar || DEFAULT_AVATAR_URL}
+                          alt=""
+                          onError={(event) => {
+                            event.currentTarget.src = DEFAULT_AVATAR_URL
+                          }}
+                        />
+                        <span>
+                          <strong>{user.name || user.username || "User"}</strong>
+                          {user.username ? <em>@{user.username}</em> : null}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+
+              <button
+                type="button"
+                className="post-publish-send-btn"
+                onClick={handleSendInvitesNow}
+                disabled={invitedUsers.length === 0}
+              >
+                Send invites{invitedUsers.length > 0 ? ` (${invitedUsers.length})` : ""}
+              </button>
+            </div>
+
+            <div className="post-publish-divider" />
+
+            <div className="post-publish-section">
+              <p className="post-publish-section-title">Share via link</p>
+              <p className="post-publish-help">
+                Anyone with this link can open the event.
+              </p>
+              <button
+                type="button"
+                className="flyer-invite-link-btn"
+                onClick={handleCopyInviteLink}
+              >
+                {inviteLinkCopied ? "Link copied" : "Copy invite link"}
+              </button>
+            </div>
+
+            <button
+              type="button"
+              className="post-publish-done-btn"
+              onClick={handleFinishPostPublish}
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      ) : (
+      <div className={`create-layout ${embedded ? "embedded" : ""} ${modal ? "modal" : ""}`}>
+        <div className="create-form-card">
           <div className="form-group">
             <label>Event Title</label>
-            <div className="create-field-shell">
-              <input
-                type="text"
-                placeholder="Spring Campus Festival"
-                value={title}
-                onChange={(event) => setTitle(event.target.value)}
-              />
-              {renderVoiceButton("title")}
-            </div>
+            <input
+              type="text"
+              placeholder="Spring Campus Festival"
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+            />
           </div>
 
           <div className="form-group">
             <label>Description</label>
-            <div className="create-field-shell textarea-shell">
-              <textarea
-                placeholder="Describe your event..."
-                rows="5"
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-              />
-              {renderVoiceButton("description")}
-            </div>
+            <textarea
+              placeholder="Describe your event..."
+              rows="5"
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+            />
           </div>
 
-          <div className="form-row form-row--triple">
-            <div className="form-group">
-              <label>Date</label>
-              <input
-                type="date"
-                value={date}
-                onChange={(event) => setDate(event.target.value)}
-              />
+          <div className="event-time-card" role="group" aria-label="Event time">
+            <div className="event-time-row">
+              <span className="event-time-label">Starts</span>
+              <div className="event-time-controls">
+                <input
+                  type="date"
+                  className="event-time-pill"
+                  value={date}
+                  onChange={(event) => setDate(event.target.value)}
+                />
+                <input
+                  type="time"
+                  className="event-time-pill"
+                  value={time}
+                  onChange={(event) => setTime(event.target.value)}
+                />
+              </div>
             </div>
 
-            <div className="form-group">
-              <label>Start Time</label>
-              <input
-                type="time"
-                value={time}
-                onChange={(event) => setTime(event.target.value)}
-              />
-            </div>
-
-            <div className="form-group">
-              <label>End Time</label>
-              <input
-                type="time"
-                value={endTime}
-                onChange={(event) => setEndTime(event.target.value)}
-              />
+            <div className="event-time-row">
+              <span className="event-time-label">Ends</span>
+              <div className="event-time-controls">
+                <input
+                  type="date"
+                  className="event-time-pill"
+                  value={endDate || date}
+                  onChange={(event) => setEndDate(event.target.value)}
+                />
+                <input
+                  type="time"
+                  className="event-time-pill"
+                  value={endTime}
+                  onChange={(event) => setEndTime(event.target.value)}
+                />
+              </div>
             </div>
           </div>
 
           <div className="form-group">
             <label>Location Name</label>
-            <div className="create-field-shell">
-              <input
-                type="text"
-                placeholder="Student Center Ballroom"
-                value={locationName}
-                onChange={handleLocationNameChange}
-              />
-              {renderVoiceButton("locationName")}
-            </div>
+            <input
+              type="text"
+              placeholder="Student Center Ballroom"
+              value={locationName}
+              onChange={handleLocationNameChange}
+            />
           </div>
 
           <div className="form-group">
             <label>Address</label>
-            <div className="create-field-shell create-address-shell">
+            <div className="create-address-shell">
               <input
                 type="text"
                 placeholder="30665 Student Services Center, Princess Anne, MD 21853"
@@ -1011,7 +1123,6 @@ function CreateEvent({ embedded = false }) {
                 data-autocomplete-status={addressMeta.status}
                 data-place-id={addressMeta.placeId}
               />
-              {renderVoiceButton("locationAddress")}
 
               {(isAddressDropdownOpen || isAddressLoading) && isGooglePlacesConfigured ? (
                 <div className="create-address-dropdown">
@@ -1110,28 +1221,22 @@ function CreateEvent({ embedded = false }) {
           <div className="form-row">
             <div className="form-group">
               <label>Organizer</label>
-              <div className="create-field-shell">
-                <input
-                  type="text"
-                  placeholder="Student Activities Board"
-                  value={organizer}
-                  onChange={(event) => setOrganizer(event.target.value)}
-                />
-                {renderVoiceButton("organizer")}
-              </div>
+              <input
+                type="text"
+                placeholder="Student Activities Board"
+                value={organizer}
+                onChange={(event) => setOrganizer(event.target.value)}
+              />
             </div>
 
             <div className="form-group">
               <label>Dress Code</label>
-              <div className="create-field-shell">
-                <input
-                  type="text"
-                  placeholder="Casual"
-                  value={dressCode}
-                  onChange={(event) => setDressCode(event.target.value)}
-                />
-                {renderVoiceButton("dressCode")}
-              </div>
+              <input
+                type="text"
+                placeholder="Casual"
+                value={dressCode}
+                onChange={(event) => setDressCode(event.target.value)}
+              />
             </div>
           </div>
 
@@ -1189,8 +1294,8 @@ function CreateEvent({ embedded = false }) {
           </button>
         </div>
 
-        <div className="flyer-card">
-          <div className="flyer-preview">
+        <div className="flyer-card flyer-card--compact">
+          <div className="flyer-preview flyer-preview--compact">
             {flyerPreview ? (
               <img src={flyerPreview} alt="Flyer preview" className="flyer-image" />
             ) : (
@@ -1200,7 +1305,7 @@ function CreateEvent({ embedded = false }) {
 
           <div className="flyer-actions">
             <label className="upload-btn">
-              Upload Flyer 📤
+              Upload Flyer
               <input
                 type="file"
                 accept="image/*"
@@ -1209,12 +1314,68 @@ function CreateEvent({ embedded = false }) {
               />
             </label>
 
-            <button className="ai-btn" type="button" onClick={handleGenerateWithAI}>
-              Generate with AI ✨
+            <button
+              className="ai-btn"
+              type="button"
+              onClick={() => setIsFlyerSearchOpen((prev) => !prev)}
+              aria-expanded={isFlyerSearchOpen}
+            >
+              {isFlyerSearchOpen ? "Hide Flyers" : "Search Flyers"}
             </button>
           </div>
+
+          {isFlyerSearchOpen ? (
+            <div className="flyer-search">
+              <div className="flyer-search-categories" role="tablist" aria-label="Flyer categories">
+                <button
+                  type="button"
+                  className={`flyer-search-chip ${!flyerSearchCategory ? "active" : ""}`}
+                  onClick={() => setFlyerSearchCategory("")}
+                >
+                  All
+                </button>
+                {FLYER_CATEGORIES.map((category) => (
+                  <button
+                    key={category.id}
+                    type="button"
+                    className={`flyer-search-chip ${flyerSearchCategory === category.id ? "active" : ""}`}
+                    onClick={() => setFlyerSearchCategory(category.id)}
+                  >
+                    {category.label}
+                  </button>
+                ))}
+              </div>
+
+              <input
+                type="search"
+                className="flyer-search-input"
+                placeholder="Search flyers"
+                value={flyerSearchQuery}
+                onChange={(event) => setFlyerSearchQuery(event.target.value)}
+              />
+
+              <div className="flyer-search-grid">
+                {filteredFlyers.length > 0 ? (
+                  filteredFlyers.map((flyer) => (
+                    <button
+                      key={flyer.id}
+                      type="button"
+                      className={`flyer-search-tile ${flyerPreview === flyer.image ? "selected" : ""}`}
+                      onClick={() => handleSelectStockFlyer(flyer)}
+                      title={flyer.label}
+                    >
+                      <img src={flyer.image} alt={flyer.label} />
+                    </button>
+                  ))
+                ) : (
+                  <p className="flyer-search-empty">No flyers match that filter.</p>
+                )}
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
+      )}
     </div>
   )
 }
