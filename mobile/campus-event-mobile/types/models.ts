@@ -15,6 +15,8 @@ export type EventRecord = {
   organizer: string;
   dressCode: string;
   image: string;
+  price?: string;
+  capacity?: number | null;
   tags: string[];
   createdBy: string;
   creatorUsername: string;
@@ -120,6 +122,8 @@ export type CreateEventInput = {
   dressCode: string;
   tags: string[];
   privacy: EventPrivacy;
+  eventType?: 'Free' | 'Paid';
+  capacity?: string;
   image?: string;
 };
 

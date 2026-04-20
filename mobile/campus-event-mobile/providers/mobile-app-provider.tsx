@@ -1040,6 +1040,10 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
       const organizer = input.organizer.trim() || currentUser.name;
       const dressCode = input.dressCode.trim() || 'Open';
       const sanitizedImage = sanitizeMediaUrl(input.image?.trim(), '');
+      const price = input.eventType === 'Paid' ? '$10' : 'Free';
+      const normalizedCapacity = input.capacity?.trim()
+        ? Number.parseInt(input.capacity.trim(), 10)
+        : null;
 
       const payload = {
         title,
@@ -1053,6 +1057,8 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
         organizer,
         dress_code: dressCode,
         image: sanitizedImage || null,
+        price,
+        capacity: Number.isFinite(normalizedCapacity) ? normalizedCapacity : null,
         tags: input.tags,
         created_by: currentUser.id,
         creator_username: currentUser.username,
@@ -1094,6 +1100,10 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
       const organizer = input.organizer.trim() || currentUser.name;
       const dressCode = input.dressCode.trim() || 'Open';
       const sanitizedImage = sanitizeMediaUrl(input.image?.trim(), '');
+      const price = input.eventType === 'Paid' ? '$10' : 'Free';
+      const normalizedCapacity = input.capacity?.trim()
+        ? Number.parseInt(input.capacity.trim(), 10)
+        : null;
 
       const payload = {
         title,
@@ -1107,6 +1117,8 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
         organizer,
         dress_code: dressCode,
         image: sanitizedImage || null,
+        price,
+        capacity: Number.isFinite(normalizedCapacity) ? normalizedCapacity : null,
         tags: input.tags,
         privacy: input.privacy,
       };

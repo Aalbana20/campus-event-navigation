@@ -123,6 +123,8 @@ type EventRow = {
   organizer?: string | null;
   dress_code?: string | null;
   image?: string | null;
+  price?: string | null;
+  capacity?: number | null;
   tags?: string[] | string | null;
   created_by?: string | null;
   creator_username?: string | null;
@@ -466,6 +468,8 @@ export const normalizeEventRow = (
     organizer: toStringValue(row.organizer) || 'Campus Event Navigation',
     dressCode: toStringValue(row.dress_code) || 'Open',
     image: toStringValue(row.image) || DEFAULT_EVENT_IMAGE,
+    price: toStringValue(row.price) || 'Free',
+    capacity: typeof row.capacity === 'number' ? row.capacity : null,
     tags: normalizeTags(row.tags),
     createdBy: toStringValue(row.created_by),
     creatorUsername: normalizeUsername(toStringValue(row.creator_username)),

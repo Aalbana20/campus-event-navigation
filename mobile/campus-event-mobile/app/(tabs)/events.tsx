@@ -1,21 +1,44 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { AppScreen } from '@/components/mobile/AppScreen';
-import { CreateEventComposer } from '@/components/mobile/CreateEventComposer';
+import { CalendarCreateSheet } from '@/components/mobile/CalendarCreateSheet';
+import { CalendarSearchSheet } from '@/components/mobile/CalendarSearchSheet';
 import { DayAgendaItem, DayAgendaSheet } from '@/components/mobile/DayAgendaSheet';
 import { EventListCard } from '@/components/mobile/EventListCard';
 import { MonthlyCalendar } from '@/components/mobile/MonthlyCalendar';
 import { useAppTheme } from '@/lib/app-theme';
 import { useMobileApp } from '@/providers/mobile-app-provider';
+import type { CreatePersonalCalendarItemInput } from '@/types/models';
 
-type EventsTab = 'my-events' | 'calendar' | 'create';
+type EventsTab = 'my-events' | 'calendar';
+type CalendarFilter = 'all' | 'going' | 'created';
+type CalendarMode = 'month' | 'year';
+
+const FILTER_LABELS: Record<CalendarFilter, string> = {
+  all: 'All',
+  going: 'Going',
+  created: 'Created',
+};
 
 const resolveEventsTab = (value?: string | string[] | null): EventsTab => {
   const normalizedValue = Array.isArray(value) ? value[0] : value;
-  if (normalizedValue === 'calendar' || normalizedValue === 'create') return normalizedValue;
+  if (normalizedValue === 'my-events') return 'my-events';
   return 'calendar';
+};
+
+const shouldOpenCreateFromParam = (value?: string | string[] | null) => {
+  const normalizedValue = Array.isArray(value) ? value[0] : value;
+  return normalizedValue === 'create';
+};
+
+const toDateKey = (date: Date) => {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
 };
 
 const parseDateKey = (dateKey: string) => {
@@ -45,43 +68,62 @@ export default function EventsScreen() {
   const styles = useMemo(() => buildStyles(theme), [theme]);
   const {
     currentUser,
+    getCreatedEventsForProfile,
     getGoingEventsForProfile,
     getCalendarEventsForProfile,
     getPersonalCalendarItemsForProfile,
     toggleSaveEvent,
     addPersonalCalendarItem,
   } = useMobileApp();
+
   const [activeTab, setActiveTab] = useState<EventsTab>(() => resolveEventsTab(params.tab));
   const [visibleMonth, setVisibleMonth] = useState(() => new Date());
+  const [calendarMode, setCalendarMode] = useState<CalendarMode>('month');
+  const [calendarFilter, setCalendarFilter] = useState<CalendarFilter>('all');
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [isAgendaOpen, setIsAgendaOpen] = useState(false);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
 
   useEffect(() => {
     setActiveTab(resolveEventsTab(params.tab));
+    if (shouldOpenCreateFromParam(params.tab)) {
+      setIsCreateOpen(true);
+    }
   }, [params.tab]);
 
   const goingEvents = getGoingEventsForProfile(currentUser.id);
+  const createdEvents = getCreatedEventsForProfile(currentUser.id);
   const calendarEvents = getCalendarEventsForProfile(currentUser.id);
   const personalCalendarItems = getPersonalCalendarItemsForProfile(currentUser.id);
+
+  const visibleCalendarEvents = useMemo(() => {
+    if (calendarFilter === 'going') return goingEvents;
+    if (calendarFilter === 'created') return createdEvents;
+    return calendarEvents;
+  }, [calendarEvents, calendarFilter, createdEvents, goingEvents]);
+
+  const visiblePersonalItems = calendarFilter === 'all' ? personalCalendarItems : [];
 
   const scheduledDates = useMemo(() => {
     const nextDates = new Set<string>();
 
-    calendarEvents.forEach((event) => {
+    visibleCalendarEvents.forEach((event) => {
       if (event.eventDate) nextDates.add(event.eventDate);
     });
 
-    personalCalendarItems.forEach((item) => {
+    visiblePersonalItems.forEach((item) => {
       if (item.date) nextDates.add(item.date);
     });
 
     return nextDates;
-  }, [calendarEvents, personalCalendarItems]);
+  }, [visibleCalendarEvents, visiblePersonalItems]);
 
   const selectedAgendaItems = useMemo(() => {
     if (!selectedDate) return [];
 
-    const eventItems: DayAgendaItem[] = calendarEvents
+    const eventItems: DayAgendaItem[] = visibleCalendarEvents
       .filter((event) => event.eventDate === selectedDate)
       .map((event) => ({
         id: event.id,
@@ -91,7 +133,7 @@ export default function EventsScreen() {
         subtitle: [event.locationName, event.organizer].filter(Boolean).join(' • '),
       }));
 
-    const personalItems: DayAgendaItem[] = personalCalendarItems
+    const personalItems: DayAgendaItem[] = visiblePersonalItems
       .filter((item) => item.date === selectedDate)
       .map((item) => ({
         id: item.id,
@@ -102,25 +144,35 @@ export default function EventsScreen() {
       }));
 
     return sortAgendaItems([...eventItems, ...personalItems]);
-  }, [calendarEvents, personalCalendarItems, selectedDate]);
+  }, [selectedDate, visibleCalendarEvents, visiblePersonalItems]);
 
   const selectedDateLabel = selectedDate ? formatDateLabel(selectedDate) : '';
-
-  const handleChangeMonth = (direction: 'previous' | 'next') => {
-    setVisibleMonth((currentMonth) => {
-      const nextMonth = new Date(currentMonth);
-      nextMonth.setMonth(currentMonth.getMonth() + (direction === 'next' ? 1 : -1));
-      return nextMonth;
-    });
-  };
 
   const handleSelectDate = (dateKey: string) => {
     setSelectedDate(dateKey);
     setVisibleMonth(parseDateKey(dateKey));
+    setCalendarMode('month');
     setIsAgendaOpen(true);
   };
 
-  const handleAddPersonalItem = (input: { title: string; note?: string; time?: string }) => {
+  const handleSelectMonth = (month: Date) => {
+    setVisibleMonth(month);
+    setCalendarMode('month');
+  };
+
+  const handleTodayPress = () => {
+    const today = new Date();
+    setVisibleMonth(today);
+    setSelectedDate(toDateKey(today));
+    setCalendarMode('month');
+  };
+
+  const handleFilterChange = (nextFilter: CalendarFilter) => {
+    setCalendarFilter(nextFilter);
+    setIsFilterOpen(false);
+  };
+
+  const handleAddPersonalItemForSelectedDate = (input: { title: string; note?: string; time?: string }) => {
     if (!selectedDate) return;
 
     addPersonalCalendarItem({
@@ -131,158 +183,145 @@ export default function EventsScreen() {
     });
   };
 
+  const handleCreatePersonalItem = (input: CreatePersonalCalendarItemInput) => {
+    addPersonalCalendarItem(input);
+  };
+
+  const renderCalendar = () => (
+    <>
+      <View style={styles.calendarTopBar}>
+        <Pressable
+          style={styles.yearButton}
+          onPress={() => setCalendarMode((currentMode) => (currentMode === 'year' ? 'month' : 'year'))}>
+          <Ionicons name="chevron-back" size={25} color={theme.text} />
+          <Text style={styles.yearButtonText}>{visibleMonth.getFullYear()}</Text>
+        </Pressable>
+      </View>
+
+      <MonthlyCalendar
+        month={visibleMonth}
+        mode={calendarMode}
+        selectedDate={selectedDate}
+        scheduledDates={scheduledDates}
+        onSelectDate={handleSelectDate}
+        onSelectMonth={handleSelectMonth}
+      />
+    </>
+  );
+
   return (
     <AppScreen>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Events</Text>
-          <Text style={styles.subtitle}>
-            Going plans, calendar, and event creation all live together now.
-          </Text>
-        </View>
+      <View style={styles.screenRoot}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}>
+          {activeTab === 'calendar' ? renderCalendar() : null}
 
-        <View style={styles.segmentedRow}>
-          <Pressable
-            style={[
-              styles.segmentedButton,
-              activeTab === 'calendar' && styles.segmentedButtonActive,
-            ]}
-            onPress={() => setActiveTab('calendar')}>
-            <Text
-              style={[
-                styles.segmentedText,
-                activeTab === 'calendar' && styles.segmentedTextActive,
-              ]}>
-              Calendar
-            </Text>
-          </Pressable>
-          <Pressable
-            style={[
-              styles.segmentedButton,
-              activeTab === 'create' && styles.segmentedButtonActive,
-            ]}
-            onPress={() => setActiveTab('create')}>
-            <Text
-              style={[
-                styles.segmentedText,
-                activeTab === 'create' && styles.segmentedTextActive,
-              ]}>
-              Create
-            </Text>
-          </Pressable>
-          <Pressable
-            style={[
-              styles.segmentedButton,
-              activeTab === 'my-events' && styles.segmentedButtonActive,
-            ]}
-            onPress={() => setActiveTab('my-events')}>
-            <Text
-              style={[
-                styles.segmentedText,
-                activeTab === 'my-events' && styles.segmentedTextActive,
-              ]}>
-              My Events
-            </Text>
-          </Pressable>
-        </View>
+          {activeTab === 'my-events' ? (
+            <>
+              <View style={styles.summaryCard}>
+                <Text style={styles.summaryTitle}>My Events</Text>
+                <Text style={styles.summaryCopy}>
+                  Events you are going to stay here for quick access and planning.
+                </Text>
+              </View>
+
+              {goingEvents.length > 0 ? (
+                goingEvents.map((event) => (
+                  <EventListCard
+                    key={event.id}
+                    event={event}
+                    actionLabel="Remove"
+                    actionTone="muted"
+                    onPress={() =>
+                      router.push({
+                        pathname: '/event/[id]',
+                        params: { id: event.id },
+                      })
+                    }
+                    onActionPress={() => toggleSaveEvent(event.id)}
+                  />
+                ))
+              ) : (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyTitle}>Nothing saved yet.</Text>
+                  <Text style={styles.emptyCopy}>
+                    Events you accept from Discover or save in Explore will show up here.
+                  </Text>
+                </View>
+              )}
+            </>
+          ) : null}
+        </ScrollView>
 
         {activeTab === 'calendar' ? (
           <>
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryTitle}>Calendar</Text>
-              <Text style={styles.summaryCopy}>
-                See your campus plans and personal reminders in one monthly view.
-              </Text>
-            </View>
+            <Pressable style={styles.todayButton} onPress={handleTodayPress}>
+              <Text style={styles.todayButtonText}>Today</Text>
+            </Pressable>
 
-            <View style={styles.calendarIntroCard}>
-              <View style={styles.calendarIntroCopy}>
-                <Text style={styles.calendarIntroTitle}>Your social calendar</Text>
-                <Text style={styles.calendarIntroText}>
-                  Tap any date to open the day plan with event items and personal notes together.
-                </Text>
+            {isFilterOpen ? (
+              <View style={styles.filterMenu}>
+                {(['all', 'going', 'created'] as CalendarFilter[]).map((filter) => (
+                  <Pressable
+                    key={filter}
+                    style={[
+                      styles.filterMenuItem,
+                      calendarFilter === filter && styles.filterMenuItemActive,
+                    ]}
+                    onPress={() => handleFilterChange(filter)}>
+                    <Text
+                      style={[
+                        styles.filterMenuText,
+                        calendarFilter === filter && styles.filterMenuTextActive,
+                      ]}>
+                      {FILTER_LABELS[filter]}
+                    </Text>
+                  </Pressable>
+                ))}
               </View>
-              <View style={styles.calendarStatsRow}>
-                <View style={styles.calendarStatPill}>
-                  <View style={[styles.calendarStatDot, { backgroundColor: theme.success }]} />
-                  <Text style={styles.calendarStatText}>{scheduledDates.size} active days</Text>
-                </View>
-              </View>
-            </View>
+            ) : null}
 
-            <MonthlyCalendar
-              month={visibleMonth}
-              selectedDate={selectedDate}
-              scheduledDates={scheduledDates}
-              onSelectDate={handleSelectDate}
-              onChangeMonth={handleChangeMonth}
-            />
-
-            <View style={styles.calendarHintCard}>
-              <Text style={styles.calendarHintTitle}>Calendar-first, create-ready.</Text>
-              <Text style={styles.calendarHintCopy}>
-                Day-to-create shortcuts can layer in later without changing this tab structure.
-              </Text>
+            <View style={styles.calendarActionControl}>
+              <Pressable
+                style={styles.actionControlButton}
+                onPress={() => setIsFilterOpen((currentValue) => !currentValue)}>
+                <Text style={styles.actionControlLabel}>{FILTER_LABELS[calendarFilter]}</Text>
+              </Pressable>
+              <View style={styles.actionDivider} />
+              <Pressable style={styles.actionControlButton} onPress={() => setIsSearchOpen(true)}>
+                <Ionicons name="search-outline" size={27} color={theme.text} />
+              </Pressable>
+              <View style={styles.actionDivider} />
+              <Pressable style={styles.actionControlButton} onPress={() => setIsCreateOpen(true)}>
+                <Ionicons name="add" size={33} color={theme.text} />
+              </Pressable>
             </View>
           </>
         ) : null}
-
-        {activeTab === 'create' ? (
-          <>
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryTitle}>Create Event</Text>
-              <Text style={styles.summaryCopy}>
-                Start a new event without leaving the same Events space you use to plan.
-              </Text>
-            </View>
-
-            <CreateEventComposer />
-          </>
-        ) : null}
-
-        {activeTab === 'my-events' ? (
-          <>
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryTitle}>My Events</Text>
-              <Text style={styles.summaryCopy}>
-                Events you are going to stay here for quick access and planning.
-              </Text>
-            </View>
-
-            {goingEvents.length > 0 ? (
-              goingEvents.map((event) => (
-                <EventListCard
-                  key={event.id}
-                  event={event}
-                  actionLabel="Remove"
-                  actionTone="muted"
-                  onPress={() =>
-                    router.push({
-                      pathname: '/event/[id]',
-                      params: { id: event.id },
-                    })
-                  }
-                  onActionPress={() => toggleSaveEvent(event.id)}
-                />
-              ))
-            ) : (
-              <View style={styles.emptyState}>
-                <Text style={styles.emptyTitle}>Nothing saved yet.</Text>
-                <Text style={styles.emptyCopy}>
-                  Events you accept from Discover or save in Explore will show up here.
-                </Text>
-              </View>
-            )}
-          </>
-        ) : null}
-      </ScrollView>
+      </View>
 
       <DayAgendaSheet
         visible={isAgendaOpen && Boolean(selectedDate)}
         dateLabel={selectedDateLabel}
         items={selectedAgendaItems}
         onClose={() => setIsAgendaOpen(false)}
-        onAddPersonalItem={handleAddPersonalItem}
+        onAddPersonalItem={handleAddPersonalItemForSelectedDate}
+      />
+
+      <CalendarSearchSheet
+        visible={isSearchOpen}
+        events={calendarEvents}
+        personalItems={personalCalendarItems}
+        onClose={() => setIsSearchOpen(false)}
+        onSelectDate={handleSelectDate}
+      />
+
+      <CalendarCreateSheet
+        visible={isCreateOpen}
+        selectedDate={selectedDate}
+        onClose={() => setIsCreateOpen(false)}
+        onAddPersonalItem={handleCreatePersonalItem}
       />
     </AppScreen>
   );
@@ -290,49 +329,130 @@ export default function EventsScreen() {
 
 const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
   StyleSheet.create({
+    screenRoot: {
+      flex: 1,
+    },
     scrollContent: {
-      padding: 18,
-      gap: 16,
-      paddingBottom: 120,
+      paddingHorizontal: 18,
+      paddingTop: 18,
+      paddingBottom: 150,
+      gap: 24,
     },
-    header: {
-      gap: 6,
-    },
-    title: {
-      color: theme.text,
-      fontSize: 30,
-      fontWeight: '800',
-    },
-    subtitle: {
-      color: theme.textMuted,
-      fontSize: 14,
-      lineHeight: 20,
-    },
-    segmentedRow: {
+    calendarTopBar: {
+      minHeight: 62,
       flexDirection: 'row',
-      gap: 10,
-      padding: 6,
-      borderRadius: 20,
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    yearButton: {
+      minHeight: 58,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingHorizontal: 18,
+      borderRadius: 29,
       backgroundColor: theme.surface,
       borderWidth: 1,
       borderColor: theme.border,
     },
-    segmentedButton: {
-      flex: 1,
+    yearButtonText: {
+      color: theme.text,
+      fontSize: 24,
+      fontWeight: '800',
+    },
+    todayButton: {
+      position: 'absolute',
+      left: 24,
+      bottom: 28,
+      minWidth: 118,
+      height: 58,
+      borderRadius: 29,
       alignItems: 'center',
       justifyContent: 'center',
-      paddingVertical: 12,
-      borderRadius: 16,
+      backgroundColor: theme.surface,
+      borderWidth: 1,
+      borderColor: theme.border,
+      shadowColor: '#000',
+      shadowOpacity: 0.24,
+      shadowRadius: 20,
+      shadowOffset: { width: 0, height: 8 },
+      elevation: 8,
     },
-    segmentedButtonActive: {
+    todayButtonText: {
+      color: theme.text,
+      fontSize: 18,
+      fontWeight: '800',
+    },
+    calendarActionControl: {
+      position: 'absolute',
+      right: 24,
+      bottom: 28,
+      minWidth: 196,
+      height: 58,
+      borderRadius: 29,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 8,
+      backgroundColor: theme.surface,
+      borderWidth: 1,
+      borderColor: theme.border,
+      shadowColor: '#000',
+      shadowOpacity: 0.24,
+      shadowRadius: 20,
+      shadowOffset: { width: 0, height: 8 },
+      elevation: 8,
+    },
+    actionControlButton: {
+      minWidth: 54,
+      height: 46,
+      borderRadius: 23,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 10,
+    },
+    actionControlLabel: {
+      color: theme.text,
+      fontSize: 12,
+      fontWeight: '900',
+    },
+    actionDivider: {
+      width: 1,
+      height: 34,
+      backgroundColor: theme.border,
+    },
+    filterMenu: {
+      position: 'absolute',
+      right: 146,
+      bottom: 94,
+      width: 124,
+      borderRadius: 18,
+      padding: 6,
+      backgroundColor: theme.surface,
+      borderWidth: 1,
+      borderColor: theme.border,
+      shadowColor: '#000',
+      shadowOpacity: 0.2,
+      shadowRadius: 18,
+      shadowOffset: { width: 0, height: 8 },
+      elevation: 9,
+      gap: 4,
+    },
+    filterMenuItem: {
+      minHeight: 38,
+      borderRadius: 13,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    filterMenuItemActive: {
       backgroundColor: theme.accent,
     },
-    segmentedText: {
-      color: theme.textMuted,
+    filterMenuText: {
+      color: theme.text,
       fontSize: 13,
       fontWeight: '800',
     },
-    segmentedTextActive: {
+    filterMenuTextActive: {
       color: theme.background,
     },
     summaryCard: {
@@ -372,66 +492,5 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       fontSize: 13,
       lineHeight: 18,
       textAlign: 'center',
-    },
-    calendarIntroCard: {
-      padding: 18,
-      borderRadius: 24,
-      backgroundColor: theme.surface,
-      borderWidth: 1,
-      borderColor: theme.border,
-      gap: 12,
-    },
-    calendarIntroCopy: {
-      gap: 6,
-    },
-    calendarIntroTitle: {
-      color: theme.text,
-      fontSize: 17,
-      fontWeight: '800',
-    },
-    calendarIntroText: {
-      color: theme.textMuted,
-      fontSize: 13,
-      lineHeight: 19,
-    },
-    calendarStatsRow: {
-      flexDirection: 'row',
-    },
-    calendarStatPill: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-      paddingHorizontal: 12,
-      paddingVertical: 9,
-      borderRadius: 999,
-      backgroundColor: theme.surfaceAlt,
-    },
-    calendarStatDot: {
-      width: 8,
-      height: 8,
-      borderRadius: 4,
-    },
-    calendarStatText: {
-      color: theme.text,
-      fontSize: 12,
-      fontWeight: '700',
-    },
-    calendarHintCard: {
-      padding: 18,
-      borderRadius: 24,
-      backgroundColor: theme.surface,
-      borderWidth: 1,
-      borderColor: theme.border,
-      gap: 8,
-    },
-    calendarHintTitle: {
-      color: theme.text,
-      fontSize: 15,
-      fontWeight: '800',
-    },
-    calendarHintCopy: {
-      color: theme.textMuted,
-      fontSize: 13,
-      lineHeight: 18,
     },
   });

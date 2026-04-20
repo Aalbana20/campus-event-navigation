@@ -1,18 +1,21 @@
-import { Ionicons } from '@expo/vector-icons';
 import React, { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useAppTheme } from '@/lib/app-theme';
 
+type CalendarMode = 'month' | 'year';
+
 type MonthlyCalendarProps = {
   month: Date;
+  mode: CalendarMode;
   selectedDate: string | null;
   scheduledDates: Set<string>;
   onSelectDate: (date: string) => void;
-  onChangeMonth: (direction: 'previous' | 'next') => void;
+  onSelectMonth: (month: Date) => void;
 };
 
-const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 const toDateKey = (date: Date) => {
   const year = date.getFullYear();
@@ -21,92 +24,85 @@ const toDateKey = (date: Date) => {
   return `${year}-${month}-${day}`;
 };
 
-export function MonthlyCalendar({
+const buildMonthDays = (month: Date) => {
+  const firstDay = new Date(month.getFullYear(), month.getMonth(), 1);
+  const offset = firstDay.getDay();
+  const daysInMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
+
+  return Array.from({ length: offset + daysInMonth }, (_, index) => {
+    if (index < offset) return null;
+
+    const date = new Date(month.getFullYear(), month.getMonth(), index - offset + 1);
+    return {
+      key: toDateKey(date),
+      dayNumber: date.getDate(),
+    };
+  });
+};
+
+function MonthGrid({
   month,
   selectedDate,
   scheduledDates,
+  compact = false,
+  showWeekdays = false,
   onSelectDate,
-  onChangeMonth,
-}: MonthlyCalendarProps) {
+}: {
+  month: Date;
+  selectedDate: string | null;
+  scheduledDates: Set<string>;
+  compact?: boolean;
+  showWeekdays?: boolean;
+  onSelectDate: (date: string) => void;
+}) {
   const theme = useAppTheme();
   const styles = useMemo(() => buildStyles(theme), [theme]);
-
-  const monthLabel = month.toLocaleDateString('en-US', {
-    month: 'long',
-    year: 'numeric',
-  });
-
-  const calendarDays = useMemo(() => {
-    const firstDay = new Date(month.getFullYear(), month.getMonth(), 1);
-    const offset = firstDay.getDay();
-    const gridStart = new Date(firstDay);
-    gridStart.setDate(firstDay.getDate() - offset);
-
-    return Array.from({ length: 42 }, (_, index) => {
-      const date = new Date(gridStart);
-      date.setDate(gridStart.getDate() + index);
-
-      return {
-        key: toDateKey(date),
-        dayNumber: date.getDate(),
-        isCurrentMonth: date.getMonth() === month.getMonth(),
-      };
-    });
-  }, [month]);
+  const todayKey = toDateKey(new Date());
+  const days = useMemo(() => buildMonthDays(month), [month]);
 
   return (
-    <View style={styles.card}>
-      <View style={styles.header}>
-        <Pressable style={styles.monthButton} onPress={() => onChangeMonth('previous')}>
-          <Ionicons name="chevron-back" size={18} color={theme.text} />
-        </Pressable>
+    <View style={compact ? styles.compactMonth : styles.monthBlock}>
+      {showWeekdays ? (
+        <View style={styles.weekdaysRow}>
+          {WEEKDAY_LABELS.map((label, index) => (
+            <Text key={`${label}-${index}`} style={styles.weekdayLabel}>
+              {label}
+            </Text>
+          ))}
+        </View>
+      ) : null}
 
-        <Text style={styles.monthLabel}>{monthLabel}</Text>
+      <View style={compact ? styles.compactGrid : styles.grid}>
+        {days.map((day, index) => {
+          if (!day) {
+            return <View key={`empty-${index}`} style={compact ? styles.compactDayCell : styles.dayCell} />;
+          }
 
-        <Pressable style={styles.monthButton} onPress={() => onChangeMonth('next')}>
-          <Ionicons name="chevron-forward" size={18} color={theme.text} />
-        </Pressable>
-      </View>
-
-      <View style={styles.weekdaysRow}>
-        {WEEKDAY_LABELS.map((label) => (
-          <Text key={label} style={styles.weekdayLabel}>
-            {label}
-          </Text>
-        ))}
-      </View>
-
-      <View style={styles.grid}>
-        {calendarDays.map((day) => {
           const isSelected = selectedDate === day.key;
+          const isToday = todayKey === day.key;
           const hasItems = scheduledDates.has(day.key);
 
           return (
             <Pressable
               key={day.key}
-              style={styles.dayCell}
+              style={compact ? styles.compactDayCell : styles.dayCell}
               onPress={() => onSelectDate(day.key)}>
               <View
                 style={[
-                  styles.dayCellInner,
-                  !day.isCurrentMonth && styles.dayCellOutside,
-                  isSelected && styles.dayCellSelected,
+                  compact ? styles.compactDayInner : styles.dayInner,
+                  isToday && styles.todayInner,
+                  isSelected && styles.selectedInner,
                 ]}>
                 <Text
                   style={[
-                    styles.dayLabel,
-                    !day.isCurrentMonth && styles.dayLabelOutside,
-                    isSelected && styles.dayLabelSelected,
+                    compact ? styles.compactDayLabel : styles.dayLabel,
+                    isToday && styles.todayLabel,
+                    isSelected && styles.selectedLabel,
                   ]}>
                   {day.dayNumber}
                 </Text>
                 {hasItems ? (
-                  <View
-                    style={[
-                      styles.dayDot,
-                      isSelected && styles.dayDotSelected,
-                    ]}
-                  />
+                  <View style={[compact ? styles.compactDot : styles.dayDot, isSelected && styles.selectedDot]} />
                 ) : null}
               </View>
             </Pressable>
@@ -117,88 +113,222 @@ export function MonthlyCalendar({
   );
 }
 
+export function MonthlyCalendar({
+  month,
+  mode,
+  selectedDate,
+  scheduledDates,
+  onSelectDate,
+  onSelectMonth,
+}: MonthlyCalendarProps) {
+  const theme = useAppTheme();
+  const styles = useMemo(() => buildStyles(theme), [theme]);
+  const year = month.getFullYear();
+  const monthsToRender = useMemo(
+    () => Array.from({ length: 8 }, (_, index) => new Date(year, month.getMonth() + index, 1)),
+    [month, year]
+  );
+  const yearMonths = useMemo(
+    () => Array.from({ length: 12 }, (_, index) => new Date(year, index, 1)),
+    [year]
+  );
+
+  if (mode === 'year') {
+    return (
+      <View style={styles.yearView}>
+        <Text style={styles.yearTitle}>{year}</Text>
+        <View style={styles.yearDivider} />
+        <View style={styles.yearGrid}>
+          {yearMonths.map((yearMonth) => (
+            <Pressable
+              key={yearMonth.getMonth()}
+              style={styles.yearMonthCard}
+              onPress={() => onSelectMonth(yearMonth)}>
+              <Text
+                style={[
+                  styles.yearMonthTitle,
+                  yearMonth.getMonth() === month.getMonth() && styles.yearMonthTitleActive,
+                ]}>
+                {MONTH_LABELS[yearMonth.getMonth()]}
+              </Text>
+              <MonthGrid
+                month={yearMonth}
+                selectedDate={selectedDate}
+                scheduledDates={scheduledDates}
+                compact
+                onSelectDate={(date) => {
+                  onSelectMonth(yearMonth);
+                  onSelectDate(date);
+                }}
+              />
+            </Pressable>
+          ))}
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.monthList}>
+      {monthsToRender.map((visibleMonth, index) => (
+        <View key={`${visibleMonth.getFullYear()}-${visibleMonth.getMonth()}`} style={styles.monthSection}>
+          <Text style={styles.monthTitle}>
+            {visibleMonth.toLocaleDateString('en-US', { month: 'long' })}
+          </Text>
+          <MonthGrid
+            month={visibleMonth}
+            selectedDate={selectedDate}
+            scheduledDates={scheduledDates}
+            showWeekdays={index === 0}
+            onSelectDate={onSelectDate}
+          />
+        </View>
+      ))}
+    </View>
+  );
+}
+
 const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
   StyleSheet.create({
-    card: {
-      padding: 16,
-      borderRadius: 26,
-      backgroundColor: theme.surface,
-      borderWidth: 1,
-      borderColor: theme.border,
+    monthList: {
+      gap: 32,
+    },
+    monthSection: {
       gap: 14,
     },
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-    },
-    monthButton: {
-      width: 38,
-      height: 38,
-      borderRadius: 19,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: theme.surfaceAlt,
-    },
-    monthLabel: {
+    monthTitle: {
       color: theme.text,
-      fontSize: 18,
-      fontWeight: '800',
+      fontSize: 44,
+      fontWeight: '900',
+      letterSpacing: -1,
+    },
+    monthBlock: {
+      gap: 8,
     },
     weekdaysRow: {
       flexDirection: 'row',
-      justifyContent: 'space-between',
-      gap: 6,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.border,
+      paddingBottom: 8,
     },
     weekdayLabel: {
-      flex: 1,
-      textAlign: 'center',
+      width: `${100 / 7}%`,
       color: theme.textMuted,
-      fontSize: 12,
-      fontWeight: '700',
+      fontSize: 13,
+      fontWeight: '800',
+      textAlign: 'center',
     },
     grid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
+      borderTopWidth: 1,
+      borderTopColor: theme.border,
     },
     dayCell: {
-      width: '14.285%',
-      aspectRatio: 1,
-      padding: 3,
+      width: `${100 / 7}%`,
+      minHeight: 76,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.border,
+      alignItems: 'center',
+      paddingTop: 14,
     },
-    dayCellInner: {
-      flex: 1,
-      borderRadius: 16,
+    dayInner: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: theme.surfaceAlt,
     },
-    dayCellOutside: {
-      opacity: 0.5,
+    selectedInner: {
+      backgroundColor: '#ff453a',
     },
-    dayCellSelected: {
-      backgroundColor: theme.accent,
+    todayInner: {
+      backgroundColor: theme.surface,
     },
     dayLabel: {
       color: theme.text,
-      fontSize: 13,
-      fontWeight: '700',
+      fontSize: 22,
+      fontWeight: '800',
     },
-    dayLabelOutside: {
-      color: theme.textMuted,
+    selectedLabel: {
+      color: '#ffffff',
     },
-    dayLabelSelected: {
-      color: theme.background,
+    todayLabel: {
+      color: theme.text,
     },
     dayDot: {
       position: 'absolute',
-      bottom: 8,
-      width: 6,
-      height: 6,
-      borderRadius: 3,
+      bottom: -7,
+      width: 14,
+      height: 5,
+      borderRadius: 999,
       backgroundColor: theme.success,
     },
-    dayDotSelected: {
-      backgroundColor: theme.background,
+    selectedDot: {
+      backgroundColor: '#ffffff',
+    },
+    yearView: {
+      gap: 20,
+    },
+    yearTitle: {
+      color: '#ff453a',
+      fontSize: 46,
+      fontWeight: '900',
+      letterSpacing: -1,
+    },
+    yearDivider: {
+      height: 1,
+      backgroundColor: theme.border,
+    },
+    yearGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      rowGap: 34,
+      justifyContent: 'space-between',
+    },
+    yearMonthCard: {
+      width: '31%',
+      gap: 8,
+    },
+    yearMonthTitle: {
+      color: theme.text,
+      fontSize: 25,
+      fontWeight: '900',
+    },
+    yearMonthTitleActive: {
+      color: '#ff453a',
+    },
+    compactMonth: {
+      gap: 4,
+    },
+    compactGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+    },
+    compactDayCell: {
+      width: `${100 / 7}%`,
+      height: 22,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    compactDayInner: {
+      minWidth: 20,
+      height: 20,
+      borderRadius: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    compactDayLabel: {
+      color: theme.text,
+      fontSize: 13,
+      fontWeight: '800',
+    },
+    compactDot: {
+      position: 'absolute',
+      bottom: -3,
+      width: 5,
+      height: 5,
+      borderRadius: 3,
+      backgroundColor: theme.success,
     },
   });

@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Image,
@@ -74,14 +74,20 @@ function FieldShell({
   );
 }
 
-export function CreateEventComposer({ onPublished }: { onPublished?: () => void }) {
+export function CreateEventComposer({
+  initialDate = '',
+  onPublished,
+}: {
+  initialDate?: string;
+  onPublished?: () => void;
+}) {
   const theme = useAppTheme();
   const styles = useMemo(() => buildStyles(theme), [theme]);
   const { createEvent } = useMobileApp();
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [date, setDate] = useState('');
+  const [date, setDate] = useState(initialDate);
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
   const [locationName, setLocationName] = useState('');
@@ -91,8 +97,16 @@ export function CreateEventComposer({ onPublished }: { onPublished?: () => void 
   const [tags, setTags] = useState<string[]>([]);
   const [organizer, setOrganizer] = useState('');
   const [dressCode, setDressCode] = useState('');
+  const [eventType, setEventType] = useState<'Free' | 'Paid'>('Free');
+  const [capacity, setCapacity] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+
+  useEffect(() => {
+    if (initialDate && !date) {
+      setDate(initialDate);
+    }
+  }, [date, initialDate]);
 
   const handlePickImage = async () => {
     if (!supabase) return;
@@ -106,7 +120,7 @@ export function CreateEventComposer({ onPublished }: { onPublished?: () => void 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: true,
-      aspect: [4, 3] as [number, number],
+      aspect: [4, 5] as [number, number],
       quality: 0.8,
     });
 
@@ -188,6 +202,8 @@ export function CreateEventComposer({ onPublished }: { onPublished?: () => void 
       dressCode,
       tags,
       privacy,
+      eventType,
+      capacity,
       image: imageUrl,
     };
 
@@ -210,6 +226,8 @@ export function CreateEventComposer({ onPublished }: { onPublished?: () => void 
     setTags([]);
     setOrganizer('');
     setDressCode('');
+    setEventType('Free');
+    setCapacity('');
     setImageUrl('');
 
     Alert.alert('Event Published', `"${createdEvent.title}" is now live in your Events flow.`);
@@ -371,6 +389,42 @@ export function CreateEventComposer({ onPublished }: { onPublished?: () => void 
         </View>
       </View>
 
+      <View style={styles.row}>
+        <View style={styles.rowItem}>
+          <Text style={styles.label}>Event Type</Text>
+          <View style={styles.segmentedRow}>
+            {(['Free', 'Paid'] as const).map((option) => (
+              <Pressable
+                key={option}
+                style={[
+                  styles.segmentedButton,
+                  eventType === option && styles.segmentedButtonActive,
+                ]}
+                onPress={() => setEventType(option)}>
+                <Text
+                  style={[
+                    styles.segmentedText,
+                    eventType === option && styles.segmentedTextActive,
+                  ]}>
+                  {option}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+        <View style={styles.rowItem}>
+          <Text style={styles.label}>Capacity</Text>
+          <TextInput
+            value={capacity}
+            onChangeText={setCapacity}
+            placeholder="100"
+            placeholderTextColor={theme.textMuted}
+            keyboardType="number-pad"
+            style={styles.input}
+          />
+        </View>
+      </View>
+
       <Text style={styles.label}>Visibility</Text>
       <View style={styles.segmentedRow}>
         <Pressable
@@ -397,6 +451,12 @@ export function CreateEventComposer({ onPublished }: { onPublished?: () => void 
         </Pressable>
       </View>
 
+      <Text style={styles.previewText}>
+        Preview: {[formatDateLabel(date), formatTimeLabel(startTime), locationName || locationAddress]
+          .filter(Boolean)
+          .join(' • ') || 'Your event details will preview here as you type.'}
+      </Text>
+
       <Text style={styles.label}>Flyer / Image</Text>
       <Pressable
         style={[styles.imagePicker, isUploadingImage && styles.imagePickerUploading]}
@@ -422,11 +482,6 @@ export function CreateEventComposer({ onPublished }: { onPublished?: () => void 
       <Pressable style={styles.publishButton} onPress={() => void handlePublish()}>
         <Text style={styles.publishButtonText}>Publish Event</Text>
       </Pressable>
-      <Text style={styles.previewText}>
-        Preview: {[formatDateLabel(date), formatTimeLabel(startTime), locationName || locationAddress]
-          .filter(Boolean)
-          .join(' • ') || 'Your event details will preview here as you type.'}
-      </Text>
     </View>
   );
 }
@@ -588,7 +643,7 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       borderStyle: 'dashed',
       borderRadius: 18,
       overflow: 'hidden',
-      height: 160,
+      height: 220,
     },
     imagePickerUploading: {
       opacity: 0.5,
