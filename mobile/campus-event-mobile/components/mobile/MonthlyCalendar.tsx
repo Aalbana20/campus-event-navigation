@@ -191,16 +191,16 @@ export function MonthlyCalendar({
 const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
   StyleSheet.create({
     monthList: {
-      gap: 32,
+      gap: 28,
     },
     monthSection: {
-      gap: 14,
+      gap: 12,
     },
     monthTitle: {
       color: theme.text,
-      fontSize: 44,
+      fontSize: 42,
       fontWeight: '900',
-      letterSpacing: -1,
+      letterSpacing: 0,
     },
     monthBlock: {
       gap: 8,
@@ -226,16 +226,16 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     },
     dayCell: {
       width: `${100 / 7}%`,
-      minHeight: 76,
+      minHeight: 72,
       borderBottomWidth: 1,
       borderBottomColor: theme.border,
       alignItems: 'center',
-      paddingTop: 14,
+      paddingTop: 12,
     },
     dayInner: {
-      width: 48,
-      height: 48,
-      borderRadius: 24,
+      width: 46,
+      height: 46,
+      borderRadius: 23,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -268,13 +268,13 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       backgroundColor: '#ffffff',
     },
     yearView: {
-      gap: 20,
+      gap: 16,
     },
     yearTitle: {
       color: '#ff453a',
-      fontSize: 46,
+      fontSize: 44,
       fontWeight: '900',
-      letterSpacing: -1,
+      letterSpacing: 0,
     },
     yearDivider: {
       height: 1,
@@ -283,7 +283,7 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     yearGrid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      rowGap: 34,
+      rowGap: 28,
       justifyContent: 'space-between',
     },
     yearMonthCard: {
@@ -292,7 +292,7 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     },
     yearMonthTitle: {
       color: theme.text,
-      fontSize: 25,
+      fontSize: 24,
       fontWeight: '900',
     },
     yearMonthTitleActive: {

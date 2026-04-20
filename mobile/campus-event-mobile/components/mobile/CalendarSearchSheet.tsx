@@ -178,9 +178,9 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
   StyleSheet.create({
     overlay: {
       flex: 1,
-      backgroundColor: theme.background,
+      backgroundColor: '#000000',
       paddingHorizontal: 18,
-      paddingTop: 58,
+      paddingTop: 48,
     },
     searchBarRow: {
       flexDirection: 'row',
@@ -195,9 +195,9 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       flexDirection: 'row',
       alignItems: 'center',
       gap: 10,
-      backgroundColor: theme.surface,
+      backgroundColor: 'rgba(28,30,36,0.94)',
       borderWidth: 1,
-      borderColor: theme.border,
+      borderColor: 'rgba(255,255,255,0.08)',
     },
     searchInput: {
       flex: 1,
@@ -212,9 +212,9 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       borderRadius: 29,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: theme.surface,
+      backgroundColor: 'rgba(28,30,36,0.94)',
       borderWidth: 1,
-      borderColor: theme.border,
+      borderColor: 'rgba(255,255,255,0.08)',
     },
     resultsContent: {
       paddingTop: 28,

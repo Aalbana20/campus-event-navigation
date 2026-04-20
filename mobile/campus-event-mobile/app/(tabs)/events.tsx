@@ -13,7 +13,7 @@ import { useAppTheme } from '@/lib/app-theme';
 import { useMobileApp } from '@/providers/mobile-app-provider';
 import type { CreatePersonalCalendarItemInput } from '@/types/models';
 
-type EventsTab = 'my-events' | 'calendar';
+type EventsTab = 'event' | 'calendar';
 type CalendarFilter = 'all' | 'going' | 'created';
 type CalendarMode = 'month' | 'year';
 
@@ -25,7 +25,7 @@ const FILTER_LABELS: Record<CalendarFilter, string> = {
 
 const resolveEventsTab = (value?: string | string[] | null): EventsTab => {
   const normalizedValue = Array.isArray(value) ? value[0] : value;
-  if (normalizedValue === 'my-events') return 'my-events';
+  if (normalizedValue === 'event' || normalizedValue === 'events' || normalizedValue === 'my-events') return 'event';
   return 'calendar';
 };
 
@@ -104,7 +104,10 @@ export default function EventsScreen() {
     return calendarEvents;
   }, [calendarEvents, calendarFilter, createdEvents, goingEvents]);
 
-  const visiblePersonalItems = calendarFilter === 'all' ? personalCalendarItems : [];
+  const visiblePersonalItems = useMemo(
+    () => (calendarFilter === 'all' ? personalCalendarItems : []),
+    [calendarFilter, personalCalendarItems]
+  );
 
   const scheduledDates = useMemo(() => {
     const nextDates = new Set<string>();
@@ -172,6 +175,11 @@ export default function EventsScreen() {
     setIsFilterOpen(false);
   };
 
+  const handleSurfaceChange = (nextTab: EventsTab) => {
+    setActiveTab(nextTab);
+    setIsFilterOpen(false);
+  };
+
   const handleAddPersonalItemForSelectedDate = (input: { title: string; note?: string; time?: string }) => {
     if (!selectedDate) return;
 
@@ -186,6 +194,27 @@ export default function EventsScreen() {
   const handleCreatePersonalItem = (input: CreatePersonalCalendarItemInput) => {
     addPersonalCalendarItem(input);
   };
+
+  const renderSurfaceSwitch = () => (
+    <View style={styles.surfaceSwitch}>
+      <Pressable
+        style={[styles.surfaceSwitchButton, activeTab === 'event' && styles.surfaceSwitchButtonActive]}
+        onPress={() => handleSurfaceChange('event')}>
+        <Text
+          style={[styles.surfaceSwitchText, activeTab === 'event' && styles.surfaceSwitchTextActive]}>
+          Event
+        </Text>
+      </Pressable>
+      <Pressable
+        style={[styles.surfaceSwitchButton, activeTab === 'calendar' && styles.surfaceSwitchButtonActive]}
+        onPress={() => handleSurfaceChange('calendar')}>
+        <Text
+          style={[styles.surfaceSwitchText, activeTab === 'calendar' && styles.surfaceSwitchTextActive]}>
+          Calendar
+        </Text>
+      </Pressable>
+    </View>
+  );
 
   const renderCalendar = () => (
     <>
@@ -215,23 +244,25 @@ export default function EventsScreen() {
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}>
+          {renderSurfaceSwitch()}
+
           {activeTab === 'calendar' ? renderCalendar() : null}
 
-          {activeTab === 'my-events' ? (
+          {activeTab === 'event' ? (
             <>
               <View style={styles.summaryCard}>
-                <Text style={styles.summaryTitle}>My Events</Text>
+                <Text style={styles.summaryTitle}>Event</Text>
                 <Text style={styles.summaryCopy}>
-                  Events you are going to stay here for quick access and planning.
+                  Your going and created events stay here for quick access and planning.
                 </Text>
               </View>
 
-              {goingEvents.length > 0 ? (
-                goingEvents.map((event) => (
+              {visibleCalendarEvents.length > 0 ? (
+                visibleCalendarEvents.map((event) => (
                   <EventListCard
                     key={event.id}
                     event={event}
-                    actionLabel="Remove"
+                    actionLabel={goingEvents.some((goingEvent) => goingEvent.id === event.id) ? 'Remove' : 'View'}
                     actionTone="muted"
                     onPress={() =>
                       router.push({
@@ -239,14 +270,24 @@ export default function EventsScreen() {
                         params: { id: event.id },
                       })
                     }
-                    onActionPress={() => toggleSaveEvent(event.id)}
+                    onActionPress={() => {
+                      if (goingEvents.some((goingEvent) => goingEvent.id === event.id)) {
+                        void toggleSaveEvent(event.id);
+                        return;
+                      }
+
+                      router.push({
+                        pathname: '/event/[id]',
+                        params: { id: event.id },
+                      });
+                    }}
                   />
                 ))
               ) : (
                 <View style={styles.emptyState}>
-                  <Text style={styles.emptyTitle}>Nothing saved yet.</Text>
+                  <Text style={styles.emptyTitle}>No events for this filter.</Text>
                   <Text style={styles.emptyCopy}>
-                    Events you accept from Discover or save in Explore will show up here.
+                    Try All, Going, or Created from the bottom control.
                   </Text>
                 </View>
               )}
@@ -254,51 +295,61 @@ export default function EventsScreen() {
           ) : null}
         </ScrollView>
 
-        {activeTab === 'calendar' ? (
-          <>
+        <>
+          {activeTab === 'calendar' ? (
             <Pressable style={styles.todayButton} onPress={handleTodayPress}>
               <Text style={styles.todayButtonText}>Today</Text>
             </Pressable>
+          ) : null}
 
-            {isFilterOpen ? (
-              <View style={styles.filterMenu}>
-                {(['all', 'going', 'created'] as CalendarFilter[]).map((filter) => (
-                  <Pressable
-                    key={filter}
+          {isFilterOpen ? (
+            <View style={styles.filterMenu}>
+              {(['all', 'going', 'created'] as CalendarFilter[]).map((filter) => (
+                <Pressable
+                  key={filter}
+                  style={[
+                    styles.filterMenuItem,
+                    calendarFilter === filter && styles.filterMenuItemActive,
+                  ]}
+                  onPress={() => handleFilterChange(filter)}>
+                  <Text
                     style={[
-                      styles.filterMenuItem,
-                      calendarFilter === filter && styles.filterMenuItemActive,
-                    ]}
-                    onPress={() => handleFilterChange(filter)}>
-                    <Text
-                      style={[
-                        styles.filterMenuText,
-                        calendarFilter === filter && styles.filterMenuTextActive,
-                      ]}>
-                      {FILTER_LABELS[filter]}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            ) : null}
-
-            <View style={styles.calendarActionControl}>
-              <Pressable
-                style={styles.actionControlButton}
-                onPress={() => setIsFilterOpen((currentValue) => !currentValue)}>
-                <Text style={styles.actionControlLabel}>{FILTER_LABELS[calendarFilter]}</Text>
-              </Pressable>
-              <View style={styles.actionDivider} />
-              <Pressable style={styles.actionControlButton} onPress={() => setIsSearchOpen(true)}>
-                <Ionicons name="search-outline" size={27} color={theme.text} />
-              </Pressable>
-              <View style={styles.actionDivider} />
-              <Pressable style={styles.actionControlButton} onPress={() => setIsCreateOpen(true)}>
-                <Ionicons name="add" size={33} color={theme.text} />
-              </Pressable>
+                      styles.filterMenuText,
+                      calendarFilter === filter && styles.filterMenuTextActive,
+                    ]}>
+                    {FILTER_LABELS[filter]}
+                  </Text>
+                </Pressable>
+              ))}
             </View>
-          </>
-        ) : null}
+          ) : null}
+
+          <View style={styles.calendarActionControl}>
+            <Pressable
+              style={styles.actionControlButton}
+              onPress={() => setIsFilterOpen((currentValue) => !currentValue)}>
+              <Text style={styles.actionControlLabel}>{FILTER_LABELS[calendarFilter]}</Text>
+            </Pressable>
+            <View style={styles.actionDivider} />
+            <Pressable
+              style={styles.actionControlButton}
+              onPress={() => {
+                setIsFilterOpen(false);
+                setIsSearchOpen(true);
+              }}>
+              <Ionicons name="search-outline" size={27} color={theme.text} />
+            </Pressable>
+            <View style={styles.actionDivider} />
+            <Pressable
+              style={styles.actionControlButton}
+              onPress={() => {
+                setIsFilterOpen(false);
+                setIsCreateOpen(true);
+              }}>
+              <Ionicons name="add" size={33} color={theme.text} />
+            </Pressable>
+          </View>
+        </>
       </View>
 
       <DayAgendaSheet
@@ -334,23 +385,56 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     },
     scrollContent: {
       paddingHorizontal: 18,
-      paddingTop: 18,
-      paddingBottom: 150,
-      gap: 24,
+      paddingTop: 2,
+      paddingBottom: 172,
+      gap: 18,
+    },
+    surfaceSwitch: {
+      flexDirection: 'row',
+      alignSelf: 'center',
+      width: '100%',
+      maxWidth: 328,
+      padding: 4,
+      borderRadius: 20,
+      backgroundColor: 'rgba(255,255,255,0.06)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.06)',
+    },
+    surfaceSwitchButton: {
+      flex: 1,
+      minHeight: 40,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    surfaceSwitchButtonActive: {
+      backgroundColor: 'rgba(99,99,102,0.5)',
+      shadowColor: '#000',
+      shadowOpacity: 0.2,
+      shadowRadius: 8,
+      shadowOffset: { width: 0, height: 3 },
+    },
+    surfaceSwitchText: {
+      color: theme.textMuted,
+      fontSize: 15,
+      fontWeight: '800',
+    },
+    surfaceSwitchTextActive: {
+      color: theme.text,
     },
     calendarTopBar: {
-      minHeight: 62,
+      minHeight: 50,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
     },
     yearButton: {
-      minHeight: 58,
+      minHeight: 52,
       flexDirection: 'row',
       alignItems: 'center',
       gap: 8,
       paddingHorizontal: 18,
-      borderRadius: 29,
+      borderRadius: 26,
       backgroundColor: theme.surface,
       borderWidth: 1,
       borderColor: theme.border,
@@ -363,10 +447,10 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     todayButton: {
       position: 'absolute',
       left: 24,
-      bottom: 28,
-      minWidth: 118,
-      height: 58,
-      borderRadius: 29,
+      bottom: 92,
+      minWidth: 112,
+      height: 56,
+      borderRadius: 28,
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: theme.surface,
@@ -386,10 +470,10 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     calendarActionControl: {
       position: 'absolute',
       right: 24,
-      bottom: 28,
+      bottom: 92,
       minWidth: 196,
-      height: 58,
-      borderRadius: 29,
+      height: 56,
+      borderRadius: 28,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
@@ -424,7 +508,7 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     filterMenu: {
       position: 'absolute',
       right: 146,
-      bottom: 94,
+      bottom: 156,
       width: 124,
       borderRadius: 18,
       padding: 6,

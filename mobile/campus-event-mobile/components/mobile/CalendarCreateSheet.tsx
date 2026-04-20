@@ -202,14 +202,16 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     overlay: {
       flex: 1,
       justifyContent: 'flex-end',
-      backgroundColor: 'rgba(0,0,0,0.42)',
+      backgroundColor: 'rgba(0,0,0,0.58)',
     },
     sheet: {
       height: '94%',
       borderTopLeftRadius: 34,
       borderTopRightRadius: 34,
-      backgroundColor: theme.surface,
-      paddingTop: 22,
+      backgroundColor: 'rgba(18,19,24,0.99)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.06)',
+      paddingTop: 18,
       paddingHorizontal: 18,
       overflow: 'hidden',
     },
@@ -217,7 +219,7 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      marginBottom: 20,
+      marginBottom: 16,
     },
     iconButton: {
       width: 56,
@@ -225,12 +227,12 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       borderRadius: 28,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: theme.surfaceAlt,
+      backgroundColor: 'rgba(28,30,36,0.92)',
       borderWidth: 1,
-      borderColor: theme.border,
+      borderColor: 'rgba(255,255,255,0.08)',
     },
     confirmButton: {
-      backgroundColor: 'rgba(255,255,255,0.16)',
+      backgroundColor: 'rgba(99,99,102,0.5)',
     },
     headerTitle: {
       color: theme.text,
@@ -241,8 +243,10 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       flexDirection: 'row',
       padding: 5,
       borderRadius: 18,
-      backgroundColor: theme.surfaceAlt,
-      marginBottom: 18,
+      backgroundColor: 'rgba(255,255,255,0.06)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.06)',
+      marginBottom: 16,
     },
     segmentedButton: {
       flex: 1,
@@ -252,7 +256,7 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       borderRadius: 14,
     },
     segmentedButtonActive: {
-      backgroundColor: 'rgba(255,255,255,0.18)',
+      backgroundColor: 'rgba(99,99,102,0.5)',
     },
     segmentedText: {
       color: theme.textMuted,
@@ -265,14 +269,14 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     },
     content: {
       gap: 16,
-      paddingBottom: 42,
+      paddingBottom: 48,
     },
     formGroup: {
-      borderRadius: 26,
-      backgroundColor: theme.surfaceAlt,
+      borderRadius: 22,
+      backgroundColor: 'rgba(44,44,46,0.58)',
       overflow: 'hidden',
       borderWidth: 1,
-      borderColor: theme.border,
+      borderColor: 'rgba(255,255,255,0.06)',
     },
     titleInput: {
       minHeight: 64,
@@ -284,7 +288,7 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     divider: {
       height: 1,
       marginLeft: 20,
-      backgroundColor: theme.border,
+      backgroundColor: 'rgba(255,255,255,0.07)',
     },
     row: {
       minHeight: 62,
@@ -301,20 +305,20 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     },
     pillInput: {
       minWidth: 138,
-      borderRadius: 18,
+      borderRadius: 14,
       paddingHorizontal: 14,
       paddingVertical: 10,
-      backgroundColor: theme.surface,
+      backgroundColor: 'rgba(99,99,102,0.28)',
       color: theme.text,
       fontSize: 16,
       textAlign: 'right',
     },
     personalCreateButton: {
       minHeight: 54,
-      borderRadius: 20,
+      borderRadius: 16,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: theme.accent,
+      backgroundColor: '#0a84ff',
     },
     personalCreateButtonDisabled: {
       opacity: 0.5,

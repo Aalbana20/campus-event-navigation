@@ -48,7 +48,7 @@ export default function TabLayout() {
         name="messages"
         options={{
           title: 'DMs',
-          tabBarIcon: ({ color, size }) => <Ionicons name="chatbubble-ellipses-outline" size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => <Ionicons name="paper-plane-outline" size={size} color={color} />,
           tabBarBadge: unreadDmCount > 0 ? unreadDmCount : undefined,
           tabBarBadgeStyle: {
             backgroundColor: theme.text,

@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { AppScreen } from '@/components/mobile/AppScreen';
 import { SegmentedToggle } from '@/components/mobile/SegmentedToggle';
 import { useAppTheme } from '@/lib/app-theme';
 
@@ -17,19 +17,20 @@ const HOME_VIEWS: { id: HomeView; label: string }[] = [
 
 export default function HomeScreen() {
   const theme = useAppTheme();
+  const insets = useSafeAreaInsets();
   const styles = useMemo(() => buildStyles(theme), [theme]);
   const [activeView, setActiveView] = useState<HomeView>('events');
 
   return (
     <View style={styles.root}>
-      <AppScreen style={styles.toggleBar}>
+      <View style={[styles.toggleBar, { paddingTop: insets.top + 8 }]}>
         <SegmentedToggle
           options={HOME_VIEWS}
           value={activeView}
           onChange={setActiveView}
           width={220}
         />
-      </AppScreen>
+      </View>
 
       <View style={styles.content} pointerEvents="box-none">
         {activeView === 'events' ? (
@@ -49,12 +50,10 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       backgroundColor: theme.background,
     },
     toggleBar: {
-      paddingTop: 8,
       paddingBottom: 8,
       paddingHorizontal: 16,
       alignItems: 'center',
       backgroundColor: theme.background,
-      flexGrow: 0,
     },
     content: {
       flex: 1,
