@@ -7,6 +7,7 @@ import { DiscoverPostsImmersiveFeed } from '@/components/mobile/DiscoverPostsImm
 import { SegmentedToggle } from '@/components/mobile/SegmentedToggle';
 import { useAppTheme } from '@/lib/app-theme';
 import {
+  deleteDiscoverPost,
   loadDiscoverPosts,
   type DiscoverPostRecord,
 } from '@/lib/mobile-discover-posts';
@@ -86,6 +87,20 @@ export default function VideoPostsScreen() {
           onPressComment={(post) => Alert.alert('Comment', `Comment on ${post.id}`)}
           onPressRepost={(post) => Alert.alert('Repost', `Reposted ${post.id}`)}
           onPressShare={(post) => Alert.alert('Share', `Shared ${post.id}`)}
+          currentUserId={currentUser.id}
+          onDeletePost={async (post) => {
+            try {
+              await deleteDiscoverPost(post.id);
+              setPosts((prev) => prev.filter((p) => p.id !== post.id));
+            } catch (error) {
+              Alert.alert(
+                'Could not delete',
+                error instanceof Error
+                  ? error.message
+                  : 'Please try again in a moment.'
+              );
+            }
+          }}
         />
       </View>
     </AppScreen>

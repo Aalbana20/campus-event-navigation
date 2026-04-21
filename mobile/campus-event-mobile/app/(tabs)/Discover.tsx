@@ -26,6 +26,7 @@ import { EventStackCard } from '@/components/mobile/EventStackCard';
 import { StoryViewerModal } from '@/components/mobile/StoryViewerModal';
 import { useAppTheme } from '@/lib/app-theme';
 import {
+  deleteDiscoverPost,
   loadDiscoverPosts,
   type DiscoverPostRecord,
 } from '@/lib/mobile-discover-posts';
@@ -773,6 +774,20 @@ export default function DiscoverScreen({
             onPressComment={(post) => Alert.alert('Comment', `Comment on ${post.id}`)}
             onPressRepost={(post) => Alert.alert('Repost', `Reposted ${post.id}`)}
             onPressShare={(post) => Alert.alert('Share', `Shared ${post.id}`)}
+            currentUserId={currentUser.id}
+            onDeletePost={async (post) => {
+              try {
+                await deleteDiscoverPost(post.id);
+                setDiscoverPosts((prev) => prev.filter((p) => p.id !== post.id));
+              } catch (error) {
+                Alert.alert(
+                  'Could not delete',
+                  error instanceof Error
+                    ? error.message
+                    : 'Please try again in a moment.'
+                );
+              }
+            }}
           />
         </View>
       )}

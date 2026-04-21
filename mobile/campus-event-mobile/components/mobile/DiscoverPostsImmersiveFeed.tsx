@@ -161,6 +161,8 @@ function DiscoverPostItemOverlay({
   onPressRepost,
   onPressShare,
   onPressCreator,
+  currentUserId,
+  onDeletePost,
   styles,
 }: {
   post: DiscoverPostRecord;
@@ -169,10 +171,47 @@ function DiscoverPostItemOverlay({
   onPressRepost: (post: DiscoverPostRecord) => void;
   onPressShare: (post: DiscoverPostRecord) => void;
   onPressCreator?: (post: DiscoverPostRecord) => void;
+  currentUserId?: string;
+  onDeletePost?: (post: DiscoverPostRecord) => void | Promise<void>;
   styles: any;
 }) {
   // TODO: Wire up real like state
   const isLiked = false;
+  const isOwner =
+    Boolean(currentUserId) && String(currentUserId) === String(post.authorId);
+
+  const handleOpenPostMenu = () => {
+    if (!onDeletePost) return;
+    Alert.alert(
+      'Post options',
+      undefined,
+      [
+        {
+          text: 'Delete Post',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              'Delete this post?',
+              'This cannot be undone.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Delete',
+                  style: 'destructive',
+                  onPress: () => {
+                    void onDeletePost(post);
+                  },
+                },
+              ],
+              { cancelable: true }
+            );
+          },
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ],
+      { cancelable: true }
+    );
+  };
 
   return (
     <>
@@ -197,6 +236,17 @@ function DiscoverPostItemOverlay({
           <Ionicons name="paper-plane-outline" size={30} color="#ffffff" />
           <Text style={styles.actionText}>Share</Text>
         </Pressable>
+
+        {isOwner && onDeletePost ? (
+          <Pressable
+            style={styles.actionButton}
+            onPress={handleOpenPostMenu}
+            accessibilityLabel="Post options"
+          >
+            <Ionicons name="ellipsis-horizontal" size={28} color="#ffffff" />
+            <Text style={styles.actionText}>More</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       {/* Bottom Content/Meta Zone */}
