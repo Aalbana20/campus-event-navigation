@@ -2,7 +2,6 @@ import React, { useState } from "react"
 import { useEvents } from "../context/EventContext"
 import { applyEventImageFallback, getEventImageSrc } from "../eventImages"
 import { DEFAULT_AVATAR_URL, sanitizeAvatarUrl } from "../profileMedia"
-import EventActionControl from "./EventActionControl"
 import EventCreatorBadge from "./EventCreatorBadge"
 
 const usersMatch = (a, b) => {
@@ -68,8 +67,6 @@ function EventCard({ event }) {
   return (
     <>
       <div className="flip-card event-card-shell" onClick={() => setFlipped(!flipped)}>
-        <EventActionControl event={event} />
-
         <div className={`flip-card-inner ${flipped ? "flipped" : ""}`}>
           <div className="flip-card-front">
             <img

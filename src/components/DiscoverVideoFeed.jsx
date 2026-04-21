@@ -13,7 +13,7 @@ const iconProps = {
   viewBox: "0 0 24 24",
   fill: "none",
   stroke: "currentColor",
-  strokeWidth: 2,
+  strokeWidth: 1.8,
   strokeLinecap: "round",
   strokeLinejoin: "round",
   "aria-hidden": true,
@@ -49,6 +49,14 @@ function RepostIcon() {
       <path d="M3 11V9a4 4 0 0 1 4-4h14" />
       <polyline points="7 23 3 19 7 15" />
       <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+    </svg>
+  )
+}
+
+function SaveIcon({ filled = false }) {
+  return (
+    <svg {...iconProps} fill={filled ? "currentColor" : "none"} stroke={filled ? "currentColor" : "currentColor"}>
+      <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
     </svg>
   )
 }
@@ -145,13 +153,13 @@ function DiscoverVideoFeed({
                 type="button"
                 className={`video-action-btn ${isSaved ? "active heart" : ""}`}
                 onClick={() => onPressHeart?.(event)}
-                aria-label={isSaved ? "Unsave event" : "Save event"}
+                aria-label={isSaved ? "Cancel RSVP" : "RSVP to event"}
               >
                 <div className="video-action-icon">
                   <HeartIcon filled={isSaved} />
                 </div>
                 <span className="video-action-count">
-                  {isSaved ? "1" : "0"}
+                  {event.goingCount || 0}
                 </span>
               </button>
 
@@ -169,15 +177,15 @@ function DiscoverVideoFeed({
 
               <button
                 type="button"
-                className={`video-action-btn ${isReposted ? "active repost" : ""}`}
-                onClick={() => onPressRepost?.(event)}
-                aria-label="Repost event"
+                className={`video-action-btn`}
+                onClick={() => {}}
+                aria-label="Save event for later"
               >
                 <div className="video-action-icon">
-                  <RepostIcon />
+                  <SaveIcon />
                 </div>
                 <span className="video-action-count">
-                  {isReposted ? "1" : "0"}
+                  0
                 </span>
               </button>
 

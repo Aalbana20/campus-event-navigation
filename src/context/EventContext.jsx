@@ -504,7 +504,29 @@ export function EventProvider({ children }) {
     }
   }
 
-  const deleteEvent = (eventId) => {
+  const deleteEvent = async (eventId) => {
+    if (!eventId) throw new Error("Missing event id.")
+
+    const userId = currentUser?.id && currentUser.id !== "current-user"
+      ? currentUser.id
+      : null
+    if (!userId) throw new Error("You must be signed in to delete this event.")
+
+    const targetEvent = allEvents.find((event) => String(event.id) === String(eventId))
+    const ownerId = targetEvent?.creatorId || targetEvent?.organizerId || targetEvent?.userId
+    if (ownerId && String(ownerId) !== String(userId)) {
+      throw new Error("Only the event owner can delete this event.")
+    }
+
+    const { error } = await supabase
+      .from("events")
+      .delete()
+      .eq("id", eventId)
+
+    if (error) {
+      throw new Error(error.message || "Could not delete this event.")
+    }
+
     setAllEvents((prev) => prev.filter((event) => String(event.id) !== String(eventId)))
     setSavedEvents((prev) => prev.filter((event) => String(event.id) !== String(eventId)))
   }

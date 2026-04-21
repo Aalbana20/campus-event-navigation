@@ -12,6 +12,7 @@ import {
   uploadDiscoverPost,
 } from "../discoverPosts"
 import EventCard from "../components/EventCard"
+import EventActionControl from "../components/EventActionControl"
 import { useEvents } from "../context/EventContext"
 import {
   buildDiscoverStoryStripItems,
@@ -51,6 +52,7 @@ function Discover({ hideModeSwitch = false, initialMode = "events" } = {}) {
   const [activeStoryItem, setActiveStoryItem] = useState(null)
   const [activeStoryIndex, setActiveStoryIndex] = useState(0)
   const [isStoryComposerOpen, setIsStoryComposerOpen] = useState(false)
+  const [isEventShareOpen, setIsEventShareOpen] = useState(false)
   const [createComposerMode, setCreateComposerMode] = useState(null)
   const [discoverPosts, setDiscoverPosts] = useState([])
   const [storyRecords, setStoryRecords] = useState([])
@@ -1192,16 +1194,15 @@ function Discover({ hideModeSwitch = false, initialMode = "events" } = {}) {
               <aside className="discover-side-actions" aria-label="Event actions">
                 <button
                   type="button"
-                  className={`discover-side-action rsvp ${buttonFlash === "flash-accept" ? "active-flash-accept" : ""} ${savedEventIds.has(currentEventId) ? "is-rsvped" : ""}`}
+                  className={`discover-side-action rsvp ${buttonFlash === "flash-accept" ? "active-flash-accept" : ""} ${savedEventIds.has(currentEventId) ? "active" : ""}`}
                   onClick={handleRsvpAction}
                   disabled={isActionLocked}
-                  aria-label="RSVP to event"
+                  aria-label={savedEventIds.has(currentEventId) ? "Cancel RSVP" : "RSVP to event"}
+                  aria-pressed={savedEventIds.has(currentEventId)}
                 >
-                  <span className="discover-side-action-icon rsvp-icon" aria-hidden="true">
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
-                      <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                      <circle cx="8.5" cy="7" r="4" stroke="currentColor" strokeWidth="1.8" />
-                      <polyline points="14 11 16 13 21 8" stroke={buttonFlash === "flash-accept" || savedEventIds.has(currentEventId) ? "#34c759" : "currentColor"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <span className="discover-side-action-icon" aria-hidden="true">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill={savedEventIds.has(currentEventId) ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 1 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
                     </svg>
                   </span>
                   <span className="discover-side-action-count">{currentEvent.attendees?.length || currentEvent.rsvpUsers?.length || currentEvent.goingCount || 0}</span>
@@ -1229,6 +1230,7 @@ function Discover({ hideModeSwitch = false, initialMode = "events" } = {}) {
                   className={`discover-side-action save ${isCurrentEventSavedForLater ? "active" : ""}`}
                   onClick={handleToggleSaveForLater}
                   aria-label="Save event for later"
+                  aria-pressed={isCurrentEventSavedForLater}
                 >
                   <span className="discover-side-action-icon" aria-hidden="true">
                     <svg width="30" height="30" viewBox="0 0 24 24" fill={isCurrentEventSavedForLater ? "currentColor" : "none"}>
@@ -1238,6 +1240,21 @@ function Discover({ hideModeSwitch = false, initialMode = "events" } = {}) {
                   <span className="discover-side-action-count">
                     {currentEvent.attendees?.length || currentEvent.rsvpUsers?.length || currentEvent.goingCount || 0}
                   </span>
+                </button>
+
+                <button
+                  type="button"
+                  className="discover-side-action share"
+                  onClick={() => setIsEventShareOpen(true)}
+                  aria-label="Share event"
+                >
+                  <span className="discover-side-action-icon" aria-hidden="true">
+                    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="22" y1="2" x2="11" y2="13" />
+                      <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                    </svg>
+                  </span>
+                  <span className="discover-side-action-count">Share</span>
                 </button>
               </aside>
             ) : (
@@ -1291,6 +1308,18 @@ function Discover({ hideModeSwitch = false, initialMode = "events" } = {}) {
         onToggleLike={handleToggleCommentLike}
         onDeleteComment={handleDeleteComment}
       />
+
+      {currentEvent ? (
+        <EventActionControl
+          event={currentEvent}
+          isOpen={isEventShareOpen}
+          onClose={() => setIsEventShareOpen(false)}
+          onAfterDelete={() => {
+            setIsEventShareOpen(false)
+            prepareNextCard(safeCurrentIndex, discoverEvents.length)
+          }}
+        />
+      ) : null}
 
       {activeStoryItem ? (
         <div

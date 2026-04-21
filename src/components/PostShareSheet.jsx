@@ -1,8 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react"
-import { useNavigate } from "react-router-dom"
 import { useEvents } from "../context/EventContext"
-import { useToast } from "../context/ToastContext"
-import { buildEventImageStyle } from "../eventImages"
 import { supabase } from "../supabaseClient"
 import "../pages/Profile.css"
 
@@ -20,61 +17,36 @@ const normalizeSharePerson = (person, index = 0) => ({
 const matchesShareSearch = (person, query) =>
   [person?.name, person?.username].filter(Boolean).join(" ").toLowerCase().includes(query)
 
-const buildPreviewImageStyle = (event) =>
-  buildEventImageStyle(
-    event?.image,
-    "linear-gradient(180deg, rgba(15, 23, 42, 0.08), rgba(15, 23, 42, 0.62))"
-  )
-
-function ShareTriggerIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <line x1="22" y1="2" x2="11" y2="13" />
-      <polygon points="22 2 15 22 11 13 2 9 22 2" />
-    </svg>
-  )
+const buildPreviewImageStyle = (post) => {
+  const url = post?.mediaUrl
+  if (!url) return { background: "linear-gradient(180deg, #1f2937, #111827)" }
+  return {
+    backgroundImage: `linear-gradient(180deg, rgba(0,0,0,0.0), rgba(0,0,0,0.45)), url("${url}")`,
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+  }
 }
 
-function EventActionControl({
-  event,
-  isOpen: controlledOpen,
-  onClose: controlledOnClose,
-  onAfterDelete,
+function PostShareSheet({
+  post,
+  isOpen,
+  onClose,
+  isOwner = false,
+  onDelete,
+  onRepost,
+  isReposted = false,
 }) {
-  const navigate = useNavigate()
-  const { showToast } = useToast()
-  const {
-    followingList,
-    currentUser,
-    repostedEventIds,
-    repostEvent,
-    unrepostEvent,
-    deleteEvent,
-  } = useEvents()
-  const isControlled = typeof controlledOpen === "boolean"
-  const [internalOpen, setInternalOpen] = useState(false)
-  const isShareSheetOpen = isControlled ? controlledOpen : internalOpen
+  const { followingList, currentUser } = useEvents()
   const [shareSearch, setShareSearch] = useState("")
   const [shareFeedback, setShareFeedback] = useState("")
   const [isDeleting, setIsDeleting] = useState(false)
   const shareSearchInputRef = useRef(null)
 
-  const eventTitle = event?.title || event?.name || "Campus Event"
-  const eventLink = `${window.location.origin}/#/events/${event?.id || ""}`
-  const sharePreviewMeta = [
-    event?.date,
-    event?.locationName || event?.location,
-    event?.organizer,
-  ]
-    .filter(Boolean)
-    .join(" • ")
-
-  const ownerId = event?.creatorId || event?.organizerId || event?.userId
-  const isOwner =
-    Boolean(currentUser?.id) &&
-    currentUser.id !== "current-user" &&
-    Boolean(ownerId) &&
-    String(ownerId) === String(currentUser.id)
+  const postTitle = post?.caption || `${post?.authorName || "Campus"} post`
+  const postLink = `${window.location.origin}/#/discover?post=${post?.id || ""}`
+  const previewMeta = post?.authorUsername
+    ? `@${post.authorUsername}`
+    : post?.authorName || "Discover post"
 
   const normalizedFollowingPeople = useMemo(
     () =>
@@ -130,130 +102,103 @@ function EventActionControl({
 
   useEffect(() => {
     if (!shareFeedback) return undefined
-
-    const timeoutId = window.setTimeout(() => {
-      setShareFeedback("")
-    }, 2400)
-
+    const timeoutId = window.setTimeout(() => setShareFeedback(""), 2400)
     return () => window.clearTimeout(timeoutId)
   }, [shareFeedback])
 
-  const openShareSheet = (eventClick) => {
-    eventClick?.stopPropagation()
-    if (!isControlled) setInternalOpen(true)
-  }
-
   const closeShareSheet = () => {
-    if (isControlled) {
-      controlledOnClose?.()
-    } else {
-      setInternalOpen(false)
-    }
+    onClose?.()
     setShareSearch("")
   }
 
   const handleCopyLink = async (eventClick) => {
     eventClick?.stopPropagation()
-
     try {
-      await navigator.clipboard.writeText(eventLink)
-      setShareFeedback("Event link copied.")
+      await navigator.clipboard.writeText(postLink)
+      setShareFeedback("Post link copied.")
     } catch {
       setShareFeedback("Could not copy link.")
     }
-
     closeShareSheet()
   }
 
   const handleShareTo = async (eventClick) => {
     eventClick?.stopPropagation()
-
     if (!navigator.share) {
       await handleCopyLink()
       return
     }
-
     try {
       await navigator.share({
-        title: eventTitle,
-        text: event?.description || "Check out this event.",
-        url: eventLink,
+        title: postTitle,
+        text: post?.caption || "Check out this post.",
+        url: postLink,
       })
-      setShareFeedback("Event shared.")
+      setShareFeedback("Post shared.")
       closeShareSheet()
     } catch (error) {
       if (error?.name === "AbortError") {
         closeShareSheet()
         return
       }
-
       await handleCopyLink()
     }
   }
 
-  const isReposted = repostedEventIds?.has(String(event?.id || ""))
-
-  const handleRepostEvent = async (eventClick) => {
-    eventClick?.stopPropagation()
-    if (!event?.id) return
-
-    if (isReposted) {
-      await unrepostEvent(event.id)
-      setShareFeedback("Repost removed.")
-    } else {
-      await repostEvent(event.id)
-      setShareFeedback("Event reposted.")
-    }
-
-    closeShareSheet()
-  }
-
   const handleMessageAction = (eventClick) => {
     eventClick?.stopPropagation()
-
     setShareSearch("")
     window.requestAnimationFrame(() => {
       shareSearchInputRef.current?.focus()
     })
   }
 
-  const handleSendEventToPerson = async (person, eventClick) => {
+  const handleSendPostToPerson = async (person, eventClick) => {
     eventClick?.stopPropagation()
-
     const senderId = currentUser?.id && currentUser.id !== "current-user"
       ? currentUser.id
       : null
 
     if (senderId && person.id) {
-      const messageText = `Check out ${eventTitle} — ${eventLink}`
+      const messageText = `Check out this post — ${postLink}`
       await supabase
         .from("messages")
         .insert({ sender_id: senderId, recipient_id: person.id, content: messageText })
     }
 
     const personHandle = person.username ? `@${person.username}` : person.name
-    setShareFeedback(`Event sent to ${personHandle}.`)
+    setShareFeedback(`Sent to ${personHandle}.`)
     closeShareSheet()
   }
 
-  const handleDeleteEvent = async (eventClick) => {
+  const handleRepostClick = async (eventClick) => {
     eventClick?.stopPropagation()
-    if (!isOwner || !event?.id || isDeleting) return
+    if (!onRepost) {
+      setShareFeedback("Reposting will arrive soon.")
+      closeShareSheet()
+      return
+    }
+    try {
+      await onRepost(post)
+      setShareFeedback(isReposted ? "Repost removed." : "Post reposted.")
+    } catch (error) {
+      setShareFeedback(error?.message || "Could not repost.")
+    }
+    closeShareSheet()
+  }
 
-    const confirmed = window.confirm("Delete this event?\nThis cannot be undone.")
+  const handleDeleteClick = async (eventClick) => {
+    eventClick?.stopPropagation()
+    if (!isOwner || !onDelete || isDeleting) return
+    const confirmed = window.confirm("Delete this post?\nThis cannot be undone.")
     if (!confirmed) return
 
     setIsDeleting(true)
     try {
-      await deleteEvent(event.id)
-      showToast?.("Event deleted.", "success")
+      await onDelete(post)
       closeShareSheet()
-      onAfterDelete?.(event)
-      if (window.location.hash.includes(`/events/${event.id}`)) {
-        navigate("/events")
-      }
     } catch (error) {
-      showToast?.(error?.message || "Could not delete this event.", "error")
+      setShareFeedback(error?.message || "Could not delete this post.")
     } finally {
       setIsDeleting(false)
     }
@@ -267,7 +212,7 @@ function EventActionControl({
         </div>
       ) : null}
 
-      {isShareSheetOpen && (
+      {isOpen && (
         <div className="event-share-sheet-overlay" onClick={closeShareSheet}>
           <div className="event-share-sheet" onClick={(eventClick) => eventClick.stopPropagation()}>
             <div className="event-share-sheet-handle" />
@@ -286,12 +231,12 @@ function EventActionControl({
             <div className="event-share-sheet-preview">
               <div
                 className="event-share-sheet-preview-image"
-                style={buildPreviewImageStyle(event)}
+                style={buildPreviewImageStyle(post)}
                 aria-hidden="true"
               />
               <div className="event-share-sheet-preview-copy">
-                <h4>{eventTitle}</h4>
-                <p>{sharePreviewMeta || "Share this event with your people."}</p>
+                <h4>{postTitle}</h4>
+                <p>{previewMeta}</p>
               </div>
             </div>
 
@@ -305,7 +250,7 @@ function EventActionControl({
                         key={`recent-${getPersonKey(person)}`}
                         type="button"
                         className="event-share-person-btn"
-                        onClick={(eventClick) => handleSendEventToPerson(person, eventClick)}
+                        onClick={(eventClick) => handleSendPostToPerson(person, eventClick)}
                       >
                         <img
                           src={person.image}
@@ -333,7 +278,7 @@ function EventActionControl({
                         key={`following-${getPersonKey(person)}`}
                         type="button"
                         className="event-share-person-btn"
-                        onClick={(eventClick) => handleSendEventToPerson(person, eventClick)}
+                        onClick={(eventClick) => handleSendPostToPerson(person, eventClick)}
                       >
                         <img
                           src={person.image}
@@ -365,7 +310,7 @@ function EventActionControl({
               <button
                 type="button"
                 className={`event-share-action-btn ${isReposted ? "active" : ""}`}
-                onClick={handleRepostEvent}
+                onClick={handleRepostClick}
               >
                 {isReposted ? "Unrepost" : "Repost"}
               </button>
@@ -394,11 +339,11 @@ function EventActionControl({
                 Message
               </button>
 
-              {isOwner ? (
+              {isOwner && onDelete ? (
                 <button
                   type="button"
                   className="event-share-action-btn destructive"
-                  onClick={handleDeleteEvent}
+                  onClick={handleDeleteClick}
                   disabled={isDeleting}
                 >
                   {isDeleting ? "Deleting..." : "Delete"}
@@ -420,4 +365,4 @@ function EventActionControl({
   )
 }
 
-export default EventActionControl
+export default PostShareSheet

@@ -1,11 +1,12 @@
 import React, { useState } from "react"
 import { DEFAULT_AVATAR_URL } from "../profileMedia"
+import PostShareSheet from "./PostShareSheet"
 
 const iconProps = {
   viewBox: "0 0 24 24",
   fill: "none",
   stroke: "currentColor",
-  strokeWidth: 2,
+  strokeWidth: 1.8,
   strokeLinecap: "round",
   strokeLinejoin: "round",
   "aria-hidden": true,
@@ -27,6 +28,17 @@ function CommentIcon() {
   return (
     <svg {...iconProps}>
       <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+      <circle cx="9" cy="11.5" r="0.8" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="11.5" r="0.8" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="11.5" r="0.8" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
+function SaveIcon({ filled = false }) {
+  return (
+    <svg {...iconProps} fill={filled ? "currentColor" : "none"} stroke={filled ? "currentColor" : "currentColor"}>
+      <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
     </svg>
   )
 }
@@ -40,103 +52,17 @@ function ShareIcon() {
   )
 }
 
-function MoreIcon() {
-  return (
-    <svg {...iconProps}>
-      <circle cx="12" cy="5" r="1.6" fill="currentColor" stroke="none" />
-      <circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none" />
-      <circle cx="12" cy="19" r="1.6" fill="currentColor" stroke="none" />
-    </svg>
-  )
-}
-
-function PostOverflowMenu({ post, onDeletePost }) {
-  const [open, setOpen] = useState(false)
-  const [isDeleting, setIsDeleting] = useState(false)
-
-  const handleConfirmDelete = async () => {
-    if (isDeleting) return
-    const confirmed = window.confirm("Delete this post?\nThis cannot be undone.")
-    if (!confirmed) {
-      setOpen(false)
-      return
-    }
-
-    setIsDeleting(true)
-    try {
-      await onDeletePost(post)
-    } finally {
-      setIsDeleting(false)
-      setOpen(false)
-    }
-  }
-
-  return (
-    <div style={{ position: "relative" }}>
-      <button
-        type="button"
-        className="video-action-btn"
-        aria-label="Post options"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={() => setOpen((prev) => !prev)}
-      >
-        <div className="video-action-icon">
-          <MoreIcon />
-        </div>
-        <span className="video-action-count">More</span>
-      </button>
-
-      {open ? (
-        <div
-          role="menu"
-          style={{
-            position: "absolute",
-            right: "100%",
-            marginRight: "10px",
-            top: 0,
-            minWidth: "160px",
-            padding: "6px",
-            borderRadius: "12px",
-            background: "rgba(15, 18, 28, 0.96)",
-            border: "1px solid rgba(255,255,255,0.12)",
-            boxShadow: "0 12px 28px rgba(0,0,0,0.32)",
-            zIndex: 20,
-          }}
-        >
-          <button
-            type="button"
-            role="menuitem"
-            onClick={handleConfirmDelete}
-            disabled={isDeleting}
-            style={{
-              width: "100%",
-              padding: "10px 12px",
-              border: "none",
-              background: "transparent",
-              color: "#ff6b6b",
-              fontSize: "0.92rem",
-              fontWeight: 700,
-              textAlign: "left",
-              cursor: isDeleting ? "default" : "pointer",
-              borderRadius: "8px",
-            }}
-          >
-            {isDeleting ? "Deleting..." : "Delete Post"}
-          </button>
-        </div>
-      ) : null}
-    </div>
-  )
-}
-
 function DiscoverPostsFeed({
   posts,
   onPressCreator,
   onPressCreate,
   currentUserId = "",
   onDeletePost,
+  onRepostPost,
+  repostedPostIds = new Set(),
 }) {
+  const [sharePost, setSharePost] = useState(null)
+
   if (!posts || posts.length === 0) {
     return (
       <div className="discover-video-feed-container">
@@ -200,15 +126,18 @@ function DiscoverPostsFeed({
                 </div>
                 <span className="video-action-count">0</span>
               </button>
-              <button type="button" className="video-action-btn" aria-label="Share post">
+              <button type="button" className="video-action-btn" aria-label="Save post">
+                <div className="video-action-icon">
+                  <SaveIcon />
+                </div>
+                <span className="video-action-count">0</span>
+              </button>
+              <button type="button" className="video-action-btn" aria-label="Share post" onClick={() => setSharePost(post)}>
                 <div className="video-action-icon">
                   <ShareIcon />
                 </div>
                 <span className="video-action-count">Share</span>
               </button>
-              {isOwner && onDeletePost ? (
-                <PostOverflowMenu post={post} onDeletePost={onDeletePost} />
-              ) : null}
             </div>
 
             <div className="video-feed-info">
@@ -240,6 +169,16 @@ function DiscoverPostsFeed({
           </article>
         )
       })}
+
+      <PostShareSheet
+        post={sharePost}
+        isOpen={Boolean(sharePost)}
+        onClose={() => setSharePost(null)}
+        isOwner={Boolean(sharePost && currentUserId && String(currentUserId) === String(sharePost.authorId))}
+        onDelete={onDeletePost}
+        onRepost={onRepostPost}
+        isReposted={Boolean(sharePost && repostedPostIds?.has(String(sharePost.id)))}
+      />
     </div>
   )
 }

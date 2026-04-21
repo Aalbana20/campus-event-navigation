@@ -653,6 +653,44 @@ body.theme-dark .profile-list-meta {
   box-shadow: 0 14px 26px rgba(15, 23, 42, 0.22);
 }
 
+.event-card-share-btn {
+  appearance: none;
+  width: 38px;
+  height: 38px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: #111;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.18);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.event-card-share-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 26px rgba(15, 23, 42, 0.22);
+}
+
+.event-share-action-btn.destructive {
+  color: #d92626;
+  border-color: rgba(217, 38, 38, 0.32);
+}
+
+.event-share-action-btn.destructive:hover {
+  background: rgba(217, 38, 38, 0.08);
+}
+
+.event-share-action-btn.destructive:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .event-share-feedback {
   position: fixed;
   left: 50%;

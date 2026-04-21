@@ -183,34 +183,39 @@ function DiscoverPostItemOverlay({
   const handleOpenPostMenu = () => {
     if (!onDeletePost) return;
     Alert.alert(
-      'Post options',
-      undefined,
+      'Delete this post?',
+      'This cannot be undone.',
       [
+        { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Delete Post',
+          text: 'Delete',
           style: 'destructive',
           onPress: () => {
-            Alert.alert(
-              'Delete this post?',
-              'This cannot be undone.',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                  text: 'Delete',
-                  style: 'destructive',
-                  onPress: () => {
-                    void onDeletePost(post);
-                  },
-                },
-              ],
-              { cancelable: true }
-            );
+            void onDeletePost(post);
           },
         },
-        { text: 'Cancel', style: 'cancel' },
       ],
       { cancelable: true }
     );
+  };
+
+  const handlePressShare = () => {
+    const options: any[] = [
+      { text: 'Repost', onPress: () => onPressRepost(post) },
+      { text: 'Copy Link', onPress: () => {} },
+      { text: 'Share to...', onPress: () => onPressShare(post) },
+      { text: 'Send Message', onPress: () => {} },
+    ];
+    if (isOwner && onDeletePost) {
+      options.push({
+        text: 'Delete Post',
+        style: 'destructive',
+        onPress: handleOpenPostMenu,
+      });
+    }
+    options.push({ text: 'Cancel', style: 'cancel' });
+
+    Alert.alert('Share', undefined, options, { cancelable: true });
   };
 
   return (
@@ -227,26 +232,15 @@ function DiscoverPostItemOverlay({
           <Text style={styles.actionText}>0</Text>
         </Pressable>
 
-        <Pressable style={styles.actionButton} onPress={() => onPressRepost(post)}>
-          <Ionicons name="repeat" size={32} color="#ffffff" />
+        <Pressable style={styles.actionButton} onPress={() => {}}>
+          <Ionicons name="bookmark-outline" size={30} color="#ffffff" />
           <Text style={styles.actionText}>0</Text>
         </Pressable>
 
-        <Pressable style={styles.actionButton} onPress={() => onPressShare(post)}>
+        <Pressable style={styles.actionButton} onPress={handlePressShare}>
           <Ionicons name="paper-plane-outline" size={30} color="#ffffff" />
           <Text style={styles.actionText}>Share</Text>
         </Pressable>
-
-        {isOwner && onDeletePost ? (
-          <Pressable
-            style={styles.actionButton}
-            onPress={handleOpenPostMenu}
-            accessibilityLabel="Post options"
-          >
-            <Ionicons name="ellipsis-horizontal" size={28} color="#ffffff" />
-            <Text style={styles.actionText}>More</Text>
-          </Pressable>
-        ) : null}
       </View>
 
       {/* Bottom Content/Meta Zone */}
