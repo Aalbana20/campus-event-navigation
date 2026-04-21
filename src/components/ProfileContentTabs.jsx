@@ -588,6 +588,21 @@ export default function ProfileContentTabs({ profileId, isOwner = false, allEven
     </>
   )
 
+  const handleTabClick = (tabId) => {
+    const hasDropdown = tabId === "posts" || tabId === "tags"
+
+    setOpenActionMenu(null)
+
+    if (activeTab !== tabId) {
+      setActiveTab(tabId)
+      setOpenDropdown(null)
+      return
+    }
+
+    setActiveTab(tabId)
+    setOpenDropdown((current) => (hasDropdown && current !== tabId ? tabId : null))
+  }
+
   return (
     <div className="profile-section profile-tabbed-section" ref={tabsRef}>
       <div className="profile-tab-bar" role="tablist" aria-label="Profile tabs">
@@ -599,15 +614,7 @@ export default function ProfileContentTabs({ profileId, isOwner = false, allEven
             <button
               type="button"
               className={`profile-tab-btn ${activeTab === tab.id ? "active" : ""}`}
-              onClick={() => {
-                setOpenActionMenu(null)
-                setActiveTab(tab.id)
-                setOpenDropdown((current) =>
-                  tab.id === "posts" || tab.id === "tags"
-                    ? current === tab.id ? null : tab.id
-                    : null
-                )
-              }}
+              onClick={() => handleTabClick(tab.id)}
               role="tab"
               aria-selected={activeTab === tab.id}
               aria-label={tab.label}
