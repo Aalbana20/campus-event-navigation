@@ -1,6 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Redirect, useRouter } from 'expo-router';
-import { useVideoPlayer, VideoView } from 'expo-video';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
@@ -15,12 +14,7 @@ import {
 } from 'react-native';
 
 import { useAppTheme } from '@/lib/app-theme';
-import { getEventCreatorLabel } from '@/lib/mobile-backend';
-import {
-  loadDiscoverPostsForAuthor,
-  type DiscoverPostRecord,
-} from '@/lib/mobile-discover-posts';
-import { getAvatarImageSource, getEventImageSource } from '@/lib/mobile-media';
+import { getAvatarImageSource } from '@/lib/mobile-media';
 import {
   pickProfileImage,
   type SelectedProfileImage,
@@ -31,13 +25,13 @@ import type { EventPrivacy, EventRecord } from '@/types/models';
 import { AppScreen } from './AppScreen';
 import { EventListCard } from './EventListCard';
 import { PersonRowCard } from './PersonRowCard';
+import { ProfileContentTabs } from './ProfileContentTabs';
 
 type ProfileScreenProps = {
   username?: string;
 };
 
 type ActiveList = 'followers' | 'following' | 'created' | null;
-type ProfileTab = 'posts' | 'reposts' | 'events';
 type EditFormState = {
   name: string;
   username: string;
@@ -100,65 +94,6 @@ function StatButton({
   );
 }
 
-function ProfilePostTile({
-  post,
-  styles,
-}: {
-  post: DiscoverPostRecord;
-  styles: ReturnType<typeof buildStyles>;
-}) {
-  const isVideo = post.mediaType === 'video';
-  const player = useVideoPlayer(isVideo ? post.mediaUrl : null, (instance) => {
-    instance.loop = true;
-    instance.muted = true;
-    instance.play();
-  });
-
-  return (
-    <View style={styles.mediaTile}>
-      {isVideo ? (
-        <VideoView
-          player={player}
-          style={styles.mediaTileImage}
-          contentFit="cover"
-          nativeControls={false}
-          allowsFullscreen={false}
-          allowsPictureInPicture={false}
-        />
-      ) : (
-        <Image source={{ uri: post.mediaUrl }} style={styles.mediaTileImage} />
-      )}
-      {post.caption ? (
-        <View style={styles.mediaTileOverlay}>
-          <Text style={styles.mediaTileTitle} numberOfLines={2}>
-            {post.caption}
-          </Text>
-        </View>
-      ) : null}
-    </View>
-  );
-}
-
-function ProfileTabButton({
-  active,
-  icon,
-  onPress,
-}: {
-  active: boolean;
-  icon: React.ComponentProps<typeof Ionicons>['name'];
-  onPress: () => void;
-}) {
-  const theme = useAppTheme();
-  const styles = useMemo(() => buildStyles(theme), [theme]);
-
-  return (
-    <Pressable style={styles.tabButton} onPress={onPress}>
-      <Ionicons name={icon} size={22} color={active ? theme.text : theme.textMuted} />
-      {active ? <View style={styles.tabIndicator} /> : null}
-    </Pressable>
-  );
-}
-
 export function ProfileScreen({ username }: ProfileScreenProps) {
   const router = useRouter();
   const theme = useAppTheme();
@@ -169,8 +104,6 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
     getFollowersForProfile,
     getFollowingForProfile,
     getCreatedEventsForProfile,
-    getGoingEventsForProfile,
-    getRepostedEventsForProfile,
     isFollowingProfile,
     followProfile,
     unfollowProfile,
@@ -179,8 +112,6 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
     updateProfile,
   } = useMobileApp();
   const [activeList, setActiveList] = useState<ActiveList>(null);
-  const [activeTab, setActiveTab] = useState<ProfileTab>('posts');
-  const [authorPosts, setAuthorPosts] = useState<DiscoverPostRecord[]>([]);
 
   // Edit Profile State
   const [isEditing, setIsEditing] = useState(false);
@@ -206,26 +137,6 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
     : getProfileByUsername(username || '');
   const resolvedProfileId = resolvedProfile?.id || '';
 
-  useEffect(() => {
-    let isCancelled = false;
-
-    if (!resolvedProfileId) {
-      setAuthorPosts([]);
-      return;
-    }
-
-    void (async () => {
-      const nextPosts = await loadDiscoverPostsForAuthor(resolvedProfileId);
-      if (!isCancelled) {
-        setAuthorPosts(nextPosts);
-      }
-    })();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [resolvedProfileId]);
-
   if (username && username === currentUser.username) {
     return <Redirect href="/(tabs)/profile" />;
   }
@@ -248,10 +159,6 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
   const followers = getFollowersForProfile(profile.id);
   const following = getFollowingForProfile(profile.id);
   const createdEvents = getCreatedEventsForProfile(profile.id);
-  const repostedEvents = getRepostedEventsForProfile(profile.id);
-  const profileEvents = isOwnProfile
-    ? getGoingEventsForProfile(profile.id)
-    : createdEvents;
 
   const handleOpenProfile = (targetUsername: string) => {
     if (targetUsername === currentUser.username) {
@@ -376,87 +283,6 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
     ? { uri: selectedAvatarImage.uri }
     : getAvatarImageSource(editForm.avatarUrl || profile.avatar);
 
-  const renderPostsGrid = () => {
-    if (authorPosts.length === 0) {
-      return (
-        <View style={styles.emptyCard}>
-          <Text style={styles.emptyTitle}>No posts yet.</Text>
-          <Text style={styles.emptyCopy}>
-            {isOwnProfile
-              ? 'Posts you publish from the create screen will show up here.'
-              : 'Posts this user publishes will show up here.'}
-          </Text>
-        </View>
-      );
-    }
-
-    return (
-      <View style={styles.mediaGrid}>
-        {authorPosts.map((post) => (
-          <ProfilePostTile key={post.id} post={post} styles={styles} />
-        ))}
-      </View>
-    );
-  };
-
-  const renderEventsGrid = (eventsToRender: EventRecord[], emptyCopy: string) => {
-    if (eventsToRender.length === 0) {
-      return (
-        <View style={styles.emptyCard}>
-          <Text style={styles.emptyTitle}>
-            {activeTab === 'reposts' ? 'No reposts yet.' : 'Nothing here yet.'}
-          </Text>
-          <Text style={styles.emptyCopy}>{emptyCopy}</Text>
-        </View>
-      );
-    }
-
-    return (
-      <View style={styles.mediaGrid}>
-        {eventsToRender.map((event) => (
-          <Pressable
-            key={event.id}
-            style={styles.mediaTile}
-            onPress={() =>
-              router.push({
-                pathname: '/event/[id]',
-                params: { id: event.id },
-              })
-            }>
-            <Image source={getEventImageSource(event.image)} style={styles.mediaTileImage} />
-            <View style={styles.mediaTileOverlay}>
-              <Text style={styles.mediaTileTitle} numberOfLines={1}>{event.title}</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
-                <Image source={getAvatarImageSource(event.creatorAvatar)} style={{ width: 16, height: 16, borderRadius: 8 }} />
-                <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 12, fontWeight: '600' }} numberOfLines={1}>
-                  {getEventCreatorLabel(event)}
-                </Text>
-              </View>
-            </View>
-          </Pressable>
-        ))}
-      </View>
-    );
-  };
-
-  const renderTabContent = () => {
-    if (activeTab === 'posts') return renderPostsGrid();
-
-    if (activeTab === 'reposts') {
-      return renderEventsGrid(
-        repostedEvents,
-        'Events this user reposts will show up here.'
-      );
-    }
-
-    return renderEventsGrid(
-      profileEvents,
-      isOwnProfile
-        ? 'Events you RSVP to will show up here.'
-        : 'Public events by this user will show up here.'
-    );
-  };
-
   return (
     <AppScreen>
       <ScrollView
@@ -520,25 +346,7 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
           </View>
         </View>
 
-        <View style={styles.tabBar}>
-          <ProfileTabButton
-            active={activeTab === 'posts'}
-            icon="grid-outline"
-            onPress={() => setActiveTab('posts')}
-          />
-          <ProfileTabButton
-            active={activeTab === 'reposts'}
-            icon="repeat-outline"
-            onPress={() => setActiveTab('reposts')}
-          />
-          <ProfileTabButton
-            active={activeTab === 'events'}
-            icon="calendar-outline"
-            onPress={() => setActiveTab('events')}
-          />
-        </View>
-
-        {renderTabContent()}
+        <ProfileContentTabs profileId={resolvedProfileId} isOwner={isOwnProfile} />
       </ScrollView>
 
       <Modal visible={activeList !== null} transparent animationType="slide" onRequestClose={() => setActiveList(null)}>

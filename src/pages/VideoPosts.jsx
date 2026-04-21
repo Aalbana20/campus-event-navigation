@@ -77,7 +77,7 @@ function VideoPosts() {
     setIsComposerOpen(false)
   }
 
-  const handleSubmitPost = async ({ file, caption }) => {
+  const handleSubmitPost = async ({ file, caption, onGrid = true }) => {
     if (!file || !currentUser?.id) {
       showToast("You need to be logged in to post.", "error")
       return
@@ -88,6 +88,7 @@ function VideoPosts() {
         authorId: currentUser.id,
         file,
         caption,
+        onGrid,
       })
 
       const refreshed = await loadDiscoverPosts()

@@ -64,6 +64,8 @@ const normalizePostRecord = ({ row, profile }) => ({
   mediaType: row.media_type === "video" ? "video" : "image",
   caption: toTrimmedString(row.caption),
   createdAt: row.created_at || new Date().toISOString(),
+  onGrid: row.on_grid !== false,
+  eventId: row.event_id ? String(row.event_id) : null,
   authorName:
     toTrimmedString(profile?.name) ||
     toTrimmedString(profile?.username) ||
@@ -71,6 +73,9 @@ const normalizePostRecord = ({ row, profile }) => ({
   authorUsername: toTrimmedString(profile?.username) || "",
   authorAvatar: sanitizeAvatarUrl(profile?.avatar_url, DEFAULT_AVATAR_URL),
 })
+
+const POST_SELECT_COLUMNS =
+  "id, author_id, media_url, media_type, caption, created_at, on_grid, event_id"
 
 const loadAuthorProfiles = async (authorIds) => {
   if (!authorIds.length) return new Map()
@@ -91,7 +96,7 @@ const loadAuthorProfiles = async (authorIds) => {
 export const loadDiscoverPosts = async () => {
   const { data: postRows, error } = await supabase
     .from("discover_posts")
-    .select("id, author_id, media_url, media_type, caption, created_at")
+    .select(POST_SELECT_COLUMNS)
     .order("created_at", { ascending: false })
     .limit(100)
 
@@ -110,14 +115,22 @@ export const loadDiscoverPosts = async () => {
   )
 }
 
-export const loadDiscoverPostsForAuthor = async (authorId) => {
+export const loadDiscoverPostsForAuthor = async (authorId, options = {}) => {
   if (!authorId) return []
 
-  const { data: postRows, error } = await supabase
+  const { onlyGrid = false } = options
+
+  let query = supabase
     .from("discover_posts")
-    .select("id, author_id, media_url, media_type, caption, created_at")
+    .select(POST_SELECT_COLUMNS)
     .eq("author_id", authorId)
     .order("created_at", { ascending: false })
+
+  if (onlyGrid) {
+    query = query.eq("on_grid", true)
+  }
+
+  const { data: postRows, error } = await query
 
   if (error) {
     console.error("Unable to load author discover posts:", error)
@@ -131,7 +144,58 @@ export const loadDiscoverPostsForAuthor = async (authorId) => {
   )
 }
 
-export const uploadDiscoverPost = async ({ authorId, file, caption }) => {
+export const loadGridPostsForAuthor = (authorId) =>
+  loadDiscoverPostsForAuthor(authorId, { onlyGrid: true })
+
+export const loadDiscoverPostsByIds = async (postIds = []) => {
+  const ids = [...new Set((postIds || []).map((id) => String(id || "")).filter(Boolean))]
+  if (!ids.length) return []
+
+  const { data: postRows, error } = await supabase
+    .from("discover_posts")
+    .select(POST_SELECT_COLUMNS)
+    .in("id", ids)
+
+  if (error) {
+    console.error("Unable to load discover posts by id:", error)
+    return []
+  }
+
+  const authorIds = [
+    ...new Set((postRows || []).map((row) => String(row.author_id || "")).filter(Boolean)),
+  ]
+  const profileLookup = await loadAuthorProfiles(authorIds)
+
+  return (postRows || []).map((row) =>
+    normalizePostRecord({ row, profile: profileLookup.get(String(row.author_id || "")) })
+  )
+}
+
+export const setDiscoverPostGridVisibility = async (postId, onGrid) => {
+  if (!postId) throw new Error("Missing post id.")
+
+  const { data, error } = await supabase
+    .from("discover_posts")
+    .update({ on_grid: Boolean(onGrid) })
+    .eq("id", postId)
+    .select(POST_SELECT_COLUMNS)
+    .single()
+
+  if (error) {
+    console.error("Unable to update post grid visibility:", error)
+    throw new Error("Could not update grid visibility. Please try again.")
+  }
+
+  return data
+}
+
+export const uploadDiscoverPost = async ({
+  authorId,
+  file,
+  caption,
+  onGrid = true,
+  eventId = null,
+}) => {
   if (!authorId || !file) {
     throw new Error("Choose media before you post.")
   }
@@ -164,8 +228,10 @@ export const uploadDiscoverPost = async ({ authorId, file, caption }) => {
       media_url: filePath,
       media_type: isVideo ? "video" : "image",
       caption: toTrimmedString(caption) || null,
+      on_grid: Boolean(onGrid),
+      event_id: eventId || null,
     })
-    .select("id, author_id, media_url, media_type, caption, created_at")
+    .select(POST_SELECT_COLUMNS)
     .single()
 
   if (error) {

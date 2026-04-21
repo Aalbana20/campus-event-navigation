@@ -2,43 +2,9 @@ import React, { useCallback, useEffect, useMemo, useState } from "react"
 import { Navigate, useNavigate, useParams } from "react-router-dom"
 import { useEvents } from "../context/EventContext"
 import { DEFAULT_AVATAR_URL, sanitizeAvatarUrl } from "../profileMedia"
-import { loadDiscoverPostsForAuthor } from "../discoverPosts"
+import ProfileContentTabs from "../components/ProfileContentTabs"
 import { supabase } from "../supabaseClient"
 import "./Profile.css"
-
-function PublicProfileTabIcon({ type }) {
-  if (type === "posts") {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <rect x="3" y="5" width="18" height="14" rx="2.2" />
-        <circle cx="12" cy="12" r="3.2" />
-        <path d="M8 5l1.5-2h5L16 5" />
-      </svg>
-    )
-  }
-
-  if (type === "reposts") {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M4.75 8H14.5" />
-        <path d="M12.25 5.5L15.75 8L12.25 10.5" />
-        <path d="M18 8V9.25C18 11.873 15.873 14 13.25 14H5.75" />
-        <path d="M19.25 16H9.5" />
-        <path d="M11.75 13.5L8.25 16L11.75 18.5" />
-        <path d="M6 16V14.75C6 12.127 8.127 10 10.75 10H18.25" />
-      </svg>
-    )
-  }
-
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <rect x="3.5" y="5" width="17" height="15" rx="2.2" />
-      <path d="M8 3v4" />
-      <path d="M16 3v4" />
-      <path d="M3.5 10h17" />
-    </svg>
-  )
-}
 
 function PublicProfile() {
   const navigate = useNavigate()
@@ -68,10 +34,6 @@ function PublicProfile() {
   const [isPanelLoading, setIsPanelLoading] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuFeedback, setMenuFeedback] = useState("")
-  const [activeTab, setActiveTab] = useState("posts")
-  const [profilePosts, setProfilePosts] = useState([])
-  const [profileReposts, setProfileReposts] = useState([])
-  const [isLoadingTabContent, setIsLoadingTabContent] = useState(false)
 
   const loadCounts = useCallback(async (profileId) => {
     if (!profileId) {
@@ -136,48 +98,7 @@ function PublicProfile() {
     setFollowingUsers([])
     setMenuOpen(false)
     setMenuFeedback("")
-    setActiveTab("posts")
-    setProfilePosts([])
-    setProfileReposts([])
   }, [viewedUsername])
-
-  useEffect(() => {
-    if (!profile?.id) return
-
-    let cancelled = false
-
-    const loadTabContent = async () => {
-      setIsLoadingTabContent(true)
-
-      const [posts, { data: repostRows }] = await Promise.all([
-        loadDiscoverPostsForAuthor(profile.id),
-        supabase
-          .from("reposts")
-          .select("event_id, created_at")
-          .eq("user_id", profile.id)
-          .order("created_at", { ascending: false }),
-      ])
-
-      if (cancelled) return
-
-      setProfilePosts(posts || [])
-
-      const repostedIds = new Set(
-        (repostRows || []).map((row) => String(row.event_id))
-      )
-      const repostedEvents = (allEvents || []).filter((event) =>
-        repostedIds.has(String(event.id))
-      )
-      setProfileReposts(repostedEvents)
-      setIsLoadingTabContent(false)
-    }
-
-    loadTabContent()
-
-    return () => {
-      cancelled = true
-    }
-  }, [allEvents, profile?.id])
 
   useEffect(() => {
     loadPublicProfile()
@@ -516,176 +437,7 @@ function PublicProfile() {
           </div>
         </div>
 
-        <div className="profile-section profile-tabbed-section public-profile-tabbed-section">
-          <div className="profile-tab-bar" role="tablist" aria-label="Profile tabs">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === "posts"}
-              aria-label="Posts"
-              className={`profile-tab-btn ${activeTab === "posts" ? "active" : ""}`}
-              onClick={() => setActiveTab("posts")}
-            >
-              <PublicProfileTabIcon type="posts" />
-            </button>
-
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === "reposts"}
-              aria-label="Reposts"
-              className={`profile-tab-btn ${activeTab === "reposts" ? "active" : ""}`}
-              onClick={() => setActiveTab("reposts")}
-            >
-              <PublicProfileTabIcon type="reposts" />
-            </button>
-
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === "events"}
-              aria-label="Events"
-              className={`profile-tab-btn ${activeTab === "events" ? "active" : ""}`}
-              onClick={() => setActiveTab("events")}
-            >
-              <PublicProfileTabIcon type="events" />
-            </button>
-          </div>
-
-          <div className="profile-tab-panel">
-            {activeTab === "posts" && (
-              isLoadingTabContent ? (
-                <p className="profile-empty-state">Loading posts...</p>
-              ) : profilePosts.length > 0 ? (
-                <div className="profile-tab-event-grid">
-                  {profilePosts.map((post) => (
-                    <div className="profile-tab-event-card static" key={post.id}>
-                      <div
-                        className="profile-tab-event-image"
-                        style={{
-                          backgroundImage:
-                            post.mediaType === "image" && post.mediaUrl
-                              ? `linear-gradient(180deg, rgba(15,23,42,0.05), rgba(15,23,42,0.55)), url(${post.mediaUrl})`
-                              : "linear-gradient(180deg, rgba(15,23,42,0.08), rgba(15,23,42,0.72))",
-                          backgroundSize: "cover",
-                          backgroundPosition: "center",
-                          position: "relative",
-                        }}
-                      >
-                        {post.mediaType === "video" && post.mediaUrl ? (
-                          <video
-                            src={post.mediaUrl}
-                            muted
-                            playsInline
-                            preload="metadata"
-                            style={{
-                              position: "absolute",
-                              inset: 0,
-                              width: "100%",
-                              height: "100%",
-                              objectFit: "cover",
-                            }}
-                          />
-                        ) : null}
-                        <span className="profile-tab-event-pill">
-                          {post.mediaType === "video" ? "Video" : "Photo"}
-                        </span>
-                      </div>
-
-                      <div className="profile-tab-event-body">
-                        <strong>
-                          {post.caption || (post.mediaType === "video" ? "New video" : "New photo")}
-                        </strong>
-                        <span>
-                          {new Date(post.createdAt).toLocaleDateString()}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="profile-tab-empty-state">
-                  <h3>No posts yet.</h3>
-                  <p>@{profile.username || "user"} hasn't shared any posts.</p>
-                </div>
-              )
-            )}
-
-            {activeTab === "reposts" && (
-              isLoadingTabContent ? (
-                <p className="profile-empty-state">Loading reposts...</p>
-              ) : profileReposts.length > 0 ? (
-                <div className="profile-tab-event-grid">
-                  {profileReposts.map((event) => (
-                    <div className="profile-tab-event-card static" key={event.id}>
-                      <div
-                        className="profile-tab-event-image"
-                        style={{
-                          backgroundImage: event.image
-                            ? `linear-gradient(180deg, rgba(15,23,42,0.05), rgba(15,23,42,0.55)), url(${event.image})`
-                            : "linear-gradient(180deg, rgba(15,23,42,0.08), rgba(15,23,42,0.72))",
-                          backgroundSize: "cover",
-                          backgroundPosition: "center",
-                        }}
-                      >
-                        <span className="profile-tab-event-pill">Reposted</span>
-                      </div>
-
-                      <div className="profile-tab-event-body">
-                        <strong>{event.title || event.name || "Untitled Event"}</strong>
-                        <span>
-                          {[event.date, event.time || "TBA"].filter(Boolean).join(" · ")}
-                        </span>
-                        <span>{event.locationName || event.location || "No location"}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="profile-tab-empty-state">
-                  <h3>No reposts yet.</h3>
-                  <p>Events @{profile.username || "user"} reposts will show up here.</p>
-                </div>
-              )
-            )}
-
-            {activeTab === "events" && (
-              createdEvents.length > 0 ? (
-                <div className="profile-tab-event-grid">
-                  {createdEvents.map((event) => (
-                    <div className="profile-tab-event-card static" key={event.id}>
-                      <div
-                        className="profile-tab-event-image"
-                        style={{
-                          backgroundImage: event.image
-                            ? `linear-gradient(180deg, rgba(15,23,42,0.05), rgba(15,23,42,0.55)), url(${event.image})`
-                            : "linear-gradient(180deg, rgba(15,23,42,0.08), rgba(15,23,42,0.72))",
-                          backgroundSize: "cover",
-                          backgroundPosition: "center",
-                        }}
-                      >
-                        <span className="profile-tab-event-pill">Created</span>
-                      </div>
-
-                      <div className="profile-tab-event-body">
-                        <strong>{event.title || event.name || "Untitled Event"}</strong>
-                        <span>
-                          {[event.date, event.time || "TBA"].filter(Boolean).join(" · ")}
-                        </span>
-                        <span>{event.locationName || event.location || "No location"}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="profile-tab-empty-state">
-                  <h3>No public events yet.</h3>
-                  <p>Events @{profile.username || "user"} creates will appear here.</p>
-                </div>
-              )
-            )}
-          </div>
-        </div>
+        <ProfileContentTabs profileId={profile.id} isOwner={false} allEvents={allEvents} />
       </div>
 
       {activePanel && (

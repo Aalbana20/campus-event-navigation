@@ -750,7 +750,7 @@ function Discover({ hideModeSwitch = false, initialMode = "events" } = {}) {
   }, [baseStoryItems, currentUser])
 
   const handleSubmitStoryComposer = useCallback(
-    async ({ file, caption }) => {
+    async ({ file, caption, onGrid = true }) => {
       if (!file || !currentUser?.id || currentUser.id === "current-user") {
         showToast("You need to be logged in to share a story.", "error")
         return
@@ -761,6 +761,7 @@ function Discover({ hideModeSwitch = false, initialMode = "events" } = {}) {
           authorId: currentUser.id,
           file,
           caption,
+          onGrid,
         })
 
         await loadStories()

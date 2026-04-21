@@ -53,6 +53,7 @@ export function StoryComposerScreen() {
   const [cameraMode, setCameraMode] = useState<'picture' | 'video'>('picture');
   const [selectedMedia, setSelectedMedia] = useState<SelectedStoryMedia | null>(null);
   const [overlayText, setOverlayText] = useState('');
+  const [postToGrid, setPostToGrid] = useState(true);
   const [isTextEditing, setIsTextEditing] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
@@ -235,6 +236,7 @@ export function StoryComposerScreen() {
     setStage('camera');
     setSelectedMedia(null);
     setOverlayText('');
+    setPostToGrid(true);
     setIsTextEditing(false);
   };
 
@@ -249,6 +251,7 @@ export function StoryComposerScreen() {
           authorId: currentUser.id,
           media: selectedMedia,
           caption: overlayText,
+          onGrid: postToGrid,
         });
       } else {
         await uploadStoryMedia({
@@ -435,6 +438,22 @@ export function StoryComposerScreen() {
           ) : null}
 
           <View style={styles.previewBottomBar}>
+            {activeMode === 'Post' ? (
+              <Pressable
+                style={styles.postToGridToggle}
+                onPress={() => setPostToGrid((value) => !value)}>
+                <View style={[styles.postToGridCheck, postToGrid && styles.postToGridCheckActive]}>
+                  {postToGrid ? (
+                    <Ionicons name="checkmark" size={13} color="#04060a" />
+                  ) : null}
+                </View>
+                <View>
+                  <Text style={styles.postToGridTitle}>Post to Grid</Text>
+                  <Text style={styles.postToGridCopy}>Show this on your profile canvas.</Text>
+                </View>
+              </Pressable>
+            ) : null}
+
             <Pressable
               style={styles.previewSecondaryButton}
               onPress={() => void handleSelectFromLibrary()}>
@@ -731,9 +750,45 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       right: 16,
       bottom: 34,
       flexDirection: 'row',
+      flexWrap: 'wrap',
       alignItems: 'center',
       gap: 12,
       zIndex: 6,
+    },
+    postToGridToggle: {
+      width: '100%',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      borderRadius: 18,
+      backgroundColor: 'rgba(5, 7, 12, 0.48)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.12)',
+    },
+    postToGridCheck: {
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.42)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    postToGridCheckActive: {
+      backgroundColor: '#ffffff',
+      borderColor: '#ffffff',
+    },
+    postToGridTitle: {
+      color: '#ffffff',
+      fontSize: 13,
+      fontWeight: '800',
+    },
+    postToGridCopy: {
+      color: 'rgba(255,255,255,0.64)',
+      fontSize: 11,
+      marginTop: 2,
     },
     previewSecondaryButton: {
       flexDirection: 'row',

@@ -23,6 +23,7 @@ function DiscoverCreateComposer({
   const [selectedFile, setSelectedFile] = useState(null)
   const [previewUrl, setPreviewUrl] = useState("")
   const [caption, setCaption] = useState("")
+  const [postToGrid, setPostToGrid] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState("")
 
@@ -35,6 +36,7 @@ function DiscoverCreateComposer({
     if (!isOpen) {
       setSelectedFile(null)
       setCaption("")
+      setPostToGrid(true)
       setIsSubmitting(false)
       setError("")
     }
@@ -131,7 +133,11 @@ function DiscoverCreateComposer({
     try {
       if (mode === "post") {
         await Promise.resolve(
-          onSubmitPost?.({ file: selectedFile, caption: caption.trim() })
+          onSubmitPost?.({
+            file: selectedFile,
+            caption: caption.trim(),
+            onGrid: postToGrid,
+          })
         )
       } else if (mode === "story") {
         await Promise.resolve(
@@ -489,6 +495,57 @@ function DiscoverCreateComposer({
                       : "Your image or video will upload to the shared stories feed so other people can see it in Discover too."}
                   </div>
                 </div>
+
+                {mode === "post" ? (
+                  <label
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: "16px",
+                      borderRadius: "20px",
+                      padding: "14px 16px",
+                      background: "rgba(255, 255, 255, 0.04)",
+                      border: "1px solid rgba(255, 255, 255, 0.08)",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <span>
+                      <span
+                        style={{
+                          display: "block",
+                          color: "var(--text-main, #f5f7fb)",
+                          fontSize: "0.84rem",
+                          fontWeight: 800,
+                        }}
+                      >
+                        Post to Grid
+                      </span>
+                      <span
+                        style={{
+                          display: "block",
+                          marginTop: "4px",
+                          color: "rgba(226, 232, 240, 0.68)",
+                          fontSize: "0.8rem",
+                          lineHeight: 1.35,
+                        }}
+                      >
+                        Add this to your curated profile canvas.
+                      </span>
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={postToGrid}
+                      onChange={(event) => setPostToGrid(event.target.checked)}
+                      style={{
+                        width: "22px",
+                        height: "22px",
+                        accentColor: "#f8fafc",
+                        flex: "0 0 auto",
+                      }}
+                    />
+                  </label>
+                ) : null}
 
                 {error ? (
                   <div

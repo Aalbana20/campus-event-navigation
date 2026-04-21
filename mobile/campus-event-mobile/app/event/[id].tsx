@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
   Image,
   Linking,
   Pressable,
@@ -15,7 +16,9 @@ import { AppScreen } from '@/components/mobile/AppScreen';
 import { EventActionTrigger } from '@/components/mobile/EventActionTrigger';
 import { useAppTheme } from '@/lib/app-theme';
 import { getEventCreatorLabel } from '@/lib/mobile-backend';
+import type { EventMemoryRecord } from '@/lib/mobile-event-memories';
 import { getAvatarImageSource, getEventImageSource } from '@/lib/mobile-media';
+import { pickStoryMediaFromLibrary } from '@/lib/mobile-story-composer';
 import { useMobileApp } from '@/providers/mobile-app-provider';
 
 export default function EventDetailScreen() {
@@ -23,9 +26,40 @@ export default function EventDetailScreen() {
   const router = useRouter();
   const theme = useAppTheme();
   const styles = useMemo(() => buildStyles(theme), [theme]);
-  const { getEventById, savedEventIds, toggleSaveEvent } = useMobileApp();
+  const {
+    getEventById,
+    savedEventIds,
+    toggleSaveEvent,
+    currentUserAttendedEvent,
+    postEventMemory,
+    loadEventMemoriesForEvent,
+  } = useMobileApp();
+  const [canAddMemory, setCanAddMemory] = useState(false);
+  const [eventMemories, setEventMemories] = useState<EventMemoryRecord[]>([]);
+  const [isMemoryBusy, setIsMemoryBusy] = useState(false);
 
   const event = id ? getEventById(String(id)) : undefined;
+
+  useEffect(() => {
+    if (!event?.id) return;
+
+    let isCancelled = false;
+
+    void (async () => {
+      const [eligible, memories] = await Promise.all([
+        currentUserAttendedEvent(event.id),
+        loadEventMemoriesForEvent(event.id),
+      ]);
+
+      if (isCancelled) return;
+      setCanAddMemory(eligible);
+      setEventMemories(memories);
+    })();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [currentUserAttendedEvent, event?.id, loadEventMemoriesForEvent]);
 
   if (!event) {
     return (
@@ -45,6 +79,28 @@ export default function EventDetailScreen() {
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
     event.locationAddress || event.locationName
   )}`;
+
+  const handleAddMemory = async () => {
+    if (!event?.id || isMemoryBusy) return;
+
+    try {
+      const media = await pickStoryMediaFromLibrary();
+      if (!media) return;
+
+      setIsMemoryBusy(true);
+      await postEventMemory({ eventId: event.id, media });
+      const refreshed = await loadEventMemoriesForEvent(event.id);
+      setEventMemories(refreshed);
+      Alert.alert('Memory added', 'Your event memory is now attached to this event.');
+    } catch (error) {
+      Alert.alert(
+        'Add Memory',
+        error instanceof Error ? error.message : 'Could not add this memory right now.'
+      );
+    } finally {
+      setIsMemoryBusy(false);
+    }
+  };
 
   return (
     <AppScreen>
@@ -116,6 +172,49 @@ export default function EventDetailScreen() {
               </View>
             </View>
           ) : null}
+
+          <View style={styles.memoriesSection}>
+            <View style={styles.memoryHeader}>
+              <View>
+                <Text style={styles.sectionEyebrow}>Event Memories</Text>
+                <Text style={styles.memoryCopy}>
+                  RSVP-based photos and videos from people tied to this event.
+                </Text>
+              </View>
+              {canAddMemory ? (
+                <Pressable
+                  style={styles.memoryButton}
+                  disabled={isMemoryBusy}
+                  onPress={() => void handleAddMemory()}>
+                  <Text style={styles.memoryButtonText}>
+                    {isMemoryBusy ? 'Adding...' : 'Add Memory'}
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
+
+            {eventMemories.length > 0 ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View style={styles.memoryRow}>
+                  {eventMemories.map((memory) => (
+                    <View key={memory.id} style={styles.memoryTile}>
+                      {memory.mediaType === 'video' ? (
+                        <View style={styles.memoryVideoFallback}>
+                          <Ionicons name="play-circle-outline" size={30} color="#ffffff" />
+                        </View>
+                      ) : (
+                        <Image source={{ uri: memory.mediaUrl }} style={styles.memoryImage} />
+                      )}
+                    </View>
+                  ))}
+                </View>
+              </ScrollView>
+            ) : (
+              <View style={styles.memoryEmpty}>
+                <Text style={styles.memoryEmptyText}>No memories yet.</Text>
+              </View>
+            )}
+          </View>
 
           <View style={styles.actionsRow}>
             <Pressable style={styles.primaryButton} onPress={() => toggleSaveEvent(event.id)}>

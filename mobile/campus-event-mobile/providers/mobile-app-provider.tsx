@@ -42,6 +42,35 @@ import {
 import { sendPushToUser } from '@/lib/mobile-push';
 import { SUPABASE_CONFIG_ERROR, supabase } from '@/lib/supabase';
 import { buildProfileSummary, sanitizePhoneNumber } from '@/lib/signup-data';
+import {
+  loadGridPostsForAuthor,
+  setDiscoverPostGridVisibility,
+  type DiscoverPostRecord,
+} from '@/lib/mobile-discover-posts';
+import {
+  hasUserRepostedPost,
+  loadRepostsForUser,
+  repostPost as repostPostRequest,
+  unrepostPost as unrepostPostRequest,
+  type RepostRecord,
+} from '@/lib/mobile-profile-reposts';
+import {
+  addContentTag,
+  loadPostsTaggingUser,
+  loadTagsForPost,
+  removeContentTag,
+  type ContentTagRecord,
+  type TaggedPostSummary,
+} from '@/lib/mobile-content-tags';
+import {
+  deleteEventMemory,
+  loadEventMemoriesForEvent,
+  loadEventMemoriesForUser,
+  uploadEventMemory,
+  userAttendedEvent as userAttendedEventRequest,
+  type EventMemoryRecord,
+} from '@/lib/mobile-event-memories';
+import type { SelectedStoryMedia } from '@/lib/mobile-story-composer';
 
 type MobileAppContextValue = {
   session: Session | null;
@@ -98,6 +127,36 @@ type MobileAppContextValue = {
   getFollowersForProfile: (profileId: string) => ProfileRecord[];
   getFollowingForProfile: (profileId: string) => ProfileRecord[];
   isFollowingProfile: (profileId: string) => boolean;
+  // Phase 1: profile unification data layer
+  setPostGridVisibility: (
+    postId: string,
+    onGrid: boolean
+  ) => Promise<DiscoverPostRecord | null>;
+  loadGridPostsForAuthor: (authorId: string) => Promise<DiscoverPostRecord[]>;
+  repostPost: (postId: string) => Promise<RepostRecord | null>;
+  unrepostPost: (postId: string) => Promise<void>;
+  hasRepostedPost: (postId: string) => Promise<boolean>;
+  loadAllRepostsForCurrentUser: () => Promise<RepostRecord[]>;
+  tagUserInPost: (input: {
+    postId: string;
+    taggedUserId: string;
+  }) => Promise<ContentTagRecord | null>;
+  untagUserInPost: (input: {
+    postId: string;
+    taggedUserId: string;
+  }) => Promise<void>;
+  loadPostsTaggingUser: (userId: string) => Promise<TaggedPostSummary[]>;
+  loadTagsForPost: (postId: string) => Promise<ContentTagRecord[]>;
+  postEventMemory: (input: {
+    eventId: string;
+    media: SelectedStoryMedia;
+    caption?: string;
+    metadata?: Record<string, unknown>;
+  }) => Promise<unknown>;
+  deleteEventMemory: (memoryId: string) => Promise<void>;
+  loadEventMemoriesForEvent: (eventId: string) => Promise<EventMemoryRecord[]>;
+  loadEventMemoriesForUser: (userId: string) => Promise<EventMemoryRecord[]>;
+  currentUserAttendedEvent: (eventId: string) => Promise<boolean>;
 };
 
 const MobileAppContext = createContext<MobileAppContextValue | null>(null);
@@ -1339,7 +1398,7 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
 
       const { error } = await supabase
         .from('reposts')
-        .insert({ user_id: currentUser.id, event_id: eventId });
+        .insert({ user_id: currentUser.id, event_id: eventId, target_type: 'event' });
 
       if (error && error.code !== '23505') {
         console.error('Unable to repost event:', error);
@@ -1367,6 +1426,7 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
         .from('reposts')
         .delete()
         .eq('user_id', currentUser.id)
+        .eq('target_type', 'event')
         .eq('event_id', eventId);
 
       if (error) {
@@ -1375,6 +1435,136 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
       }
     },
     [currentUser.id]
+  );
+
+  // Phase 1: profile unification data layer bindings.
+  const setPostGridVisibility = useCallback(
+    (postId: string, onGrid: boolean) =>
+      setDiscoverPostGridVisibility(postId, onGrid),
+    []
+  );
+
+  const loadGridPostsForAuthorBound = useCallback(
+    (authorId: string) => loadGridPostsForAuthor(authorId),
+    []
+  );
+
+  const repostPost = useCallback(
+    async (postId: string) => {
+      if (!currentUser.id || !postId) return null;
+      return repostPostRequest({ userId: currentUser.id, postId });
+    },
+    [currentUser.id]
+  );
+
+  const unrepostPost = useCallback(
+    async (postId: string) => {
+      if (!currentUser.id || !postId) return;
+      return unrepostPostRequest({ userId: currentUser.id, postId });
+    },
+    [currentUser.id]
+  );
+
+  const hasRepostedPost = useCallback(
+    async (postId: string) => {
+      if (!currentUser.id || !postId) return false;
+      return hasUserRepostedPost({ userId: currentUser.id, postId });
+    },
+    [currentUser.id]
+  );
+
+  const loadAllRepostsForCurrentUser = useCallback(async () => {
+    if (!currentUser.id) return [];
+    return loadRepostsForUser(currentUser.id);
+  }, [currentUser.id]);
+
+  const tagUserInPost = useCallback(
+    async ({
+      postId,
+      taggedUserId,
+    }: {
+      postId: string;
+      taggedUserId: string;
+    }) => {
+      if (!currentUser.id || !postId || !taggedUserId) return null;
+      return addContentTag({
+        postId,
+        taggedUserId,
+        taggerId: currentUser.id,
+      });
+    },
+    [currentUser.id]
+  );
+
+  const untagUserInPost = useCallback(
+    async ({
+      postId,
+      taggedUserId,
+    }: {
+      postId: string;
+      taggedUserId: string;
+    }) => removeContentTag({ postId, taggedUserId }),
+    []
+  );
+
+  const loadPostsTaggingUserBound = useCallback(
+    (userId: string) => loadPostsTaggingUser(userId),
+    []
+  );
+
+  const loadTagsForPostBound = useCallback(
+    (postId: string) => loadTagsForPost(postId),
+    []
+  );
+
+  const currentUserAttendedEvent = useCallback(
+    async (eventId: string) => {
+      if (!currentUser.id || !eventId) return false;
+      return userAttendedEventRequest({
+        userId: currentUser.id,
+        eventId,
+      });
+    },
+    [currentUser.id]
+  );
+
+  const postEventMemory = useCallback(
+    async ({
+      eventId,
+      media,
+      caption,
+      metadata,
+    }: {
+      eventId: string;
+      media: SelectedStoryMedia;
+      caption?: string;
+      metadata?: Record<string, unknown>;
+    }) => {
+      if (!currentUser.id || !eventId || !media) return null;
+      return uploadEventMemory({
+        authorId: currentUser.id,
+        eventId,
+        media,
+        caption,
+        metadata,
+      });
+    },
+    [currentUser.id]
+  );
+
+  const deleteEventMemoryBound = useCallback(
+    (memoryId: string) => deleteEventMemory(memoryId),
+    []
+  );
+
+  const loadEventMemoriesForEventBound = useCallback(
+    (eventId: string) => loadEventMemoriesForEvent(eventId),
+    []
+  );
+
+  const loadEventMemoriesForUserBound = useCallback(
+    (userId: string) => loadEventMemoriesForUser(userId),
+    []
   );
 
   const followProfile = useCallback(
@@ -1765,9 +1955,39 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
       getFollowersForProfile,
       getFollowingForProfile,
       isFollowingProfile,
+      setPostGridVisibility,
+      loadGridPostsForAuthor: loadGridPostsForAuthorBound,
+      repostPost,
+      unrepostPost,
+      hasRepostedPost,
+      loadAllRepostsForCurrentUser,
+      tagUserInPost,
+      untagUserInPost,
+      loadPostsTaggingUser: loadPostsTaggingUserBound,
+      loadTagsForPost: loadTagsForPostBound,
+      postEventMemory,
+      deleteEventMemory: deleteEventMemoryBound,
+      loadEventMemoriesForEvent: loadEventMemoriesForEventBound,
+      loadEventMemoriesForUser: loadEventMemoriesForUserBound,
+      currentUserAttendedEvent,
     }),
     [
       acceptDiscoverEvent,
+      setPostGridVisibility,
+      loadGridPostsForAuthorBound,
+      repostPost,
+      unrepostPost,
+      hasRepostedPost,
+      loadAllRepostsForCurrentUser,
+      tagUserInPost,
+      untagUserInPost,
+      loadPostsTaggingUserBound,
+      loadTagsForPostBound,
+      postEventMemory,
+      deleteEventMemoryBound,
+      loadEventMemoriesForEventBound,
+      loadEventMemoriesForUserBound,
+      currentUserAttendedEvent,
       addPersonalCalendarItem,
       authError,
       createEvent,

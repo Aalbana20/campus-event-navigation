@@ -5,6 +5,29 @@ import {
   sanitizeAvatarUrl,
 } from "../profileMedia"
 import { supabase } from "../supabaseClient"
+import {
+  loadGridPostsForAuthor,
+  setDiscoverPostGridVisibility,
+} from "../discoverPosts"
+import {
+  hasUserRepostedPost,
+  loadRepostsForUser,
+  repostPost as repostPostRequest,
+  unrepostPost as unrepostPostRequest,
+} from "../profileReposts"
+import {
+  addContentTag,
+  loadPostsTaggingUser,
+  loadTagsForPost,
+  removeContentTag,
+} from "../contentTags"
+import {
+  deleteEventMemory,
+  loadEventMemoriesForEvent,
+  loadEventMemoriesForUser,
+  uploadEventMemory,
+  userAttendedEvent as userAttendedEventRequest,
+} from "../eventMemories"
 
 const EventContext = createContext()
 
@@ -542,7 +565,7 @@ export function EventProvider({ children }) {
 
     const { error } = await supabase
       .from("reposts")
-      .insert({ user_id: userId, event_id: eventId })
+      .insert({ user_id: userId, event_id: eventId, target_type: "event" })
 
     if (!error) {
       setRepostedEventIds((prev) => new Set([...prev, String(eventId)]))
@@ -559,6 +582,7 @@ export function EventProvider({ children }) {
       .from("reposts")
       .delete()
       .eq("user_id", userId)
+      .eq("target_type", "event")
       .eq("event_id", eventId)
 
     if (!error) {
@@ -568,6 +592,65 @@ export function EventProvider({ children }) {
         return next
       })
     }
+  }
+
+  const getActiveUserId = () =>
+    currentUser?.id && currentUser.id !== "current-user" ? currentUser.id : null
+
+  const setPostGridVisibility = async (postId, onGrid) => {
+    if (!postId) return null
+    return setDiscoverPostGridVisibility(postId, onGrid)
+  }
+
+  const repostPost = async (postId) => {
+    const userId = getActiveUserId()
+    if (!userId || !postId) return null
+    return repostPostRequest({ userId, postId })
+  }
+
+  const unrepostPost = async (postId) => {
+    const userId = getActiveUserId()
+    if (!userId || !postId) return
+    return unrepostPostRequest({ userId, postId })
+  }
+
+  const hasRepostedPost = async (postId) => {
+    const userId = getActiveUserId()
+    if (!userId || !postId) return false
+    return hasUserRepostedPost({ userId, postId })
+  }
+
+  const loadAllRepostsForCurrentUser = async () => {
+    const userId = getActiveUserId()
+    if (!userId) return []
+    return loadRepostsForUser(userId)
+  }
+
+  const tagUserInPost = async ({ postId, taggedUserId }) => {
+    const taggerId = getActiveUserId()
+    if (!taggerId || !postId || !taggedUserId) return null
+    return addContentTag({ postId, taggedUserId, taggerId })
+  }
+
+  const untagUserInPost = async ({ postId, taggedUserId }) =>
+    removeContentTag({ postId, taggedUserId })
+
+  const currentUserAttendedEvent = async (eventId) => {
+    const userId = getActiveUserId()
+    if (!userId || !eventId) return false
+    return userAttendedEventRequest({ userId, eventId })
+  }
+
+  const postEventMemory = async ({ eventId, file, caption, metadata }) => {
+    const userId = getActiveUserId()
+    if (!userId || !eventId || !file) return null
+    return uploadEventMemory({
+      authorId: userId,
+      eventId,
+      file,
+      caption,
+      metadata,
+    })
   }
 
   const mutualUsers = useMemo(
@@ -597,6 +680,22 @@ export function EventProvider({ children }) {
         repostedEventIds,
         repostEvent,
         unrepostEvent,
+        // Phase 1: profile unification data layer
+        setPostGridVisibility,
+        loadGridPostsForAuthor,
+        repostPost,
+        unrepostPost,
+        hasRepostedPost,
+        loadAllRepostsForCurrentUser,
+        tagUserInPost,
+        untagUserInPost,
+        loadPostsTaggingUser,
+        loadTagsForPost,
+        postEventMemory,
+        deleteEventMemory,
+        loadEventMemoriesForEvent,
+        loadEventMemoriesForUser,
+        currentUserAttendedEvent,
       }}
     >
       {children}

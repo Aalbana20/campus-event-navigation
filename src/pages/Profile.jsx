@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useState } from "react"
 import Cropper from "react-easy-crop"
 import { useNavigate } from "react-router-dom"
 import { useEvents } from "../context/EventContext"
-import { buildEventImageStyle } from "../eventImages"
 import {
   DEFAULT_AVATAR_URL,
   sanitizeAvatarStorageValue,
@@ -19,6 +18,7 @@ import {
 } from "../theme"
 import { useToast } from "../context/ToastContext"
 import { registerPushNotifications, unregisterPushNotifications } from "../pushNotifications"
+import ProfileContentTabs from "../components/ProfileContentTabs"
 import "./Profile.css"
 
 const createImage = (url) =>
@@ -72,54 +72,11 @@ async function getCroppedImageBlob(imageSrc, pixelCrop) {
   })
 }
 
-function ProfileTabIcon({ type }) {
-  if (type === "grid") {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <rect x="3.5" y="3.5" width="7" height="7" rx="1.5" />
-        <rect x="13.5" y="3.5" width="7" height="7" rx="1.5" />
-        <rect x="3.5" y="13.5" width="7" height="7" rx="1.5" />
-        <rect x="13.5" y="13.5" width="7" height="7" rx="1.5" />
-      </svg>
-    )
-  }
-
-  if (type === "reposts") {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M4.75 8H14.5" />
-        <path d="M12.25 5.5L15.75 8L12.25 10.5" />
-        <path d="M18 8V9.25C18 11.873 15.873 14 13.25 14H5.75" />
-        <path d="M19.25 16H9.5" />
-        <path d="M11.75 13.5L8.25 16L11.75 18.5" />
-        <path d="M6 16V14.75C6 12.127 8.127 10 10.75 10H18.25" />
-      </svg>
-    )
-  }
-
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M8 6.5A2.5 2.5 0 1 1 8 11.5A2.5 2.5 0 0 1 8 6.5Z" />
-      <path d="M16 4.5A2.5 2.5 0 1 1 16 9.5A2.5 2.5 0 0 1 16 4.5Z" />
-      <path d="M14.5 18.5A3.5 3.5 0 1 1 14.5 11.5A3.5 3.5 0 0 1 14.5 18.5Z" />
-      <path d="M10 9.5L13 11.5" />
-      <path d="M9 14L11.5 15" />
-    </svg>
-  )
-}
-
-const buildProfileEventImageStyle = (event) =>
-  buildEventImageStyle(
-    event?.image,
-    "linear-gradient(180deg, rgba(15, 23, 42, 0.08), rgba(15, 23, 42, 0.72))"
-  )
-
 function Profile() {
   const navigate = useNavigate()
   const { showToast } = useToast()
   const {
     currentUser,
-    savedEvents,
     allEvents,
     followingList,
     followersList,
@@ -128,7 +85,6 @@ function Profile() {
     updateEvent,
     follow,
     unfollow,
-    repostedEventIds,
   } = useEvents()
 
   const [name, setName] = useState("")
@@ -158,7 +114,6 @@ function Profile() {
     event: null,
   })
   const [isConfirmingAction, setIsConfirmingAction] = useState(false)
-  const [activeProfileTab, setActiveProfileTab] = useState("grid")
   const [editingEventId, setEditingEventId] = useState(null)
   const [editEventForm, setEditEventForm] = useState({
     title: "",
@@ -212,17 +167,6 @@ function Profile() {
       event.createdBy === ownerUsername ||
       event.creatorUsername === ownerUsername
   )
-  const rsvpGridEvents = savedEvents || []
-  const repostedEvents = allEvents.filter((event) =>
-    repostedEventIds?.has(String(event.id))
-  )
-  const taggedMoments = (savedEvents || []).filter((event) => {
-    const raw = event.date || event.eventDate
-    if (!raw) return false
-    const d = new Date(raw)
-    return !Number.isNaN(d.getTime()) && d < new Date()
-  })
-
   const openPanel = (panelName) => {
     setActivePanel(panelName)
   }
@@ -572,10 +516,6 @@ function Profile() {
     }
   }
 
-  const openCancelRsvpModal = (event) => {
-    setConfirmModal({ open: true, type: "cancel-rsvp", event })
-  }
-
   const closeConfirmModal = () => {
     setConfirmModal({ open: false, type: "", event: null })
   }
@@ -725,144 +665,7 @@ function Profile() {
         </div>
 
         <div className="profile-content-stack">
-          <div className="profile-section profile-tabbed-section">
-            <div className="profile-tab-bar" role="tablist" aria-label="Profile tabs">
-              <button
-                type="button"
-                className={`profile-tab-btn ${activeProfileTab === "grid" ? "active" : ""}`}
-                onClick={() => setActiveProfileTab("grid")}
-                aria-label="Going events"
-                aria-selected={activeProfileTab === "grid"}
-                role="tab"
-              >
-                <ProfileTabIcon type="grid" />
-              </button>
-
-              <button
-                type="button"
-                className={`profile-tab-btn ${activeProfileTab === "reposts" ? "active" : ""}`}
-                onClick={() => setActiveProfileTab("reposts")}
-                aria-label="Reposted events"
-                aria-selected={activeProfileTab === "reposts"}
-                role="tab"
-              >
-                <ProfileTabIcon type="reposts" />
-              </button>
-
-              <button
-                type="button"
-                className={`profile-tab-btn ${activeProfileTab === "tagged" ? "active" : ""}`}
-                onClick={() => setActiveProfileTab("tagged")}
-                aria-label="Tagged moments"
-                aria-selected={activeProfileTab === "tagged"}
-                role="tab"
-              >
-                <ProfileTabIcon type="tagged" />
-              </button>
-            </div>
-
-            <div className="profile-tab-panel">
-              {activeProfileTab === "grid" && (
-                rsvpGridEvents.length > 0 ? (
-                  <div className="profile-tab-event-grid">
-                    {rsvpGridEvents.map((event) => (
-                      <button
-                        key={event.id}
-                        type="button"
-                        className="profile-tab-event-card"
-                        onClick={() => openCancelRsvpModal(event)}
-                      >
-                        <div
-                          className="profile-tab-event-image"
-                          style={buildProfileEventImageStyle(event)}
-                        >
-                          <span className="profile-tab-event-pill">Going</span>
-                        </div>
-
-                        <div className="profile-tab-event-body">
-                          <strong>{event.title || event.name || "Untitled Event"}</strong>
-                          <span>
-                            {[
-                              event.date,
-                              event.time || "TBA",
-                            ].filter(Boolean).join(" · ")}
-                          </span>
-                          <span>{event.locationName || event.location || "No location"}</span>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="profile-tab-empty-state">
-                    <h3>Your grid is open.</h3>
-                    <p>Events you RSVP to will show up here first.</p>
-                  </div>
-                )
-              )}
-
-              {activeProfileTab === "reposts" && (
-                repostedEvents.length > 0 ? (
-                  <div className="profile-tab-event-grid">
-                    {repostedEvents.map((event) => (
-                      <div className="profile-tab-event-card static" key={event.id}>
-                        <div
-                          className="profile-tab-event-image"
-                          style={buildProfileEventImageStyle(event)}
-                        >
-                          <span className="profile-tab-event-pill">Reposted</span>
-                        </div>
-
-                        <div className="profile-tab-event-body">
-                          <strong>{event.title || event.name || "Untitled Event"}</strong>
-                          <span>
-                            {[
-                              event.date,
-                              event.time || "TBA",
-                            ].filter(Boolean).join(" · ")}
-                          </span>
-                          <span>{event.locationName || event.location || "No location"}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="profile-tab-empty-state">
-                    <h3>Nothing reposted yet.</h3>
-                    <p>Events you repost will show up here.</p>
-                  </div>
-                )
-              )}
-
-              {activeProfileTab === "tagged" && (
-                taggedMoments.length > 0 ? (
-                  <div className="profile-tab-event-grid">
-                    {taggedMoments.map((event) => (
-                      <div className="profile-tab-event-card static" key={event.id}>
-                        <div
-                          className="profile-tab-event-image"
-                          style={buildProfileEventImageStyle(event)}
-                        >
-                          <span className="profile-tab-event-pill">Attended</span>
-                        </div>
-                        <div className="profile-tab-event-body">
-                          <strong>{event.title || event.name || "Untitled Event"}</strong>
-                          <span>
-                            {[event.date, event.time || "TBA"].filter(Boolean).join(" · ")}
-                          </span>
-                          <span>{event.locationName || event.location || "No location"}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="profile-tab-empty-state">
-                    <h3>No past events yet.</h3>
-                    <p>Events you RSVPd to that have already happened will appear here.</p>
-                  </div>
-                )
-              )}
-            </div>
-          </div>
+          <ProfileContentTabs profileId={ownerId} isOwner allEvents={allEvents} />
         </div>
       </div>
 

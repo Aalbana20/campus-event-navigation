@@ -175,11 +175,6 @@ export default function EventsScreen() {
     setIsFilterOpen(false);
   };
 
-  const handleSurfaceChange = (nextTab: EventsTab) => {
-    setActiveTab(nextTab);
-    setIsFilterOpen(false);
-  };
-
   const handleAddPersonalItemForSelectedDate = (input: { title: string; note?: string; time?: string }) => {
     if (!selectedDate) return;
 
@@ -195,34 +190,13 @@ export default function EventsScreen() {
     addPersonalCalendarItem(input);
   };
 
-  const renderSurfaceSwitch = () => (
-    <View style={styles.surfaceSwitch}>
-      <Pressable
-        style={[styles.surfaceSwitchButton, activeTab === 'event' && styles.surfaceSwitchButtonActive]}
-        onPress={() => handleSurfaceChange('event')}>
-        <Text
-          style={[styles.surfaceSwitchText, activeTab === 'event' && styles.surfaceSwitchTextActive]}>
-          Event
-        </Text>
-      </Pressable>
-      <Pressable
-        style={[styles.surfaceSwitchButton, activeTab === 'calendar' && styles.surfaceSwitchButtonActive]}
-        onPress={() => handleSurfaceChange('calendar')}>
-        <Text
-          style={[styles.surfaceSwitchText, activeTab === 'calendar' && styles.surfaceSwitchTextActive]}>
-          Calendar
-        </Text>
-      </Pressable>
-    </View>
-  );
-
   const renderCalendar = () => (
     <>
       <View style={styles.calendarTopBar}>
         <Pressable
           style={styles.yearButton}
           onPress={() => setCalendarMode((currentMode) => (currentMode === 'year' ? 'month' : 'year'))}>
-          <Ionicons name="chevron-back" size={25} color={theme.text} />
+          <Ionicons name="chevron-back" size={20} color={theme.text} />
           <Text style={styles.yearButtonText}>{visibleMonth.getFullYear()}</Text>
         </Pressable>
       </View>
@@ -239,13 +213,11 @@ export default function EventsScreen() {
   );
 
   return (
-    <AppScreen>
+    <AppScreen edges={[]}>
       <View style={styles.screenRoot}>
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}>
-          {renderSurfaceSwitch()}
-
           {activeTab === 'calendar' ? renderCalendar() : null}
 
           {activeTab === 'event' ? (
@@ -337,7 +309,7 @@ export default function EventsScreen() {
                 setIsFilterOpen(false);
                 setIsSearchOpen(true);
               }}>
-              <Ionicons name="search-outline" size={27} color={theme.text} />
+              <Ionicons name="search-outline" size={20} color={theme.text} />
             </Pressable>
             <View style={styles.actionDivider} />
             <Pressable
@@ -346,7 +318,7 @@ export default function EventsScreen() {
                 setIsFilterOpen(false);
                 setIsCreateOpen(true);
               }}>
-              <Ionicons name="add" size={33} color={theme.text} />
+              <Ionicons name="add" size={22} color={theme.text} />
             </Pressable>
           </View>
         </>
@@ -385,112 +357,79 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     },
     scrollContent: {
       paddingHorizontal: 18,
-      paddingTop: 2,
-      paddingBottom: 172,
-      gap: 18,
-    },
-    surfaceSwitch: {
-      flexDirection: 'row',
-      alignSelf: 'center',
-      width: '100%',
-      maxWidth: 328,
-      padding: 4,
-      borderRadius: 20,
-      backgroundColor: 'rgba(255,255,255,0.06)',
-      borderWidth: 1,
-      borderColor: 'rgba(255,255,255,0.06)',
-    },
-    surfaceSwitchButton: {
-      flex: 1,
-      minHeight: 40,
-      borderRadius: 16,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    surfaceSwitchButtonActive: {
-      backgroundColor: 'rgba(99,99,102,0.5)',
-      shadowColor: '#000',
-      shadowOpacity: 0.2,
-      shadowRadius: 8,
-      shadowOffset: { width: 0, height: 3 },
-    },
-    surfaceSwitchText: {
-      color: theme.textMuted,
-      fontSize: 15,
-      fontWeight: '800',
-    },
-    surfaceSwitchTextActive: {
-      color: theme.text,
+      paddingTop: 0,
+      paddingBottom: 140,
+      gap: 10,
     },
     calendarTopBar: {
-      minHeight: 50,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
     },
     yearButton: {
-      minHeight: 52,
+      minHeight: 44,
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 8,
-      paddingHorizontal: 18,
-      borderRadius: 26,
+      gap: 6,
+      paddingHorizontal: 14,
+      paddingVertical: 6,
+      borderRadius: 22,
       backgroundColor: theme.surface,
       borderWidth: 1,
       borderColor: theme.border,
     },
     yearButtonText: {
       color: theme.text,
-      fontSize: 24,
+      fontSize: 20,
       fontWeight: '800',
     },
     todayButton: {
       position: 'absolute',
-      left: 24,
-      bottom: 92,
-      minWidth: 112,
-      height: 56,
-      borderRadius: 28,
+      left: 20,
+      bottom: 96,
+      minWidth: 84,
+      height: 42,
+      borderRadius: 21,
+      paddingHorizontal: 16,
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: theme.surface,
       borderWidth: 1,
       borderColor: theme.border,
       shadowColor: '#000',
-      shadowOpacity: 0.24,
-      shadowRadius: 20,
-      shadowOffset: { width: 0, height: 8 },
-      elevation: 8,
+      shadowOpacity: 0.22,
+      shadowRadius: 16,
+      shadowOffset: { width: 0, height: 6 },
+      elevation: 6,
     },
     todayButtonText: {
       color: theme.text,
-      fontSize: 18,
-      fontWeight: '800',
+      fontSize: 14,
+      fontWeight: '700',
     },
     calendarActionControl: {
       position: 'absolute',
-      right: 24,
-      bottom: 92,
-      minWidth: 196,
-      height: 56,
-      borderRadius: 28,
+      right: 20,
+      bottom: 96,
+      height: 42,
+      borderRadius: 21,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingHorizontal: 8,
+      paddingHorizontal: 4,
       backgroundColor: theme.surface,
       borderWidth: 1,
       borderColor: theme.border,
       shadowColor: '#000',
-      shadowOpacity: 0.24,
-      shadowRadius: 20,
-      shadowOffset: { width: 0, height: 8 },
-      elevation: 8,
+      shadowOpacity: 0.22,
+      shadowRadius: 16,
+      shadowOffset: { width: 0, height: 6 },
+      elevation: 6,
     },
     actionControlButton: {
-      minWidth: 54,
-      height: 46,
-      borderRadius: 23,
+      minWidth: 44,
+      height: 34,
+      borderRadius: 17,
       alignItems: 'center',
       justifyContent: 'center',
       paddingHorizontal: 10,
@@ -498,27 +437,27 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     actionControlLabel: {
       color: theme.text,
       fontSize: 12,
-      fontWeight: '900',
+      fontWeight: '700',
     },
     actionDivider: {
       width: 1,
-      height: 34,
+      height: 20,
       backgroundColor: theme.border,
     },
     filterMenu: {
       position: 'absolute',
-      right: 146,
-      bottom: 156,
-      width: 124,
-      borderRadius: 18,
+      right: 120,
+      bottom: 148,
+      width: 116,
+      borderRadius: 16,
       padding: 6,
       backgroundColor: theme.surface,
       borderWidth: 1,
       borderColor: theme.border,
       shadowColor: '#000',
       shadowOpacity: 0.2,
-      shadowRadius: 18,
-      shadowOffset: { width: 0, height: 8 },
+      shadowRadius: 16,
+      shadowOffset: { width: 0, height: 6 },
       elevation: 9,
       gap: 4,
     },

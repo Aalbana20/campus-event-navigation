@@ -29,6 +29,8 @@ export type DiscoverPostRecord = {
   mediaType: DiscoverPostMediaType;
   caption: string;
   createdAt: string;
+  onGrid: boolean;
+  eventId: string | null;
   authorName: string;
   authorUsername: string;
   authorAvatar: string;
@@ -41,7 +43,12 @@ type DiscoverPostRow = {
   media_type: 'image' | 'video';
   caption?: string | null;
   created_at?: string | null;
+  on_grid?: boolean | null;
+  event_id?: string | null;
 };
+
+const POST_SELECT_COLUMNS =
+  'id, author_id, media_url, media_type, caption, created_at, on_grid, event_id';
 
 type ProfileRow = {
   id: string;
@@ -131,6 +138,8 @@ const normalizePostRow = (
   mediaType: row.media_type === 'video' ? 'video' : 'image',
   caption: toTrimmedString(row.caption),
   createdAt: row.created_at || new Date().toISOString(),
+  onGrid: row.on_grid !== false,
+  eventId: row.event_id ? String(row.event_id) : null,
   authorName:
     toTrimmedString(profile?.name) ||
     toTrimmedString(profile?.username) ||
@@ -162,7 +171,7 @@ export const loadDiscoverPosts = async (): Promise<DiscoverPostRecord[]> => {
 
   const { data, error } = await supabase
     .from('discover_posts')
-    .select('id, author_id, media_url, media_type, caption, created_at')
+    .select(POST_SELECT_COLUMNS)
     .order('created_at', { ascending: false })
     .limit(100);
 
@@ -182,16 +191,27 @@ export const loadDiscoverPosts = async (): Promise<DiscoverPostRecord[]> => {
   );
 };
 
+export type LoadDiscoverPostsForAuthorOptions = {
+  onlyGrid?: boolean;
+};
+
 export const loadDiscoverPostsForAuthor = async (
-  authorId: string
+  authorId: string,
+  options: LoadDiscoverPostsForAuthorOptions = {}
 ): Promise<DiscoverPostRecord[]> => {
   if (!supabase || !authorId) return [];
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('discover_posts')
-    .select('id, author_id, media_url, media_type, caption, created_at')
+    .select(POST_SELECT_COLUMNS)
     .eq('author_id', authorId)
     .order('created_at', { ascending: false });
+
+  if (options.onlyGrid) {
+    query = query.eq('on_grid', true);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     console.error('Unable to load author discover posts:', error);
@@ -206,14 +226,77 @@ export const loadDiscoverPostsForAuthor = async (
   );
 };
 
+export const loadGridPostsForAuthor = (authorId: string) =>
+  loadDiscoverPostsForAuthor(authorId, { onlyGrid: true });
+
+export const loadDiscoverPostsByIds = async (
+  postIds: string[] = []
+): Promise<DiscoverPostRecord[]> => {
+  if (!supabase) return [];
+
+  const ids = [
+    ...new Set(postIds.map((id) => String(id || '')).filter(Boolean)),
+  ];
+  if (!ids.length) return [];
+
+  const { data, error } = await supabase
+    .from('discover_posts')
+    .select(POST_SELECT_COLUMNS)
+    .in('id', ids);
+
+  if (error) {
+    console.error('Unable to load discover posts by id:', error);
+    return [];
+  }
+
+  const rows = (data || []) as DiscoverPostRow[];
+  const authorIds = [
+    ...new Set(rows.map((row) => String(row.author_id || '')).filter(Boolean)),
+  ];
+  const profileLookup = await loadAuthorProfiles(authorIds);
+
+  return rows.map((row) =>
+    normalizePostRow(row, profileLookup.get(String(row.author_id || '')))
+  );
+};
+
+export const setDiscoverPostGridVisibility = async (
+  postId: string,
+  onGrid: boolean
+): Promise<DiscoverPostRecord | null> => {
+  if (!supabase || !postId) return null;
+
+  const { data, error } = await supabase
+    .from('discover_posts')
+    .update({ on_grid: Boolean(onGrid) })
+    .eq('id', postId)
+    .select(POST_SELECT_COLUMNS)
+    .single();
+
+  if (error) {
+    console.error('Unable to update post grid visibility:', error);
+    throw new Error('Could not update grid visibility. Please try again.');
+  }
+
+  const row = data as DiscoverPostRow | null;
+  if (!row) return null;
+
+  const profileLookup = await loadAuthorProfiles([String(row.author_id)]);
+  return normalizePostRow(row, profileLookup.get(String(row.author_id)));
+};
+
 export const uploadDiscoverPost = async ({
   authorId,
   media,
   caption,
+  onGrid = true,
+  eventId = null,
 }: {
   authorId: string;
   media: SelectedStoryMedia;
   caption?: string;
+  onGrid?: boolean;
+  eventId?: string | null;
 }) => {
   if (!supabase) {
     throw new Error('Posts are unavailable right now. Please try again later.');
@@ -262,8 +345,10 @@ export const uploadDiscoverPost = async ({
       media_url: filePath,
       media_type: media.mediaType,
       caption: toTrimmedString(caption) || null,
+      on_grid: Boolean(onGrid),
+      event_id: eventId || null,
     })
-    .select('id, author_id, media_url, media_type, caption, created_at')
+    .select(POST_SELECT_COLUMNS)
     .single();
 
   if (error) {
