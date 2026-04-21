@@ -158,8 +158,9 @@ const OverflowMenu = ({
   openMenuId,
   setOpenMenuId,
   label = "Open content actions",
+  emptyLabel = "",
 }) => {
-  if (!actions.length) return null
+  if (!actions.length && !emptyLabel) return null
 
   const isOpen = openMenuId === menuId
 
@@ -180,20 +181,24 @@ const OverflowMenu = ({
 
       {isOpen && (
         <div className="profile-overflow-menu" role="menu">
-          {actions.map((action) => (
-            <button
-              key={action.id}
-              type="button"
-              className={`profile-overflow-menu-item ${action.tone || ""}`}
-              onClick={async () => {
-                setOpenMenuId(null)
-                await action.onSelect()
-              }}
-              role="menuitem"
-            >
-              {action.label}
-            </button>
-          ))}
+          {actions.length > 0 ? (
+            actions.map((action) => (
+              <button
+                key={action.id}
+                type="button"
+                className={`profile-overflow-menu-item ${action.tone || ""}`}
+                onClick={async () => {
+                  setOpenMenuId(null)
+                  await action.onSelect()
+                }}
+                role="menuitem"
+              >
+                {action.label}
+              </button>
+            ))
+          ) : (
+            <span className="profile-overflow-menu-empty">{emptyLabel}</span>
+          )}
         </div>
       )}
     </div>
@@ -209,24 +214,95 @@ const getGridActions = (post, onToggleGrid) => [
   },
 ]
 
-const PostTile = ({ post, isOwner, onToggleGrid, onOpen, openMenuId, setOpenMenuId }) => (
+const engagementIconProps = {
+  viewBox: "0 0 24 24",
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 1.85,
+  strokeLinecap: "round",
+  strokeLinejoin: "round",
+  "aria-hidden": true,
+}
+
+const LikeIcon = () => (
+  <svg {...engagementIconProps}>
+    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 1 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78Z" />
+  </svg>
+)
+
+const CommentIcon = () => (
+  <svg {...engagementIconProps}>
+    <path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 8.5-8.5h.5a8.5 8.5 0 0 1 8 8v.5Z" />
+  </svg>
+)
+
+const ShareIcon = () => (
+  <svg {...engagementIconProps}>
+    <path d="M22 2 11 13" />
+    <path d="m22 2-7 20-4-9-9-4 20-7Z" />
+  </svg>
+)
+
+const toEngagementCount = (...values) => {
+  for (const value of values) {
+    if (typeof value === "number" && Number.isFinite(value)) return value
+    if (Array.isArray(value)) return value.length
+  }
+
+  return null
+}
+
+const formatMetricLabel = (value, singular, plural) =>
+  `${value.toLocaleString()} ${value === 1 ? singular : plural}`
+
+const getPostEngagement = (post) => ({
+  likes: toEngagementCount(post?.likeCount, post?.likesCount, post?.likes),
+  comments: toEngagementCount(post?.commentCount, post?.commentsCount, post?.comments),
+  shares: toEngagementCount(post?.shareCount, post?.sharesCount, post?.shares),
+})
+
+const PostEngagementRow = ({ post }) => {
+  const engagement = getPostEngagement(post)
+  const metrics = [
+    engagement.likes == null ? null : formatMetricLabel(engagement.likes, "like", "likes"),
+    engagement.comments == null ? null : formatMetricLabel(engagement.comments, "comment", "comments"),
+    engagement.shares == null ? null : formatMetricLabel(engagement.shares, "share", "shares"),
+  ].filter(Boolean)
+
+  return (
+    <div className="profile-post-engagement" aria-label="Post engagement">
+      <div className="profile-post-action-row" aria-label="Post actions">
+        <button type="button" className="profile-post-action-icon" aria-label="Like post">
+          <LikeIcon />
+        </button>
+        <button type="button" className="profile-post-action-icon" aria-label="Comment on post">
+          <CommentIcon />
+        </button>
+        <button type="button" className="profile-post-action-icon" aria-label="Share post">
+          <ShareIcon />
+        </button>
+      </div>
+      {metrics.length > 0 && (
+        <div className="profile-post-engagement-summary">
+          {metrics.map((metric) => (
+            <span key={metric}>{metric}</span>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+const PostTile = ({ post, onOpen }) => (
   <article className="profile-post-tile">
     <button type="button" className="profile-post-open" onClick={() => onOpen(post)}>
       <PostMedia post={post} />
       <ContentTypeBadge type={getPostContentType(post)} />
     </button>
-    {isOwner && (
-      <OverflowMenu
-        actions={getGridActions(post, onToggleGrid)}
-        menuId={`tile-${post.id}`}
-        openMenuId={openMenuId}
-        setOpenMenuId={setOpenMenuId}
-      />
-    )}
   </article>
 )
 
-const PostListItem = ({ post, isOwner, onToggleGrid, onOpen, openMenuId, setOpenMenuId }) => (
+const PostListItem = ({ post, onOpen }) => (
   <article className="profile-post-list-item">
     <button type="button" className="profile-post-list-media" onClick={() => onOpen(post)}>
       <PostMedia post={post} className="profile-post-list-image" />
@@ -234,14 +310,6 @@ const PostListItem = ({ post, isOwner, onToggleGrid, onOpen, openMenuId, setOpen
     <div className="profile-post-list-body">
       <div className="profile-post-list-heading">
         <ContentTypeBadge type={getPostContentType(post)} />
-        {isOwner && (
-          <OverflowMenu
-            actions={getGridActions(post, onToggleGrid)}
-            menuId={`list-${post.id}`}
-            openMenuId={openMenuId}
-            setOpenMenuId={setOpenMenuId}
-          />
-        )}
       </div>
       <strong>{post.caption || "Untitled post"}</strong>
       <p>{new Date(post.createdAt).toLocaleDateString()}</p>
@@ -489,11 +557,7 @@ export default function ProfileContentTabs({ profileId, isOwner = false, allEven
           <PostTile
             key={post.id}
             post={post}
-            isOwner={isOwner}
-            onToggleGrid={handleToggleGrid}
             onOpen={setSelectedPost}
-            openMenuId={openActionMenu}
-            setOpenMenuId={setOpenActionMenu}
           />
         ))}
       </div>
@@ -520,11 +584,7 @@ export default function ProfileContentTabs({ profileId, isOwner = false, allEven
               <PostListItem
                 key={post.id}
                 post={post}
-                isOwner={isOwner}
-                onToggleGrid={handleToggleGrid}
                 onOpen={setSelectedPost}
-                openMenuId={openActionMenu}
-                setOpenMenuId={setOpenActionMenu}
               />
             ))}
           </div>
@@ -549,11 +609,7 @@ export default function ProfileContentTabs({ profileId, isOwner = false, allEven
             <PostTile
               key={item.id}
               post={item.post}
-              isOwner={false}
-              onToggleGrid={handleToggleGrid}
               onOpen={setSelectedPost}
-              openMenuId={openActionMenu}
-              setOpenMenuId={setOpenActionMenu}
             />
           )
         )}
@@ -571,11 +627,7 @@ export default function ProfileContentTabs({ profileId, isOwner = false, allEven
               <PostTile
                 key={item.id}
                 post={item.post}
-                isOwner={false}
-                onToggleGrid={handleToggleGrid}
                 onOpen={setSelectedPost}
-                openMenuId={openActionMenu}
-                setOpenMenuId={setOpenActionMenu}
               />
             ) : (
               <MemoryCard key={item.id} memory={item.memory} event={item.event} />
@@ -684,14 +736,13 @@ export default function ProfileContentTabs({ profileId, isOwner = false, allEven
             <div className="profile-post-modal-topbar">
               <ContentTypeBadge type={getPostContentType(selectedPost)} />
               <div className="profile-post-modal-actions">
-                {isOwner && (
-                  <OverflowMenu
-                    actions={getGridActions(selectedPost, handleToggleGrid)}
-                    menuId={`modal-${selectedPost.id}`}
-                    openMenuId={openActionMenu}
-                    setOpenMenuId={setOpenActionMenu}
-                  />
-                )}
+                <OverflowMenu
+                  actions={isOwner ? getGridActions(selectedPost, handleToggleGrid) : []}
+                  menuId={`modal-${selectedPost.id}`}
+                  openMenuId={openActionMenu}
+                  setOpenMenuId={setOpenActionMenu}
+                  emptyLabel="No actions available"
+                />
                 <button type="button" className="profile-post-modal-close" onClick={() => setSelectedPost(null)}>
                   ×
                 </button>
@@ -701,8 +752,11 @@ export default function ProfileContentTabs({ profileId, isOwner = false, allEven
               <PostMedia post={selectedPost} className="profile-post-modal-media" />
             </div>
             <div className="profile-post-modal-details">
+              <PostEngagementRow post={selectedPost} />
               {selectedPost.caption && <p>{selectedPost.caption}</p>}
-              <span>{new Date(selectedPost.createdAt).toLocaleDateString()}</span>
+              <time className="profile-post-modal-date" dateTime={selectedPost.createdAt}>
+                {new Date(selectedPost.createdAt).toLocaleDateString()}
+              </time>
             </div>
           </div>
         </div>
