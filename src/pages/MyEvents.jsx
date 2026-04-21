@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react"
-import { useSearchParams } from "react-router-dom"
+import { useNavigate, useSearchParams } from "react-router-dom"
 import CreateEvent from "../CreateEvent"
 import MyEventCard from "../components/MyEventCard"
 import { applyEventImageFallback, getEventImageSrc } from "../eventImages"
@@ -526,6 +526,7 @@ function MyEventsLane({ items, onOpenItem, emptyMessage }) {
 
 function MyEvents() {
   const { savedEvents, allEvents, currentUser } = useEvents()
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const [selectedCalendarEvent, setSelectedCalendarEvent] = useState(null)
   const [selectedPersonalItem, setSelectedPersonalItem] = useState(null)
@@ -609,14 +610,32 @@ function MyEvents() {
 
   useEffect(() => {
     if (!isCreateMenuOpen) return undefined
-    const handleDocClick = (event) => {
+
+    const handlePointerDown = (event) => {
       if (createMenuRef.current && !createMenuRef.current.contains(event.target)) {
         setIsCreateMenuOpen(false)
       }
     }
-    document.addEventListener("mousedown", handleDocClick)
-    return () => document.removeEventListener("mousedown", handleDocClick)
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setIsCreateMenuOpen(false)
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown)
+    document.addEventListener("keydown", handleKeyDown)
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown)
+      document.removeEventListener("keydown", handleKeyDown)
+    }
   }, [isCreateMenuOpen])
+
+  const openCreateRoute = (target) => {
+    setIsCreateMenuOpen(false)
+    navigate(target)
+  }
 
   const openCreateEventModal = () => {
     const next = new URLSearchParams(searchParams)
@@ -926,12 +945,16 @@ function MyEvents() {
                 <button
                   type="button"
                   role="menuitem"
-                  onClick={() => {
-                    setIsCreateMenuOpen(false)
-                    openCreateEventModal()
-                  }}
+                  onClick={() => openCreateRoute("/home?create=post")}
                 >
-                  Event
+                  Post
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => openCreateRoute("/home?create=story")}
+                >
+                  Story
                 </button>
                 <button
                   type="button"
@@ -942,6 +965,16 @@ function MyEvents() {
                   }}
                 >
                   Personal
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setIsCreateMenuOpen(false)
+                    openCreateEventModal()
+                  }}
+                >
+                  Event
                 </button>
               </div>
             )}
