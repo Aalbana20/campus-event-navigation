@@ -557,7 +557,10 @@ function MainLayout() {
       next.delete(thread.id)
       return next
     })
-    navigate(`/messages?thread=${thread.id}`)
+    // When already on /messages, switching threads should replace rather than
+    // stack history — otherwise every thread click pollutes the back stack.
+    const alreadyOnMessages = location.pathname === "/messages"
+    navigate(`/messages?thread=${thread.id}`, { replace: alreadyOnMessages })
 
     // Persist read state so unread dots don't reappear on reload
     if (currentUserId) {
@@ -793,7 +796,7 @@ function MainLayout() {
                   onClick={clearAllNotifications}
                   disabled={!unreadNotificationCount}
                 >
-                  Clear all
+                  Mark all read
                 </button>
               </div>
 

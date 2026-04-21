@@ -1,4 +1,4 @@
-import React from "react"
+import React, { useState } from "react"
 import { DEFAULT_AVATAR_URL } from "../profileMedia"
 
 const iconProps = {
@@ -40,10 +40,102 @@ function ShareIcon() {
   )
 }
 
+function MoreIcon() {
+  return (
+    <svg {...iconProps}>
+      <circle cx="12" cy="5" r="1.6" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="19" r="1.6" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
+function PostOverflowMenu({ post, onDeletePost }) {
+  const [open, setOpen] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+
+  const handleConfirmDelete = async () => {
+    if (isDeleting) return
+    const confirmed = window.confirm("Delete this post?\nThis cannot be undone.")
+    if (!confirmed) {
+      setOpen(false)
+      return
+    }
+
+    setIsDeleting(true)
+    try {
+      await onDeletePost(post)
+    } finally {
+      setIsDeleting(false)
+      setOpen(false)
+    }
+  }
+
+  return (
+    <div style={{ position: "relative" }}>
+      <button
+        type="button"
+        className="video-action-btn"
+        aria-label="Post options"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((prev) => !prev)}
+      >
+        <div className="video-action-icon">
+          <MoreIcon />
+        </div>
+        <span className="video-action-count">More</span>
+      </button>
+
+      {open ? (
+        <div
+          role="menu"
+          style={{
+            position: "absolute",
+            right: "100%",
+            marginRight: "10px",
+            top: 0,
+            minWidth: "160px",
+            padding: "6px",
+            borderRadius: "12px",
+            background: "rgba(15, 18, 28, 0.96)",
+            border: "1px solid rgba(255,255,255,0.12)",
+            boxShadow: "0 12px 28px rgba(0,0,0,0.32)",
+            zIndex: 20,
+          }}
+        >
+          <button
+            type="button"
+            role="menuitem"
+            onClick={handleConfirmDelete}
+            disabled={isDeleting}
+            style={{
+              width: "100%",
+              padding: "10px 12px",
+              border: "none",
+              background: "transparent",
+              color: "#ff6b6b",
+              fontSize: "0.92rem",
+              fontWeight: 700,
+              textAlign: "left",
+              cursor: isDeleting ? "default" : "pointer",
+              borderRadius: "8px",
+            }}
+          >
+            {isDeleting ? "Deleting..." : "Delete Post"}
+          </button>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 function DiscoverPostsFeed({
   posts,
   onPressCreator,
   onPressCreate,
+  currentUserId = "",
+  onDeletePost,
 }) {
   if (!posts || posts.length === 0) {
     return (
@@ -69,6 +161,10 @@ function DiscoverPostsFeed({
     <div className="discover-video-feed-container">
       {posts.map((post) => {
         const isVideo = post.mediaType === "video"
+        const isOwner =
+          Boolean(currentUserId) &&
+          String(currentUserId) === String(post.authorId)
+
         return (
           <article key={post.id} className="video-feed-item">
             {isVideo ? (
@@ -110,6 +206,9 @@ function DiscoverPostsFeed({
                 </div>
                 <span className="video-action-count">Share</span>
               </button>
+              {isOwner && onDeletePost ? (
+                <PostOverflowMenu post={post} onDeletePost={onDeletePost} />
+              ) : null}
             </div>
 
             <div className="video-feed-info">

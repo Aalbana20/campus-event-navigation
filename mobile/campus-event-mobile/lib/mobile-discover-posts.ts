@@ -285,6 +285,59 @@ export const setDiscoverPostGridVisibility = async (
   return normalizePostRow(row, profileLookup.get(String(row.author_id)));
 };
 
+export const deleteDiscoverPost = async (postId: string) => {
+  if (!supabase) {
+    throw new Error('Posts are unavailable right now. Please try again later.');
+  }
+
+  if (!postId) {
+    throw new Error('Missing post id.');
+  }
+
+  const { data: existing, error: fetchError } = await supabase
+    .from('discover_posts')
+    .select('id, media_url')
+    .eq('id', postId)
+    .maybeSingle();
+
+  if (fetchError) {
+    console.error('Unable to load post before delete:', fetchError);
+    throw new Error('Could not delete this post right now. Please try again.');
+  }
+
+  const { error: deleteError } = await supabase
+    .from('discover_posts')
+    .delete()
+    .eq('id', postId);
+
+  if (deleteError) {
+    console.error('Unable to delete discover post:', deleteError);
+    throw new Error('Could not delete this post right now. Please try again.');
+  }
+
+  const rawMediaUrl = toTrimmedString((existing as { media_url?: string | null } | null)?.media_url);
+  const isExternalUrl =
+    rawMediaUrl.startsWith('http://') ||
+    rawMediaUrl.startsWith('https://') ||
+    rawMediaUrl.startsWith('file://') ||
+    rawMediaUrl.startsWith('data:');
+
+  if (rawMediaUrl && !isExternalUrl) {
+    const storagePath = normalizeStoragePath(rawMediaUrl);
+    if (storagePath) {
+      const { error: storageError } = await supabase.storage
+        .from(DISCOVER_POST_BUCKET)
+        .remove([storagePath]);
+
+      if (storageError) {
+        console.warn('Post row deleted but storage cleanup failed:', storageError);
+      }
+    }
+  }
+
+  return { id: String(postId) };
+};
+
 export const uploadDiscoverPost = async ({
   authorId,
   media,

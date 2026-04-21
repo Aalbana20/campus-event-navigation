@@ -325,6 +325,8 @@ export function EventProvider({ children }) {
             .select("id, name, username, avatar_url")
             .in("id", followingIds)
           setFollowingList(toUserList(followingProfiles))
+        } else {
+          setFollowingList([])
         }
 
         if (followerIds.length > 0) {
@@ -333,6 +335,8 @@ export function EventProvider({ children }) {
             .select("id, name, username, avatar_url")
             .in("id", followerIds)
           setFollowersList(toUserList(followerProfiles))
+        } else {
+          setFollowersList([])
         }
       } catch (error) {
         console.error("Failed to load event context:", error)
@@ -377,11 +381,19 @@ export function EventProvider({ children }) {
     const userId = currentUser?.id && currentUser.id !== "current-user"
       ? currentUser.id
       : null
+
+    const alreadySaved = savedEvents.some(
+      (e) => String(e.id) === String(event.id)
+    )
+
+    if (alreadySaved) return
+
     if (userId && event.id) {
       supabase
         .from("rsvps")
         .insert({ user_id: userId, event_id: event.id })
         .then(({ error }) => {
+          // 23505 = unique violation; can still happen on a race across tabs.
           if (error && error.code !== "23505") {
             console.error("Failed to save RSVP:", error)
           }

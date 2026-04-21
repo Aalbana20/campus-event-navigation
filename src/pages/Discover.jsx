@@ -6,7 +6,11 @@ import DiscoverCommentsDrawer from "../components/DiscoverCommentsDrawer"
 import DiscoverCreateComposer from "../components/DiscoverCreateComposer"
 import DiscoverStoriesRow from "../components/DiscoverStoriesRow"
 import DiscoverPostsFeed from "../components/DiscoverPostsFeed"
-import { loadDiscoverPosts, uploadDiscoverPost } from "../discoverPosts"
+import {
+  deleteDiscoverPost,
+  loadDiscoverPosts,
+  uploadDiscoverPost,
+} from "../discoverPosts"
 import EventCard from "../components/EventCard"
 import { useEvents } from "../context/EventContext"
 import {
@@ -821,6 +825,23 @@ function Discover({ hideModeSwitch = false, initialMode = "events" } = {}) {
     [currentUser, loadDiscoverPostsFeed, showToast]
   )
 
+  const handleDeleteDiscoverPost = useCallback(
+    async (post) => {
+      if (!post?.id) return
+      try {
+        await deleteDiscoverPost(post.id)
+        setDiscoverPosts((prev) => prev.filter((p) => String(p.id) !== String(post.id)))
+        showToast("Post deleted.", "success")
+      } catch (error) {
+        showToast(
+          error?.message || "Could not delete this post right now. Please try again.",
+          "error"
+        )
+      }
+    },
+    [showToast]
+  )
+
   const handleOpenEventFlowFromComposer = useCallback(() => {
     setIsStoryComposerOpen(false)
     setCreateComposerMode(null)
@@ -1240,6 +1261,8 @@ function Discover({ hideModeSwitch = false, initialMode = "events" } = {}) {
         ) : (
           <DiscoverPostsFeed
             posts={discoverPosts}
+            currentUserId={currentUser?.id || ""}
+            onDeletePost={handleDeleteDiscoverPost}
             onPressCreator={(post) => {
               const handle = post?.authorUsername || post?.authorId
               if (!handle) return

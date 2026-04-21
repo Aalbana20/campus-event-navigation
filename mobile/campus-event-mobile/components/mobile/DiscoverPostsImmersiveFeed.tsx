@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import React, { useMemo, useState } from 'react';
-import { FlatList, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, FlatList, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useAppTheme } from '@/lib/app-theme';
 import { getAvatarImageSource } from '@/lib/mobile-media';
@@ -14,6 +14,8 @@ type DiscoverPostsImmersiveFeedProps = {
   onPressRepost: (post: DiscoverPostRecord) => void;
   onPressShare: (post: DiscoverPostRecord) => void;
   onPressCreator?: (post: DiscoverPostRecord) => void;
+  currentUserId?: string;
+  onDeletePost?: (post: DiscoverPostRecord) => void | Promise<void>;
 };
 
 export function DiscoverPostsImmersiveFeed({
@@ -23,6 +25,8 @@ export function DiscoverPostsImmersiveFeed({
   onPressRepost,
   onPressShare,
   onPressCreator,
+  currentUserId,
+  onDeletePost,
 }: DiscoverPostsImmersiveFeedProps) {
   const theme = useAppTheme();
   const styles = useMemo(() => buildStyles(theme), [theme]);
@@ -64,6 +68,8 @@ export function DiscoverPostsImmersiveFeed({
             onPressRepost={onPressRepost}
             onPressShare={onPressShare}
             onPressCreator={onPressCreator}
+            currentUserId={currentUserId}
+            onDeletePost={onDeletePost}
             styles={styles}
           />
         )}
@@ -81,6 +87,8 @@ function DiscoverPostItem({
   onPressRepost,
   onPressShare,
   onPressCreator,
+  currentUserId,
+  onDeletePost,
   styles,
 }: {
   post: DiscoverPostRecord;
@@ -91,6 +99,8 @@ function DiscoverPostItem({
   onPressRepost: (post: DiscoverPostRecord) => void;
   onPressShare: (post: DiscoverPostRecord) => void;
   onPressCreator?: (post: DiscoverPostRecord) => void;
+  currentUserId?: string;
+  onDeletePost?: (post: DiscoverPostRecord) => void | Promise<void>;
   styles: any;
 }) {
   const isVideo = post.mediaType === 'video';
@@ -135,6 +145,8 @@ function DiscoverPostItem({
           onPressRepost={onPressRepost}
           onPressShare={onPressShare}
           onPressCreator={onPressCreator}
+          currentUserId={currentUserId}
+          onDeletePost={onDeletePost}
           styles={styles}
         />
       </View>

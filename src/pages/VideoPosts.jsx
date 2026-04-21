@@ -3,7 +3,11 @@ import { useNavigate, useSearchParams } from "react-router-dom"
 import SegmentedToggle from "../components/SegmentedToggle"
 import DiscoverPostsFeed from "../components/DiscoverPostsFeed"
 import DiscoverCreateComposer from "../components/DiscoverCreateComposer"
-import { loadDiscoverPosts, uploadDiscoverPost } from "../discoverPosts"
+import {
+  deleteDiscoverPost,
+  loadDiscoverPosts,
+  uploadDiscoverPost,
+} from "../discoverPosts"
 import { useEvents } from "../context/EventContext"
 import { useToast } from "../context/ToastContext"
 
@@ -103,6 +107,20 @@ function VideoPosts() {
     }
   }
 
+  const handleDeletePost = async (post) => {
+    if (!post?.id) return
+    try {
+      await deleteDiscoverPost(post.id)
+      setPosts((prev) => prev.filter((p) => String(p.id) !== String(post.id)))
+      showToast("Post deleted.", "success")
+    } catch (error) {
+      showToast(
+        error?.message || "Could not delete this post right now. Please try again.",
+        "error"
+      )
+    }
+  }
+
   const handleOpenEventFlow = () => {
     setIsComposerOpen(false)
     navigate("/events?create=event")
@@ -123,6 +141,8 @@ function VideoPosts() {
 
       <DiscoverPostsFeed
         posts={visiblePosts}
+        currentUserId={currentUser?.id || ""}
+        onDeletePost={handleDeletePost}
         onPressCreator={handleOpenCreator}
         onPressCreate={() => handleOpenComposer("post")}
       />

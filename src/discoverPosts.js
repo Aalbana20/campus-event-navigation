@@ -189,6 +189,53 @@ export const setDiscoverPostGridVisibility = async (postId, onGrid) => {
   return data
 }
 
+export const deleteDiscoverPost = async (postId) => {
+  if (!postId) throw new Error("Missing post id.")
+
+  const { data: existing, error: fetchError } = await supabase
+    .from("discover_posts")
+    .select("id, media_url")
+    .eq("id", postId)
+    .maybeSingle()
+
+  if (fetchError) {
+    console.error("Unable to load post before delete:", fetchError)
+    throw new Error("Could not delete this post right now. Please try again.")
+  }
+
+  const { error: deleteError } = await supabase
+    .from("discover_posts")
+    .delete()
+    .eq("id", postId)
+
+  if (deleteError) {
+    console.error("Unable to delete discover post:", deleteError)
+    throw new Error("Could not delete this post right now. Please try again.")
+  }
+
+  const rawMediaUrl = toTrimmedString(existing?.media_url)
+  const isExternalUrl =
+    rawMediaUrl.startsWith("http://") ||
+    rawMediaUrl.startsWith("https://") ||
+    rawMediaUrl.startsWith("blob:") ||
+    rawMediaUrl.startsWith("data:")
+
+  if (rawMediaUrl && !isExternalUrl) {
+    const storagePath = normalizePostStoragePath(rawMediaUrl)
+    if (storagePath) {
+      const { error: storageError } = await supabase.storage
+        .from(POST_MEDIA_BUCKET)
+        .remove([storagePath])
+
+      if (storageError) {
+        console.warn("Post row deleted but storage cleanup failed:", storageError)
+      }
+    }
+  }
+
+  return { id: String(postId) }
+}
+
 export const uploadDiscoverPost = async ({
   authorId,
   file,

@@ -48,7 +48,7 @@ function Login() {
 
       await syncStoredUserFromSession(data?.session || { user: authenticatedUser })
 
-      navigate("/discover", { replace: true })
+      navigate("/home", { replace: true })
     } catch (error) {
       setErrorMessage(error.message || "Login failed.")
     } finally {
