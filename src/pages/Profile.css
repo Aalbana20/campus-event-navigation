@@ -1759,3 +1759,159 @@ body.theme-dark .public-profile-feedback {
     grid-template-columns: 1fr;
   }
 }
+
+/* =========================================================
+   PROFILE ICON DROPDOWNS (Grid/List & Filters)
+========================================================= */
+.profile-icon-dropdown-container {
+  position: relative;
+  display: inline-flex;
+}
+
+.profile-icon-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 140px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(17, 24, 39, 0.08);
+  border-radius: 16px;
+  padding: 6px;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.14);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 100;
+  animation: dropFadeIn 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes dropFadeIn {
+  from { opacity: 0; transform: translate(-50%, -6px) scale(0.96); }
+  to { opacity: 1; transform: translate(-50%, 0) scale(1); }
+}
+
+.profile-icon-dropdown-item {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #111827;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.profile-icon-dropdown-item:hover {
+  background: rgba(17, 24, 39, 0.05);
+}
+
+.profile-icon-dropdown-item.active {
+  color: #0a84ff;
+  background: rgba(10, 132, 255, 0.08);
+}
+
+body.theme-dark .profile-icon-dropdown-menu {
+  background: rgba(28, 28, 30, 0.94);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+}
+
+body.theme-dark .profile-icon-dropdown-item {
+  color: #f5f7fb;
+}
+
+body.theme-dark .profile-icon-dropdown-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+body.theme-dark .profile-icon-dropdown-item.active {
+  color: #5e9cff;
+  background: rgba(94, 156, 255, 0.12);
+}
+
+/* =========================================================
+   PROFILE ICON DROPDOWNS (Grid/List & Filters)
+========================================================= */
+.profile-icon-dropdown-container {
+  position: relative;
+  display: inline-flex;
+}
+
+.profile-icon-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 140px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(17, 24, 39, 0.08);
+  border-radius: 16px;
+  padding: 6px;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.14);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 100;
+  animation: dropFadeIn 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes dropFadeIn {
+  from { opacity: 0; transform: translate(-50%, -6px) scale(0.96); }
+  to { opacity: 1; transform: translate(-50%, 0) scale(1); }
+}
+
+.profile-icon-dropdown-item {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #111827;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.profile-icon-dropdown-item:hover {
+  background: rgba(17, 24, 39, 0.05);
+}
+
+.profile-icon-dropdown-item.active {
+  color: #0a84ff;
+  background: rgba(10, 132, 255, 0.08);
+}
+
+body.theme-dark .profile-icon-dropdown-menu {
+  background: rgba(28, 28, 30, 0.94);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+}
+
+body.theme-dark .profile-icon-dropdown-item {
+  color: #f5f7fb;
+}
+
+body.theme-dark .profile-icon-dropdown-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+body.theme-dark .profile-icon-dropdown-item.active {
+  color: #5e9cff;
+  background: rgba(94, 156, 255, 0.12);
+}
