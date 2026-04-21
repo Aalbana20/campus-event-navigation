@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useEffect, useMemo, useState } from "react"
+import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react"
 import "./App.css"
 import {
   Routes,
@@ -182,6 +182,7 @@ function MainLayout() {
   const [isInboxOpen, setIsInboxOpen] = useState(false)
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [isRailPinned, setIsRailPinned] = useState(false)
+  const [isCreateMenuOpen, setIsCreateMenuOpen] = useState(false)
   const [notificationFilter, setNotificationFilter] = useState("all")
   const [openNotificationMenuId, setOpenNotificationMenuId] = useState(null)
   const [activeDmThreadId, setActiveDmThreadId] = useState(null)
@@ -189,6 +190,7 @@ function MainLayout() {
   const [dmThreads, setDmThreads] = useState([])
   const [dmMessagesByThread, setDmMessagesByThread] = useState({})
   const [unreadDmThreadIds, setUnreadDmThreadIds] = useState(new Set())
+  const createMenuRef = useRef(null)
   const defaultAvatar = DEFAULT_AVATAR_URL
   const currentUserId = currentUser?.id
 
@@ -621,6 +623,34 @@ function MainLayout() {
     setIsInboxOpen(true)
   }
 
+  useEffect(() => {
+    if (!isCreateMenuOpen) return undefined
+
+    const handlePointerDown = (event) => {
+      if (createMenuRef.current?.contains(event.target)) return
+      setIsCreateMenuOpen(false)
+    }
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setIsCreateMenuOpen(false)
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown)
+    document.addEventListener("keydown", handleKeyDown)
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown)
+      document.removeEventListener("keydown", handleKeyDown)
+    }
+  }, [isCreateMenuOpen])
+
+  const handleCreateAction = (target) => {
+    setIsCreateMenuOpen(false)
+    navigate(target)
+  }
+
   const handleNotificationSelect = (item) => {
     markNotificationRead(item.id)
     closeNotificationMenu()
@@ -733,18 +763,39 @@ function MainLayout() {
             <span className="app-rail-label">Notifications</span>
           </button>
 
-          <button
-            type="button"
-            className="app-rail-item app-rail-button app-rail-create"
-            aria-label="Create"
-            title="Create"
-            onClick={() => navigate("/events?create=event")}
-          >
-            <span className="app-rail-icon">
-              <AppRailIcon name="plus" />
-            </span>
-            <span className="app-rail-label">Create</span>
-          </button>
+          <div className="app-rail-create-wrap" ref={createMenuRef}>
+            <button
+              type="button"
+              className="app-rail-item app-rail-button app-rail-create"
+              aria-label="Create"
+              title="Create"
+              aria-haspopup="menu"
+              aria-expanded={isCreateMenuOpen}
+              onClick={() => setIsCreateMenuOpen((open) => !open)}
+            >
+              <span className="app-rail-icon">
+                <AppRailIcon name="plus" />
+              </span>
+              <span className="app-rail-label">Create</span>
+            </button>
+
+            {isCreateMenuOpen ? (
+              <div className="app-rail-create-menu" role="menu" aria-label="Create">
+                <button type="button" role="menuitem" onClick={() => handleCreateAction("/home?create=post")}>
+                  Post
+                </button>
+                <button type="button" role="menuitem" onClick={() => handleCreateAction("/home?create=story")}>
+                  Story
+                </button>
+                <button type="button" role="menuitem" onClick={() => handleCreateAction("/events?create=personal")}>
+                  Personal
+                </button>
+                <button type="button" role="menuitem" onClick={() => handleCreateAction("/events?create=event")}>
+                  Event
+                </button>
+              </div>
+            ) : null}
+          </div>
         </div>
 
         <div className="app-rail-footer">

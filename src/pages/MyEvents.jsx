@@ -550,7 +550,9 @@ function MyEvents() {
   const [isHeroHidden, setIsHeroHidden] = useState(false)
   const createMenuRef = useRef(null)
 
-  const isCreateEventOpen = searchParams.get("create") === "event"
+  const createMode = searchParams.get("create")
+  const isCreateEventOpen = createMode === "event"
+  const isPersonalCreateRouteOpen = createMode === "personal"
 
   const now = new Date()
   const [anchorDate, setAnchorDate] = useState(
@@ -777,6 +779,15 @@ function MyEvents() {
     setIsPersonalComposerOpen(true)
   }
 
+  const closePersonalComposer = () => {
+    setIsPersonalComposerOpen(false)
+    if (isPersonalCreateRouteOpen) {
+      const next = new URLSearchParams(searchParams)
+      next.delete("create")
+      setSearchParams(next, { replace: true })
+    }
+  }
+
   const handleSubmitPersonal = (event) => {
     event.preventDefault()
     const title = personalDraft.title.trim()
@@ -792,7 +803,7 @@ function MyEvents() {
         note: personalDraft.note.trim(),
       },
     ])
-    setIsPersonalComposerOpen(false)
+    closePersonalComposer()
   }
 
   const renderCalendarView = () => {
@@ -970,8 +981,8 @@ function MyEvents() {
         onClose={() => setSelectedPersonalItem(null)}
       />
 
-      {isPersonalComposerOpen ? (
-        <div className="calendar-modal-overlay" onClick={() => setIsPersonalComposerOpen(false)}>
+      {isPersonalComposerOpen || isPersonalCreateRouteOpen ? (
+        <div className="calendar-modal-overlay" onClick={closePersonalComposer}>
           <form className="personal-calendar-form" onSubmit={handleSubmitPersonal} onClick={(event) => event.stopPropagation()}>
             <span className="personal-modal-kicker">Personal</span>
             <h2>Personal</h2>
@@ -1016,7 +1027,7 @@ function MyEvents() {
               />
             </label>
             <div className="personal-form-actions">
-              <button type="button" onClick={() => setIsPersonalComposerOpen(false)}>
+              <button type="button" onClick={closePersonalComposer}>
                 Cancel
               </button>
               <button type="submit">Add</button>

@@ -11,12 +11,26 @@ const usersMatch = (a, b) => {
   return false
 }
 
-function EventCard({ event }) {
-  const { mutualUsers } = useEvents()
+function EventCard({
+  event,
+  isSaved = false,
+  isActionLocked = false,
+  onRsvp,
+  onNotGoing,
+  onOpenComments,
+  onShare,
+  commentCount = 0,
+}) {
+  const { addEvent, cancelRSVP, currentUser, mutualUsers, savedEvents } = useEvents()
   const [flipped, setFlipped] = useState(false)
   const [isMutualsOpen, setIsMutualsOpen] = useState(false)
 
   const eventTitle = event?.title || event?.name || "Untitled Event"
+  const eventDescription = event?.description || event?.details || ""
+  const eventOrganizer = event?.organizer || event?.host || event?.organization || ""
+  const eventDressCode = event?.dressCode || event?.dress_code || ""
+  const eventPrice = event?.price || event?.cost || ""
+  const eventTags = Array.isArray(event?.tags) ? event.tags.filter(Boolean) : []
   const displayLocation =
     event.locationName || event.locationAddress || event.location || "No location"
   const displayDate = event?.date || event?.eventDate || "TBD"
@@ -24,10 +38,15 @@ function EventCard({ event }) {
     event?.time ||
     [event?.startTime, event?.endTime].filter(Boolean).join(" - ") ||
     "TBA"
-  const mapsQuery = encodeURIComponent(event.locationAddress || event.location || "")
+  const mapsQuery = encodeURIComponent(
+    event.locationAddress || event.location || event.locationName || ""
+  )
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${mapsQuery}`
+  const hasMapTarget = Boolean(event.locationAddress || event.location || event.locationName)
 
   const attendeeUsers = event?.attendees || event?.rsvpUsers || event?.goingUsers || []
+  const savedEventIds = new Set((savedEvents || []).map((savedEvent) => String(savedEvent.id)))
+  const isEventSaved = isSaved || savedEventIds.has(String(event?.id || ""))
 
   const mutualAttendees = (mutualUsers || []).filter((mutualUser) =>
     attendeeUsers.some((attendee) => usersMatch(attendee, mutualUser))
@@ -66,12 +85,77 @@ function EventCard({ event }) {
 
   const handleFlip = (e) => {
     if (e.target.closest("button") || e.target.closest("a")) return
-    setFlipped(!flipped)
+    setFlipped((currentValue) => !currentValue)
+  }
+
+  const handleCardKeyDown = (eventKey) => {
+    if (eventKey.key !== "Enter" && eventKey.key !== " ") return
+    eventKey.preventDefault()
+    setFlipped((currentValue) => !currentValue)
+  }
+
+  const handleRsvpClick = (eventClick) => {
+    eventClick.stopPropagation()
+    if (!event?.id || isActionLocked) return
+
+    if (onRsvp) {
+      onRsvp(event)
+      return
+    }
+
+    if (isEventSaved) {
+      cancelRSVP(event.id)
+    } else {
+      addEvent({ ...event, rsvpDate: new Date().toISOString() }, currentUser)
+    }
+  }
+
+  const handleNotGoingClick = (eventClick) => {
+    eventClick.stopPropagation()
+    if (isActionLocked) return
+
+    if (onNotGoing) {
+      onNotGoing(event)
+      return
+    }
+
+    if (event?.id && isEventSaved) {
+      cancelRSVP(event.id)
+    }
+  }
+
+  const handleOpenCommentsClick = (eventClick) => {
+    eventClick.stopPropagation()
+    onOpenComments?.(event)
+  }
+
+  const handleShareClick = (eventClick) => {
+    eventClick.stopPropagation()
+    onShare?.(event)
+  }
+
+  const handleMapClick = (eventClick) => {
+    eventClick.stopPropagation()
+    if (!hasMapTarget) return
+    window.open(mapsUrl, "_blank")
+  }
+
+  const handleFlipBack = (eventClick) => {
+    eventClick.stopPropagation()
+    setFlipped(false)
   }
 
   return (
     <>
-      <div className="flip-card event-card-shell" onClick={handleFlip}>
+      <div
+        className="flip-card event-card-shell"
+        onClick={handleFlip}
+        onKeyDown={handleCardKeyDown}
+        role="button"
+        tabIndex={0}
+        aria-pressed={flipped}
+        aria-label={`${eventTitle} event card`}
+      >
         <div className={`flip-card-inner ${flipped ? "flipped" : ""}`}>
           <div className="flip-card-front">
             <img
@@ -178,9 +262,23 @@ function EventCard({ event }) {
           <div className="flip-card-back">
             <div className="discover-event-back-shell">
               <div className="discover-event-back-header">
-                <span className="discover-event-back-kicker">Event Details</span>
+                <div className="discover-event-back-heading-row">
+                  <span className="discover-event-back-kicker">Event Details</span>
+                  <button
+                    type="button"
+                    className="discover-event-back-close"
+                    onClick={handleFlipBack}
+                    aria-label="Show event flyer"
+                  >
+                    ×
+                  </button>
+                </div>
                 <h2>{eventTitle}</h2>
               </div>
+
+              {eventDescription ? (
+                <p className="discover-event-back-description">{eventDescription}</p>
+              ) : null}
 
               <div className="discover-event-back-details">
                 <div className="discover-event-back-detail">
@@ -195,33 +293,98 @@ function EventCard({ event }) {
                   <span>Location</span>
                   <strong>{displayLocation}</strong>
                 </div>
+                {eventOrganizer ? (
+                  <div className="discover-event-back-detail">
+                    <span>Organizer</span>
+                    <strong>{eventOrganizer}</strong>
+                  </div>
+                ) : null}
+                {eventPrice ? (
+                  <div className="discover-event-back-detail">
+                    <span>Price</span>
+                    <strong>{eventPrice}</strong>
+                  </div>
+                ) : null}
+                {eventDressCode ? (
+                  <div className="discover-event-back-detail full-width">
+                    <span>Dress Code</span>
+                    <strong>{eventDressCode}</strong>
+                  </div>
+                ) : null}
               </div>
 
-              <p className="discover-event-back-note">
-                Open the event details to view the full description and schedule.
-              </p>
+              <div className="discover-event-back-stats" aria-label="Event activity">
+                <button
+                  type="button"
+                  className="discover-event-back-stat interactive"
+                  onClick={openMutuals}
+                >
+                  <span>Going</span>
+                  <strong>{goingCount}</strong>
+                </button>
+
+                {onOpenComments ? (
+                  <button
+                    type="button"
+                    className="discover-event-back-stat interactive"
+                    onClick={handleOpenCommentsClick}
+                  >
+                    <span>Comments</span>
+                    <strong>{commentCount}</strong>
+                  </button>
+                ) : null}
+              </div>
+
+              {eventTags.length > 0 ? (
+                <div className="discover-event-back-tags" aria-label="Event tags">
+                  {eventTags.slice(0, 5).map((tag) => (
+                    <span key={tag} className="discover-event-back-tag">
+                      #{tag}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
 
               <div className="discover-event-back-actions">
                 <button
                   type="button"
-                  className="map-btn secondary"
-                  onClick={openMutuals}
+                  className={`discover-event-back-action primary ${isEventSaved ? "active" : ""}`}
+                  onClick={handleRsvpClick}
+                  disabled={isActionLocked}
                 >
-                  View Mutuals
+                  {isEventSaved ? "Going" : "RSVP"}
                 </button>
 
-                <div className="discover-event-back-actions-spacer" />
+                {onNotGoing || isEventSaved ? (
+                  <button
+                    type="button"
+                    className="discover-event-back-action secondary"
+                    onClick={handleNotGoingClick}
+                    disabled={isActionLocked}
+                  >
+                    Not Going
+                  </button>
+                ) : null}
 
-                <button
-                  type="button"
-                  className="map-btn"
-                  onClick={(eventClick) => {
-                    eventClick.stopPropagation()
-                    window.open(mapsUrl, "_blank")
-                  }}
-                >
-                  View Map
-                </button>
+                {hasMapTarget ? (
+                  <button
+                    type="button"
+                    className="discover-event-back-action secondary"
+                    onClick={handleMapClick}
+                  >
+                    Directions
+                  </button>
+                ) : null}
+
+                {onShare ? (
+                  <button
+                    type="button"
+                    className="discover-event-back-action secondary"
+                    onClick={handleShareClick}
+                  >
+                    Share
+                  </button>
+                ) : null}
               </div>
             </div>
           </div>

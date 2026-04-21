@@ -1,12 +1,23 @@
 import { Buffer } from 'buffer';
 import * as FileSystem from 'expo-file-system/legacy';
 
+import {
+  invalidate as invalidateFeedCache,
+  loadWithBackgroundRefresh,
+} from '@/lib/feed-cache';
+import {
+  compressImageMedia,
+  extractVideoPoster,
+} from '@/lib/mobile-media-compression';
 import { supabase } from '@/lib/supabase';
 import type { SelectedStoryMedia } from '@/lib/mobile-story-composer';
 
 export const DISCOVER_POST_BUCKET = 'stories';
 export const DISCOVER_POST_FOLDER = 'posts';
+const DISCOVER_POST_THUMBNAIL_FOLDER = 'post-thumbs';
 const MAX_POST_MEDIA_BYTES = 120 * 1024 * 1024;
+const DISCOVER_FEED_CACHE_KEY = 'discover-posts:global';
+const DISCOVER_FEED_CACHE_TTL_MS = 60_000;
 
 const MIME_EXTENSION_MAP: Record<string, string> = {
   'image/heic': 'heic',
@@ -27,6 +38,10 @@ export type DiscoverPostRecord = {
   authorId: string;
   mediaUrl: string;
   mediaType: DiscoverPostMediaType;
+  thumbnailUrl: string;
+  durationSeconds: number | null;
+  mediaWidth: number | null;
+  mediaHeight: number | null;
   caption: string;
   createdAt: string;
   onGrid: boolean;
@@ -45,10 +60,14 @@ type DiscoverPostRow = {
   created_at?: string | null;
   on_grid?: boolean | null;
   event_id?: string | null;
+  thumbnail_url?: string | null;
+  duration?: number | string | null;
+  width?: number | null;
+  height?: number | null;
 };
 
 const POST_SELECT_COLUMNS =
-  'id, author_id, media_url, media_type, caption, created_at, on_grid, event_id';
+  'id, author_id, media_url, media_type, caption, created_at, on_grid, event_id, thumbnail_url, duration, width, height';
 
 type ProfileRow = {
   id: string;
@@ -136,6 +155,11 @@ const normalizePostRow = (
   authorId: String(row.author_id),
   mediaUrl: resolveDiscoverPostMediaUrl(row.media_url),
   mediaType: row.media_type === 'video' ? 'video' : 'image',
+  thumbnailUrl: resolveDiscoverPostMediaUrl(row.thumbnail_url, ''),
+  durationSeconds:
+    row.duration == null ? null : Number(row.duration) || null,
+  mediaWidth: row.width ? Number(row.width) || null : null,
+  mediaHeight: row.height ? Number(row.height) || null : null,
   caption: toTrimmedString(row.caption),
   createdAt: row.created_at || new Date().toISOString(),
   onGrid: row.on_grid !== false,
@@ -166,7 +190,7 @@ const loadAuthorProfiles = async (authorIds: string[]) => {
   );
 };
 
-export const loadDiscoverPosts = async (): Promise<DiscoverPostRecord[]> => {
+const fetchDiscoverPostsFromNetwork = async (): Promise<DiscoverPostRecord[]> => {
   if (!supabase) return [];
 
   const { data, error } = await supabase
@@ -189,6 +213,45 @@ export const loadDiscoverPosts = async (): Promise<DiscoverPostRecord[]> => {
   return rows.map((row) =>
     normalizePostRow(row, profileLookup.get(String(row.author_id || '')))
   );
+};
+
+export type LoadDiscoverPostsOptions = {
+  forceRefresh?: boolean;
+  onData?: (
+    posts: DiscoverPostRecord[],
+    meta: { fromCache: boolean }
+  ) => void;
+};
+
+/**
+ * Load the discover feed.
+ *
+ * Returns cached data instantly when fresh and refreshes in the background.
+ * Pass `{ forceRefresh: true }` from pull-to-refresh to bypass the cache.
+ */
+export const loadDiscoverPosts = async (
+  options: LoadDiscoverPostsOptions = {}
+): Promise<DiscoverPostRecord[]> => {
+  const { forceRefresh = false, onData } = options;
+  try {
+    return await loadWithBackgroundRefresh<DiscoverPostRecord[]>(
+      DISCOVER_FEED_CACHE_KEY,
+      fetchDiscoverPostsFromNetwork,
+      {
+        ttlMs: DISCOVER_FEED_CACHE_TTL_MS,
+        forceRefresh,
+        refreshFresh: true,
+        onData,
+      }
+    );
+  } catch (error) {
+    console.error('Unable to load discover posts:', error);
+    return [];
+  }
+};
+
+export const invalidateDiscoverFeedCache = () => {
+  invalidateFeedCache((key) => key.startsWith('discover-posts:'));
 };
 
 export type LoadDiscoverPostsForAuthorOptions = {
@@ -281,6 +344,8 @@ export const setDiscoverPostGridVisibility = async (
   const row = data as DiscoverPostRow | null;
   if (!row) return null;
 
+  invalidateDiscoverFeedCache();
+
   const profileLookup = await loadAuthorProfiles([String(row.author_id)]);
   return normalizePostRow(row, profileLookup.get(String(row.author_id)));
 };
@@ -296,7 +361,7 @@ export const deleteDiscoverPost = async (postId: string) => {
 
   const { data: existing, error: fetchError } = await supabase
     .from('discover_posts')
-    .select('id, media_url')
+    .select('id, media_url, thumbnail_url')
     .eq('id', postId)
     .maybeSingle();
 
@@ -315,27 +380,71 @@ export const deleteDiscoverPost = async (postId: string) => {
     throw new Error('Could not delete this post right now. Please try again.');
   }
 
-  const rawMediaUrl = toTrimmedString((existing as { media_url?: string | null } | null)?.media_url);
-  const isExternalUrl =
-    rawMediaUrl.startsWith('http://') ||
-    rawMediaUrl.startsWith('https://') ||
-    rawMediaUrl.startsWith('file://') ||
-    rawMediaUrl.startsWith('data:');
+  const existingPaths = existing as {
+    media_url?: string | null;
+    thumbnail_url?: string | null;
+  } | null;
+  const storagePaths = [existingPaths?.media_url, existingPaths?.thumbnail_url]
+    .map((value) => toTrimmedString(value))
+    .filter(Boolean)
+    .filter((value) => {
+      return !(
+        value.startsWith('http://') ||
+        value.startsWith('https://') ||
+        value.startsWith('file://') ||
+        value.startsWith('data:')
+      );
+    })
+    .map(normalizeStoragePath)
+    .filter(Boolean);
 
-  if (rawMediaUrl && !isExternalUrl) {
-    const storagePath = normalizeStoragePath(rawMediaUrl);
-    if (storagePath) {
-      const { error: storageError } = await supabase.storage
-        .from(DISCOVER_POST_BUCKET)
-        .remove([storagePath]);
+  if (storagePaths.length > 0) {
+    const { error: storageError } = await supabase.storage
+      .from(DISCOVER_POST_BUCKET)
+      .remove(storagePaths);
 
-      if (storageError) {
-        console.warn('Post row deleted but storage cleanup failed:', storageError);
-      }
+    if (storageError) {
+      console.warn('Post row deleted but storage cleanup failed:', storageError);
     }
   }
 
+  invalidateDiscoverFeedCache();
+
   return { id: String(postId) };
+};
+
+const uploadThumbnail = async ({
+  authorId,
+  thumbUri,
+  thumbFileName,
+  thumbMimeType,
+  timestamp,
+}: {
+  authorId: string;
+  thumbUri: string;
+  thumbFileName: string;
+  thumbMimeType: string;
+  timestamp: number;
+}): Promise<string> => {
+  if (!supabase || !thumbUri) return '';
+  const extension = getFileExtension(thumbFileName, thumbMimeType, thumbUri);
+  const thumbPath = `${DISCOVER_POST_THUMBNAIL_FOLDER}/${authorId}/${timestamp}-thumb.${extension}`;
+  const thumbBody = await readFileAsArrayBuffer(thumbUri);
+
+  const { error: thumbUploadError } = await supabase.storage
+    .from(DISCOVER_POST_BUCKET)
+    .upload(thumbPath, thumbBody, {
+      cacheControl: '3600',
+      contentType: thumbMimeType,
+      upsert: false,
+    });
+
+  if (thumbUploadError) {
+    console.warn('Thumbnail upload failed, continuing without poster:', thumbUploadError);
+    return '';
+  }
+
+  return thumbPath;
 };
 
 export const uploadDiscoverPost = async ({
@@ -374,21 +483,52 @@ export const uploadDiscoverPost = async ({
     throw new Error('You need to be signed in to publish a post.');
   }
 
-  const extension = getFileExtension(media.fileName, media.mimeType, media.uri);
-  const filePath = `${DISCOVER_POST_FOLDER}/${effectiveAuthorId}/${Date.now()}.${extension}`;
-  const fileBody = await readFileAsArrayBuffer(media.uri);
+  // Compress images before upload. Videos are uploaded as-is since RN video
+  // transcoding requires a heavy native module; we generate a poster instead
+  // and the feed renders it first with viewport-based playback.
+  const isImage = media.mediaType === 'image';
+  const compressed = isImage ? await compressImageMedia(media) : null;
+
+  const uploadUri = compressed?.uri || media.uri;
+  const uploadMimeType = compressed?.mimeType || media.mimeType;
+  const uploadFileName = compressed?.fileName || media.fileName;
+
+  const timestamp = Date.now();
+  const extension = getFileExtension(uploadFileName, uploadMimeType, uploadUri);
+  const filePath = `${DISCOVER_POST_FOLDER}/${effectiveAuthorId}/${timestamp}.${extension}`;
+  const fileBody = await readFileAsArrayBuffer(uploadUri);
 
   const { error: uploadError } = await supabase.storage
     .from(DISCOVER_POST_BUCKET)
     .upload(filePath, fileBody, {
       cacheControl: '3600',
-      contentType: media.mimeType,
+      contentType: uploadMimeType,
       upsert: false,
     });
 
   if (uploadError) {
     console.error('Discover post upload failed:', uploadError);
     throw new Error('Could not upload your post right now. Please try again.');
+  }
+
+  let thumbnailPath = '';
+  let mediaWidth: number | null = compressed?.width ?? null;
+  let mediaHeight: number | null = compressed?.height ?? null;
+  let durationSeconds: number | null = null;
+
+  if (media.mediaType === 'video') {
+    const poster = await extractVideoPoster(media);
+    if (poster) {
+      mediaWidth = poster.width ?? null;
+      mediaHeight = poster.height ?? null;
+      thumbnailPath = await uploadThumbnail({
+        authorId: effectiveAuthorId,
+        thumbUri: poster.uri,
+        thumbFileName: poster.fileName,
+        thumbMimeType: poster.mimeType,
+        timestamp,
+      });
+    }
   }
 
   const { data, error } = await supabase
@@ -400,6 +540,10 @@ export const uploadDiscoverPost = async ({
       caption: toTrimmedString(caption) || null,
       on_grid: Boolean(onGrid),
       event_id: eventId || null,
+      thumbnail_url: thumbnailPath || null,
+      duration: durationSeconds,
+      width: mediaWidth,
+      height: mediaHeight,
     })
     .select(POST_SELECT_COLUMNS)
     .single();
@@ -408,6 +552,8 @@ export const uploadDiscoverPost = async ({
     console.error('Unable to insert discover post row:', error);
     throw new Error('Could not publish your post right now. Please try again.');
   }
+
+  invalidateDiscoverFeedCache();
 
   return data;
 };

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useSearchParams } from "react-router-dom"
 import { supabase } from "../supabaseClient"
 import DiscoverModeSwitch from "../components/DiscoverModeSwitch"
 import DiscoverCommentsDrawer from "../components/DiscoverCommentsDrawer"
@@ -31,6 +31,7 @@ function Discover({ hideModeSwitch = false, initialMode = "events" } = {}) {
   const SWIPE_TRIGGER_PX = 110
   const DRAG_INTENT_PX = 10
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { showToast } = useToast()
   const {
     addEvent,
@@ -78,6 +79,9 @@ function Discover({ hideModeSwitch = false, initialMode = "events" } = {}) {
     isDragging: false,
     ignoreGesture: false,
   })
+  const createMode = searchParams.get("create")
+  const routeCreateMode =
+    createMode === "post" || createMode === "story" ? createMode : null
   const suppressCardClickRef = useRef(false)
   const isSubmittingCommentRef = useRef(false)
 
@@ -738,10 +742,17 @@ function Discover({ hideModeSwitch = false, initialMode = "events" } = {}) {
     handleOpenCreateComposer("story")
   }, [handleOpenCreateComposer])
 
+  const closeRouteCreateComposer = useCallback(() => {
+    const nextParams = new URLSearchParams(searchParams)
+    nextParams.delete("create")
+    setSearchParams(nextParams, { replace: true })
+  }, [searchParams, setSearchParams])
+
   const handleCloseStoryComposer = useCallback(() => {
     setIsStoryComposerOpen(false)
     setCreateComposerMode(null)
-  }, [])
+    if (routeCreateMode) closeRouteCreateComposer()
+  }, [closeRouteCreateComposer, routeCreateMode])
 
   const loadStories = useCallback(async () => {
     const storyUserId =
@@ -777,23 +788,30 @@ function Discover({ hideModeSwitch = false, initialMode = "events" } = {}) {
         await loadStories()
         setIsStoryComposerOpen(false)
         setCreateComposerMode(null)
+        if (routeCreateMode) closeRouteCreateComposer()
         showToast("Story shared!", "success")
       } catch (error) {
         showToast(error?.message || "Could not share your story right now. Please try again.", "error")
       }
     },
-    [currentUser, loadStories, showToast]
+    [closeRouteCreateComposer, currentUser, loadStories, routeCreateMode, showToast]
   )
 
   const loadDiscoverPostsFeed = useCallback(async () => {
-    const nextPosts = await loadDiscoverPosts()
+    const nextPosts = await loadDiscoverPosts({
+      onData: (posts) => setDiscoverPosts(posts),
+    })
     setDiscoverPosts(nextPosts)
   }, [])
 
   useEffect(() => {
     let cancelled = false
 
-    loadDiscoverPosts().then((nextPosts) => {
+    loadDiscoverPosts({
+      onData: (posts) => {
+        if (!cancelled) setDiscoverPosts(posts)
+      },
+    }).then((nextPosts) => {
       if (!cancelled) setDiscoverPosts(nextPosts)
     })
 
@@ -819,12 +837,13 @@ function Discover({ hideModeSwitch = false, initialMode = "events" } = {}) {
         await loadDiscoverPostsFeed()
         setIsStoryComposerOpen(false)
         setCreateComposerMode(null)
+        if (routeCreateMode) closeRouteCreateComposer()
         showToast("Posted!", "success")
       } catch (error) {
         showToast(error?.message || "Could not publish your post right now. Please try again.", "error")
       }
     },
-    [currentUser, loadDiscoverPostsFeed, showToast]
+    [closeRouteCreateComposer, currentUser, loadDiscoverPostsFeed, routeCreateMode, showToast]
   )
 
   const handleDeleteDiscoverPost = useCallback(
@@ -1149,7 +1168,16 @@ function Discover({ hideModeSwitch = false, initialMode = "events" } = {}) {
                             : "default",
                     }}
                   >
-                    <EventCard event={currentEvent} />
+                    <EventCard
+                      event={currentEvent}
+                      isSaved={savedEventIds.has(currentEventId)}
+                      isActionLocked={isActionLocked}
+                      onRsvp={handleRsvpAction}
+                      onNotGoing={handleReject}
+                      onOpenComments={handleOpenComments}
+                      onShare={() => setIsEventShareOpen(true)}
+                      commentCount={eventCommentsById[currentEventId]?.length || 0}
+                    />
                   </div>
                 </>
               ) : (
@@ -1980,8 +2008,8 @@ function Discover({ hideModeSwitch = false, initialMode = "events" } = {}) {
       ) : null}
 
       <DiscoverCreateComposer
-        isOpen={isStoryComposerOpen}
-        initialMode={createComposerMode || "post"}
+        isOpen={isStoryComposerOpen || Boolean(routeCreateMode)}
+        initialMode={routeCreateMode || createComposerMode || "post"}
         onClose={handleCloseStoryComposer}
         onSubmitPost={handleSubmitPostComposer}
         onSubmitStory={handleSubmitStoryComposer}

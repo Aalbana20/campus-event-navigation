@@ -13,9 +13,8 @@ import {
 } from '@/lib/mobile-discover-posts';
 import { useMobileApp } from '@/providers/mobile-app-provider';
 
-// TODO(db follow-up): when the backend separates videos from image posts
-// into distinct tables (e.g. `discover_videos` vs `discover_posts`), replace
-// the frontend `mediaType` filter below with targeted queries per view.
+// Unified table: videos and image posts stay in discover_posts and split by
+// mediaType/metadata in the UI.
 type VideoPostsView = 'video' | 'posts';
 
 const VIDEO_POSTS_VIEWS: { id: VideoPostsView; label: string }[] = [
@@ -34,7 +33,11 @@ export default function VideoPostsScreen() {
 
   useEffect(() => {
     let cancelled = false;
-    loadDiscoverPosts().then((next) => {
+    loadDiscoverPosts({
+      onData: (next) => {
+        if (!cancelled) setPosts(next);
+      },
+    }).then((next) => {
       if (!cancelled) setPosts(next);
     });
     return () => {

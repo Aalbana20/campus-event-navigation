@@ -1,6 +1,62 @@
-import React, { useState } from "react"
+import React, { useEffect, useRef, useState } from "react"
 import { DEFAULT_AVATAR_URL } from "../profileMedia"
 import PostShareSheet from "./PostShareSheet"
+
+function FeedVideo({ post }) {
+  const videoRef = useRef(null)
+  const [isActive, setIsActive] = useState(false)
+  const [hasStarted, setHasStarted] = useState(false)
+
+  useEffect(() => {
+    const element = videoRef.current
+    if (!element || typeof IntersectionObserver === "undefined") return undefined
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          const visible = entry.isIntersecting && entry.intersectionRatio >= 0.6
+          setIsActive(visible)
+          if (visible) setHasStarted(true)
+        })
+      },
+      { threshold: [0, 0.6, 1] }
+    )
+
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
+
+  useEffect(() => {
+    const element = videoRef.current
+    if (!element) return
+    if (isActive) {
+      const playPromise = element.play()
+      if (playPromise && typeof playPromise.catch === "function") {
+        playPromise.catch(() => {
+          // Autoplay rejection is expected when the tab is backgrounded.
+        })
+      }
+    } else {
+      element.pause()
+    }
+  }, [isActive])
+
+  // Keep bandwidth minimal until the user first scrolls the video into view.
+  const src = hasStarted ? post.mediaUrl : undefined
+
+  return (
+    <video
+      ref={videoRef}
+      className="video-feed-media"
+      src={src}
+      poster={post.thumbnailUrl || undefined}
+      muted
+      loop
+      playsInline
+      preload="none"
+    />
+  )
+}
 
 const iconProps = {
   viewBox: "0 0 24 24",
@@ -87,28 +143,18 @@ function DiscoverPostsFeed({
     <div className="discover-video-feed-container">
       {posts.map((post) => {
         const isVideo = post.mediaType === "video"
-        const isOwner =
-          Boolean(currentUserId) &&
-          String(currentUserId) === String(post.authorId)
 
         return (
           <article key={post.id} className="video-feed-item">
             {isVideo ? (
-              <video
-                className="video-feed-media"
-                src={post.mediaUrl}
-                autoPlay
-                muted
-                loop
-                playsInline
-                preload="metadata"
-              />
+              <FeedVideo post={post} />
             ) : (
               <img
                 src={post.mediaUrl}
                 alt={post.caption || `${post.authorName} post`}
                 className="video-feed-media"
                 draggable={false}
+                loading="lazy"
               />
             )}
             <div className="video-feed-overlay" />

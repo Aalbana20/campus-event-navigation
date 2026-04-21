@@ -102,7 +102,9 @@ export default function DiscoverScreen({
   const [mutualSheetProfiles, setMutualSheetProfiles] = useState<ProfileRecord[]>([]);
 
   const loadPosts = useCallback(async () => {
-    const nextPosts = await loadDiscoverPosts();
+    const nextPosts = await loadDiscoverPosts({
+      onData: (posts) => setDiscoverPosts(posts),
+    });
     setDiscoverPosts(nextPosts);
   }, []);
 

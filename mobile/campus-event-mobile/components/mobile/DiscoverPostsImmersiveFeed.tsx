@@ -104,7 +104,9 @@ function DiscoverPostItem({
   styles: any;
 }) {
   const isVideo = post.mediaType === 'video';
-  const videoSource = isVideo ? post.mediaUrl : null;
+  // Only hand a real source to the player when the item is the active one in
+  // the feed; this avoids spinning up video decoders for every card on mount.
+  const videoSource = isVideo && isActive ? post.mediaUrl : null;
   const player = useVideoPlayer(videoSource, (instance) => {
     instance.loop = true;
     instance.muted = false;
@@ -120,16 +122,29 @@ function DiscoverPostItem({
     }
   }, [isActive, isVideo, player]);
 
+  const posterUri = post.thumbnailUrl || (isVideo ? undefined : post.mediaUrl);
+
   return (
     <View style={[{ height, width: '100%' }]}>
       <View style={styles.media}>
         {isVideo ? (
-          <VideoView
-            player={player}
-            style={StyleSheet.absoluteFill}
-            contentFit="cover"
-            nativeControls={false}
-          />
+          <>
+            {posterUri ? (
+              <Image
+                source={{ uri: posterUri }}
+                style={StyleSheet.absoluteFill}
+                resizeMode="cover"
+              />
+            ) : null}
+            {isActive ? (
+              <VideoView
+                player={player}
+                style={StyleSheet.absoluteFill}
+                contentFit="cover"
+                nativeControls={false}
+              />
+            ) : null}
+          </>
         ) : (
           <Image
             source={{ uri: post.mediaUrl }}

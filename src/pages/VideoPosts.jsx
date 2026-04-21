@@ -11,9 +11,8 @@ import {
 import { useEvents } from "../context/EventContext"
 import { useToast } from "../context/ToastContext"
 
-// TODO(db follow-up): when the backend separates videos from image posts
-// into distinct tables (e.g. `discover_videos` vs `discover_posts`), replace
-// the frontend `mediaType` filter below with targeted queries per view.
+// Unified table: videos and image posts stay in discover_posts and split by
+// mediaType/metadata in the UI.
 const VIDEO_POSTS_VIEWS = [
   { id: "video", label: "Video" },
   { id: "posts", label: "Posts" },
@@ -36,7 +35,11 @@ function VideoPosts() {
   useEffect(() => {
     let cancelled = false
 
-    loadDiscoverPosts().then((nextPosts) => {
+    loadDiscoverPosts({
+      onData: (nextPosts) => {
+        if (!cancelled) setPosts(nextPosts)
+      },
+    }).then((nextPosts) => {
       if (!cancelled) setPosts(nextPosts)
     })
 
@@ -95,7 +98,7 @@ function VideoPosts() {
         onGrid,
       })
 
-      const refreshed = await loadDiscoverPosts()
+      const refreshed = await loadDiscoverPosts({ forceRefresh: true })
       setPosts(refreshed)
       setIsComposerOpen(false)
       showToast("Posted!", "success")

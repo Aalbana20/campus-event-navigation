@@ -1,9 +1,21 @@
+import {
+  invalidate as invalidateFeedCache,
+  loadWithBackgroundRefresh,
+} from "./lib/feedCache"
+import {
+  compressImageFile,
+  extractVideoPoster,
+  readImageDimensions,
+} from "./lib/mediaCompression"
 import { DEFAULT_AVATAR_URL, sanitizeAvatarUrl } from "./profileMedia"
 import { supabase } from "./supabaseClient"
 
 const POST_MEDIA_BUCKET = "stories"
 const POST_MEDIA_FOLDER = "posts"
+const POST_THUMBNAIL_FOLDER = "post-thumbs"
 const MAX_POST_FILE_BYTES = 120 * 1024 * 1024
+const DISCOVER_FEED_CACHE_KEY = "discover-posts:global"
+const DISCOVER_FEED_CACHE_TTL_MS = 60_000
 
 const MIME_EXTENSION_MAP = {
   "image/heic": "heic",
@@ -62,6 +74,11 @@ const normalizePostRecord = ({ row, profile }) => ({
   authorId: String(row.author_id),
   mediaUrl: resolveDiscoverPostMediaUrl(row.media_url),
   mediaType: row.media_type === "video" ? "video" : "image",
+  thumbnailUrl: resolveDiscoverPostMediaUrl(row.thumbnail_url, ""),
+  durationSeconds:
+    row.duration == null ? null : Number(row.duration) || null,
+  mediaWidth: row.width ? Number(row.width) || null : null,
+  mediaHeight: row.height ? Number(row.height) || null : null,
   caption: toTrimmedString(row.caption),
   createdAt: row.created_at || new Date().toISOString(),
   onGrid: row.on_grid !== false,
@@ -75,7 +92,7 @@ const normalizePostRecord = ({ row, profile }) => ({
 })
 
 const POST_SELECT_COLUMNS =
-  "id, author_id, media_url, media_type, caption, created_at, on_grid, event_id"
+  "id, author_id, media_url, media_type, caption, created_at, on_grid, event_id, thumbnail_url, duration, width, height"
 
 const loadAuthorProfiles = async (authorIds) => {
   if (!authorIds.length) return new Map()
@@ -93,7 +110,7 @@ const loadAuthorProfiles = async (authorIds) => {
   return new Map((data || []).map((profile) => [String(profile.id), profile]))
 }
 
-export const loadDiscoverPosts = async () => {
+const fetchDiscoverPostsFromNetwork = async () => {
   const { data: postRows, error } = await supabase
     .from("discover_posts")
     .select(POST_SELECT_COLUMNS)
@@ -113,6 +130,39 @@ export const loadDiscoverPosts = async () => {
   return (postRows || []).map((row) =>
     normalizePostRecord({ row, profile: profileLookup.get(String(row.author_id || "")) })
   )
+}
+
+/**
+ * Load the discover feed.
+ *
+ * By default returns cached data instantly (if fresh) and refreshes silently in
+ * the background. Pass `{ forceRefresh: true }` from pull-to-refresh to bypass
+ * the cache. Pass `onData` to receive both the cached hit and the network
+ * refresh without managing cache state yourself.
+ */
+export const loadDiscoverPosts = async ({
+  forceRefresh = false,
+  onData,
+} = {}) => {
+  try {
+    return await loadWithBackgroundRefresh(
+      DISCOVER_FEED_CACHE_KEY,
+      fetchDiscoverPostsFromNetwork,
+      {
+        ttlMs: DISCOVER_FEED_CACHE_TTL_MS,
+        forceRefresh,
+        refreshFresh: true,
+        onData,
+      }
+    )
+  } catch (error) {
+    console.error("Unable to load discover posts:", error)
+    return []
+  }
+}
+
+export const invalidateDiscoverFeedCache = () => {
+  invalidateFeedCache((key) => key.startsWith("discover-posts:"))
 }
 
 export const loadDiscoverPostsForAuthor = async (authorId, options = {}) => {
@@ -186,6 +236,8 @@ export const setDiscoverPostGridVisibility = async (postId, onGrid) => {
     throw new Error("Could not update grid visibility. Please try again.")
   }
 
+  invalidateDiscoverFeedCache()
+
   return data
 }
 
@@ -194,7 +246,7 @@ export const deleteDiscoverPost = async (postId) => {
 
   const { data: existing, error: fetchError } = await supabase
     .from("discover_posts")
-    .select("id, media_url")
+    .select("id, media_url, thumbnail_url")
     .eq("id", postId)
     .maybeSingle()
 
@@ -213,27 +265,54 @@ export const deleteDiscoverPost = async (postId) => {
     throw new Error("Could not delete this post right now. Please try again.")
   }
 
-  const rawMediaUrl = toTrimmedString(existing?.media_url)
-  const isExternalUrl =
-    rawMediaUrl.startsWith("http://") ||
-    rawMediaUrl.startsWith("https://") ||
-    rawMediaUrl.startsWith("blob:") ||
-    rawMediaUrl.startsWith("data:")
+  const storagePaths = [existing?.media_url, existing?.thumbnail_url]
+    .map((value) => toTrimmedString(value))
+    .filter(Boolean)
+    .filter((value) => {
+      return !(
+        value.startsWith("http://") ||
+        value.startsWith("https://") ||
+        value.startsWith("blob:") ||
+        value.startsWith("data:")
+      )
+    })
+    .map(normalizePostStoragePath)
+    .filter(Boolean)
 
-  if (rawMediaUrl && !isExternalUrl) {
-    const storagePath = normalizePostStoragePath(rawMediaUrl)
-    if (storagePath) {
-      const { error: storageError } = await supabase.storage
-        .from(POST_MEDIA_BUCKET)
-        .remove([storagePath])
+  if (storagePaths.length > 0) {
+    const { error: storageError } = await supabase.storage
+      .from(POST_MEDIA_BUCKET)
+      .remove(storagePaths)
 
-      if (storageError) {
-        console.warn("Post row deleted but storage cleanup failed:", storageError)
-      }
+    if (storageError) {
+      console.warn("Post row deleted but storage cleanup failed:", storageError)
     }
   }
 
+  invalidateDiscoverFeedCache()
+
   return { id: String(postId) }
+}
+
+const uploadThumbnail = async ({ authorId, thumbnailFile, timestamp }) => {
+  if (!thumbnailFile) return ""
+  const extension = getFileExtension(thumbnailFile.name, thumbnailFile.type || "")
+  const thumbPath = `${POST_THUMBNAIL_FOLDER}/${authorId}/${timestamp}-thumb.${extension}`
+
+  const { error: thumbUploadError } = await supabase.storage
+    .from(POST_MEDIA_BUCKET)
+    .upload(thumbPath, thumbnailFile, {
+      cacheControl: "3600",
+      contentType: thumbnailFile.type || "image/jpeg",
+      upsert: false,
+    })
+
+  if (thumbUploadError) {
+    console.warn("Thumbnail upload failed, continuing without poster:", thumbUploadError)
+    return ""
+  }
+
+  return thumbPath
 }
 
 export const uploadDiscoverPost = async ({
@@ -252,20 +331,52 @@ export const uploadDiscoverPost = async ({
   }
 
   const isVideo = (file.type || "").startsWith("video/")
-  const extension = getFileExtension(file.name, file.type || "")
-  const filePath = `${POST_MEDIA_FOLDER}/${authorId}/${Date.now()}.${extension}`
+
+  // Compress images before upload. Video compression on the web requires
+  // ffmpeg.wasm (too heavy for our bundle); instead we extract a poster and
+  // rely on preload="none" + viewport-based playback in the feed.
+  const uploadFile = isVideo ? file : await compressImageFile(file)
+
+  const timestamp = Date.now()
+  const extension = getFileExtension(uploadFile.name, uploadFile.type || "")
+  const filePath = `${POST_MEDIA_FOLDER}/${authorId}/${timestamp}.${extension}`
 
   const { error: uploadError } = await supabase.storage
     .from(POST_MEDIA_BUCKET)
-    .upload(filePath, file, {
+    .upload(filePath, uploadFile, {
       cacheControl: "3600",
-      contentType: file.type || (isVideo ? "video/mp4" : "image/jpeg"),
+      contentType: uploadFile.type || (isVideo ? "video/mp4" : "image/jpeg"),
       upsert: false,
     })
 
   if (uploadError) {
     console.error("Unable to upload post media:", uploadError)
     throw new Error("Could not upload your post right now. Please try again.")
+  }
+
+  let thumbnailPath = ""
+  let mediaWidth = null
+  let mediaHeight = null
+  let durationSeconds = null
+
+  if (isVideo) {
+    const poster = await extractVideoPoster(file)
+    if (poster) {
+      mediaWidth = poster.width
+      mediaHeight = poster.height
+      durationSeconds = poster.durationSeconds
+      thumbnailPath = await uploadThumbnail({
+        authorId,
+        thumbnailFile: poster.file,
+        timestamp,
+      })
+    }
+  } else {
+    const dims = await readImageDimensions(uploadFile)
+    if (dims) {
+      mediaWidth = dims.width
+      mediaHeight = dims.height
+    }
   }
 
   const { data, error } = await supabase
@@ -277,6 +388,10 @@ export const uploadDiscoverPost = async ({
       caption: toTrimmedString(caption) || null,
       on_grid: Boolean(onGrid),
       event_id: eventId || null,
+      thumbnail_url: thumbnailPath || null,
+      duration: durationSeconds,
+      width: mediaWidth,
+      height: mediaHeight,
     })
     .select(POST_SELECT_COLUMNS)
     .single()
@@ -285,6 +400,8 @@ export const uploadDiscoverPost = async ({
     console.error("Unable to insert discover post row:", error)
     throw new Error("Could not publish your post right now. Please try again.")
   }
+
+  invalidateDiscoverFeedCache()
 
   return data
 }
