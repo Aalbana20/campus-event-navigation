@@ -64,9 +64,14 @@ function EventCard({ event }) {
     setIsMutualsOpen(false)
   }
 
+  const handleFlip = (e) => {
+    if (e.target.closest("button") || e.target.closest("a")) return
+    setFlipped(!flipped)
+  }
+
   return (
     <>
-      <div className="flip-card event-card-shell" onClick={() => setFlipped(!flipped)}>
+      <div className="flip-card event-card-shell" onClick={handleFlip}>
         <div className={`flip-card-inner ${flipped ? "flipped" : ""}`}>
           <div className="flip-card-front">
             <img
