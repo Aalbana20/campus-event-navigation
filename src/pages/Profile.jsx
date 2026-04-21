@@ -523,6 +523,10 @@ function Profile() {
   const handleConfirmAction = async () => {
     const event = confirmModal.event
     if (!event || isConfirmingAction) return
+    if (!currentUser?.id || currentUser.id === "current-user") {
+      showToast("You must be signed in to do that.", "error")
+      return
+    }
 
     try {
       setIsConfirmingAction(true)
@@ -569,6 +573,7 @@ function Profile() {
           .from("events")
           .delete()
           .eq("id", event.id)
+          .eq("created_by", currentUser.id)
 
         if (eventDeleteError) {
           showToast(eventDeleteError.message, "error")

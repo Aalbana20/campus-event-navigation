@@ -80,6 +80,7 @@ export default function DiscoverScreen({
   const { sendDmMessage, unreadNotificationCount } = useMobileInbox();
 
   const translate = useRef(new Animated.ValueXY()).current;
+  const isSubmittingCommentRef = useRef(false);
   const [refreshing, setRefreshing] = useState(false);
   const [scrollEnabled, setScrollEnabled] = useState(true);
   const [activeTab, setActiveTab] = useState<'events' | 'friends'>(initialMode || 'events');
@@ -402,7 +403,9 @@ export default function DiscoverScreen({
   }, [loadComments]);
 
   const handleSubmitComment = useCallback(async (parentId: string | null = null) => {
-    if (!supabase || !activeCommentEvent || !commentDraft.trim()) return;
+    if (!supabase || !activeCommentEvent || !commentDraft.trim() || isSubmittingCommentRef.current) return;
+    if (!currentUser.id || currentUser.id === 'current-user') return;
+    isSubmittingCommentRef.current = true;
 
     const eventId = String(activeCommentEvent.id);
     const body = commentDraft.trim();
@@ -439,6 +442,7 @@ export default function DiscoverScreen({
         ...current,
         [eventId]: (current[eventId] || []).filter((c) => c.id !== tempId),
       }));
+      isSubmittingCommentRef.current = false;
       return;
     }
 
@@ -461,6 +465,7 @@ export default function DiscoverScreen({
 
       return { ...current, [eventId]: nextList };
     });
+    isSubmittingCommentRef.current = false;
 
     // Notify the event creator
     if (activeCommentEvent.createdBy && activeCommentEvent.createdBy !== currentUser.id) {

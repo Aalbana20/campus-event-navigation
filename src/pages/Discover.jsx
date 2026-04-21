@@ -73,6 +73,7 @@ function Discover({ hideModeSwitch = false, initialMode = "events" } = {}) {
     ignoreGesture: false,
   })
   const suppressCardClickRef = useRef(false)
+  const isSubmittingCommentRef = useRef(false)
 
   const savedEventIds = useMemo(
     () => new Set((savedEvents || []).map((event) => String(event.id))),
@@ -361,7 +362,8 @@ function Discover({ hideModeSwitch = false, initialMode = "events" } = {}) {
   }, [])
 
   const handleSubmitComment = useCallback(async (parentId = null) => {
-    if (!activeCommentEvent || !commentDraft.trim()) return
+    if (!activeCommentEvent || !commentDraft.trim() || isSubmittingCommentRef.current) return
+    isSubmittingCommentRef.current = true
 
     const eventId = String(activeCommentEvent.id)
     const userId = currentUser?.id && currentUser.id !== "current-user"
@@ -407,6 +409,7 @@ function Discover({ hideModeSwitch = false, initialMode = "events" } = {}) {
         ...prev,
         [eventId]: (prev[eventId] || []).filter((c) => c.id !== optimisticComment.id),
       }))
+      isSubmittingCommentRef.current = false
       return
     }
 
@@ -429,6 +432,7 @@ function Discover({ hideModeSwitch = false, initialMode = "events" } = {}) {
 
       return { ...prev, [eventId]: nextList }
     })
+    isSubmittingCommentRef.current = false
   }, [activeCommentEvent, commentDraft, currentUser, showToast])
 
   const handleToggleCommentLike = useCallback(
@@ -1015,10 +1019,12 @@ function Discover({ hideModeSwitch = false, initialMode = "events" } = {}) {
 
       setStoryViewerRows([])
       setIsStoryViewerRowsLoading(false)
-      await recordDiscoverStoryView({
-        storyId: activeStoryMedia.id,
-        viewerId: effectiveStoryUserId,
-      })
+      if (effectiveStoryUserId && effectiveStoryUserId !== "current-user") {
+        await recordDiscoverStoryView({
+          storyId: activeStoryMedia.id,
+          viewerId: effectiveStoryUserId,
+        })
+      }
     }
 
     syncStoryViewerState()
