@@ -50,6 +50,7 @@ type MobileInboxContextValue = {
   deleteNotification: (notificationId: string) => void;
   openDmThread: (threadId: string) => void;
   sendDmMessage: (threadId: string, text: string) => Promise<void>;
+  deleteDmMessage: (threadId: string, messageId: string) => Promise<void>;
 };
 
 const MobileInboxContext = createContext<MobileInboxContextValue | null>(null);
@@ -441,32 +442,49 @@ export function MobileInboxProvider({ children }: { children: React.ReactNode })
     );
   };
 
+  const deleteDmMessage = async (threadId: string, messageId: string) => {
+    if (!messageId) return;
+
+    const previousRows = messageRows;
+    setMessageRows((currentRows) =>
+      currentRows.filter((message) => String(message.id) !== String(messageId))
+    );
+
+    if (String(messageId).startsWith('temp-')) return;
+
+    if (!supabase || !currentUser.id) return;
+
+    const { error } = await supabase
+      .from('messages')
+      .delete()
+      .eq('id', messageId)
+      .or(`sender_id.eq.${currentUser.id},recipient_id.eq.${currentUser.id}`);
+
+    if (error) {
+      console.error('Unable to delete mobile DM:', error);
+      setMessageRows(previousRows);
+      openDmThread(threadId);
+    }
+  };
+
   const getThreadById = (threadId: string) =>
     dmThreads.find((thread) => String(thread.id) === String(threadId));
 
-  const value = useMemo<MobileInboxContextValue>(
-    () => ({
-      notifications: derivedNotifications,
-      dmThreads,
-      messagesByThread,
-      unreadNotificationCount,
-      unreadDmCount,
-      defaultThreadId: dmThreads[0]?.id || null,
-      getThreadById,
-      markNotificationRead,
-      clearNotifications,
-      deleteNotification,
-      openDmThread,
-      sendDmMessage,
-    }),
-    [
-      derivedNotifications,
-      dmThreads,
-      messagesByThread,
-      unreadNotificationCount,
-      unreadDmCount,
-    ]
-  );
+  const value: MobileInboxContextValue = {
+    notifications: derivedNotifications,
+    dmThreads,
+    messagesByThread,
+    unreadNotificationCount,
+    unreadDmCount,
+    defaultThreadId: dmThreads[0]?.id || null,
+    getThreadById,
+    markNotificationRead,
+    clearNotifications,
+    deleteNotification,
+    openDmThread,
+    sendDmMessage,
+    deleteDmMessage,
+  };
 
   return <MobileInboxContext.Provider value={value}>{children}</MobileInboxContext.Provider>;
 }

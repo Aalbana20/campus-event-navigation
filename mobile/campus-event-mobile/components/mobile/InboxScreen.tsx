@@ -1,7 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
+import type { GestureResponderEvent } from 'react-native';
 import {
+  Dimensions,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -15,12 +18,27 @@ import { MobileInboxTab, useMobileInbox } from '@/providers/mobile-inbox-provide
 
 import { AppScreen } from './AppScreen';
 
+const QUICK_REACTIONS = ['❤️', '😂', '😮', '😢', '😡', '👍', '＋'];
+const MESSAGE_MENU_WIDTH = 300;
+
 type InboxScreenProps = {
   initialTab?: MobileInboxTab;
   lockedTab?: MobileInboxTab;
   showBackButton?: boolean;
   title?: string;
   subtitle?: string;
+};
+
+type MenuMessage = {
+  id: string;
+  sender: 'me' | 'them';
+  text: string;
+};
+
+type ActiveMessageMenu = {
+  message: MenuMessage;
+  left: number;
+  top: number;
 };
 
 export function InboxScreen({
@@ -45,10 +63,15 @@ export function InboxScreen({
     deleteNotification,
     openDmThread,
     sendDmMessage,
+    deleteDmMessage,
   } = useMobileInbox();
   const [internalTab, setInternalTab] = useState<MobileInboxTab>(lockedTab || initialTab);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [draftMessage, setDraftMessage] = useState('');
+  const [activeMessageMenu, setActiveMessageMenu] = useState<ActiveMessageMenu | null>(null);
+  const [messageReactions, setMessageReactions] = useState<Record<string, string>>({});
+  const [messageStickers, setMessageStickers] = useState<Record<string, string>>({});
+  const [replyingTo, setReplyingTo] = useState<MenuMessage | null>(null);
   const activeTab = lockedTab || internalTab;
   const resolvedTitle = title || (activeTab === 'dms' ? 'DMs' : 'Notifications');
   const resolvedSubtitle =
@@ -118,6 +141,52 @@ export function InboxScreen({
 
     sendDmMessage(activeThreadId, draftMessage);
     setDraftMessage('');
+    setReplyingTo(null);
+  };
+
+  const openMessageMenu = (message: MenuMessage, event: GestureResponderEvent) => {
+    const { height, width } = Dimensions.get('window');
+    const pageX = event.nativeEvent.pageX || width / 2;
+    const pageY = event.nativeEvent.pageY || height / 2;
+    const left = Math.min(
+      Math.max(16, pageX - MESSAGE_MENU_WIDTH / 2),
+      width - MESSAGE_MENU_WIDTH - 16
+    );
+    const top = Math.min(Math.max(72, pageY - 88), height - 360);
+
+    setActiveMessageMenu({ message, left, top });
+  };
+
+  const handleReaction = (emoji: string) => {
+    if (!activeMessageMenu) return;
+    setMessageReactions((currentReactions) => ({
+      ...currentReactions,
+      [activeMessageMenu.message.id]: emoji,
+    }));
+    setActiveMessageMenu(null);
+  };
+
+  const handleReply = () => {
+    setReplyingTo(activeMessageMenu?.message || null);
+    setActiveMessageMenu(null);
+  };
+
+  const handleAddSticker = () => {
+    if (!activeMessageMenu) return;
+    setMessageStickers((currentStickers) => ({
+      ...currentStickers,
+      [activeMessageMenu.message.id]: '✨',
+    }));
+    setActiveMessageMenu(null);
+  };
+
+  const handleDeleteMessage = () => {
+    if (!activeThreadId || !activeMessageMenu) return;
+    void deleteDmMessage(activeThreadId, activeMessageMenu.message.id);
+    if (replyingTo?.id === activeMessageMenu.message.id) {
+      setReplyingTo(null);
+    }
+    setActiveMessageMenu(null);
   };
 
   return (
@@ -227,8 +296,10 @@ export function InboxScreen({
 
             <ScrollView contentContainerStyle={styles.chatMessages} showsVerticalScrollIndicator={false}>
               {(messagesByThread[activeThread.id] || []).map((message) => (
-                <View
+                <Pressable
                   key={message.id}
+                  delayLongPress={360}
+                  onLongPress={(event) => openMessageMenu(message, event)}
                   style={[
                     styles.chatBubble,
                     message.sender === 'me' ? styles.chatBubbleMe : styles.chatBubbleThem,
@@ -240,9 +311,39 @@ export function InboxScreen({
                     ]}>
                     {message.text}
                   </Text>
-                </View>
+                  {messageReactions[message.id] || messageStickers[message.id] ? (
+                    <View
+                      style={[
+                        styles.messageBadge,
+                        message.sender === 'them' && styles.messageBadgeThem,
+                      ]}>
+                      {messageReactions[message.id] ? (
+                        <Text style={styles.messageBadgeText}>{messageReactions[message.id]}</Text>
+                      ) : null}
+                      {messageStickers[message.id] ? (
+                        <Text style={styles.messageBadgeText}>{messageStickers[message.id]}</Text>
+                      ) : null}
+                    </View>
+                  ) : null}
+                </Pressable>
               ))}
             </ScrollView>
+
+            {replyingTo ? (
+              <View style={styles.replyingBanner}>
+                <View style={styles.replyingCopy}>
+                  <Text style={styles.replyingLabel}>
+                    Replying to {replyingTo.sender === 'me' ? 'your message' : activeThread.name}
+                  </Text>
+                  <Text style={styles.replyingText} numberOfLines={1}>
+                    {replyingTo.text}
+                  </Text>
+                </View>
+                <Pressable style={styles.replyingClose} onPress={() => setReplyingTo(null)}>
+                  <Ionicons name="close" size={16} color={theme.text} />
+                </Pressable>
+              </View>
+            ) : null}
 
             <View style={styles.chatComposer}>
               <TextInput
@@ -256,6 +357,51 @@ export function InboxScreen({
                 <Text style={styles.sendButtonText}>Send</Text>
               </Pressable>
             </View>
+
+            <Modal
+              transparent
+              visible={Boolean(activeMessageMenu)}
+              animationType="fade"
+              onRequestClose={() => setActiveMessageMenu(null)}>
+              <Pressable style={styles.messageMenuBackdrop} onPress={() => setActiveMessageMenu(null)}>
+                {activeMessageMenu ? (
+                  <Pressable
+                    style={[
+                      styles.messageMenuShell,
+                      { left: activeMessageMenu.left, top: activeMessageMenu.top },
+                    ]}
+                    onPress={(event) => event.stopPropagation()}>
+                    <View style={styles.reactionBar}>
+                      {QUICK_REACTIONS.map((emoji) => (
+                        <Pressable
+                          key={emoji}
+                          style={styles.reactionButton}
+                          onPress={() => handleReaction(emoji)}>
+                          <Text style={styles.reactionText}>{emoji}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+
+                    <View style={styles.messageActionMenu}>
+                      <Pressable style={styles.messageActionRow} onPress={handleReply}>
+                        <Ionicons name="arrow-undo-outline" size={23} color={theme.text} />
+                        <Text style={styles.messageActionText}>Reply</Text>
+                      </Pressable>
+                      <Pressable style={styles.messageActionRow} onPress={handleAddSticker}>
+                        <Ionicons name="images-outline" size={23} color={theme.text} />
+                        <Text style={styles.messageActionText}>Add sticker</Text>
+                      </Pressable>
+                      <Pressable style={styles.messageActionRow} onPress={handleDeleteMessage}>
+                        <Ionicons name="trash-outline" size={23} color="#ff6b8a" />
+                        <Text style={[styles.messageActionText, styles.messageActionDanger]}>
+                          Delete message
+                        </Text>
+                      </Pressable>
+                    </View>
+                  </Pressable>
+                ) : null}
+              </Pressable>
+            </Modal>
           </View>
         ) : (
           <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -529,6 +675,7 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       gap: 10,
     },
     chatBubble: {
+      position: 'relative',
       maxWidth: '82%',
       paddingHorizontal: 14,
       paddingVertical: 12,
@@ -551,6 +698,67 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     },
     chatBubbleTextMe: {
       color: theme.background,
+    },
+    messageBadge: {
+      position: 'absolute',
+      right: 8,
+      bottom: -17,
+      minHeight: 24,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 2,
+      paddingHorizontal: 7,
+      paddingVertical: 3,
+      borderRadius: 999,
+      backgroundColor: theme.surface,
+      borderWidth: 1,
+      borderColor: theme.border,
+      shadowColor: '#000',
+      shadowOpacity: 0.22,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 6 },
+      elevation: 6,
+    },
+    messageBadgeThem: {
+      right: undefined,
+      left: 8,
+    },
+    messageBadgeText: {
+      fontSize: 13,
+      lineHeight: 17,
+    },
+    replyingBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: theme.border,
+      backgroundColor: theme.surface,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+    },
+    replyingCopy: {
+      flex: 1,
+      gap: 3,
+    },
+    replyingLabel: {
+      color: theme.textMuted,
+      fontSize: 12,
+      fontWeight: '800',
+    },
+    replyingText: {
+      color: theme.text,
+      fontSize: 13,
+      fontWeight: '700',
+    },
+    replyingClose: {
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: theme.surfaceAlt,
     },
     chatComposer: {
       flexDirection: 'row',
@@ -579,5 +787,68 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       color: theme.background,
       fontSize: 13,
       fontWeight: '800',
+    },
+    messageMenuBackdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.32)',
+    },
+    messageMenuShell: {
+      position: 'absolute',
+      width: MESSAGE_MENU_WIDTH,
+      gap: 12,
+    },
+    reactionBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      borderRadius: 999,
+      padding: 8,
+      backgroundColor: 'rgba(18, 22, 29, 0.96)',
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.08)',
+      shadowColor: '#000',
+      shadowOpacity: 0.28,
+      shadowRadius: 22,
+      shadowOffset: { width: 0, height: 12 },
+      elevation: 12,
+    },
+    reactionButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    reactionText: {
+      fontSize: 24,
+      lineHeight: 28,
+    },
+    messageActionMenu: {
+      borderRadius: 24,
+      padding: 8,
+      backgroundColor: 'rgba(24, 22, 34, 0.96)',
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.08)',
+      shadowColor: '#000',
+      shadowOpacity: 0.3,
+      shadowRadius: 24,
+      shadowOffset: { width: 0, height: 14 },
+      elevation: 14,
+    },
+    messageActionRow: {
+      minHeight: 54,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 14,
+      borderRadius: 16,
+      paddingHorizontal: 12,
+    },
+    messageActionText: {
+      color: theme.text,
+      fontSize: 17,
+      fontWeight: '700',
+    },
+    messageActionDanger: {
+      color: '#ff6b8a',
     },
   });

@@ -1,5 +1,8 @@
-import React from "react"
+import React, { useEffect, useRef, useState } from "react"
 import { useOutletContext } from "react-router-dom"
+
+const QUICK_REACTIONS = ["❤️", "😂", "😮", "😢", "😡", "👍", "＋"]
+const LONG_PRESS_MS = 420
 
 function Messages() {
   const {
@@ -13,11 +16,105 @@ function Messages() {
     openDmThread,
     closeDmThread,
     handleSendDmMessage,
+    handleDeleteDmMessage,
   } = useOutletContext()
+  const [activeMessageMenu, setActiveMessageMenu] = useState(null)
+  const [messageReactions, setMessageReactions] = useState({})
+  const [messageStickers, setMessageStickers] = useState({})
+  const [replyingTo, setReplyingTo] = useState(null)
+  const longPressTimerRef = useRef(null)
+  const menuRef = useRef(null)
 
   const selectedMessages = selectedDmThread
     ? dmMessagesByThread[selectedDmThread.id] || []
     : []
+
+  useEffect(() => {
+    if (!activeMessageMenu) return undefined
+
+    const handlePointerDown = (event) => {
+      if (menuRef.current?.contains(event.target)) return
+      setActiveMessageMenu(null)
+    }
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setActiveMessageMenu(null)
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown)
+    document.addEventListener("keydown", handleKeyDown)
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown)
+      document.removeEventListener("keydown", handleKeyDown)
+    }
+  }, [activeMessageMenu])
+
+  const clearLongPressTimer = () => {
+    if (longPressTimerRef.current) {
+      window.clearTimeout(longPressTimerRef.current)
+      longPressTimerRef.current = null
+    }
+  }
+
+  const openMessageMenu = (message, element) => {
+    const rect = element.getBoundingClientRect()
+    const menuWidth = 260
+    const left = Math.min(
+      Math.max(16, message.sender === "me" ? rect.right - menuWidth : rect.left),
+      window.innerWidth - menuWidth - 16
+    )
+    const top = Math.min(Math.max(72, rect.top - 76), window.innerHeight - 330)
+
+    setActiveMessageMenu({
+      message,
+      left,
+      top,
+    })
+  }
+
+  const handleMessagePointerDown = (event, message) => {
+    clearLongPressTimer()
+    longPressTimerRef.current = window.setTimeout(() => {
+      openMessageMenu(message, event.currentTarget)
+    }, LONG_PRESS_MS)
+  }
+
+  const handleMessageContextMenu = (event, message) => {
+    event.preventDefault()
+    clearLongPressTimer()
+    openMessageMenu(message, event.currentTarget)
+  }
+
+  const handleReaction = (emoji) => {
+    if (!activeMessageMenu?.message) return
+    const messageId = activeMessageMenu.message.id
+    setMessageReactions((prev) => ({ ...prev, [messageId]: emoji }))
+    setActiveMessageMenu(null)
+  }
+
+  const handleReply = () => {
+    setReplyingTo(activeMessageMenu?.message || null)
+    setActiveMessageMenu(null)
+  }
+
+  const handleAddSticker = () => {
+    if (!activeMessageMenu?.message) return
+    setMessageStickers((prev) => ({ ...prev, [activeMessageMenu.message.id]: "✨" }))
+    setActiveMessageMenu(null)
+  }
+
+  const handleDelete = () => {
+    if (activeMessageMenu?.message) {
+      handleDeleteDmMessage?.(activeMessageMenu.message)
+    }
+    if (replyingTo?.id === activeMessageMenu?.message?.id) {
+      setReplyingTo(null)
+    }
+    setActiveMessageMenu(null)
+  }
 
   return (
     <main className="messages-page">
@@ -95,13 +192,39 @@ function Messages() {
                   <div
                     className={`dm-chat-bubble ${message.sender}`}
                     key={message.id}
+                    onPointerDown={(event) => handleMessagePointerDown(event, message)}
+                    onPointerUp={clearLongPressTimer}
+                    onPointerLeave={clearLongPressTimer}
+                    onPointerCancel={clearLongPressTimer}
+                    onContextMenu={(event) => handleMessageContextMenu(event, message)}
                   >
                     {message.text}
+                    {messageReactions[message.id] || messageStickers[message.id] ? (
+                      <span className="dm-chat-bubble-badges">
+                        {messageReactions[message.id] ? (
+                          <span>{messageReactions[message.id]}</span>
+                        ) : null}
+                        {messageStickers[message.id] ? (
+                          <span>{messageStickers[message.id]}</span>
+                        ) : null}
+                      </span>
+                    ) : null}
                   </div>
                 ))}
               </div>
 
               <form className="dm-chat-input-row" onSubmit={handleSendDmMessage}>
+                {replyingTo ? (
+                  <div className="dm-replying-banner">
+                    <span>
+                      Replying to {replyingTo.sender === "me" ? "your message" : selectedDmThread.name}
+                    </span>
+                    <strong>{replyingTo.text}</strong>
+                    <button type="button" onClick={() => setReplyingTo(null)} aria-label="Cancel reply">
+                      ×
+                    </button>
+                  </div>
+                ) : null}
                 <input
                   type="text"
                   value={dmDraftMessage}
@@ -110,6 +233,44 @@ function Messages() {
                 />
                 <button type="submit">Send</button>
               </form>
+
+              {activeMessageMenu ? (
+                <div
+                  className="dm-message-popover"
+                  ref={menuRef}
+                  style={{
+                    left: `${activeMessageMenu.left}px`,
+                    top: `${activeMessageMenu.top}px`,
+                  }}
+                >
+                  <div className="dm-message-reaction-bar" aria-label="Quick reactions">
+                    {QUICK_REACTIONS.map((emoji) => (
+                      <button
+                        type="button"
+                        key={emoji}
+                        onClick={() => handleReaction(emoji)}
+                        aria-label={`React with ${emoji}`}
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="dm-message-action-menu" role="menu">
+                    <button type="button" role="menuitem" onClick={handleReply}>
+                      <span aria-hidden="true">↩</span>
+                      Reply
+                    </button>
+                    <button type="button" role="menuitem" onClick={handleAddSticker}>
+                      <span aria-hidden="true">▣</span>
+                      Add sticker
+                    </button>
+                    <button type="button" role="menuitem" className="danger" onClick={handleDelete}>
+                      <span aria-hidden="true">⌫</span>
+                      Delete message
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </div>
           ) : (
             <div className="messages-empty-card messages-chat-empty">

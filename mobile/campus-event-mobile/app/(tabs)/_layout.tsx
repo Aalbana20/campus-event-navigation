@@ -47,7 +47,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="messages"
         options={{
-          title: 'DMs',
+          title: 'Messages',
           tabBarIcon: ({ color, size }) => <Ionicons name="paper-plane-outline" size={size} color={color} />,
           tabBarBadge: unreadDmCount > 0 ? unreadDmCount : undefined,
           tabBarBadgeStyle: {

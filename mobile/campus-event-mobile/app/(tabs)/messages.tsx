@@ -8,7 +8,7 @@ export default function MessagesRoute() {
       initialTab="dms"
       lockedTab="dms"
       showBackButton={false}
-      title="DMs"
+      title="Messages"
       subtitle="Conversations around your campus plans live here."
     />
   );

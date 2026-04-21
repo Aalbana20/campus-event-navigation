@@ -619,6 +619,34 @@ function MainLayout() {
     }
   }
 
+  const handleDeleteDmMessage = async (message) => {
+    if (!selectedDmThread || !message?.id || !currentUserId) return
+
+    const threadId = selectedDmThread.id
+    const previousMessages = dmMessagesByThread[threadId] || []
+
+    setDmMessagesByThread((prev) => ({
+      ...prev,
+      [threadId]: (prev[threadId] || []).filter((item) => String(item.id) !== String(message.id)),
+    }))
+
+    if (String(message.id).startsWith("temp-")) return
+
+    const { error } = await supabase
+      .from("messages")
+      .delete()
+      .eq("id", message.id)
+      .or(`sender_id.eq.${currentUserId},recipient_id.eq.${currentUserId}`)
+
+    if (error) {
+      console.error("Unable to delete DM message:", error)
+      setDmMessagesByThread((prev) => ({
+        ...prev,
+        [threadId]: previousMessages,
+      }))
+    }
+  }
+
   const openInbox = () => {
     setIsInboxOpen(true)
   }
@@ -697,6 +725,7 @@ function MainLayout() {
     openDmThread,
     closeDmThread,
     handleSendDmMessage,
+    handleDeleteDmMessage,
   }
 
   const navItems = [
