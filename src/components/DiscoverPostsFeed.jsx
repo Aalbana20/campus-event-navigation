@@ -1,5 +1,18 @@
 import React, { useEffect, useRef, useState } from "react"
+import {
+  addPostComment,
+  deletePostComment,
+  loadPostComments,
+  recordPostShare,
+  setPostCommentLike,
+  setPostLike,
+} from "../postEngagement"
+import { invalidateDiscoverFeedCache } from "../discoverPosts"
 import { DEFAULT_AVATAR_URL } from "../profileMedia"
+import { repostPost, unrepostPost } from "../profileReposts"
+import { useEvents } from "../context/EventContext"
+import { useToast } from "../context/ToastContext"
+import DiscoverCommentsDrawer from "./DiscoverCommentsDrawer"
 import PostShareSheet from "./PostShareSheet"
 
 function FeedVideo({ post }) {
@@ -111,10 +124,13 @@ function CommentIcon() {
   )
 }
 
-function SaveIcon({ filled = false }) {
+function RepostIcon() {
   return (
-    <svg {...iconProps} fill={filled ? "currentColor" : "none"} stroke={filled ? "currentColor" : "currentColor"}>
-      <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+    <svg {...iconProps}>
+      <polyline points="17 1 21 5 17 9" />
+      <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+      <polyline points="7 23 3 19 7 15" />
+      <path d="M21 13v2a4 4 0 0 1-4 4H3" />
     </svg>
   )
 }
@@ -145,6 +161,21 @@ function PauseIcon() {
   )
 }
 
+const formatActionCount = (value, fallback = "0") => {
+  const count = Number(value) || 0
+  if (count <= 0) return fallback
+  if (count < 1000) return String(count)
+  if (count < 1_000_000) return `${(count / 1000).toFixed(count < 10_000 ? 1 : 0)}K`
+  return `${(count / 1_000_000).toFixed(count < 10_000_000 ? 1 : 0)}M`
+}
+
+const getPostThreadTitle = (post) =>
+  post?.caption?.trim()
+    ? post.caption.trim()
+    : post?.authorUsername
+      ? `@${post.authorUsername}'s post`
+      : `${post?.authorName || "Campus"} post`
+
 function DiscoverPostsFeed({
   posts,
   onPressCreator,
@@ -154,9 +185,260 @@ function DiscoverPostsFeed({
   onRepostPost,
   repostedPostIds = new Set(),
 }) {
+  const { showToast } = useToast()
+  const { currentUser } = useEvents()
+  const [localPosts, setLocalPosts] = useState(posts || [])
   const [sharePost, setSharePost] = useState(null)
+  const [activeCommentPostId, setActiveCommentPostId] = useState(null)
+  const [commentsByPostId, setCommentsByPostId] = useState({})
+  const [commentDraft, setCommentDraft] = useState("")
+  const [isSubmittingComment, setIsSubmittingComment] = useState(false)
 
-  if (!posts || posts.length === 0) {
+  useEffect(() => {
+    setLocalPosts(posts || [])
+  }, [posts])
+
+  const updateLocalPost = (postId, updater) => {
+    setLocalPosts((prev) =>
+      prev.map((post) =>
+        String(post.id) === String(postId)
+          ? { ...post, ...updater(post) }
+          : post
+      )
+    )
+    setSharePost((prev) =>
+      prev && String(prev.id) === String(postId)
+        ? { ...prev, ...updater(prev) }
+        : prev
+    )
+  }
+
+  const requireCurrentUser = (message) => {
+    if (currentUserId && currentUserId !== "current-user") return true
+    showToast(message, "error")
+    return false
+  }
+
+  const handleToggleLike = async (post) => {
+    if (!requireCurrentUser("Sign in to like posts.")) return
+    const postId = String(post.id)
+    const wasLiked = Boolean(post.isLikedByCurrentUser)
+    const nextLiked = !wasLiked
+
+    updateLocalPost(postId, () => ({
+      isLikedByCurrentUser: nextLiked,
+      likeCount: Math.max(0, (Number(post.likeCount) || 0) + (nextLiked ? 1 : -1)),
+    }))
+
+    try {
+      await setPostLike({ postId, userId: currentUserId, liked: nextLiked })
+      invalidateDiscoverFeedCache()
+    } catch (error) {
+      updateLocalPost(postId, () => ({
+        isLikedByCurrentUser: wasLiked,
+        likeCount: Number(post.likeCount) || 0,
+      }))
+      showToast(error?.message || "Could not update like.", "error")
+    }
+  }
+
+  const handleToggleRepost = async (post) => {
+    if (!requireCurrentUser("Sign in to repost posts.")) return
+    const postId = String(post.id)
+    const wasReposted =
+      Boolean(post.isRepostedByCurrentUser) || repostedPostIds?.has(postId)
+    const nextReposted = !wasReposted
+
+    updateLocalPost(postId, () => ({
+      isRepostedByCurrentUser: nextReposted,
+      repostCount: Math.max(0, (Number(post.repostCount) || 0) + (nextReposted ? 1 : -1)),
+    }))
+
+    try {
+      if (onRepostPost) {
+        await onRepostPost({ ...post, isRepostedByCurrentUser: wasReposted })
+      } else if (nextReposted) {
+        await repostPost({ userId: currentUserId, postId })
+      } else {
+        await unrepostPost({ userId: currentUserId, postId })
+      }
+      invalidateDiscoverFeedCache()
+      showToast(nextReposted ? "Post reposted." : "Repost removed.", "success")
+    } catch (error) {
+      updateLocalPost(postId, () => ({
+        isRepostedByCurrentUser: wasReposted,
+        repostCount: Number(post.repostCount) || 0,
+      }))
+      showToast(error?.message || "Could not update repost.", "error")
+    }
+  }
+
+  const handleOpenComments = async (post) => {
+    setActiveCommentPostId(String(post.id))
+    setCommentDraft("")
+    try {
+      const comments = await loadPostComments({
+        postId: post.id,
+        currentUserId,
+      })
+      setCommentsByPostId((prev) => ({ ...prev, [String(post.id)]: comments }))
+      updateLocalPost(post.id, () => ({ commentCount: comments.length }))
+    } catch (error) {
+      showToast(error?.message || "Could not load comments.", "error")
+    }
+  }
+
+  const handleCloseComments = () => {
+    setActiveCommentPostId(null)
+    setCommentDraft("")
+  }
+
+  const activeCommentPost =
+    localPosts.find((post) => String(post.id) === String(activeCommentPostId)) ||
+    null
+  const activePostComments = activeCommentPostId
+    ? commentsByPostId[String(activeCommentPostId)] || []
+    : []
+
+  const handleSubmitComment = async (parentId = null) => {
+    if (!activeCommentPost || !commentDraft.trim() || isSubmittingComment) return
+    if (!requireCurrentUser("Sign in to comment.")) return
+
+    const postId = String(activeCommentPost.id)
+    const body = commentDraft.trim()
+    const optimisticId = `optimistic-${Date.now()}`
+    const optimisticComment = {
+      id: optimisticId,
+      authorName: currentUser?.name || currentUser?.username || "Campus User",
+      authorUsername: currentUser?.username || "",
+      authorAvatar: currentUser?.image || currentUser?.avatar || "",
+      authorId: currentUserId,
+      body,
+      createdAt: new Date().toISOString(),
+      likeCount: 0,
+      likedByMe: false,
+      parentId: parentId || null,
+    }
+
+    setIsSubmittingComment(true)
+    setCommentDraft("")
+    setCommentsByPostId((prev) => ({
+      ...prev,
+      [postId]: [...(prev[postId] || []), optimisticComment],
+    }))
+    updateLocalPost(postId, (post) => ({
+      commentCount: (Number(post.commentCount) || 0) + 1,
+    }))
+
+    try {
+      const savedComment = await addPostComment({
+        postId,
+        userId: currentUserId,
+        body,
+        parentId,
+      })
+      invalidateDiscoverFeedCache()
+      setCommentsByPostId((prev) => ({
+        ...prev,
+        [postId]: (prev[postId] || []).map((comment) =>
+          comment.id === optimisticId
+            ? { ...comment, id: savedComment.id, authorId: savedComment.userId }
+            : comment
+        ),
+      }))
+    } catch (error) {
+      setCommentsByPostId((prev) => ({
+        ...prev,
+        [postId]: (prev[postId] || []).filter((comment) => comment.id !== optimisticId),
+      }))
+      updateLocalPost(postId, (post) => ({
+        commentCount: Math.max(0, (Number(post.commentCount) || 0) - 1),
+      }))
+      showToast(error?.message || "Could not post comment.", "error")
+    } finally {
+      setIsSubmittingComment(false)
+    }
+  }
+
+  const handleToggleCommentLike = async (commentId) => {
+    if (!activeCommentPost) return
+    if (!requireCurrentUser("Sign in to like comments.")) return
+    const postId = String(activeCommentPost.id)
+    let nextLiked = false
+
+    setCommentsByPostId((prev) => ({
+      ...prev,
+      [postId]: (prev[postId] || []).map((comment) => {
+        if (comment.id !== commentId) return comment
+        nextLiked = !comment.likedByMe
+        return {
+          ...comment,
+          likedByMe: nextLiked,
+          likeCount: Math.max(0, (comment.likeCount || 0) + (nextLiked ? 1 : -1)),
+        }
+      }),
+    }))
+
+    if (String(commentId).startsWith("optimistic-")) return
+
+    try {
+      await setPostCommentLike({
+        commentId,
+        userId: currentUserId,
+        liked: nextLiked,
+      })
+    } catch (error) {
+      showToast(error?.message || "Could not update comment like.", "error")
+      const comments = await loadPostComments({ postId, currentUserId })
+      setCommentsByPostId((prev) => ({ ...prev, [postId]: comments }))
+    }
+  }
+
+  const handleDeleteComment = async (commentId) => {
+    if (!activeCommentPost) return
+    if (!requireCurrentUser("Sign in to delete comments.")) return
+    const postId = String(activeCommentPost.id)
+    const currentComments = commentsByPostId[postId] || []
+    const removedCount = currentComments.filter(
+      (comment) => comment.id === commentId || comment.parentId === commentId
+    ).length
+
+    setCommentsByPostId((prev) => ({
+      ...prev,
+      [postId]: (prev[postId] || []).filter(
+        (comment) => comment.id !== commentId && comment.parentId !== commentId
+      ),
+    }))
+    updateLocalPost(postId, (post) => ({
+      commentCount: Math.max(0, (Number(post.commentCount) || 0) - removedCount),
+    }))
+
+    if (String(commentId).startsWith("optimistic-")) return
+
+    try {
+      await deletePostComment({ commentId, userId: currentUserId })
+      invalidateDiscoverFeedCache()
+    } catch (error) {
+      showToast(error?.message || "Could not delete comment.", "error")
+      const comments = await loadPostComments({ postId, currentUserId })
+      setCommentsByPostId((prev) => ({ ...prev, [postId]: comments }))
+      updateLocalPost(postId, () => ({ commentCount: comments.length }))
+    }
+  }
+
+  const handleRecordShare = async (post, method) => {
+    const shareCount = await recordPostShare({
+      postId: post?.id,
+      userId: currentUserId,
+      method,
+    })
+    if (shareCount != null) {
+      updateLocalPost(post.id, () => ({ shareCount }))
+      invalidateDiscoverFeedCache()
+    }
+  }
+
+  if (!localPosts || localPosts.length === 0) {
     return (
       <div className="discover-video-feed-container">
         <div className="video-feed-empty">
@@ -178,8 +460,12 @@ function DiscoverPostsFeed({
 
   return (
     <div className="discover-video-feed-container">
-      {posts.map((post) => {
+      {localPosts.map((post) => {
         const isVideo = post.mediaType === "video"
+        const isLiked = Boolean(post.isLikedByCurrentUser)
+        const isReposted =
+          Boolean(post.isRepostedByCurrentUser) ||
+          repostedPostIds?.has(String(post.id))
 
         return (
           <article key={post.id} className="video-feed-item">
@@ -197,29 +483,54 @@ function DiscoverPostsFeed({
             <div className="video-feed-overlay" />
 
             <div className="video-feed-actions">
-              <button type="button" className="video-action-btn" aria-label="Like post">
+              <button
+                type="button"
+                className={`video-action-btn ${isLiked ? "active heart" : ""}`}
+                onClick={() => handleToggleLike(post)}
+                aria-label={isLiked ? "Unlike post" : "Like post"}
+                aria-pressed={isLiked}
+              >
                 <div className="video-action-icon">
-                  <HeartIcon />
+                  <HeartIcon filled={isLiked} />
                 </div>
-                <span className="video-action-count">0</span>
+                <span className="video-action-count">
+                  {formatActionCount(post.likeCount)}
+                </span>
               </button>
-              <button type="button" className="video-action-btn" aria-label="Open comments">
+              <button
+                type="button"
+                className="video-action-btn"
+                onClick={() => handleOpenComments(post)}
+                aria-label="Open comments"
+              >
                 <div className="video-action-icon">
                   <CommentIcon />
                 </div>
-                <span className="video-action-count">0</span>
+                <span className="video-action-count">
+                  {formatActionCount(post.commentCount)}
+                </span>
               </button>
-              <button type="button" className="video-action-btn" aria-label="Save post">
+              <button
+                type="button"
+                className={`video-action-btn ${isReposted ? "active repost" : ""}`}
+                onClick={() => handleToggleRepost(post)}
+                aria-label={isReposted ? "Remove repost" : "Repost post"}
+                aria-pressed={isReposted}
+              >
                 <div className="video-action-icon">
-                  <SaveIcon />
+                  <RepostIcon />
                 </div>
-                <span className="video-action-count">0</span>
+                <span className="video-action-count">
+                  {formatActionCount(post.repostCount)}
+                </span>
               </button>
               <button type="button" className="video-action-btn" aria-label="Share post" onClick={() => setSharePost(post)}>
                 <div className="video-action-icon">
                   <ShareIcon />
                 </div>
-                <span className="video-action-count">Share</span>
+                <span className="video-action-count">
+                  {formatActionCount(post.shareCount, "Share")}
+                </span>
               </button>
             </div>
 
@@ -259,8 +570,33 @@ function DiscoverPostsFeed({
         onClose={() => setSharePost(null)}
         isOwner={Boolean(sharePost && currentUserId && String(currentUserId) === String(sharePost.authorId))}
         onDelete={onDeletePost}
-        onRepost={onRepostPost}
-        isReposted={Boolean(sharePost && repostedPostIds?.has(String(sharePost.id)))}
+        onRepost={handleToggleRepost}
+        onShareComplete={handleRecordShare}
+        isReposted={Boolean(
+          sharePost &&
+            (sharePost.isRepostedByCurrentUser || repostedPostIds?.has(String(sharePost.id)))
+        )}
+      />
+
+      <DiscoverCommentsDrawer
+        open={Boolean(activeCommentPost)}
+        event={activeCommentPost}
+        comments={activePostComments}
+        draft={commentDraft}
+        currentUserId={currentUserId}
+        threadTitle={activeCommentPost ? getPostThreadTitle(activeCommentPost) : ""}
+        threadMeta={
+          activeCommentPost?.authorUsername
+            ? `@${activeCommentPost.authorUsername}`
+            : activeCommentPost?.authorName || "Discover post"
+        }
+        emptyCopy="Start the conversation for this post."
+        ariaLabel="Post comments"
+        onDraftChange={setCommentDraft}
+        onSubmit={handleSubmitComment}
+        onClose={handleCloseComments}
+        onToggleLike={handleToggleCommentLike}
+        onDeleteComment={handleDeleteComment}
       />
     </div>
   )

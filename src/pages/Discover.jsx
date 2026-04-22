@@ -799,15 +799,17 @@ function Discover({ hideModeSwitch = false, initialMode = "events" } = {}) {
 
   const loadDiscoverPostsFeed = useCallback(async () => {
     const nextPosts = await loadDiscoverPosts({
+      currentUserId: currentUser?.id || "",
       onData: (posts) => setDiscoverPosts(posts),
     })
     setDiscoverPosts(nextPosts)
-  }, [])
+  }, [currentUser?.id])
 
   useEffect(() => {
     let cancelled = false
 
     loadDiscoverPosts({
+      currentUserId: currentUser?.id || "",
       onData: (posts) => {
         if (!cancelled) setDiscoverPosts(posts)
       },
@@ -818,7 +820,7 @@ function Discover({ hideModeSwitch = false, initialMode = "events" } = {}) {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [currentUser?.id])
 
   const handleSubmitPostComposer = useCallback(
     async ({ file, caption }) => {

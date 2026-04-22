@@ -32,6 +32,10 @@ function DiscoverCommentsDrawer({
   comments,
   draft,
   currentUserId,
+  threadTitle,
+  threadMeta,
+  emptyCopy = "Start the conversation for this event.",
+  ariaLabel = "Event comments",
   onDraftChange,
   onSubmit,
   onClose,
@@ -177,6 +181,8 @@ function DiscoverCommentsDrawer({
   }
 
   if (!open || !event) return null
+  const title = threadTitle || event.title || "Campus thread"
+  const meta = threadMeta || [event.date, event.time].filter(Boolean).join(" • ") || "Event thread"
 
   const renderComment = (comment, isReply = false) => {
     const avatarSrc = sanitizeAvatarUrl(comment.authorAvatar, DEFAULT_AVATAR_URL)
@@ -262,12 +268,12 @@ function DiscoverCommentsDrawer({
         aria-label="Close comments"
       />
 
-      <aside className="discover-comments-drawer" aria-label="Event comments">
+      <aside className="discover-comments-drawer" aria-label={ariaLabel}>
         <div className="discover-comments-header">
           <div className="discover-comments-header-copy">
             <span className="discover-comments-kicker">Comments</span>
-            <h3>{event.title || "Campus Event"}</h3>
-            <p>{[event.date, event.time].filter(Boolean).join(" • ") || "Event thread"}</p>
+            <h3>{title}</h3>
+            <p>{meta}</p>
           </div>
 
           <button
@@ -317,7 +323,7 @@ function DiscoverCommentsDrawer({
           ) : (
             <div className="discover-comments-empty">
               <h4>No comments yet.</h4>
-              <p>Start the conversation for this event.</p>
+              <p>{emptyCopy}</p>
             </div>
           )}
         </div>

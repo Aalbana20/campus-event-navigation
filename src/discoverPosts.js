@@ -7,6 +7,7 @@ import {
   extractVideoPoster,
   readImageDimensions,
 } from "./lib/mediaCompression"
+import { loadPostEngagementSummary } from "./postEngagement"
 import { DEFAULT_AVATAR_URL, sanitizeAvatarUrl } from "./profileMedia"
 import { supabase } from "./supabaseClient"
 
@@ -69,7 +70,7 @@ export const resolveDiscoverPostMediaUrl = (value, fallback = "") => {
   return data?.publicUrl || fallback
 }
 
-const normalizePostRecord = ({ row, profile }) => ({
+const normalizePostRecord = ({ row, profile, engagement }) => ({
   id: String(row.id),
   authorId: String(row.author_id),
   mediaUrl: resolveDiscoverPostMediaUrl(row.media_url),
@@ -89,6 +90,12 @@ const normalizePostRecord = ({ row, profile }) => ({
     "Campus User",
   authorUsername: toTrimmedString(profile?.username) || "",
   authorAvatar: sanitizeAvatarUrl(profile?.avatar_url, DEFAULT_AVATAR_URL),
+  likeCount: Number(engagement?.likeCount) || 0,
+  commentCount: Number(engagement?.commentCount) || 0,
+  repostCount: Number(engagement?.repostCount) || 0,
+  shareCount: Number(engagement?.shareCount) || 0,
+  isLikedByCurrentUser: Boolean(engagement?.isLikedByCurrentUser),
+  isRepostedByCurrentUser: Boolean(engagement?.isRepostedByCurrentUser),
 })
 
 const POST_SELECT_COLUMNS =
@@ -110,7 +117,7 @@ const loadAuthorProfiles = async (authorIds) => {
   return new Map((data || []).map((profile) => [String(profile.id), profile]))
 }
 
-const fetchDiscoverPostsFromNetwork = async () => {
+const fetchDiscoverPostsFromNetwork = async ({ currentUserId = "" } = {}) => {
   const { data: postRows, error } = await supabase
     .from("discover_posts")
     .select(POST_SELECT_COLUMNS)
@@ -126,9 +133,17 @@ const fetchDiscoverPostsFromNetwork = async () => {
     ...new Set((postRows || []).map((row) => String(row.author_id || "")).filter(Boolean)),
   ]
   const profileLookup = await loadAuthorProfiles(authorIds)
+  const engagementLookup = await loadPostEngagementSummary({
+    postIds: (postRows || []).map((row) => row.id),
+    currentUserId,
+  })
 
   return (postRows || []).map((row) =>
-    normalizePostRecord({ row, profile: profileLookup.get(String(row.author_id || "")) })
+    normalizePostRecord({
+      row,
+      profile: profileLookup.get(String(row.author_id || "")),
+      engagement: engagementLookup.get(String(row.id)),
+    })
   )
 }
 
@@ -143,11 +158,13 @@ const fetchDiscoverPostsFromNetwork = async () => {
 export const loadDiscoverPosts = async ({
   forceRefresh = false,
   onData,
+  currentUserId = "",
 } = {}) => {
   try {
+    const cacheKey = `${DISCOVER_FEED_CACHE_KEY}:${currentUserId || "anonymous"}`
     return await loadWithBackgroundRefresh(
-      DISCOVER_FEED_CACHE_KEY,
-      fetchDiscoverPostsFromNetwork,
+      cacheKey,
+      () => fetchDiscoverPostsFromNetwork({ currentUserId }),
       {
         ttlMs: DISCOVER_FEED_CACHE_TTL_MS,
         forceRefresh,
@@ -188,9 +205,17 @@ export const loadDiscoverPostsForAuthor = async (authorId, options = {}) => {
   }
 
   const profileLookup = await loadAuthorProfiles([authorId])
+  const engagementLookup = await loadPostEngagementSummary({
+    postIds: (postRows || []).map((row) => row.id),
+    currentUserId: options.currentUserId || "",
+  })
 
   return (postRows || []).map((row) =>
-    normalizePostRecord({ row, profile: profileLookup.get(String(authorId)) })
+    normalizePostRecord({
+      row,
+      profile: profileLookup.get(String(authorId)),
+      engagement: engagementLookup.get(String(row.id)),
+    })
   )
 }
 
@@ -215,9 +240,16 @@ export const loadDiscoverPostsByIds = async (postIds = []) => {
     ...new Set((postRows || []).map((row) => String(row.author_id || "")).filter(Boolean)),
   ]
   const profileLookup = await loadAuthorProfiles(authorIds)
+  const engagementLookup = await loadPostEngagementSummary({
+    postIds: (postRows || []).map((row) => row.id),
+  })
 
   return (postRows || []).map((row) =>
-    normalizePostRecord({ row, profile: profileLookup.get(String(row.author_id || "")) })
+    normalizePostRecord({
+      row,
+      profile: profileLookup.get(String(row.author_id || "")),
+      engagement: engagementLookup.get(String(row.id)),
+    })
   )
 }
 

@@ -111,6 +111,7 @@ function DiscoverVideoItem({
 }) {
   const rawUri = getEventImageUri(event.image);
   const isVideo = isVideoMediaUrl(event.image);
+  const [isManuallyPaused, setIsManuallyPaused] = useState(false);
   const videoSource = isVideo ? rawUri : null;
   const player = useVideoPlayer(videoSource, (instance) => {
     instance.loop = true;
@@ -119,12 +120,17 @@ function DiscoverVideoItem({
 
   React.useEffect(() => {
     if (!isVideo || !player) return;
-    if (isActive) {
+    if (isActive && !isManuallyPaused) {
       player.play();
     } else {
       player.pause();
     }
-  }, [isActive, isVideo, player]);
+  }, [isActive, isManuallyPaused, isVideo, player]);
+
+  const handleTogglePlayback = () => {
+    if (!isActive) return;
+    setIsManuallyPaused((paused) => !paused);
+  };
 
   return (
     <View style={[{ height, width: '100%' }]}>
@@ -138,6 +144,19 @@ function DiscoverVideoItem({
             allowsFullscreen={false}
             allowsPictureInPicture={false}
           />
+          <Pressable
+            accessibilityLabel={isManuallyPaused ? 'Play video' : 'Pause video'}
+            accessibilityRole="button"
+            disabled={!isActive}
+            onPress={handleTogglePlayback}
+            style={styles.playbackHitArea}
+          >
+            {isManuallyPaused ? (
+              <View style={styles.playbackCenterButton}>
+                <Ionicons name="play" size={34} color="rgba(255,255,255,0.9)" />
+              </View>
+            ) : null}
+          </Pressable>
           <View style={styles.gradientOverlay} />
           <DiscoverVideoItemOverlay
             event={event}
@@ -275,6 +294,20 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     gradientOverlay: {
       ...StyleSheet.absoluteFillObject,
       backgroundColor: 'rgba(0,0,0,0.3)',
+    },
+    playbackHitArea: {
+      ...StyleSheet.absoluteFillObject,
+      zIndex: 5,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    playbackCenterButton: {
+      width: 70,
+      height: 70,
+      borderRadius: 35,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: 'rgba(0,0,0,0.28)',
     },
     rightRail: {
       position: 'absolute',

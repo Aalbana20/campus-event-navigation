@@ -36,6 +36,7 @@ function VideoPosts() {
     let cancelled = false
 
     loadDiscoverPosts({
+      currentUserId: currentUser?.id || "",
       onData: (nextPosts) => {
         if (!cancelled) setPosts(nextPosts)
       },
@@ -46,7 +47,7 @@ function VideoPosts() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [currentUser?.id])
 
   const videoPosts = useMemo(
     () => posts.filter((post) => post.mediaType === "video"),
@@ -98,7 +99,10 @@ function VideoPosts() {
         onGrid,
       })
 
-      const refreshed = await loadDiscoverPosts({ forceRefresh: true })
+      const refreshed = await loadDiscoverPosts({
+        forceRefresh: true,
+        currentUserId: currentUser?.id || "",
+      })
       setPosts(refreshed)
       setIsComposerOpen(false)
       showToast("Posted!", "success")

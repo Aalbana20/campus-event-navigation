@@ -34,6 +34,7 @@ function PostShareSheet({
   isOwner = false,
   onDelete,
   onRepost,
+  onShareComplete,
   isReposted = false,
 }) {
   const { followingList, currentUser } = useEvents()
@@ -115,6 +116,7 @@ function PostShareSheet({
     eventClick?.stopPropagation()
     try {
       await navigator.clipboard.writeText(postLink)
+      await onShareComplete?.(post, "copy_link")
       setShareFeedback("Post link copied.")
     } catch {
       setShareFeedback("Could not copy link.")
@@ -134,6 +136,7 @@ function PostShareSheet({
         text: post?.caption || "Check out this post.",
         url: postLink,
       })
+      await onShareComplete?.(post, "native_share")
       setShareFeedback("Post shared.")
       closeShareSheet()
     } catch (error) {
@@ -166,6 +169,7 @@ function PostShareSheet({
         .insert({ sender_id: senderId, recipient_id: person.id, content: messageText })
     }
 
+    await onShareComplete?.(post, "message")
     const personHandle = person.username ? `@${person.username}` : person.name
     setShareFeedback(`Sent to ${personHandle}.`)
     closeShareSheet()

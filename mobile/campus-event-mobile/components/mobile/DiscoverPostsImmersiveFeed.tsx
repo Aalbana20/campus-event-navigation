@@ -104,6 +104,7 @@ function DiscoverPostItem({
   styles: any;
 }) {
   const isVideo = post.mediaType === 'video';
+  const [isManuallyPaused, setIsManuallyPaused] = useState(false);
   // Only hand a real source to the player when the item is the active one in
   // the feed; this avoids spinning up video decoders for every card on mount.
   const videoSource = isVideo && isActive ? post.mediaUrl : null;
@@ -114,13 +115,20 @@ function DiscoverPostItem({
 
   React.useEffect(() => {
     if (!isVideo || !player) return;
-    if (isActive) {
+    if (isActive && !isManuallyPaused) {
       player.play();
     } else {
       player.pause();
-      player.currentTime = 0;
+      if (!isActive) {
+        player.currentTime = 0;
+      }
     }
-  }, [isActive, isVideo, player]);
+  }, [isActive, isManuallyPaused, isVideo, player]);
+
+  const handleTogglePlayback = () => {
+    if (!isActive) return;
+    setIsManuallyPaused((paused) => !paused);
+  };
 
   const posterUri = post.thumbnailUrl || (isVideo ? undefined : post.mediaUrl);
 
@@ -144,6 +152,19 @@ function DiscoverPostItem({
                 nativeControls={false}
               />
             ) : null}
+            <Pressable
+              accessibilityLabel={isManuallyPaused ? 'Play video' : 'Pause video'}
+              accessibilityRole="button"
+              disabled={!isActive}
+              onPress={handleTogglePlayback}
+              style={styles.playbackHitArea}
+            >
+              {isManuallyPaused ? (
+                <View style={styles.playbackCenterButton}>
+                  <Ionicons name="play" size={34} color="rgba(255,255,255,0.9)" />
+                </View>
+              ) : null}
+            </Pressable>
           </>
         ) : (
           <Image
@@ -307,6 +328,20 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     gradientOverlay: {
       ...StyleSheet.absoluteFillObject,
       backgroundColor: 'rgba(0,0,0,0.3)',
+    },
+    playbackHitArea: {
+      ...StyleSheet.absoluteFillObject,
+      zIndex: 5,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    playbackCenterButton: {
+      width: 70,
+      height: 70,
+      borderRadius: 35,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: 'rgba(0,0,0,0.28)',
     },
     rightRail: {
       position: 'absolute',
