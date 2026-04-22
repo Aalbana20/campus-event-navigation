@@ -1,3 +1,4 @@
+import { compressImageFile } from "./lib/mediaCompression"
 import { DEFAULT_AVATAR_URL, sanitizeAvatarUrl } from "./profileMedia"
 import { supabase } from "./supabaseClient"
 
@@ -282,14 +283,17 @@ export const uploadDiscoverStory = async ({
     throw new Error("Choose media smaller than 80 MB for stories.")
   }
 
-  const extension = getFileExtension(file.name, file.type || "")
+  const isVideo = (file.type || "").startsWith("video/")
+  const uploadFile = isVideo ? file : await compressImageFile(file)
+
+  const extension = getFileExtension(uploadFile.name, uploadFile.type || "")
   const filePath = `${STORY_MEDIA_FOLDER}/${authorId}/${Date.now()}.${extension}`
 
   const { error: uploadError } = await supabase.storage
     .from(STORY_MEDIA_BUCKET)
-    .upload(filePath, file, {
+    .upload(filePath, uploadFile, {
       cacheControl: "3600",
-      contentType: file.type || ((file.type || "").startsWith("video/") ? "video/mp4" : "image/jpeg"),
+      contentType: uploadFile.type || (isVideo ? "video/mp4" : "image/jpeg"),
       upsert: false,
     })
 
