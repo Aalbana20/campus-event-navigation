@@ -1316,6 +1316,15 @@ function Discover({ hideModeSwitch = false, initialMode = "events" } = {}) {
               navigate(`/profile/${handle}`)
             }}
             onPressCreate={() => handleOpenCreateComposer("post")}
+            onPostLikeToggled={(postId, liked, likeCount) => {
+              setDiscoverPosts((prev) =>
+                prev.map((p) =>
+                  String(p.id) === postId
+                    ? { ...p, isLikedByCurrentUser: liked, likeCount }
+                    : p
+                )
+              )
+            }}
           />
         )}
 

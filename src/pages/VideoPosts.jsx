@@ -152,6 +152,15 @@ function VideoPosts() {
         onDeletePost={handleDeletePost}
         onPressCreator={handleOpenCreator}
         onPressCreate={() => handleOpenComposer("post")}
+        onPostLikeToggled={(postId, liked, likeCount) => {
+          setPosts((prev) =>
+            prev.map((p) =>
+              String(p.id) === postId
+                ? { ...p, isLikedByCurrentUser: liked, likeCount }
+                : p
+            )
+          )
+        }}
       />
 
       <DiscoverCreateComposer

@@ -184,6 +184,7 @@ function DiscoverPostsFeed({
   onDeletePost,
   onRepostPost,
   repostedPostIds = new Set(),
+  onPostLikeToggled,
 }) {
   const { showToast } = useToast()
   const { currentUser } = useEvents()
@@ -224,11 +225,13 @@ function DiscoverPostsFeed({
     const postId = String(post.id)
     const wasLiked = Boolean(post.isLikedByCurrentUser)
     const nextLiked = !wasLiked
+    const nextLikeCount = Math.max(0, (Number(post.likeCount) || 0) + (nextLiked ? 1 : -1))
 
     updateLocalPost(postId, () => ({
       isLikedByCurrentUser: nextLiked,
-      likeCount: Math.max(0, (Number(post.likeCount) || 0) + (nextLiked ? 1 : -1)),
+      likeCount: nextLikeCount,
     }))
+    onPostLikeToggled?.(postId, nextLiked, nextLikeCount)
 
     try {
       await setPostLike({ postId, userId: currentUserId, liked: nextLiked })
@@ -238,6 +241,7 @@ function DiscoverPostsFeed({
         isLikedByCurrentUser: wasLiked,
         likeCount: Number(post.likeCount) || 0,
       }))
+      onPostLikeToggled?.(postId, wasLiked, Number(post.likeCount) || 0)
       showToast(error?.message || "Could not update like.", "error")
     }
   }
