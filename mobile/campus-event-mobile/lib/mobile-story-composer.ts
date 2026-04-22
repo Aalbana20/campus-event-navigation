@@ -2,6 +2,7 @@ import { Buffer } from 'buffer';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
 
+import { compressImageMedia } from '@/lib/mobile-media-compression';
 import { supabase } from '@/lib/supabase';
 import type { StoryMediaType } from '@/types/models';
 
@@ -188,19 +189,24 @@ export const uploadStoryMedia = async ({
 
   const effectiveAuthorId = user?.id || authorId;
 
-  if (!effectiveAuthorId) {
+  if (!effectiveAuthorId || effectiveAuthorId === 'current-user') {
     throw new Error('You need to be signed in to publish a story.');
   }
 
-  const extension = getFileExtension(media.fileName, media.mimeType, media.uri);
+  const compressed = media.mediaType === 'image' ? await compressImageMedia(media) : null;
+  const uploadUri = compressed?.uri ?? media.uri;
+  const uploadMimeType = compressed?.mimeType ?? media.mimeType;
+  const uploadFileName = compressed?.fileName ?? media.fileName;
+
+  const extension = getFileExtension(uploadFileName, uploadMimeType, uploadUri);
   const filePath = `${STORY_MEDIA_FOLDER}/${effectiveAuthorId}/${Date.now()}.${extension}`;
-  const fileBody = await readFileAsArrayBuffer(media.uri);
+  const fileBody = await readFileAsArrayBuffer(uploadUri);
 
   const { error: uploadError } = await supabase.storage
     .from(STORY_MEDIA_BUCKET)
     .upload(filePath, fileBody, {
       cacheControl: '3600',
-      contentType: media.mimeType,
+      contentType: uploadMimeType,
       upsert: false,
     });
 
