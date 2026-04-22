@@ -450,11 +450,21 @@ body.theme-dark .profile-confirm-delete-btn:hover {
 
 .public-profile-action-row {
   align-items: center;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 54px;
+  gap: 12px;
+  width: min(100%, 720px);
+  margin-top: 18px;
 }
 
 .public-profile-btn {
-  min-width: 140px;
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
   justify-content: center;
+  border-radius: 8px;
+  font-size: 0.98rem;
+  font-weight: 800;
 }
 
 .public-profile-btn:disabled {
@@ -462,6 +472,66 @@ body.theme-dark .profile-confirm-delete-btn:hover {
   opacity: 0.65;
   transform: none;
   box-shadow: none;
+}
+
+.public-profile-suggest-btn {
+  width: 54px;
+  height: 48px;
+  border: 1px solid rgba(17, 17, 17, 0.08);
+  border-radius: 8px;
+  background: #f3f4f6;
+  color: #111;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+}
+
+.public-profile-suggest-btn:hover,
+.public-profile-suggest-btn:focus-visible {
+  background: #e8eaee;
+  border-color: rgba(17, 17, 17, 0.14);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.public-profile-mutual-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: min(100%, 720px);
+  margin-top: 4px;
+  color: #303036;
+}
+
+.public-profile-mutual-avatars {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding-left: 2px;
+}
+
+.public-profile-mutual-avatars img {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #ffffff;
+  background: #eceef2;
+  margin-left: -9px;
+}
+
+.public-profile-mutual-avatars img:first-child {
+  margin-left: 0;
+}
+
+.public-profile-mutual-row p {
+  margin: 0;
+  color: inherit;
+  font-size: 0.94rem;
+  font-weight: 650;
+  line-height: 1.35;
 }
 
 .public-profile-events-section {
@@ -532,6 +602,14 @@ body.theme-dark .profile-list-meta {
 
   .public-profile-btn {
     width: 100%;
+  }
+
+  .public-profile-action-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 50px;
+  }
+
+  .public-profile-suggest-btn {
+    width: 50px;
   }
 }
 
@@ -2075,6 +2153,49 @@ body.theme-dark .profile-post-list-body p {
 
 body.theme-dark .public-profile-feedback {
   color: var(--text-muted);
+}
+
+body.theme-dark .public-profile-btn {
+  background: #24262b;
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+body.theme-dark .public-profile-btn:hover {
+  background: #2e3036;
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+body.theme-dark .public-profile-btn:not(.secondary) {
+  background: #f5f5f5;
+  border-color: #f5f5f5;
+  color: #050505;
+}
+
+body.theme-dark .public-profile-btn:not(.secondary):hover {
+  background: #ffffff;
+  border-color: #ffffff;
+}
+
+body.theme-dark .public-profile-mutual-row {
+  color: #f2f2f2;
+}
+
+body.theme-dark .public-profile-mutual-avatars img {
+  border-color: #000000;
+  background: #1b1b1d;
+}
+
+body.theme-dark .public-profile-suggest-btn {
+  background: #1f2024;
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+body.theme-dark .public-profile-suggest-btn:hover,
+body.theme-dark .public-profile-suggest-btn:focus-visible {
+  background: #2a2b30;
+  border-color: rgba(255, 255, 255, 0.22);
 }
 
 @media (max-width: 640px) {

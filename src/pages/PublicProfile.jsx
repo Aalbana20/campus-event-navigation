@@ -35,6 +35,8 @@ function PublicProfile() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuFeedback, setMenuFeedback] = useState("")
   const [profileContentCounts, setProfileContentCounts] = useState({ posts: 0 })
+  const [mutualFollowers, setMutualFollowers] = useState([])
+  const [mutualFollowerCount, setMutualFollowerCount] = useState(0)
 
   const loadCounts = useCallback(async (profileId) => {
     if (!profileId) {
@@ -92,6 +94,72 @@ function PublicProfile() {
     setIsLoading(false)
   }, [isOwnProfileRoute, loadCounts, viewedUsername])
 
+  const loadMutualFollowers = useCallback(async (profileId) => {
+    const followingIds = (followingList || [])
+      .map((person) => person.id)
+      .filter(Boolean)
+
+    if (!profileId || !currentUser?.id || followingIds.length === 0) {
+      setMutualFollowers([])
+      setMutualFollowerCount(0)
+      return
+    }
+
+    const { data: relationRows, error: relationError } = await supabase
+      .from("follows")
+      .select("follower_id")
+      .eq("following_id", profileId)
+      .in("follower_id", followingIds)
+
+    if (relationError) {
+      console.error("Unable to load mutual followers:", relationError)
+      setMutualFollowers([])
+      setMutualFollowerCount(0)
+      return
+    }
+
+    const mutualIds = (relationRows || [])
+      .map((row) => row.follower_id)
+      .filter(Boolean)
+
+    setMutualFollowerCount(mutualIds.length)
+
+    if (mutualIds.length === 0) {
+      setMutualFollowers([])
+      return
+    }
+
+    const { data: profilesData, error: profilesError } = await supabase
+      .from("profiles")
+      .select("id, name, username, avatar_url")
+      .in("id", mutualIds.slice(0, 3))
+
+    if (profilesError || !profilesData) {
+      console.error("Unable to load mutual follower profiles:", profilesError)
+      setMutualFollowers([])
+      return
+    }
+
+    const profileMap = new Map(
+      profilesData.map((person) => [
+        String(person.id),
+        {
+          id: person.id,
+          name: person.name || person.username || "User",
+          username: person.username || "",
+          image: sanitizeAvatarUrl(person.avatar_url, defaultAvatar),
+        },
+      ])
+    )
+
+    setMutualFollowers(
+      mutualIds
+        .slice(0, 3)
+        .map((id) => profileMap.get(String(id)))
+        .filter(Boolean)
+    )
+  }, [currentUser?.id, defaultAvatar, followingList])
+
   useEffect(() => {
     setFollowOverride(null)
     setActivePanel(null)
@@ -100,11 +168,18 @@ function PublicProfile() {
     setMenuOpen(false)
     setMenuFeedback("")
     setProfileContentCounts({ posts: 0 })
+    setMutualFollowers([])
+    setMutualFollowerCount(0)
   }, [viewedUsername])
 
   useEffect(() => {
     loadPublicProfile()
   }, [loadPublicProfile])
+
+  useEffect(() => {
+    if (!profile?.id) return
+    loadMutualFollowers(profile.id)
+  }, [loadMutualFollowers, profile?.id])
 
   useEffect(() => {
     if (!menuFeedback) return undefined
@@ -235,6 +310,10 @@ function PublicProfile() {
     closeMenu()
   }
 
+  const handleSuggestedProfiles = () => {
+    setMenuFeedback("Suggested profiles are coming soon.")
+  }
+
   const loadPanelUsers = useCallback(async (panelType) => {
     if (!profile?.id) return
 
@@ -335,6 +414,27 @@ function PublicProfile() {
   const activePanelUsers =
     activePanel === "followers" ? followersUsers : followingUsers
 
+  const mutualLabel = useMemo(() => {
+    if (mutualFollowerCount <= 0) return ""
+
+    const displayNames = mutualFollowers
+      .slice(0, 2)
+      .map((person) => person.name || person.username)
+      .filter(Boolean)
+
+    if (displayNames.length === 0) {
+      return `${mutualFollowerCount} mutual ${mutualFollowerCount === 1 ? "follower" : "followers"}`
+    }
+
+    const remainingCount = Math.max(mutualFollowerCount - displayNames.length, 0)
+
+    if (remainingCount > 0) {
+      return `Followed by ${displayNames.join(", ")} and ${remainingCount} more`
+    }
+
+    return `Followed by ${displayNames.join(" and ")}`
+  }, [mutualFollowerCount, mutualFollowers])
+
   if (isOwnProfileRoute) {
     return <Navigate to="/profile" replace />
   }
@@ -425,6 +525,24 @@ function PublicProfile() {
 
             <p className="bio">{profile.bio || "No bio yet."}</p>
 
+            {mutualLabel ? (
+              <div className="public-profile-mutual-row">
+                <div className="public-profile-mutual-avatars" aria-hidden="true">
+                  {mutualFollowers.slice(0, 3).map((person) => (
+                    <img
+                      key={person.id}
+                      src={person.image}
+                      alt=""
+                      onError={(event) => {
+                        event.currentTarget.src = defaultAvatar
+                      }}
+                    />
+                  ))}
+                </div>
+                <p>{mutualLabel}</p>
+              </div>
+            ) : null}
+
             <div className="profile-action-row public-profile-action-row">
               <button
                 type="button"
@@ -432,7 +550,7 @@ function PublicProfile() {
                 onClick={handleToggleFollow}
                 disabled={isFollowBusy}
               >
-                {isFollowBusy ? "Working..." : isFollowingProfile ? "Unfollow" : "Follow"}
+                {isFollowBusy ? "Working..." : isFollowingProfile ? "Following" : "Follow"}
               </button>
 
               <button
@@ -442,6 +560,20 @@ function PublicProfile() {
                 disabled={!profile.id}
               >
                 Message
+              </button>
+
+              <button
+                type="button"
+                className="public-profile-suggest-btn"
+                onClick={handleSuggestedProfiles}
+                aria-label="Suggested profiles"
+                title="Suggested profiles"
+              >
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <circle cx="10" cy="8.5" r="3" stroke="currentColor" strokeWidth="1.8" />
+                  <path d="M4.5 19a5.8 5.8 0 0 1 11 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                  <path d="M18.5 8v5M16 10.5h5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                </svg>
               </button>
             </div>
 
