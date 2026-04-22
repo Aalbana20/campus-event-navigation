@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react"
+import React, { lazy, Suspense, useEffect, useMemo, useRef, useState, Component } from "react"
 import "./App.css"
 import {
   Routes,
@@ -28,6 +28,27 @@ import { DEFAULT_AVATAR_URL, sanitizeAvatarUrl, syncStoredUserFromSession } from
 import { supabase } from "./supabaseClient"
 import { applyThemeMode, getStoredThemeMode } from "./theme"
 import GlobalSearch from "./components/GlobalSearch"
+
+class AppErrorBoundary extends Component {
+  constructor(props) {
+    super(props)
+    this.state = { hasError: false }
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true }
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: "2rem", textAlign: "center" }}>
+          <h2>Something went wrong.</h2>
+          <button onClick={() => window.location.reload()}>Reload</button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 
 const MONTH_NAMES = [
   "January",
@@ -1125,6 +1146,7 @@ function App() {
 
   return (
     <div className="app">
+      <AppErrorBoundary>
       <Suspense fallback={<div className="app-page-loading" aria-label="Loading…" />}>
       <Routes>
         <Route path="/" element={<RootRedirect session={session} />} />
@@ -1177,6 +1199,7 @@ function App() {
         <Route path="*" element={<RootRedirect session={session} />} />
       </Routes>
       </Suspense>
+      </AppErrorBoundary>
     </div>
   )
 }

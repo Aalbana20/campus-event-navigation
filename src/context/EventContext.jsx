@@ -187,7 +187,7 @@ export function EventProvider({ children }) {
     const userId =
       currentUser?.id && currentUser.id !== "current-user"
         ? currentUser.id
-        : JSON.parse(localStorage.getItem("user") || "{}").id
+        : null
 
     const loadData = async () => {
       try {
