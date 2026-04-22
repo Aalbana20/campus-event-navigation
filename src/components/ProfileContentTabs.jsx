@@ -48,10 +48,10 @@ const ProfileTabIcon = ({ type }) => {
   if (type === "grid") {
     return (
       <svg viewBox="0 0 24 24" aria-hidden="true">
-        <rect x="3.5" y="3.5" width="7" height="7" rx="1.5" />
-        <rect x="13.5" y="3.5" width="7" height="7" rx="1.5" />
-        <rect x="3.5" y="13.5" width="7" height="7" rx="1.5" />
-        <rect x="13.5" y="13.5" width="7" height="7" rx="1.5" />
+        <rect x="4" y="4" width="6.25" height="6.25" rx="1.1" />
+        <rect x="13.75" y="4" width="6.25" height="6.25" rx="1.1" />
+        <rect x="4" y="13.75" width="6.25" height="6.25" rx="1.1" />
+        <rect x="13.75" y="13.75" width="6.25" height="6.25" rx="1.1" />
       </svg>
     )
   }
@@ -59,10 +59,9 @@ const ProfileTabIcon = ({ type }) => {
   if (type === "posts") {
     return (
       <svg viewBox="0 0 24 24" aria-hidden="true">
-        <rect x="3.25" y="6.25" width="17.5" height="12.5" rx="3.5" />
-        <circle cx="12" cy="12.5" r="3.6" />
-        <path d="M11.15 10.35v4.3l3.45-2.15-3.45-2.15Z" />
-        <path d="M8 6.25 9.25 4h5.5L16 6.25" />
+        <path d="M6.6 7.25 8.2 4.9h7.6l1.6 2.35" />
+        <rect x="4" y="7.25" width="16" height="11.75" rx="2.4" />
+        <circle cx="12" cy="13.1" r="3.15" />
       </svg>
     )
   }
@@ -70,19 +69,19 @@ const ProfileTabIcon = ({ type }) => {
   if (type === "reposts") {
     return (
       <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M7.25 6.5h8.1c2.1 0 3.8 1.7 3.8 3.8v.45" />
-        <path d="M16.65 3.95 19.2 6.5l-2.55 2.55" />
-        <path d="M16.75 17.5h-8.1c-2.1 0-3.8-1.7-3.8-3.8v-.45" />
-        <path d="M7.35 20.05 4.8 17.5l2.55-2.55" />
+        <path d="M17.8 5.2 20.4 7.8l-2.6 2.6" />
+        <path d="M4.1 11.1v-.65A2.65 2.65 0 0 1 6.75 7.8H20.4" />
+        <path d="M6.2 18.8 3.6 16.2l2.6-2.6" />
+        <path d="M19.9 12.9v.65a2.65 2.65 0 0 1-2.65 2.65H3.6" />
       </svg>
     )
   }
 
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M12 2.8 21.2 12 12 21.2 2.8 12 12 2.8Z" />
-      <circle cx="12" cy="9.4" r="2.15" />
-      <path d="M7.75 16.05c.8-2.05 2.25-3.1 4.25-3.1s3.45 1.05 4.25 3.1" />
+      <path d="M12 3.05 20.95 12 12 20.95 3.05 12 12 3.05Z" />
+      <circle cx="12" cy="9.7" r="1.55" />
+      <path d="M8.55 15.75c.7-1.65 1.86-2.48 3.45-2.48s2.75.83 3.45 2.48" />
     </svg>
   )
 }

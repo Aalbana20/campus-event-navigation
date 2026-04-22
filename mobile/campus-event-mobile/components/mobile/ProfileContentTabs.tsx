@@ -544,11 +544,16 @@ export function ProfileContentTabs({
               accessibilityState={{ selected: activeTab === tab.id }}
               onPress={() => handleTabPress(tab.id)}>
               {tab.id === 'tags' ? (
-                <View style={styles.tagsIcon}>
+                <View
+                  style={[
+                    styles.tagsIcon,
+                    activeTab === tab.id && styles.tagsIconActive,
+                  ]}>
                   <Ionicons
                     name="person-outline"
                     size={14}
                     color={activeTab === tab.id ? theme.text : theme.textMuted}
+                    style={styles.tagsIconPerson}
                   />
                 </View>
               ) : (
@@ -783,6 +788,12 @@ const buildStyles = (theme: AppTheme) => {
       borderWidth: 1.7,
       borderColor: profileMutedText,
       transform: [{ rotate: '45deg' }],
+    },
+    tagsIconActive: {
+      borderColor: profileText,
+    },
+    tagsIconPerson: {
+      transform: [{ rotate: '-45deg' }],
     },
     tabDropdown: {
       position: 'absolute',
