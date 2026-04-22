@@ -1066,6 +1066,7 @@ function CreateEvent({ embedded = false, modal = false, onPublished }) {
                   type="date"
                   className="event-time-pill"
                   value={date}
+                  min={new Date().toISOString().split("T")[0]}
                   onChange={(event) => setDate(event.target.value)}
                 />
                 <input
@@ -1084,6 +1085,7 @@ function CreateEvent({ embedded = false, modal = false, onPublished }) {
                   type="date"
                   className="event-time-pill"
                   value={endDate || date}
+                  min={date || new Date().toISOString().split("T")[0]}
                   onChange={(event) => setEndDate(event.target.value)}
                 />
                 <input

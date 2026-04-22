@@ -299,13 +299,17 @@ function Profile() {
       ? currentUser.id
       : null
     if (userId) {
-      await supabase.auth.updateUser({
+      const { error: authUpdateError } = await supabase.auth.updateUser({
         data: {
           name: draftName,
           username: draftUsername,
           avatar_url: nextProfileImageValue || null,
         },
       })
+      if (authUpdateError) {
+        showToast(authUpdateError.message || "Failed to update account.", "error")
+        return
+      }
 
       await supabase
         .from("profiles")
