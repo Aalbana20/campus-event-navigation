@@ -3,10 +3,12 @@ import { useRouter } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
   Image,
   Modal,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   View,
@@ -20,7 +22,7 @@ import {
   type DiscoverPostRecord,
 } from '@/lib/mobile-discover-posts';
 import type { EventMemoryRecord } from '@/lib/mobile-event-memories';
-import { getEventImageSource } from '@/lib/mobile-media';
+import { getAvatarImageSource, getEventImageSource } from '@/lib/mobile-media';
 import { loadRepostsForUser, type RepostRecord } from '@/lib/mobile-profile-reposts';
 import { useMobileApp } from '@/providers/mobile-app-provider';
 import type { EventRecord } from '@/types/models';
@@ -51,6 +53,16 @@ const tagFilters: { id: TagFilter; label: string }[] = [
 const toTime = (value?: string | null) => {
   const parsed = Date.parse(value || '');
   return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const formatPostDate = (value?: string | null) => {
+  const parsed = Date.parse(value || '');
+  if (!Number.isFinite(parsed)) return '';
+
+  return new Date(parsed).toLocaleDateString(undefined, {
+    month: 'long',
+    day: 'numeric',
+  });
 };
 
 function PostMedia({
@@ -109,7 +121,9 @@ export function ProfileContentTabs({
   const theme = useAppTheme();
   const styles = useMemo(() => buildStyles(theme), [theme]);
   const {
+    currentUser,
     getEventById,
+    repostPost,
     setPostGridVisibility,
     loadGridPostsForAuthor,
     loadPostsTaggingUser,
@@ -127,6 +141,7 @@ export function ProfileContentTabs({
   const [taggedPosts, setTaggedPosts] = useState<DiscoverPostRecord[]>([]);
   const [eventMemories, setEventMemories] = useState<EventMemoryRecord[]>([]);
   const [selectedPost, setSelectedPost] = useState<DiscoverPostRecord | null>(null);
+  const [isPostMenuOpen, setIsPostMenuOpen] = useState(false);
 
   const loadProfileContent = useCallback(async () => {
     if (!profileId) return;
@@ -196,6 +211,69 @@ export function ProfileContentTabs({
         ? [nextPost, ...posts.filter((item) => item.id !== post.id)]
         : posts.filter((item) => item.id !== post.id)
     );
+    setSelectedPost((currentPost) =>
+      currentPost?.id === post.id ? { ...currentPost, onGrid } : currentPost
+    );
+  };
+
+  const handleOpenPost = (post: DiscoverPostRecord) => {
+    setIsPostMenuOpen(false);
+    setSelectedPost(post);
+  };
+
+  const handleClosePost = () => {
+    setIsPostMenuOpen(false);
+    setSelectedPost(null);
+  };
+
+  const handlePostLike = () => {
+    Alert.alert('Likes coming soon', 'Post likes are not wired to the backend yet.');
+  };
+
+  const handlePostComment = () => {
+    Alert.alert('Comments coming soon', 'Post comments are not wired to the backend yet.');
+  };
+
+  const handlePostRepost = async () => {
+    if (!selectedPost) return;
+
+    try {
+      await repostPost(selectedPost.id);
+      Alert.alert('Reposted', 'This post was added to your reposts.');
+    } catch (error) {
+      Alert.alert(
+        'Repost unavailable',
+        error instanceof Error ? error.message : 'Could not repost right now.'
+      );
+    }
+  };
+
+  const handlePostShare = async () => {
+    if (!selectedPost) return;
+
+    try {
+      await Share.share({
+        message: [selectedPost.caption, selectedPost.mediaUrl].filter(Boolean).join('\n'),
+      });
+    } catch (error) {
+      Alert.alert(
+        'Share unavailable',
+        error instanceof Error ? error.message : 'Could not open the share sheet.'
+      );
+    }
+  };
+
+  const handlePostReport = () => {
+    setIsPostMenuOpen(false);
+    Alert.alert('Reported', 'Thanks for reporting this post. We will review it.');
+  };
+
+  const handleOwnerGridMenuAction = () => {
+    if (!selectedPost) return;
+
+    const nextOnGrid = !selectedPost.onGrid;
+    setIsPostMenuOpen(false);
+    void handleToggleGrid(selectedPost, nextOnGrid);
   };
 
   const repostItems = useMemo(() => {
@@ -253,37 +331,22 @@ export function ProfileContentTabs({
     );
   }, [eventMemories, getEventById, tagFilter, taggedPosts]);
 
-  const renderOwnerGridAction = (post: DiscoverPostRecord) => {
-    if (!isOwner) return null;
-
-    return (
-      <Pressable
-        style={styles.gridAction}
-        onPress={() => void handleToggleGrid(post, !post.onGrid)}>
-        <Text style={styles.gridActionText}>
-          {post.onGrid ? 'Remove from Grid' : 'Post to Grid'}
-        </Text>
-      </Pressable>
-    );
-  };
-
   const renderPostTile = (post: DiscoverPostRecord) => (
     <View key={post.id} style={styles.postTileWrap}>
-      <Pressable style={styles.mediaTile} onPress={() => setSelectedPost(post)}>
+      <Pressable style={styles.mediaTile} onPress={() => handleOpenPost(post)}>
         <PostMedia post={post} style={styles.mediaTileImage} />
-        <View style={styles.mediaTilePill}>
-          <Text style={styles.mediaTilePillText}>
-            {post.mediaType === 'video' ? 'Video' : 'Post'}
-          </Text>
-        </View>
+        {post.mediaType === 'video' ? (
+          <View style={styles.mediaTileIcon}>
+            <Ionicons name="play" size={13} color="#ffffff" />
+          </View>
+        ) : null}
       </Pressable>
-      {renderOwnerGridAction(post)}
     </View>
   );
 
   const renderPostListItem = (post: DiscoverPostRecord) => (
     <View key={post.id} style={styles.postListItem}>
-      <Pressable style={styles.postListThumb} onPress={() => setSelectedPost(post)}>
+      <Pressable style={styles.postListThumb} onPress={() => handleOpenPost(post)}>
         <PostMedia post={post} style={styles.postListImage} />
       </Pressable>
       <View style={styles.postListCopy}>
@@ -296,7 +359,6 @@ export function ProfileContentTabs({
         <Text style={styles.postListMeta}>
           {new Date(post.createdAt).toLocaleDateString()}
         </Text>
-        {renderOwnerGridAction(post)}
       </View>
     </View>
   );
@@ -452,6 +514,11 @@ export function ProfileContentTabs({
     return renderTagsTab();
   };
 
+  const selectedPostIsOwner =
+    Boolean(selectedPost && currentUser.id) &&
+    String(selectedPost?.authorId) === String(currentUser.id);
+  const selectedPostDate = formatPostDate(selectedPost?.createdAt);
+
   return (
     <View style={styles.wrap}>
       <View style={styles.tabBar}>
@@ -494,23 +561,109 @@ export function ProfileContentTabs({
       <Modal
         visible={Boolean(selectedPost)}
         transparent
-        animationType="fade"
-        onRequestClose={() => setSelectedPost(null)}>
-        <Pressable style={styles.modalOverlay} onPress={() => setSelectedPost(null)}>
-          <Pressable style={styles.postPreview} onPress={(event) => event.stopPropagation()}>
-            <Pressable style={styles.closeButton} onPress={() => setSelectedPost(null)}>
-              <Ionicons name="close" size={22} color="#fff" />
+        animationType="slide"
+        onRequestClose={handleClosePost}>
+        <View style={styles.viewerScreen}>
+          <View style={styles.viewerTopBar}>
+            <Pressable style={styles.viewerIconButton} onPress={handleClosePost}>
+              <Ionicons name="chevron-back" size={30} color="#ffffff" />
             </Pressable>
+            <View style={styles.viewerTitleStack}>
+              <Text style={styles.viewerTitle}>Posts</Text>
+              <Text style={styles.viewerSubtitle} numberOfLines={1}>
+                {selectedPost?.authorUsername || selectedPost?.authorName || 'Campus'}
+              </Text>
+            </View>
+            <Pressable
+              style={styles.viewerIconButton}
+              onPress={() => setIsPostMenuOpen((open) => !open)}>
+              <Ionicons name="ellipsis-horizontal" size={25} color="#ffffff" />
+            </Pressable>
+          </View>
+
+          {isPostMenuOpen && selectedPost ? (
+            <Pressable style={styles.viewerMenuScrim} onPress={() => setIsPostMenuOpen(false)}>
+              <Pressable style={styles.viewerMenu} onPress={(event) => event.stopPropagation()}>
+                {selectedPostIsOwner ? (
+                  <Pressable style={styles.viewerMenuItem} onPress={handleOwnerGridMenuAction}>
+                    <Ionicons
+                      name={selectedPost.onGrid ? 'grid-outline' : 'add-circle-outline'}
+                      size={18}
+                      color="#ffffff"
+                    />
+                    <Text style={styles.viewerMenuItemText}>
+                      {selectedPost.onGrid ? 'Remove from Grid' : 'Post to Grid'}
+                    </Text>
+                  </Pressable>
+                ) : (
+                  <Pressable style={styles.viewerMenuItem} onPress={handlePostReport}>
+                    <Ionicons name="flag-outline" size={18} color="#ff7a7a" />
+                    <Text style={[styles.viewerMenuItemText, styles.viewerMenuItemDanger]}>
+                      Report
+                    </Text>
+                  </Pressable>
+                )}
+              </Pressable>
+            </Pressable>
+          ) : null}
+
+          <ScrollView
+            style={styles.viewerScroll}
+            contentContainerStyle={styles.viewerContent}
+            showsVerticalScrollIndicator={false}>
             {selectedPost ? (
               <>
-                <PostMedia post={selectedPost} style={styles.previewMedia} />
+                <View style={styles.viewerAuthorRow}>
+                  <Image
+                    source={getAvatarImageSource(selectedPost.authorAvatar)}
+                    style={styles.viewerAvatar}
+                  />
+                  <View style={styles.viewerAuthorCopy}>
+                    <Text style={styles.viewerAuthorName} numberOfLines={1}>
+                      {selectedPost.authorUsername
+                        ? `@${selectedPost.authorUsername}`
+                        : selectedPost.authorName || 'Campus User'}
+                    </Text>
+                    <Text style={styles.viewerAuthorMeta} numberOfLines={1}>
+                      {selectedPost.mediaType === 'video' ? 'Video post' : 'Post'}
+                    </Text>
+                  </View>
+                </View>
+
+                <PostMedia post={selectedPost} style={styles.viewerMedia} />
+
+                <View style={styles.viewerActionsRow}>
+                  <View style={styles.viewerLeftActions}>
+                    <Pressable style={styles.viewerActionButton} onPress={handlePostLike}>
+                      <Ionicons name="heart-outline" size={31} color="#ffffff" />
+                    </Pressable>
+                    <Pressable style={styles.viewerActionButton} onPress={handlePostComment}>
+                      <Ionicons name="chatbubble-outline" size={29} color="#ffffff" />
+                    </Pressable>
+                    <Pressable style={styles.viewerActionButton} onPress={handlePostRepost}>
+                      <Ionicons name="repeat-outline" size={30} color="#ffffff" />
+                    </Pressable>
+                    <Pressable style={styles.viewerActionButton} onPress={handlePostShare}>
+                      <Ionicons name="paper-plane-outline" size={29} color="#ffffff" />
+                    </Pressable>
+                  </View>
+                </View>
+
                 {selectedPost.caption ? (
-                  <Text style={styles.previewCaption}>{selectedPost.caption}</Text>
+                  <Text style={styles.viewerCaption}>
+                    <Text style={styles.viewerCaptionAuthor}>
+                      {selectedPost.authorUsername || selectedPost.authorName || 'Campus'}{' '}
+                    </Text>
+                    {selectedPost.caption}
+                  </Text>
+                ) : null}
+                {selectedPostDate ? (
+                  <Text style={styles.viewerDate}>{selectedPostDate}</Text>
                 ) : null}
               </>
             ) : null}
-          </Pressable>
-        </Pressable>
+          </ScrollView>
+        </View>
       </Modal>
     </View>
   );
@@ -561,52 +714,35 @@ const buildStyles = (theme: AppTheme) => {
     mediaGrid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      gap: 10,
+      gap: 1,
+      marginHorizontal: -18,
     },
     postTileWrap: {
-      width: '31.6%',
-      minWidth: 96,
-      gap: 7,
+      width: '33.1%',
+      gap: 0,
     },
     mediaTile: {
       aspectRatio: 1,
       overflow: 'hidden',
-      borderRadius: 18,
-      backgroundColor: profileSurfaceAlt,
+      borderRadius: 0,
+      backgroundColor: '#050505',
       position: 'relative',
     },
     mediaTileImage: {
       width: '100%',
       height: '100%',
-      backgroundColor: profileSurfaceAlt,
+      backgroundColor: '#050505',
     },
-    mediaTilePill: {
+    mediaTileIcon: {
       position: 'absolute',
-      right: 7,
-      top: 7,
+      right: 8,
+      top: 8,
+      width: 24,
+      height: 24,
       borderRadius: 999,
-      paddingHorizontal: 8,
-      paddingVertical: 4,
-      backgroundColor: 'rgba(0,0,0,0.55)',
-    },
-    mediaTilePillText: {
-      color: '#fff',
-      fontSize: 10,
-      fontWeight: '800',
-    },
-    gridAction: {
-      alignSelf: 'flex-start',
-      borderRadius: 999,
-      paddingHorizontal: 9,
-      paddingVertical: 6,
-      backgroundColor: profileSurfaceAlt,
-      borderWidth: 1,
-      borderColor: profileBorder,
-    },
-    gridActionText: {
-      color: profileText,
-      fontSize: 10,
-      fontWeight: '800',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: 'rgba(0,0,0,0.36)',
     },
     emptyCard: {
       borderRadius: 0,
@@ -731,42 +867,156 @@ const buildStyles = (theme: AppTheme) => {
       fontSize: 11,
       fontWeight: '700',
     },
-    modalOverlay: {
+    viewerScreen: {
       flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.72)',
+      backgroundColor: '#000000',
+      paddingTop: 44,
+    },
+    viewerTopBar: {
+      minHeight: 62,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: 'rgba(255,255,255,0.08)',
+      zIndex: 4,
+    },
+    viewerIconButton: {
+      width: 48,
+      height: 48,
       alignItems: 'center',
       justifyContent: 'center',
-      padding: 20,
     },
-    postPreview: {
-      width: '100%',
-      maxHeight: '82%',
-      overflow: 'hidden',
-      borderRadius: 28,
-      backgroundColor: '#080a0f',
+    viewerTitleStack: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      minWidth: 0,
     },
-    closeButton: {
+    viewerTitle: {
+      color: '#ffffff',
+      fontSize: 18,
+      fontWeight: '900',
+      letterSpacing: 0.2,
+    },
+    viewerSubtitle: {
+      color: 'rgba(255,255,255,0.78)',
+      fontSize: 13,
+      fontWeight: '700',
+      marginTop: 2,
+      maxWidth: 180,
+    },
+    viewerMenuScrim: {
       position: 'absolute',
-      right: 12,
-      top: 12,
-      zIndex: 2,
-      width: 38,
-      height: 38,
-      borderRadius: 19,
+      top: 0,
+      right: 0,
+      bottom: 0,
+      left: 0,
+      zIndex: 8,
+      paddingTop: 98,
+      paddingRight: 12,
+      alignItems: 'flex-end',
+      backgroundColor: 'rgba(0,0,0,0.08)',
+    },
+    viewerMenu: {
+      minWidth: 190,
+      borderRadius: 18,
+      padding: 8,
+      backgroundColor: 'rgba(18,18,20,0.98)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.1)',
+    },
+    viewerMenuItem: {
+      minHeight: 44,
+      borderRadius: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      paddingHorizontal: 12,
+    },
+    viewerMenuItemText: {
+      color: '#ffffff',
+      fontSize: 14,
+      fontWeight: '800',
+    },
+    viewerMenuItemDanger: {
+      color: '#ff7a7a',
+    },
+    viewerScroll: {
+      flex: 1,
+    },
+    viewerContent: {
+      paddingBottom: 34,
+    },
+    viewerAuthorRow: {
+      minHeight: 72,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      paddingHorizontal: 16,
+    },
+    viewerAvatar: {
+      width: 42,
+      height: 42,
+      borderRadius: 999,
+      backgroundColor: '#1a1a1c',
+    },
+    viewerAuthorCopy: {
+      flex: 1,
+      minWidth: 0,
+    },
+    viewerAuthorName: {
+      color: '#ffffff',
+      fontSize: 16,
+      fontWeight: '900',
+    },
+    viewerAuthorMeta: {
+      color: 'rgba(255,255,255,0.58)',
+      fontSize: 13,
+      fontWeight: '600',
+      marginTop: 2,
+    },
+    viewerMedia: {
+      width: '100%',
+      height: 520,
+      backgroundColor: '#050505',
+    },
+    viewerActionsRow: {
+      minHeight: 60,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 14,
+    },
+    viewerLeftActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 17,
+    },
+    viewerActionButton: {
+      minWidth: 30,
+      minHeight: 44,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: 'rgba(0,0,0,0.55)',
     },
-    previewMedia: {
-      width: '100%',
-      height: 460,
-      backgroundColor: '#05070b',
-    },
-    previewCaption: {
-      color: '#f8fafc',
-      padding: 16,
+    viewerCaption: {
+      color: 'rgba(255,255,255,0.92)',
+      paddingHorizontal: 16,
+      paddingTop: 2,
       fontSize: 15,
-      lineHeight: 21,
+      lineHeight: 22,
+    },
+    viewerCaptionAuthor: {
+      color: '#ffffff',
+      fontWeight: '900',
+    },
+    viewerDate: {
+      color: 'rgba(255,255,255,0.48)',
+      paddingHorizontal: 16,
+      paddingTop: 12,
+      fontSize: 13,
+      fontWeight: '600',
     },
   });
 };
