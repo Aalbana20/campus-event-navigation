@@ -4261,8 +4261,8 @@ body.theme-light {
 }
 
 body.theme-dark {
-  background: #111318;
-  color: #f5f7fb;
+  background: #000000;
+  color: #ffffff;
 }
 
 body.theme-dark .topbar {
@@ -6802,43 +6802,43 @@ body.theme-light {
 }
 
 body.theme-dark {
-  --bg-main: #111318;
-  --bg-surface: rgba(23, 28, 35, 0.86);
-  --bg-elevated: #181c23;
-  --bg-soft: #202631;
-  --bg-soft-2: #262d39;
-  --text-main: #f5f7fb;
+  --bg-main: #000000;
+  --bg-surface: rgba(10, 10, 11, 0.9);
+  --bg-elevated: #101010;
+  --bg-soft: #1a1a1c;
+  --bg-soft-2: #242426;
+  --text-main: #ffffff;
   --text-strong: #ffffff;
-  --text-muted: #a3adba;
-  --border-soft: rgba(255, 255, 255, 0.08);
-  --shadow-soft: 0 18px 40px rgba(0, 0, 0, 0.28);
+  --text-muted: #c7c7cc;
+  --border-soft: rgba(255, 255, 255, 0.1);
+  --shadow-soft: 0 18px 42px rgba(0, 0, 0, 0.38);
   --explore-page-bg:
-    radial-gradient(circle at top, rgba(96, 165, 250, 0.16), transparent 32%),
-    linear-gradient(180deg, #0f141c, #0b1016);
-  --explore-card-bg: rgba(24, 28, 35, 0.94);
-  --explore-card-border: rgba(255, 255, 255, 0.08);
-  --explore-card-border-hover: rgba(255, 255, 255, 0.16);
-  --explore-card-shadow: 0 20px 40px rgba(0, 0, 0, 0.24);
-  --explore-card-shadow-hover: 0 26px 48px rgba(0, 0, 0, 0.34);
-  --explore-title-color: #f8fafc;
-  --explore-secondary-text: #a7b0bf;
-  --explore-search-bg: rgba(32, 38, 49, 0.92);
-  --explore-chip-bg: rgba(32, 38, 49, 0.96);
-  --explore-chip-active-bg: #f5f7fb;
-  --explore-chip-active-text: #111318;
-  --explore-tag-bg: rgba(96, 165, 250, 0.16);
-  --explore-tag-text: #d9e8ff;
-  --explore-person-badge-bg: #f5f7fb;
-  --explore-person-badge-text: #111318;
-  --explore-action-btn-bg: rgba(32, 38, 49, 0.96);
-  --explore-action-btn-text: #f5f7fb;
-  --explore-action-btn-border: rgba(255, 255, 255, 0.08);
-  --explore-action-btn-hover-bg: rgba(38, 45, 57, 1);
-  --explore-action-btn-active-bg: #f5f7fb;
-  --explore-action-btn-active-text: #111318;
-  --explore-action-btn-active-border: #f5f7fb;
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.045), transparent 30%),
+    linear-gradient(180deg, #000000, #050505);
+  --explore-card-bg: rgba(16, 16, 17, 0.94);
+  --explore-card-border: rgba(255, 255, 255, 0.1);
+  --explore-card-border-hover: rgba(255, 255, 255, 0.18);
+  --explore-card-shadow: 0 20px 42px rgba(0, 0, 0, 0.34);
+  --explore-card-shadow-hover: 0 26px 52px rgba(0, 0, 0, 0.44);
+  --explore-title-color: #ffffff;
+  --explore-secondary-text: #c7c7cc;
+  --explore-search-bg: rgba(20, 20, 22, 0.94);
+  --explore-chip-bg: rgba(26, 26, 28, 0.96);
+  --explore-chip-active-bg: #ffffff;
+  --explore-chip-active-text: #000000;
+  --explore-tag-bg: rgba(255, 255, 255, 0.09);
+  --explore-tag-text: #f5f5f7;
+  --explore-person-badge-bg: #ffffff;
+  --explore-person-badge-text: #000000;
+  --explore-action-btn-bg: rgba(26, 26, 28, 0.96);
+  --explore-action-btn-text: #ffffff;
+  --explore-action-btn-border: rgba(255, 255, 255, 0.1);
+  --explore-action-btn-hover-bg: rgba(38, 38, 40, 1);
+  --explore-action-btn-active-bg: #ffffff;
+  --explore-action-btn-active-text: #000000;
+  --explore-action-btn-active-border: #ffffff;
   --explore-event-fallback:
-    linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(37, 99, 235, 0.76), rgba(217, 70, 239, 0.56));
+    linear-gradient(135deg, rgba(5, 5, 6, 0.98), rgba(30, 30, 32, 0.88), rgba(70, 70, 76, 0.56));
 }
 
 body.theme-light,
@@ -10346,4 +10346,160 @@ body.theme-dark .create-event-modal .flyer-search-chip.active {
 body.theme-dark .create-event-modal::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.12);
   background-clip: padding-box;
+}
+
+/* =========================================================
+   GLOBAL BLACK-MODE UNIFICATION
+========================================================= */
+body.theme-dark,
+body.theme-dark .web-app-shell,
+body.theme-dark .web-app-main,
+body.theme-dark .app {
+  background: #000000;
+  color: var(--text-main);
+}
+
+body.theme-dark .app-rail,
+body.theme-dark .topbar {
+  background: rgba(5, 5, 6, 0.9);
+  border-color: var(--border-soft);
+  box-shadow: none;
+}
+
+body.theme-dark .app-rail-logo,
+body.theme-dark .app-rail-create,
+body.theme-dark .app-rail-create-menu,
+body.theme-dark .topbar-item-icon-nav.active {
+  background: #101010;
+  border-color: var(--border-soft);
+  color: #ffffff;
+}
+
+body.theme-dark .app-rail-item,
+body.theme-dark .app-rail-profile,
+body.theme-dark .topbar-item,
+body.theme-dark .navbar-bell-btn,
+body.theme-dark .header-icon-btn {
+  color: var(--text-main);
+}
+
+body.theme-dark .app-rail-item:hover,
+body.theme-dark .app-rail-profile:hover,
+body.theme-dark .app-rail-item.active,
+body.theme-dark .topbar-item:hover,
+body.theme-dark .navbar-bell-btn:hover,
+body.theme-dark .header-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+body.theme-dark .app-rail-create:hover,
+body.theme-dark .app-rail-create-menu button:hover,
+body.theme-dark .app-rail-create-menu button:focus-visible {
+  background: #1a1a1c;
+}
+
+body.theme-dark .app-rail-create-menu button {
+  color: var(--text-main);
+}
+
+body.theme-dark .events-summary-card,
+body.theme-dark .events-empty-state,
+body.theme-dark .settings-modal,
+body.theme-dark .inbox-panel,
+body.theme-dark .messages-thread-panel,
+body.theme-dark .messages-chat-panel,
+body.theme-dark .messages-empty-card,
+body.theme-dark .event-mutuals-modal,
+body.theme-dark .calendar-box,
+body.theme-dark .create-form-card,
+body.theme-dark .flyer-card,
+body.theme-dark .my-flip-card-front,
+body.theme-dark .my-flip-card-back,
+body.theme-dark .flip-card-front,
+body.theme-dark .flip-card-back,
+body.theme-dark .discover-friend-card,
+body.theme-dark .post-publish-card,
+body.theme-dark .calendar-topbar,
+body.theme-dark .calendar-command-panel,
+body.theme-dark .calendar-main-surface,
+body.theme-dark .personal-calendar-modal,
+body.theme-dark .personal-calendar-form,
+body.theme-dark .create-event-modal {
+  background: var(--bg-elevated);
+  border-color: var(--border-soft);
+  color: var(--text-main);
+  box-shadow: var(--shadow-soft);
+}
+
+body.theme-dark .settings-row-btn,
+body.theme-dark .settings-option-row,
+body.theme-dark .settings-toggle-row,
+body.theme-dark .inbox-item,
+body.theme-dark .profile-list-item,
+body.theme-dark .profile-rsvp-card.compact,
+body.theme-dark .profile-created-card.compact,
+body.theme-dark .event-mutuals-item,
+body.theme-dark .calendar-day,
+body.theme-dark .toggle-btn,
+body.theme-dark .calendar-arrow-btn,
+body.theme-dark .calendar-month-picker,
+body.theme-dark .inbox-tabs button,
+body.theme-dark .notification-filter-chip:not(.active),
+body.theme-dark .settings-back-btn,
+body.theme-dark .profile-modal-close,
+body.theme-dark .inbox-close-btn,
+body.theme-dark .event-mutuals-close,
+body.theme-dark .calendar-segmented,
+body.theme-dark .calendar-segmented-thumb,
+body.theme-dark .calendar-plus-btn,
+body.theme-dark .calendar-search,
+body.theme-dark .calendar-date-controls button,
+body.theme-dark .calendar-command-btn,
+body.theme-dark .calendar-create-menu,
+body.theme-dark .create-event-modal .create-form-card,
+body.theme-dark .create-event-modal .flyer-card,
+body.theme-dark .create-event-modal .form-group input,
+body.theme-dark .create-event-modal .form-group textarea,
+body.theme-dark .create-event-modal .form-group select,
+body.theme-dark .create-event-modal .create-address-shell input,
+body.theme-dark .create-event-modal .create-event-tags-input-wrap,
+body.theme-dark .create-event-modal .create-event-tag-entry input,
+body.theme-dark .create-event-modal .event-time-card,
+body.theme-dark .create-event-modal .event-time-pill,
+body.theme-dark .create-event-modal .flyer-search,
+body.theme-dark input,
+body.theme-dark textarea,
+body.theme-dark select {
+  background: var(--bg-soft);
+  border-color: var(--border-soft);
+  color: var(--text-main);
+}
+
+body.theme-dark .calendar-page-shell,
+body.theme-dark .explore-page,
+body.theme-dark .discover-page,
+body.theme-dark .events-page,
+body.theme-dark .my-events-page,
+body.theme-dark .messages-page,
+body.theme-dark .create-page {
+  background:
+    radial-gradient(circle at 50% -10%, rgba(255, 255, 255, 0.04), transparent 30%),
+    #000000;
+  color: var(--text-main);
+}
+
+body.theme-dark .profile-page .profile-action-btn,
+body.theme-dark .profile-page .profile-action-btn.secondary {
+  background: #050505;
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: none;
+}
+
+body.theme-dark .profile-page .profile-action-btn:hover,
+body.theme-dark .profile-page .profile-action-btn.secondary:hover {
+  background: #101010;
+  border-color: rgba(255, 255, 255, 0.22);
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.32);
 }

@@ -2192,15 +2192,16 @@ body.theme-dark .profile-list-meta {
 }
 
 body.theme-dark .profile-action-btn {
-  background: #f5f5f5;
-  color: #050505;
-  border-color: rgba(255, 255, 255, 0.72);
+  background: #050505;
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.14);
   box-shadow: none;
 }
 
 body.theme-dark .profile-action-btn:hover {
-  background: #ffffff;
-  box-shadow: 0 12px 26px rgba(255, 255, 255, 0.08);
+  background: #101010;
+  border-color: rgba(255, 255, 255, 0.22);
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.32);
 }
 
 body.theme-dark .profile-action-btn.secondary,
@@ -2208,9 +2209,9 @@ body.theme-dark .profile-menu-btn,
 body.theme-dark .profile-modal-close,
 body.theme-dark .profile-confirm-cancel-btn,
 body.theme-dark .edit-event-cancel {
-  background: rgba(38, 38, 42, 0.96);
-  color: #f5f5f5;
-  border-color: rgba(255, 255, 255, 0.09);
+  background: #050505;
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.14);
 }
 
 body.theme-dark .profile-action-btn.secondary:hover,
@@ -2218,7 +2219,8 @@ body.theme-dark .profile-menu-btn:hover,
 body.theme-dark .profile-modal-close:hover,
 body.theme-dark .profile-confirm-cancel-btn:hover,
 body.theme-dark .edit-event-cancel:hover {
-  background: rgba(48, 48, 52, 0.98);
+  background: #101010;
+  border-color: rgba(255, 255, 255, 0.22);
 }
 
 body.theme-dark .profile-tab-bar {
