@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   loadDiscoverPostsByIds,
   loadDiscoverPostsForAuthor,
   resolveDiscoverPostMediaUrl,
 } from "../discoverPosts"
-import { buildEventImageStyle } from "../eventImages"
 import { loadRepostsForUser } from "../profileReposts"
 import { loadPostsTaggingUser } from "../contentTags"
 import { loadEventMemoriesForUser } from "../eventMemories"
@@ -24,23 +23,10 @@ const TAG_FILTERS = [
   { id: "event-tags", label: "Event Tags" },
 ]
 
-const POST_VIEW_OPTIONS = [
-  { id: "grid", label: "Grid" },
-  { id: "list", label: "List" },
-]
-
-const CONTENT_TYPE_LABELS = {
-  video: "Video",
-  post: "Post",
-  event: "Event",
-}
-
 const toTime = (value) => {
   const time = Date.parse(value || "")
   return Number.isFinite(time) ? time : 0
 }
-
-const getPostContentType = (post) => (post?.mediaType === "video" ? "video" : "post")
 
 const ProfileTabIcon = ({ type }) => {
   if (type === "grid") {
@@ -92,268 +78,65 @@ const EmptyState = ({ title, copy }) => (
   </div>
 )
 
-const ContentTypeIcon = ({ type }) => {
-  if (type === "video") {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <rect x="4" y="5.5" width="16" height="13" rx="3" />
-        <path d="M10.3 9.25v5.5l4.7-2.75-4.7-2.75Z" />
-      </svg>
-    )
-  }
-
-  if (type === "event") {
-    return (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M7 3.75v3" />
-        <path d="M17 3.75v3" />
-        <rect x="4.5" y="5.5" width="15" height="14" rx="3" />
-        <path d="M4.5 9.5h15" />
-        <path d="M9 13h.01" />
-        <path d="M12 13h.01" />
-        <path d="M15 13h.01" />
-      </svg>
-    )
-  }
-
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <rect x="4" y="5" width="16" height="14" rx="3" />
-      <path d="m7.5 15 3.1-3.1 2.2 2.2 1.4-1.4L17 15.5" />
-      <circle cx="9" cy="9.3" r="1.2" />
-    </svg>
-  )
-}
-
-const ContentTypeBadge = ({ type }) => (
-  <span
-    className={`profile-content-type-badge ${type}`}
-    aria-label={CONTENT_TYPE_LABELS[type] || "Content"}
-    title={CONTENT_TYPE_LABELS[type] || "Content"}
-  >
-    <ContentTypeIcon type={type} />
-  </span>
-)
-
 const PostMedia = ({ post, className = "profile-post-media" }) => {
   if (post.mediaType === "video") {
     return (
-      <video
-        className={className}
-        src={post.mediaUrl}
-        poster={post.thumbnailUrl || undefined}
-        muted
-        playsInline
-        preload="metadata"
-      />
+      <video className={className} src={post.mediaUrl} muted playsInline preload="metadata" />
     )
   }
 
   return <img className={className} src={post.mediaUrl} alt={post.caption || "Profile post"} />
 }
 
-const OverflowMenu = ({
-  actions = [],
-  menuId,
-  openMenuId,
-  setOpenMenuId,
-  label = "Open content actions",
-  emptyLabel = "",
-}) => {
-  if (!actions.length && !emptyLabel) return null
-
-  const isOpen = openMenuId === menuId
-
-  return (
-    <div className="profile-overflow-menu-wrap" onClick={(event) => event.stopPropagation()}>
-      <button
-        type="button"
-        className="profile-overflow-trigger"
-        onClick={() => setOpenMenuId(isOpen ? null : menuId)}
-        aria-label={label}
-        aria-haspopup="menu"
-        aria-expanded={isOpen}
-      >
-        <span />
-        <span />
-        <span />
-      </button>
-
-      {isOpen && (
-        <div className="profile-overflow-menu" role="menu">
-          {actions.length > 0 ? (
-            actions.map((action) => (
-              <button
-                key={action.id}
-                type="button"
-                className={`profile-overflow-menu-item ${action.tone || ""}`}
-                onClick={async () => {
-                  setOpenMenuId(null)
-                  await action.onSelect()
-                }}
-                role="menuitem"
-              >
-                {action.label}
-              </button>
-            ))
-          ) : (
-            <span className="profile-overflow-menu-empty">{emptyLabel}</span>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
-const getGridActions = (post, onToggleGrid) => [
-  {
-    id: "toggle-grid",
-    label: post.onGrid ? "Remove from Grid" : "Post to Grid",
-    tone: post.onGrid ? "danger" : "",
-    onSelect: () => onToggleGrid(post, !post.onGrid),
-  },
-]
-
-const engagementIconProps = {
-  viewBox: "0 0 24 24",
-  fill: "none",
-  stroke: "currentColor",
-  strokeWidth: 1.85,
-  strokeLinecap: "round",
-  strokeLinejoin: "round",
-  "aria-hidden": true,
-}
-
-const LikeIcon = () => (
-  <svg {...engagementIconProps}>
-    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 1 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78Z" />
-  </svg>
-)
-
-const CommentIcon = () => (
-  <svg {...engagementIconProps}>
-    <path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 8.5-8.5h.5a8.5 8.5 0 0 1 8 8v.5Z" />
-  </svg>
-)
-
-const ShareIcon = () => (
-  <svg {...engagementIconProps}>
-    <path d="M22 2 11 13" />
-    <path d="m22 2-7 20-4-9-9-4 20-7Z" />
-  </svg>
-)
-
-const toEngagementCount = (...values) => {
-  for (const value of values) {
-    if (typeof value === "number" && Number.isFinite(value)) return value
-    if (Array.isArray(value)) return value.length
-  }
-
-  return null
-}
-
-const formatMetricLabel = (value, singular, plural) =>
-  `${value.toLocaleString()} ${value === 1 ? singular : plural}`
-
-const getPostEngagement = (post) => ({
-  likes: toEngagementCount(post?.likeCount, post?.likesCount, post?.likes),
-  comments: toEngagementCount(post?.commentCount, post?.commentsCount, post?.comments),
-  shares: toEngagementCount(post?.shareCount, post?.sharesCount, post?.shares),
-})
-
-const PostEngagementRow = ({ post }) => {
-  const engagement = getPostEngagement(post)
-  const metrics = [
-    engagement.likes == null ? null : formatMetricLabel(engagement.likes, "like", "likes"),
-    engagement.comments == null ? null : formatMetricLabel(engagement.comments, "comment", "comments"),
-    engagement.shares == null ? null : formatMetricLabel(engagement.shares, "share", "shares"),
-  ].filter(Boolean)
-
-  return (
-    <div className="profile-post-engagement" aria-label="Post engagement">
-      <div className="profile-post-action-row" aria-label="Post actions">
-        <button type="button" className="profile-post-action-icon" aria-label="Like post">
-          <LikeIcon />
-        </button>
-        <button type="button" className="profile-post-action-icon" aria-label="Comment on post">
-          <CommentIcon />
-        </button>
-        <button type="button" className="profile-post-action-icon" aria-label="Share post">
-          <ShareIcon />
-        </button>
-      </div>
-      {metrics.length > 0 && (
-        <div className="profile-post-engagement-summary">
-          {metrics.map((metric) => (
-            <span key={metric}>{metric}</span>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-const PostTile = ({ post, onOpen }) => (
+const PostTile = ({ post, isOwner, onToggleGrid, onOpen }) => (
   <article className="profile-post-tile">
     <button type="button" className="profile-post-open" onClick={() => onOpen(post)}>
       <PostMedia post={post} />
-      <ContentTypeBadge type={getPostContentType(post)} />
+      <span className="profile-tab-event-pill">{post.mediaType === "video" ? "Video" : "Post"}</span>
     </button>
+    {isOwner && (
+      <button
+        type="button"
+        className="profile-grid-manage-btn"
+        onClick={() => onToggleGrid(post, !post.onGrid)}
+      >
+        {post.onGrid ? "Remove from Grid" : "Post to Grid"}
+      </button>
+    )}
   </article>
 )
 
-const PostListItem = ({ post, onOpen }) => (
+const PostListItem = ({ post, isOwner, onToggleGrid, onOpen }) => (
   <article className="profile-post-list-item">
     <button type="button" className="profile-post-list-media" onClick={() => onOpen(post)}>
       <PostMedia post={post} className="profile-post-list-image" />
     </button>
     <div className="profile-post-list-body">
-      <div className="profile-post-list-heading">
-        <ContentTypeBadge type={getPostContentType(post)} />
-      </div>
+      <span>{post.mediaType === "video" ? "Video" : "Post"}</span>
       <strong>{post.caption || "Untitled post"}</strong>
       <p>{new Date(post.createdAt).toLocaleDateString()}</p>
+      {isOwner && (
+        <button type="button" onClick={() => onToggleGrid(post, !post.onGrid)}>
+          {post.onGrid ? "Remove from Grid" : "Post to Grid"}
+        </button>
+      )}
     </div>
   </article>
 )
 
-const EventTile = ({ event, onOpen }) => (
-  <article className="profile-post-tile profile-event-tile">
-    <button
-      type="button"
-      className="profile-post-open profile-event-tile-open"
-      style={buildEventImageStyle(event?.image)}
-      onClick={() => onOpen(event)}
+const EventCard = ({ event, label, onOpen }) => (
+  <button type="button" className="profile-tab-event-card" onClick={() => onOpen(event)}>
+    <div
+      className="profile-tab-event-image"
+      style={event.image ? { backgroundImage: `url(${event.image})` } : undefined}
     >
-      <ContentTypeBadge type="event" />
-      <span className="profile-event-tile-scrim" aria-hidden="true" />
-      <span className="profile-event-tile-copy">
-        <strong>{event?.title || "Untitled Event"}</strong>
-        <span>{event?.date || event?.eventDate || "Campus event"}</span>
-      </span>
-    </button>
-  </article>
-)
-
-const ProfileDropdown = ({ label, options, selectedId, onSelect }) => (
-  <div className="profile-icon-dropdown-menu" role="menu" aria-label={label}>
-    {options.map((option) => (
-      <button
-        key={option.id}
-        type="button"
-        className={`profile-icon-dropdown-item ${selectedId === option.id ? "active" : ""}`}
-        onClick={(event) => {
-          event.stopPropagation()
-          onSelect(option.id)
-        }}
-        role="menuitemradio"
-        aria-checked={selectedId === option.id}
-      >
-        <span>{option.label}</span>
-        {selectedId === option.id && <span aria-hidden="true">✓</span>}
-      </button>
-    ))}
-  </div>
+      <span className="profile-tab-event-pill">{label}</span>
+    </div>
+    <div className="profile-tab-event-body">
+      <strong>{event.title || "Untitled Event"}</strong>
+      <span>{event.date || event.eventDate || "Campus event"}</span>
+    </div>
+  </button>
 )
 
 const MemoryCard = ({ memory, event }) => (
@@ -364,7 +147,7 @@ const MemoryCard = ({ memory, event }) => (
       ) : (
         <img className="profile-post-media" src={memory.mediaUrl} alt={memory.caption || "Event memory"} />
       )}
-      <ContentTypeBadge type="event" />
+      <span className="profile-tab-event-pill">Event Tag</span>
     </div>
     <div className="profile-post-list-body compact">
       <strong>{event?.title || "Event memory"}</strong>
@@ -373,12 +156,7 @@ const MemoryCard = ({ memory, event }) => (
   </article>
 )
 
-export default function ProfileContentTabs({
-  profileId,
-  isOwner = false,
-  allEvents = [],
-  onContentCountsChange,
-}) {
+export default function ProfileContentTabs({ profileId, isOwner = false, allEvents = [] }) {
   const {
     savedEvents,
     addEvent,
@@ -398,9 +176,6 @@ export default function ProfileContentTabs({
   const [eventMemories, setEventMemories] = useState([])
   const [selectedEvent, setSelectedEvent] = useState(null)
   const [selectedPost, setSelectedPost] = useState(null)
-  const [openDropdown, setOpenDropdown] = useState(null)
-  const [openActionMenu, setOpenActionMenu] = useState(null)
-  const tabsRef = useRef(null)
 
   const eventLookup = useMemo(
     () => new Map((allEvents || []).map((event) => [String(event.id), event])),
@@ -440,28 +215,10 @@ export default function ProfileContentTabs({
     loadProfileData()
   }, [loadProfileData])
 
-  useEffect(() => {
-    onContentCountsChange?.({
-      posts: authorPosts.length,
-    })
-  }, [authorPosts.length, onContentCountsChange])
-
   const handleToggleGrid = async (post, onGrid) => {
-    setOpenActionMenu(null)
     await setPostGridVisibility(post.id, onGrid)
     setAuthorPosts((posts) =>
       posts.map((item) => (item.id === post.id ? { ...item, onGrid } : item))
-    )
-    setRepostedPosts((posts) =>
-      posts.map((item) => (item.id === post.id ? { ...item, onGrid } : item))
-    )
-    setTaggedPostRows((rows) =>
-      rows.map((row) =>
-        row.post?.id === post.id ? { ...row, post: { ...row.post, onGrid } } : row
-      )
-    )
-    setSelectedPost((current) =>
-      current?.id === post.id ? { ...current, onGrid } : current
     )
     setGridPosts((posts) =>
       onGrid
@@ -469,46 +226,6 @@ export default function ProfileContentTabs({
         : posts.filter((item) => item.id !== post.id)
     )
   }
-
-  useEffect(() => {
-    const handlePointerDown = (event) => {
-      if (
-        event.target.closest(".profile-tab-slot.has-dropdown") ||
-        event.target.closest(".profile-overflow-menu-wrap")
-      ) {
-        return
-      }
-
-      setOpenDropdown(null)
-      setOpenActionMenu(null)
-    }
-
-    document.addEventListener("pointerdown", handlePointerDown)
-    return () => document.removeEventListener("pointerdown", handlePointerDown)
-  }, [])
-
-  useEffect(() => {
-    const handleKeyDown = (event) => {
-      if (event.key !== "Escape") return
-
-      if (openActionMenu) {
-        setOpenActionMenu(null)
-        return
-      }
-
-      if (openDropdown) {
-        setOpenDropdown(null)
-        return
-      }
-
-      if (selectedPost) {
-        setSelectedPost(null)
-      }
-    }
-
-    document.addEventListener("keydown", handleKeyDown)
-    return () => document.removeEventListener("keydown", handleKeyDown)
-  }, [openActionMenu, openDropdown, selectedPost])
 
   const repostItems = useMemo(() => {
     const postLookup = new Map(repostedPosts.map((post) => [post.id, post]))
@@ -568,6 +285,8 @@ export default function ProfileContentTabs({
           <PostTile
             key={post.id}
             post={post}
+            isOwner={isOwner}
+            onToggleGrid={handleToggleGrid}
             onOpen={setSelectedPost}
           />
         ))}
@@ -586,6 +305,20 @@ export default function ProfileContentTabs({
 
   const renderPostsTab = () => (
     <>
+      <div className="profile-tab-toolbar">
+        <div className="profile-mode-switch" role="tablist" aria-label="Post view mode">
+          {["grid", "list"].map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              className={postViewMode === mode ? "active" : ""}
+              onClick={() => setPostViewMode(mode)}
+            >
+              {mode === "grid" ? "Grid" : "List"}
+            </button>
+          ))}
+        </div>
+      </div>
       {authorPosts.length > 0 ? (
         postViewMode === "grid" ? (
           renderPostGrid(authorPosts)
@@ -595,6 +328,8 @@ export default function ProfileContentTabs({
               <PostListItem
                 key={post.id}
                 post={post}
+                isOwner={isOwner}
+                onToggleGrid={handleToggleGrid}
                 onOpen={setSelectedPost}
               />
             ))}
@@ -608,18 +343,21 @@ export default function ProfileContentTabs({
 
   const renderRepostsTab = () =>
     repostItems.length > 0 ? (
-      <div className="profile-media-grid">
+      <div className="profile-mixed-list">
         {repostItems.map((item) =>
           item.type === "event" ? (
-            <EventTile
+            <EventCard
               key={item.id}
               event={item.event}
+              label="Reposted Event"
               onOpen={setSelectedEvent}
             />
           ) : (
-            <PostTile
+            <PostListItem
               key={item.id}
               post={item.post}
+              isOwner={false}
+              onToggleGrid={handleToggleGrid}
               onOpen={setSelectedPost}
             />
           )
@@ -631,6 +369,20 @@ export default function ProfileContentTabs({
 
   const renderTagsTab = () => (
     <>
+      <div className="profile-tab-toolbar">
+        <div className="profile-mode-switch" role="tablist" aria-label="Tagged content filter">
+          {TAG_FILTERS.map((filter) => (
+            <button
+              key={filter.id}
+              type="button"
+              className={tagFilter === filter.id ? "active" : ""}
+              onClick={() => setTagFilter(filter.id)}
+            >
+              {filter.label}
+            </button>
+          ))}
+        </div>
+      </div>
       {filteredTagItems.length > 0 ? (
         <div className="profile-media-grid">
           {filteredTagItems.map((item) =>
@@ -638,6 +390,8 @@ export default function ProfileContentTabs({
               <PostTile
                 key={item.id}
                 post={item.post}
+                isOwner={false}
+                onToggleGrid={handleToggleGrid}
                 onOpen={setSelectedPost}
               />
             ) : (
@@ -651,67 +405,90 @@ export default function ProfileContentTabs({
     </>
   )
 
-  const handleTabClick = (tabId) => {
-    const hasDropdown = tabId === "posts" || tabId === "tags"
-
-    setOpenActionMenu(null)
-
-    if (activeTab !== tabId) {
-      setActiveTab(tabId)
-      setOpenDropdown(null)
-      return
-    }
-
-    setActiveTab(tabId)
-    setOpenDropdown((current) => (hasDropdown && current !== tabId ? tabId : null))
-  }
-
   return (
-    <div className="profile-section profile-tabbed-section" ref={tabsRef}>
+    <div className="profile-section profile-tabbed-section">
       <div className="profile-tab-bar" role="tablist" aria-label="Profile tabs">
+      <div className="profile-tab-bar" role="tablist" aria-label="Profile tabs" ref={dropdownRef}>
         {PROFILE_TABS.map((tab) => (
+          <button
           <div
             key={tab.id}
-            className={`profile-tab-slot ${tab.id === "posts" || tab.id === "tags" ? "has-dropdown" : ""}`}
+            type="button"
+            className={`profile-tab-btn ${activeTab === tab.id ? "active" : ""}`}
+            onClick={() => setActiveTab(tab.id)}
+            onClick={() => {
+              setActiveTab(tab.id)
+              if (tab.id === "posts" || tab.id === "tags") {
+                setActiveDropdown(activeDropdown === tab.id ? null : tab.id)
+              } else {
+                setActiveDropdown(null)
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                setActiveTab(tab.id)
+                if (tab.id === "posts" || tab.id === "tags") {
+                  setActiveDropdown(activeDropdown === tab.id ? null : tab.id)
+                } else {
+                  setActiveDropdown(null)
+                }
+              }
+            }}
+            role="tab"
+            aria-selected={activeTab === tab.id}
+            aria-label={tab.label}
+            title={tab.label}
+            tabIndex={0}
+            style={{ position: "relative", cursor: "pointer" }}
           >
-            <button
-              type="button"
-              className={`profile-tab-btn ${activeTab === tab.id ? "active" : ""}`}
-              onClick={() => handleTabClick(tab.id)}
-              role="tab"
-              aria-selected={activeTab === tab.id}
-              aria-label={tab.label}
-              aria-haspopup={tab.id === "posts" || tab.id === "tags" ? "menu" : undefined}
-              aria-expanded={openDropdown === tab.id}
-              title={tab.label}
-            >
-              <ProfileTabIcon type={tab.id} />
-            </button>
+            <ProfileTabIcon type={tab.id} />
+          </button>
 
-            {openDropdown === "posts" && tab.id === "posts" && (
-              <ProfileDropdown
-                label="Post layout"
-                options={POST_VIEW_OPTIONS}
-                selectedId={postViewMode}
-                onSelect={(optionId) => {
-                  setPostViewMode(optionId)
-                  setActiveTab("posts")
-                  setOpenDropdown(null)
-                }}
-              />
+            {/* Dropdown for Posts / Camera Icon (Grid/List) */}
+            {activeDropdown === tab.id && tab.id === "posts" && (
+              <div
+                className="absolute top-full mt-2 w-32 bg-[#1c1c1e] border border-[#2c2c2e] rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.5)] overflow-hidden z-50 flex flex-col"
+                style={{ left: '50%', transform: 'translateX(-50%)' }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button
+                  type="button"
+                  onClick={() => { setPostViewMode('grid'); setActiveDropdown(null); }}
+                  className={`w-full text-left px-4 py-3 text-sm transition-colors ${postViewMode === 'grid' ? 'text-white bg-[#2c2c2e]' : 'text-gray-400 hover:text-white hover:bg-[#2c2c2e]'}`}
+                >
+                  Grid
+                </button>
+                <div className="h-[1px] w-full bg-[#2c2c2e]" />
+                <button
+                  type="button"
+                  onClick={() => { setPostViewMode('list'); setActiveDropdown(null); }}
+                  className={`w-full text-left px-4 py-3 text-sm transition-colors ${postViewMode === 'list' ? 'text-white bg-[#2c2c2e]' : 'text-gray-400 hover:text-white hover:bg-[#2c2c2e]'}`}
+                >
+                  List
+                </button>
+              </div>
             )}
 
-            {openDropdown === "tags" && tab.id === "tags" && (
-              <ProfileDropdown
-                label="Tagged content filter"
-                options={TAG_FILTERS}
-                selectedId={tagFilter}
-                onSelect={(optionId) => {
-                  setTagFilter(optionId)
-                  setActiveTab("tags")
-                  setOpenDropdown(null)
-                }}
-              />
+            {/* Dropdown for Tags Icon (All/Posts/Event Tags) */}
+            {activeDropdown === tab.id && tab.id === "tags" && (
+              <div
+                className="absolute top-full right-0 mt-2 w-40 bg-[#1c1c1e] border border-[#2c2c2e] rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.5)] overflow-hidden z-50 flex flex-col"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {TAG_FILTERS.map((filter, index) => (
+                  <div key={filter.id} className="flex flex-col">
+                    <button
+                      type="button"
+                      onClick={() => { setTagFilter(filter.id); setActiveDropdown(null); }}
+                      className={`w-full text-left px-4 py-3 text-sm transition-colors ${tagFilter === filter.id ? 'text-white bg-[#2c2c2e]' : 'text-gray-400 hover:text-white hover:bg-[#2c2c2e]'}`}
+                    >
+                      {filter.label}
+                    </button>
+                    {index < TAG_FILTERS.length - 1 && <div className="h-[1px] w-full bg-[#2c2c2e]" />}
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         ))}
@@ -743,32 +520,12 @@ export default function ProfileContentTabs({
             aria-label="Close post preview"
             onClick={() => setSelectedPost(null)}
           />
-          <div className="profile-post-modal-card" onClick={(event) => event.stopPropagation()}>
-            <div className="profile-post-modal-topbar">
-              <ContentTypeBadge type={getPostContentType(selectedPost)} />
-              <div className="profile-post-modal-actions">
-                <OverflowMenu
-                  actions={isOwner ? getGridActions(selectedPost, handleToggleGrid) : []}
-                  menuId={`modal-${selectedPost.id}`}
-                  openMenuId={openActionMenu}
-                  setOpenMenuId={setOpenActionMenu}
-                  emptyLabel="No actions available"
-                />
-                <button type="button" className="profile-post-modal-close" onClick={() => setSelectedPost(null)}>
-                  ×
-                </button>
-              </div>
-            </div>
-            <div className="profile-post-modal-media-frame">
-              <PostMedia post={selectedPost} className="profile-post-modal-media" />
-            </div>
-            <div className="profile-post-modal-details">
-              <PostEngagementRow post={selectedPost} />
-              {selectedPost.caption && <p>{selectedPost.caption}</p>}
-              <time className="profile-post-modal-date" dateTime={selectedPost.createdAt}>
-                {new Date(selectedPost.createdAt).toLocaleDateString()}
-              </time>
-            </div>
+          <div className="profile-post-modal-card">
+            <button type="button" className="profile-post-modal-close" onClick={() => setSelectedPost(null)}>
+              ×
+            </button>
+            <PostMedia post={selectedPost} className="profile-post-modal-media" />
+            {selectedPost.caption && <p>{selectedPost.caption}</p>}
           </div>
         </div>
       )}
