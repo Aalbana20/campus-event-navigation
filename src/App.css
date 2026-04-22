@@ -8898,6 +8898,61 @@ body.theme-dark .profile-rsvp-title {
   object-fit: cover;
 }
 
+.video-playback-hitarea {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.video-playback-hitarea:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.9);
+  outline-offset: -8px;
+}
+
+.video-playback-hitarea:disabled {
+  cursor: default;
+}
+
+.video-playback-center {
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.28);
+  color: rgba(255, 255, 255, 0.88);
+  opacity: 0;
+  transform: scale(0.88);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.32));
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.video-playback-hitarea.paused .video-playback-center {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.video-playback-center svg {
+  width: 38px;
+  height: 38px;
+  fill: currentColor;
+}
+
+.video-playback-play-icon {
+  transform: translateX(2px);
+}
+
 .video-feed-overlay {
   position: absolute;
   inset: 0;

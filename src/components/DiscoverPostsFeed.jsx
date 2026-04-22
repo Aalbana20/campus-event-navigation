@@ -6,6 +6,7 @@ function FeedVideo({ post }) {
   const videoRef = useRef(null)
   const [isActive, setIsActive] = useState(false)
   const [hasStarted, setHasStarted] = useState(false)
+  const [isManuallyPaused, setIsManuallyPaused] = useState(false)
 
   useEffect(() => {
     const element = videoRef.current
@@ -29,7 +30,7 @@ function FeedVideo({ post }) {
   useEffect(() => {
     const element = videoRef.current
     if (!element) return
-    if (isActive) {
+    if (isActive && !isManuallyPaused) {
       const playPromise = element.play()
       if (playPromise && typeof playPromise.catch === "function") {
         playPromise.catch(() => {
@@ -39,22 +40,41 @@ function FeedVideo({ post }) {
     } else {
       element.pause()
     }
-  }, [isActive])
+  }, [isActive, isManuallyPaused])
+
+  const handleTogglePlayback = () => {
+    if (!isActive) return
+    setHasStarted(true)
+    setIsManuallyPaused((paused) => !paused)
+  }
 
   // Keep bandwidth minimal until the user first scrolls the video into view.
   const src = hasStarted ? post.mediaUrl : undefined
 
   return (
-    <video
-      ref={videoRef}
-      className="video-feed-media"
-      src={src}
-      poster={post.thumbnailUrl || undefined}
-      muted
-      loop
-      playsInline
-      preload="none"
-    />
+    <>
+      <video
+        ref={videoRef}
+        className="video-feed-media"
+        src={src}
+        poster={post.thumbnailUrl || undefined}
+        muted
+        loop
+        playsInline
+        preload="none"
+      />
+      <button
+        type="button"
+        className={`video-playback-hitarea ${isManuallyPaused ? "paused" : ""}`}
+        onClick={handleTogglePlayback}
+        aria-label={isManuallyPaused ? "Play video" : "Pause video"}
+        disabled={!isActive}
+      >
+        <span className="video-playback-center" aria-hidden="true">
+          {isManuallyPaused ? <PlayIcon /> : <PauseIcon />}
+        </span>
+      </button>
+    </>
   )
 }
 
@@ -104,6 +124,23 @@ function ShareIcon() {
     <svg {...iconProps}>
       <line x1="22" y1="2" x2="11" y2="13" />
       <polygon points="22 2 15 22 11 13 2 9 22 2" />
+    </svg>
+  )
+}
+
+function PlayIcon() {
+  return (
+    <svg className="video-playback-play-icon" viewBox="0 0 32 32" aria-hidden="true">
+      <path d="M11 8.6v14.8c0 1.2 1.3 2 2.4 1.4l12.2-7.4c1-.6 1-2.1 0-2.8L13.4 7.2C12.3 6.6 11 7.4 11 8.6z" />
+    </svg>
+  )
+}
+
+function PauseIcon() {
+  return (
+    <svg viewBox="0 0 32 32" aria-hidden="true">
+      <rect x="10" y="8" width="4.2" height="16" rx="1.4" />
+      <rect x="17.8" y="8" width="4.2" height="16" rx="1.4" />
     </svg>
   )
 }
