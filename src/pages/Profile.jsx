@@ -627,8 +627,6 @@ function Profile() {
             <h1 className="username">{username}</h1>
             <h2 className="real-name">{name}</h2>
 
-            <p className="bio">{bio}</p>
-
             <div className="profile-stats">
               <button
                 type="button"
@@ -662,6 +660,8 @@ function Profile() {
                 <span className="profile-stat-label">Posts</span>
               </div>
             </div>
+
+            <p className="bio">{bio}</p>
 
             <div className="profile-action-row">
               <button

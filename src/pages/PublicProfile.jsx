@@ -393,8 +393,6 @@ function PublicProfile() {
               </button>
             </div>
 
-            <p className="bio">{profile.bio || "No bio yet."}</p>
-
             <div className="profile-stats">
               <button
                 type="button"
@@ -424,6 +422,8 @@ function PublicProfile() {
                 <span className="profile-stat-label">Posts</span>
               </div>
             </div>
+
+            <p className="bio">{profile.bio || "No bio yet."}</p>
 
             <div className="profile-action-row public-profile-action-row">
               <button

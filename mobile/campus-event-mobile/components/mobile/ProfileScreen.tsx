@@ -313,7 +313,6 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
             <View style={styles.headerCopy}>
               <Text style={styles.name}>{profile.name}</Text>
               <Text style={styles.username}>@{profile.username}</Text>
-              <Text style={styles.bio}>{profile.bio}</Text>
             </View>
           </View>
 
@@ -323,6 +322,8 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
             <StatButton label="Host" value={createdEvents.length} onPress={() => setActiveList('created')} />
             <StatButton label="Posts" value={profileContentCounts.posts} />
           </View>
+
+          {profile.bio ? <Text style={styles.bio}>{profile.bio}</Text> : null}
 
           <View style={styles.actionRow}>
             {isOwnProfile ? (
