@@ -7,6 +7,32 @@ import { useEvents } from "../context/EventContext"
 const DEBOUNCE_MS = 280
 const MAX_RESULTS = 8
 
+const getDateRange = (filter) => {
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  if (filter === "today") {
+    return { start: today, end: new Date(today.getTime() + 86400000) }
+  }
+  if (filter === "this-week") {
+    const end = new Date(today.getTime() + 7 * 86400000)
+    return { start: today, end }
+  }
+  if (filter === "this-weekend") {
+    const day = today.getDay()
+    const daysToSat = (6 - day + 7) % 7 || 7
+    const sat = new Date(today.getTime() + daysToSat * 86400000)
+    const sun = new Date(sat.getTime() + 86400000)
+    return { start: sat, end: new Date(sun.getTime() + 86400000) }
+  }
+  return null
+}
+
+const DATE_FILTERS = [
+  { key: "today", label: "Today" },
+  { key: "this-week", label: "This week" },
+  { key: "this-weekend", label: "This weekend" },
+]
+
 function useDebounce(value, delay) {
   const [debounced, setDebounced] = useState(value)
   useEffect(() => {
@@ -25,6 +51,7 @@ export default function GlobalSearch({ onClose }) {
   const [query, setQuery] = useState("")
   const [profiles, setProfiles] = useState([])
   const [isLoading, setIsLoading] = useState(false)
+  const [dateFilter, setDateFilter] = useState(null)
   const debouncedQuery = useDebounce(query.trim().toLowerCase(), DEBOUNCE_MS)
 
   // Focus input on first render
@@ -61,16 +88,24 @@ export default function GlobalSearch({ onClose }) {
     return () => { active = false }
   }, [debouncedQuery])
 
-  // Filter events locally
-  const matchedEvents = debouncedQuery
+  // Filter events locally by text + optional date filter
+  const dateRange = getDateRange(dateFilter)
+  const matchedEvents = (debouncedQuery || dateFilter)
     ? (allEvents || [])
         .filter((event) => {
-          const haystack = [
-            event.title, event.description, event.location,
-            event.locationName, event.locationAddress, event.organizer,
-            ...(event.tags || []),
-          ].filter(Boolean).join(" ").toLowerCase()
-          return haystack.includes(debouncedQuery)
+          if (debouncedQuery) {
+            const haystack = [
+              event.title, event.description, event.location,
+              event.locationName, event.locationAddress, event.organizer,
+              ...(event.tags || []),
+            ].filter(Boolean).join(" ").toLowerCase()
+            if (!haystack.includes(debouncedQuery)) return false
+          }
+          if (dateRange && event.event_date) {
+            const d = new Date(event.event_date)
+            if (d < dateRange.start || d >= dateRange.end) return false
+          }
+          return true
         })
         .slice(0, MAX_RESULTS)
     : []
@@ -118,10 +153,25 @@ export default function GlobalSearch({ onClose }) {
           {isLoading && <span className="global-search-spinner" aria-hidden="true" />}
         </div>
 
-        {debouncedQuery && (
+        <div className="global-search-filter-row">
+          {DATE_FILTERS.map((f) => (
+            <button
+              key={f.key}
+              type="button"
+              className={`global-search-filter-chip ${dateFilter === f.key ? "active" : ""}`}
+              onClick={() => setDateFilter(dateFilter === f.key ? null : f.key)}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+
+        {(debouncedQuery || dateFilter) && (
           <div className="global-search-results">
             {!hasResults && !isLoading && (
-              <p className="global-search-empty">No results for "{query}"</p>
+              <p className="global-search-empty">
+                {debouncedQuery ? `No results for "${query}"` : "No events match that filter."}
+              </p>
             )}
 
             {matchedEvents.length > 0 && (

@@ -321,7 +321,7 @@ export const recordDiscoverStoryView = async ({
   storyId,
   viewerId,
 }) => {
-  if (!storyId || !viewerId) return
+  if (!storyId || !viewerId || viewerId === "current-user") return
 
   const { error } = await supabase
     .from("story_views")
