@@ -34,6 +34,7 @@ function PublicProfile() {
   const [isPanelLoading, setIsPanelLoading] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuFeedback, setMenuFeedback] = useState("")
+  const [profileContentCounts, setProfileContentCounts] = useState({ posts: 0 })
 
   const loadCounts = useCallback(async (profileId) => {
     if (!profileId) {
@@ -98,6 +99,7 @@ function PublicProfile() {
     setFollowingUsers([])
     setMenuOpen(false)
     setMenuFeedback("")
+    setProfileContentCounts({ posts: 0 })
   }, [viewedUsername])
 
   useEffect(() => {
@@ -323,6 +325,13 @@ function PublicProfile() {
     navigate(`/profile/${person.username || person.id}`)
   }
 
+  const handleProfileContentCountsChange = useCallback((counts) => {
+    setProfileContentCounts((prev) => ({
+      ...prev,
+      ...counts,
+    }))
+  }, [])
+
   const activePanelUsers =
     activePanel === "followers" ? followersUsers : followingUsers
 
@@ -387,11 +396,6 @@ function PublicProfile() {
             <p className="bio">{profile.bio || "No bio yet."}</p>
 
             <div className="profile-stats">
-              <div className="profile-stat-card public-profile-stat-card static">
-                <span className="profile-stat-number">{createdEvents.length}</span>
-                <span className="profile-stat-label">Events Created</span>
-              </div>
-
               <button
                 type="button"
                 className="profile-stat-card public-profile-stat-card is-clickable"
@@ -409,6 +413,16 @@ function PublicProfile() {
                 <span className="profile-stat-number">{profileCounts.following}</span>
                 <span className="profile-stat-label">Following</span>
               </button>
+
+              <div className="profile-stat-card public-profile-stat-card static">
+                <span className="profile-stat-number">{createdEvents.length}</span>
+                <span className="profile-stat-label">Host</span>
+              </div>
+
+              <div className="profile-stat-card public-profile-stat-card static">
+                <span className="profile-stat-number">{profileContentCounts.posts}</span>
+                <span className="profile-stat-label">Posts</span>
+              </div>
             </div>
 
             <div className="profile-action-row public-profile-action-row">
@@ -437,7 +451,12 @@ function PublicProfile() {
           </div>
         </div>
 
-        <ProfileContentTabs profileId={profile.id} isOwner={false} allEvents={allEvents} />
+        <ProfileContentTabs
+          profileId={profile.id}
+          isOwner={false}
+          allEvents={allEvents}
+          onContentCountsChange={handleProfileContentCountsChange}
+        />
       </div>
 
       {activePanel && (

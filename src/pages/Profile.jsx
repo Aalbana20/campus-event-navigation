@@ -96,6 +96,7 @@ function Profile() {
   const [isCropModalOpen, setIsCropModalOpen] = useState(false)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [shareMessage, setShareMessage] = useState("")
+  const [profileContentCounts, setProfileContentCounts] = useState({ posts: 0 })
   const [activeSettingsView, setActiveSettingsView] = useState("main")
   const [themeMode, setThemeMode] = useState(getStoredThemeMode)
   const [pushNotifications, setPushNotifications] = useState(true)
@@ -174,6 +175,13 @@ function Profile() {
   const closePanel = () => {
     setActivePanel(null)
   }
+
+  const handleProfileContentCountsChange = useCallback((counts) => {
+    setProfileContentCounts((prev) => ({
+      ...prev,
+      ...counts,
+    }))
+  }, [])
 
   const openEditProfile = () => {
     setDraftName(name)
@@ -625,15 +633,6 @@ function Profile() {
               <button
                 type="button"
                 className="profile-stat-card"
-                onClick={() => openPanel("following")}
-              >
-                <span className="profile-stat-number">{followingList.length}</span>
-                <span className="profile-stat-label">Following</span>
-              </button>
-
-              <button
-                type="button"
-                className="profile-stat-card"
                 onClick={() => openPanel("followers")}
               >
                 <span className="profile-stat-number">{followersList.length}</span>
@@ -643,11 +642,25 @@ function Profile() {
               <button
                 type="button"
                 className="profile-stat-card"
+                onClick={() => openPanel("following")}
+              >
+                <span className="profile-stat-number">{followingList.length}</span>
+                <span className="profile-stat-label">Following</span>
+              </button>
+
+              <button
+                type="button"
+                className="profile-stat-card"
                 onClick={() => openPanel("events")}
               >
                 <span className="profile-stat-number">{createdEvents.length}</span>
-                <span className="profile-stat-label">Events Created</span>
+                <span className="profile-stat-label">Host</span>
               </button>
+
+              <div className="profile-stat-card static">
+                <span className="profile-stat-number">{profileContentCounts.posts}</span>
+                <span className="profile-stat-label">Posts</span>
+              </div>
             </div>
 
             <div className="profile-action-row">
@@ -678,7 +691,12 @@ function Profile() {
         </div>
 
         <div className="profile-content-stack">
-          <ProfileContentTabs profileId={ownerId} isOwner allEvents={allEvents} />
+          <ProfileContentTabs
+            profileId={ownerId}
+            isOwner
+            allEvents={allEvents}
+            onContentCountsChange={handleProfileContentCountsChange}
+          />
         </div>
       </div>
 

@@ -373,7 +373,12 @@ const MemoryCard = ({ memory, event }) => (
   </article>
 )
 
-export default function ProfileContentTabs({ profileId, isOwner = false, allEvents = [] }) {
+export default function ProfileContentTabs({
+  profileId,
+  isOwner = false,
+  allEvents = [],
+  onContentCountsChange,
+}) {
   const {
     savedEvents,
     addEvent,
@@ -434,6 +439,12 @@ export default function ProfileContentTabs({ profileId, isOwner = false, allEven
   useEffect(() => {
     loadProfileData()
   }, [loadProfileData])
+
+  useEffect(() => {
+    onContentCountsChange?.({
+      posts: authorPosts.length,
+    })
+  }, [authorPosts.length, onContentCountsChange])
 
   const handleToggleGrid = async (post, onGrid) => {
     setOpenActionMenu(null)
