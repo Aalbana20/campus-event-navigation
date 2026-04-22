@@ -311,7 +311,7 @@ function Profile() {
         return
       }
 
-      await supabase
+      const { error: profileUpsertError } = await supabase
         .from("profiles")
         .upsert({
           id: userId,
@@ -321,6 +321,10 @@ function Profile() {
           avatar_url: nextProfileImageValue || null,
           updated_at: new Date().toISOString(),
         })
+      if (profileUpsertError) {
+        showToast(profileUpsertError.message || "Failed to save profile.", "error")
+        return
+      }
 
       const {
         data: { session },
