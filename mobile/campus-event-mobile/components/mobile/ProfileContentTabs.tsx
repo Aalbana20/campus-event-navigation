@@ -1,13 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
+  FlatList,
   Image,
   Modal,
   Pressable,
-  ScrollView,
   Share,
   StyleSheet,
   Text,
@@ -66,12 +66,25 @@ const formatPostDate = (value?: string | null) => {
   });
 };
 
+const getPostMediaAspectRatio = (post: DiscoverPostRecord) => {
+  const width = Number(post.mediaWidth);
+  const height = Number(post.mediaHeight);
+
+  if (Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) {
+    return width / height;
+  }
+
+  return 4 / 5;
+};
+
 function PostMedia({
   post,
   style,
+  fit = 'cover',
 }: {
   post: DiscoverPostRecord;
   style: object;
+  fit?: 'cover' | 'contain';
 }) {
   const isVideo = post.mediaType === 'video';
   const player = useVideoPlayer(isVideo ? post.mediaUrl : null, (instance) => {
@@ -84,7 +97,7 @@ function PostMedia({
       <VideoView
         player={player}
         style={style}
-        contentFit="cover"
+        contentFit={fit}
         nativeControls={false}
         allowsFullscreen={false}
         allowsPictureInPicture={false}
@@ -92,7 +105,7 @@ function PostMedia({
     );
   }
 
-  return <Image source={{ uri: post.mediaUrl }} style={style} />;
+  return <Image source={{ uri: post.mediaUrl }} style={style} resizeMode={fit} />;
 }
 
 function MemoryMedia({
@@ -143,7 +156,22 @@ export function ProfileContentTabs({
   const [taggedPosts, setTaggedPosts] = useState<DiscoverPostRecord[]>([]);
   const [eventMemories, setEventMemories] = useState<EventMemoryRecord[]>([]);
   const [selectedPost, setSelectedPost] = useState<DiscoverPostRecord | null>(null);
+  const [viewerPosts, setViewerPosts] = useState<DiscoverPostRecord[]>([]);
   const [isPostMenuOpen, setIsPostMenuOpen] = useState(false);
+  const viewerViewabilityConfig = useRef({ itemVisiblePercentThreshold: 55 }).current;
+  const handleViewerViewableItemsChanged = useRef(
+    ({
+      viewableItems,
+    }: {
+      viewableItems: { item?: DiscoverPostRecord; index: number | null }[];
+    }) => {
+      const nextVisiblePost = viewableItems.find((entry) => entry.item)?.item;
+      if (nextVisiblePost) {
+        setSelectedPost(nextVisiblePost);
+        setIsPostMenuOpen(false);
+      }
+    }
+  ).current;
 
   const loadProfileContent = useCallback(async () => {
     if (!profileId) return;
@@ -213,6 +241,9 @@ export function ProfileContentTabs({
         ? [nextPost, ...posts.filter((item) => item.id !== post.id)]
         : posts.filter((item) => item.id !== post.id)
     );
+    setViewerPosts((posts) =>
+      posts.map((item) => (item.id === post.id ? { ...item, onGrid } : item))
+    );
     setSelectedPost((currentPost) =>
       currentPost?.id === post.id ? { ...currentPost, onGrid } : currentPost
     );
@@ -259,29 +290,39 @@ export function ProfileContentTabs({
     setOpenDropdown(null);
   };
 
-  const handleOpenPost = (post: DiscoverPostRecord) => {
+  const handleOpenPost = (post: DiscoverPostRecord, sourcePosts: DiscoverPostRecord[]) => {
+    const uniqueSourcePosts = sourcePosts.filter(
+      (item, index, list) => list.findIndex((candidate) => candidate.id === item.id) === index
+    );
+    const startIndex = Math.max(
+      0,
+      uniqueSourcePosts.findIndex((item) => item.id === post.id)
+    );
+
     setIsPostMenuOpen(false);
     setSelectedPost(post);
+    setViewerPosts(uniqueSourcePosts.length ? uniqueSourcePosts.slice(startIndex) : [post]);
   };
 
   const handleClosePost = () => {
     setIsPostMenuOpen(false);
     setSelectedPost(null);
+    setViewerPosts([]);
   };
 
-  const handlePostLike = () => {
+  const handlePostLike = (_post: DiscoverPostRecord) => {
     Alert.alert('Likes coming soon', 'Post likes are not wired to the backend yet.');
   };
 
-  const handlePostComment = () => {
+  const handlePostComment = (_post: DiscoverPostRecord) => {
     Alert.alert('Comments coming soon', 'Post comments are not wired to the backend yet.');
   };
 
-  const handlePostRepost = async () => {
-    if (!selectedPost) return;
+  const handlePostRepost = async (post: DiscoverPostRecord) => {
+    if (!post) return;
 
     try {
-      await repostPost(selectedPost.id);
+      await repostPost(post.id);
       Alert.alert('Reposted', 'This post was added to your reposts.');
     } catch (error) {
       Alert.alert(
@@ -291,12 +332,12 @@ export function ProfileContentTabs({
     }
   };
 
-  const handlePostShare = async () => {
-    if (!selectedPost) return;
+  const handlePostShare = async (post: DiscoverPostRecord) => {
+    if (!post) return;
 
     try {
       await Share.share({
-        message: [selectedPost.caption, selectedPost.mediaUrl].filter(Boolean).join('\n'),
+        message: [post.caption, post.mediaUrl].filter(Boolean).join('\n'),
       });
     } catch (error) {
       Alert.alert(
@@ -374,9 +415,9 @@ export function ProfileContentTabs({
     );
   }, [eventMemories, getEventById, tagFilter, taggedPosts]);
 
-  const renderPostTile = (post: DiscoverPostRecord) => (
+  const renderPostTile = (post: DiscoverPostRecord, sourcePosts: DiscoverPostRecord[]) => (
     <View key={post.id} style={styles.postTileWrap}>
-      <Pressable style={styles.mediaTile} onPress={() => handleOpenPost(post)}>
+      <Pressable style={styles.mediaTile} onPress={() => handleOpenPost(post, sourcePosts)}>
         <PostMedia post={post} style={styles.mediaTileImage} />
         {post.mediaType === 'video' ? (
           <View style={styles.mediaTileIcon}>
@@ -387,9 +428,9 @@ export function ProfileContentTabs({
     </View>
   );
 
-  const renderPostListItem = (post: DiscoverPostRecord) => (
+  const renderPostListItem = (post: DiscoverPostRecord, sourcePosts: DiscoverPostRecord[]) => (
     <View key={post.id} style={styles.postListItem}>
-      <Pressable style={styles.postListThumb} onPress={() => handleOpenPost(post)}>
+      <Pressable style={styles.postListThumb} onPress={() => handleOpenPost(post, sourcePosts)}>
         <PostMedia post={post} style={styles.postListImage} />
       </Pressable>
       <View style={styles.postListCopy}>
@@ -432,7 +473,7 @@ export function ProfileContentTabs({
   const renderGrid = (posts: DiscoverPostRecord[]) => {
     if (!posts.length) return null;
 
-    return <View style={styles.mediaGrid}>{posts.map(renderPostTile)}</View>;
+    return <View style={styles.mediaGrid}>{posts.map((post) => renderPostTile(post, posts))}</View>;
   };
 
   const renderEmpty = (title: string, copy: string) => (
@@ -457,7 +498,7 @@ export function ProfileContentTabs({
       {authorPosts.length
         ? postMode === 'grid'
           ? renderGrid(authorPosts)
-          : authorPosts.map(renderPostListItem)
+          : authorPosts.map((post) => renderPostListItem(post, authorPosts))
         : renderEmpty('No posts yet.', 'Posts and videos will appear here.')}
     </View>
   );
@@ -469,7 +510,12 @@ export function ProfileContentTabs({
           item?.type === 'event'
             ? renderEventRepost(item.event, item.id)
             : item?.post
-              ? renderPostListItem(item.post)
+              ? renderPostListItem(
+                  item.post,
+                  repostItems
+                    .filter((candidate) => candidate.type === 'post')
+                    .map((candidate) => candidate.post)
+                )
               : null
         )}
       </View>
@@ -483,7 +529,12 @@ export function ProfileContentTabs({
         <View style={styles.mediaGrid}>
           {tagItems.map((item) =>
             item.type === 'post' ? (
-              renderPostTile(item.post)
+              renderPostTile(
+                item.post,
+                tagItems
+                  .filter((candidate) => candidate.type === 'post')
+                  .map((candidate) => candidate.post)
+              )
             ) : (
               <View key={item.id} style={styles.postTileWrap}>
                 <View style={styles.mediaTile}>
@@ -523,7 +574,66 @@ export function ProfileContentTabs({
   const selectedPostIsOwner =
     Boolean(selectedPost && currentUser.id) &&
     String(selectedPost?.authorId) === String(currentUser.id);
-  const selectedPostDate = formatPostDate(selectedPost?.createdAt);
+
+  const renderViewerPost = ({ item }: { item: DiscoverPostRecord }) => {
+    const postDate = formatPostDate(item.createdAt);
+
+    return (
+      <View style={styles.viewerPost}>
+        <View style={styles.viewerAuthorRow}>
+          <Image
+            source={getAvatarImageSource(item.authorAvatar)}
+            style={styles.viewerAvatar}
+          />
+          <View style={styles.viewerAuthorCopy}>
+            <Text style={styles.viewerAuthorName} numberOfLines={1}>
+              {item.authorUsername
+                ? `@${item.authorUsername}`
+                : item.authorName || 'Campus User'}
+            </Text>
+            <Text style={styles.viewerAuthorMeta} numberOfLines={1}>
+              {item.mediaType === 'video' ? 'Video post' : 'Post'}
+            </Text>
+          </View>
+        </View>
+
+        <PostMedia
+          post={item}
+          style={[styles.viewerMedia, { aspectRatio: getPostMediaAspectRatio(item) }]}
+          fit="contain"
+        />
+
+        <View style={styles.viewerActionsRow}>
+          <View style={styles.viewerLeftActions}>
+            <Pressable style={styles.viewerActionButton} onPress={() => handlePostLike(item)}>
+              <Ionicons name="heart-outline" size={31} color="#ffffff" />
+            </Pressable>
+            <Pressable style={styles.viewerActionButton} onPress={() => handlePostComment(item)}>
+              <Ionicons name="chatbubble-outline" size={29} color="#ffffff" />
+            </Pressable>
+            <Pressable style={styles.viewerActionButton} onPress={() => handlePostRepost(item)}>
+              <Ionicons name="repeat-outline" size={30} color="#ffffff" />
+            </Pressable>
+            <Pressable style={styles.viewerActionButton} onPress={() => handlePostShare(item)}>
+              <Ionicons name="paper-plane-outline" size={29} color="#ffffff" />
+            </Pressable>
+          </View>
+        </View>
+
+        {item.caption ? (
+          <Text style={styles.viewerCaption}>
+            <Text style={styles.viewerCaptionAuthor}>
+              {item.authorUsername || item.authorName || 'Campus'}{' '}
+            </Text>
+            {item.caption}
+          </Text>
+        ) : null}
+        {postDate ? (
+          <Text style={styles.viewerDate}>{postDate}</Text>
+        ) : null}
+      </View>
+    );
+  };
 
   return (
     <View style={styles.wrap}>
@@ -622,7 +732,7 @@ export function ProfileContentTabs({
       {renderContent()}
 
       <Modal
-        visible={Boolean(selectedPost)}
+        visible={viewerPosts.length > 0}
         transparent
         animationType="slide"
         onRequestClose={handleClosePost}>
@@ -670,62 +780,16 @@ export function ProfileContentTabs({
             </Pressable>
           ) : null}
 
-          <ScrollView
-            style={styles.viewerScroll}
+          <FlatList
+            data={viewerPosts}
+            keyExtractor={(item) => item.id}
+            renderItem={renderViewerPost}
+            style={styles.viewerList}
             contentContainerStyle={styles.viewerContent}
-            showsVerticalScrollIndicator={false}>
-            {selectedPost ? (
-              <>
-                <View style={styles.viewerAuthorRow}>
-                  <Image
-                    source={getAvatarImageSource(selectedPost.authorAvatar)}
-                    style={styles.viewerAvatar}
-                  />
-                  <View style={styles.viewerAuthorCopy}>
-                    <Text style={styles.viewerAuthorName} numberOfLines={1}>
-                      {selectedPost.authorUsername
-                        ? `@${selectedPost.authorUsername}`
-                        : selectedPost.authorName || 'Campus User'}
-                    </Text>
-                    <Text style={styles.viewerAuthorMeta} numberOfLines={1}>
-                      {selectedPost.mediaType === 'video' ? 'Video post' : 'Post'}
-                    </Text>
-                  </View>
-                </View>
-
-                <PostMedia post={selectedPost} style={styles.viewerMedia} />
-
-                <View style={styles.viewerActionsRow}>
-                  <View style={styles.viewerLeftActions}>
-                    <Pressable style={styles.viewerActionButton} onPress={handlePostLike}>
-                      <Ionicons name="heart-outline" size={31} color="#ffffff" />
-                    </Pressable>
-                    <Pressable style={styles.viewerActionButton} onPress={handlePostComment}>
-                      <Ionicons name="chatbubble-outline" size={29} color="#ffffff" />
-                    </Pressable>
-                    <Pressable style={styles.viewerActionButton} onPress={handlePostRepost}>
-                      <Ionicons name="repeat-outline" size={30} color="#ffffff" />
-                    </Pressable>
-                    <Pressable style={styles.viewerActionButton} onPress={handlePostShare}>
-                      <Ionicons name="paper-plane-outline" size={29} color="#ffffff" />
-                    </Pressable>
-                  </View>
-                </View>
-
-                {selectedPost.caption ? (
-                  <Text style={styles.viewerCaption}>
-                    <Text style={styles.viewerCaptionAuthor}>
-                      {selectedPost.authorUsername || selectedPost.authorName || 'Campus'}{' '}
-                    </Text>
-                    {selectedPost.caption}
-                  </Text>
-                ) : null}
-                {selectedPostDate ? (
-                  <Text style={styles.viewerDate}>{selectedPostDate}</Text>
-                ) : null}
-              </>
-            ) : null}
-          </ScrollView>
+            showsVerticalScrollIndicator={false}
+            onViewableItemsChanged={handleViewerViewableItemsChanged}
+            viewabilityConfig={viewerViewabilityConfig}
+          />
         </View>
       </Modal>
     </View>
@@ -1070,11 +1134,16 @@ const buildStyles = (theme: AppTheme) => {
     viewerMenuItemDanger: {
       color: '#ff7a7a',
     },
-    viewerScroll: {
+    viewerList: {
       flex: 1,
     },
     viewerContent: {
       paddingBottom: 34,
+    },
+    viewerPost: {
+      paddingBottom: 24,
+      borderBottomWidth: 1,
+      borderBottomColor: 'rgba(255,255,255,0.08)',
     },
     viewerAuthorRow: {
       minHeight: 72,
@@ -1106,7 +1175,6 @@ const buildStyles = (theme: AppTheme) => {
     },
     viewerMedia: {
       width: '100%',
-      height: 520,
       backgroundColor: '#050505',
     },
     viewerActionsRow: {
