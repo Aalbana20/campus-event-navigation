@@ -49,6 +49,7 @@ export type DiscoverPostRecord = {
   authorName: string;
   authorUsername: string;
   authorAvatar: string;
+  likeCount: number;
 };
 
 type DiscoverPostRow = {
@@ -64,10 +65,11 @@ type DiscoverPostRow = {
   duration?: number | string | null;
   width?: number | null;
   height?: number | null;
+  like_count?: number | null;
 };
 
 const POST_SELECT_COLUMNS =
-  'id, author_id, media_url, media_type, caption, created_at, on_grid, event_id, thumbnail_url, duration, width, height';
+  'id, author_id, media_url, media_type, caption, created_at, on_grid, event_id, thumbnail_url, duration, width, height, like_count';
 
 type ProfileRow = {
   id: string;
@@ -170,6 +172,7 @@ const normalizePostRow = (
     'Campus User',
   authorUsername: toTrimmedString(profile?.username) || '',
   authorAvatar: toTrimmedString(profile?.avatar_url) || '',
+  likeCount: Number(row.like_count) || 0,
 });
 
 const loadAuthorProfiles = async (authorIds: string[]) => {
@@ -556,4 +559,46 @@ export const uploadDiscoverPost = async ({
   invalidateDiscoverFeedCache();
 
   return data;
+};
+
+export const loadLikedPostIds = async (userId: string): Promise<Set<string>> => {
+  if (!supabase || !userId || userId === 'current-user') return new Set();
+
+  const { data, error } = await supabase
+    .from('post_likes')
+    .select('post_id')
+    .eq('user_id', userId);
+
+  if (error) {
+    console.error('Unable to load liked post ids:', error);
+    return new Set();
+  }
+
+  return new Set((data || []).map((row) => String(row.post_id)));
+};
+
+export const togglePostLike = async ({
+  postId,
+  userId,
+  isLiked,
+}: {
+  postId: string;
+  userId: string;
+  isLiked: boolean;
+}): Promise<void> => {
+  if (!supabase || !postId || !userId || userId === 'current-user') return;
+
+  if (isLiked) {
+    const { error } = await supabase
+      .from('post_likes')
+      .delete()
+      .eq('post_id', postId)
+      .eq('user_id', userId);
+    if (error) console.error('Unable to unlike post:', error);
+  } else {
+    const { error } = await supabase
+      .from('post_likes')
+      .insert({ post_id: postId, user_id: userId });
+    if (error && error.code !== '23505') console.error('Unable to like post:', error);
+  }
 };

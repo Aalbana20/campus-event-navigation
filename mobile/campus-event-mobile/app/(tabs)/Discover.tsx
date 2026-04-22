@@ -28,6 +28,8 @@ import { useAppTheme } from '@/lib/app-theme';
 import {
   deleteDiscoverPost,
   loadDiscoverPosts,
+  loadLikedPostIds,
+  togglePostLike,
   type DiscoverPostRecord,
 } from '@/lib/mobile-discover-posts';
 import {
@@ -87,6 +89,7 @@ export default function DiscoverScreen({
   const [activeTab, setActiveTab] = useState<'events' | 'friends'>(initialMode || 'events');
   const [storyRecords, setStoryRecords] = useState<StoryRecord[]>([]);
   const [discoverPosts, setDiscoverPosts] = useState<DiscoverPostRecord[]>([]);
+  const [likedPostIds, setLikedPostIds] = useState<Set<string>>(new Set());
   const [seenStoryIds, setSeenStoryIds] = useState<Set<string>>(new Set());
   const [reactedStoryIds, setReactedStoryIds] = useState<Set<string>>(new Set());
   const [isStoryViewerVisible, setIsStoryViewerVisible] = useState(false);
@@ -102,11 +105,13 @@ export default function DiscoverScreen({
   const [mutualSheetProfiles, setMutualSheetProfiles] = useState<ProfileRecord[]>([]);
 
   const loadPosts = useCallback(async () => {
-    const nextPosts = await loadDiscoverPosts({
-      onData: (posts) => setDiscoverPosts(posts),
-    });
+    const [nextPosts, nextLikedIds] = await Promise.all([
+      loadDiscoverPosts({ onData: (posts) => setDiscoverPosts(posts) }),
+      loadLikedPostIds(currentUser.id),
+    ]);
     setDiscoverPosts(nextPosts);
-  }, []);
+    setLikedPostIds(nextLikedIds);
+  }, [currentUser.id]);
 
   const loadStories = useCallback(async () => {
     const nextStories = await loadActiveStoryRecords({
@@ -771,8 +776,24 @@ export default function DiscoverScreen({
         <View style={styles.videoFeedContainer}>
           <DiscoverPostsImmersiveFeed
             posts={discoverPosts}
+            likedPostIds={likedPostIds}
             onPressCreator={handleOpenPostAuthor}
-            onPressLike={(post) => Alert.alert('Like', `Liked ${post.id}`)}
+            onPressLike={(post) => {
+              const isLiked = likedPostIds.has(post.id);
+              setLikedPostIds((prev) => {
+                const next = new Set(prev);
+                isLiked ? next.delete(post.id) : next.add(post.id);
+                return next;
+              });
+              setDiscoverPosts((prev) =>
+                prev.map((p) =>
+                  p.id === post.id
+                    ? { ...p, likeCount: Math.max(0, p.likeCount + (isLiked ? -1 : 1)) }
+                    : p
+                )
+              );
+              void togglePostLike({ postId: post.id, userId: currentUser.id, isLiked });
+            }}
             onPressComment={(post) => Alert.alert('Comment', `Comment on ${post.id}`)}
             onPressRepost={(post) => Alert.alert('Repost', `Reposted ${post.id}`)}
             onPressShare={(post) => Alert.alert('Share', `Shared ${post.id}`)}

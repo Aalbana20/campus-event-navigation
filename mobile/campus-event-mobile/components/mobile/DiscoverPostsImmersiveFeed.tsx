@@ -16,6 +16,7 @@ type DiscoverPostsImmersiveFeedProps = {
   onPressCreator?: (post: DiscoverPostRecord) => void;
   currentUserId?: string;
   onDeletePost?: (post: DiscoverPostRecord) => void | Promise<void>;
+  likedPostIds?: Set<string>;
 };
 
 export function DiscoverPostsImmersiveFeed({
@@ -27,6 +28,7 @@ export function DiscoverPostsImmersiveFeed({
   onPressCreator,
   currentUserId,
   onDeletePost,
+  likedPostIds,
 }: DiscoverPostsImmersiveFeedProps) {
   const theme = useAppTheme();
   const styles = useMemo(() => buildStyles(theme), [theme]);
@@ -70,6 +72,7 @@ export function DiscoverPostsImmersiveFeed({
             onPressCreator={onPressCreator}
             currentUserId={currentUserId}
             onDeletePost={onDeletePost}
+            isLiked={likedPostIds?.has(item.id) ?? false}
             styles={styles}
           />
         )}
@@ -89,6 +92,7 @@ function DiscoverPostItem({
   onPressCreator,
   currentUserId,
   onDeletePost,
+  isLiked,
   styles,
 }: {
   post: DiscoverPostRecord;
@@ -101,6 +105,7 @@ function DiscoverPostItem({
   onPressCreator?: (post: DiscoverPostRecord) => void;
   currentUserId?: string;
   onDeletePost?: (post: DiscoverPostRecord) => void | Promise<void>;
+  isLiked: boolean;
   styles: any;
 }) {
   const isVideo = post.mediaType === 'video';
@@ -183,6 +188,7 @@ function DiscoverPostItem({
           onPressCreator={onPressCreator}
           currentUserId={currentUserId}
           onDeletePost={onDeletePost}
+          isLiked={isLiked}
           styles={styles}
         />
       </View>
@@ -199,6 +205,7 @@ function DiscoverPostItemOverlay({
   onPressCreator,
   currentUserId,
   onDeletePost,
+  isLiked,
   styles,
 }: {
   post: DiscoverPostRecord;
@@ -209,10 +216,9 @@ function DiscoverPostItemOverlay({
   onPressCreator?: (post: DiscoverPostRecord) => void;
   currentUserId?: string;
   onDeletePost?: (post: DiscoverPostRecord) => void | Promise<void>;
+  isLiked: boolean;
   styles: any;
 }) {
-  // TODO: Wire up real like state
-  const isLiked = false;
   const isOwner =
     Boolean(currentUserId) && String(currentUserId) === String(post.authorId);
 
@@ -260,7 +266,7 @@ function DiscoverPostItemOverlay({
       <View style={styles.rightRail}>
         <Pressable style={styles.actionButton} onPress={() => onPressLike(post)}>
           <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={32} color={isLiked ? '#ff3b30' : '#ffffff'} />
-          <Text style={styles.actionText}>0</Text>
+          <Text style={styles.actionText}>{post.likeCount}</Text>
         </Pressable>
 
         <Pressable style={styles.actionButton} onPress={() => onPressComment(post)}>
