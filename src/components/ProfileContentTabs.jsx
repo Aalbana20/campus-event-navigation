@@ -660,20 +660,6 @@ export default function ProfileContentTabs({ profileId, isOwner = false, allEven
 
   const renderTagsTab = () => (
     <>
-      <div className="profile-tab-toolbar">
-        <div className="profile-mode-switch" role="tablist" aria-label="Tagged content filter">
-          {TAG_FILTERS.map((filter) => (
-            <button
-              key={filter.id}
-              type="button"
-              className={tagFilter === filter.id ? "active" : ""}
-              onClick={() => setTagFilter(filter.id)}
-            >
-              {filter.label}
-            </button>
-          ))}
-        </div>
-      </div>
       {filteredTagItems.length > 0 ? (
         <div className="profile-media-grid">
           {filteredTagItems.map((item) =>
