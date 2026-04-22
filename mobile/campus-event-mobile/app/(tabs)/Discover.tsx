@@ -310,7 +310,7 @@ export default function DiscoverScreen({
 
   const handleToggleCommentLike = useCallback(
     async (commentId: string) => {
-      if (!activeCommentEvent || !supabase || !currentUser.id) return;
+      if (!activeCommentEvent || !supabase || !currentUser.id || currentUser.id === 'current-user') return;
       const eventId = String(activeCommentEvent.id);
 
       let nextLikedState = false;
