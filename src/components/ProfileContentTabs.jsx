@@ -100,14 +100,23 @@ const getPostThreadTitle = (post) =>
       ? `@${post.authorUsername}'s post`
       : `${post?.authorName || "Campus"} post`
 
-const PostMedia = ({ post, className = "profile-post-media" }) => {
+const PostMedia = ({ post, className = "profile-post-media", style }) => {
   if (post.mediaType === "video") {
     return (
-      <video className={className} src={post.mediaUrl} muted playsInline preload="metadata" />
+      <video className={className} style={style} src={post.mediaUrl} muted playsInline preload="metadata" />
     )
   }
 
-  return <img className={className} src={post.mediaUrl} alt={post.caption || "Profile post"} />
+  return <img className={className} style={style} src={post.mediaUrl} alt={post.caption || "Profile post"} />
+}
+
+const modalMediaStyle = {
+  width: "100%",
+  height: "100%",
+  maxWidth: "100%",
+  maxHeight: "100%",
+  objectFit: "contain",
+  objectPosition: "center center",
 }
 
 const DropdownChevron = ({ open }) => (
@@ -793,7 +802,11 @@ export default function ProfileContentTabs({ profileId, isOwner = false, allEven
           />
           <div className="profile-post-modal-card">
             <div className="profile-post-modal-media-frame">
-              <PostMedia post={selectedPost} className="profile-post-modal-media" />
+              <PostMedia
+                post={selectedPost}
+                className="profile-post-modal-media"
+                style={modalMediaStyle}
+              />
             </div>
 
             <aside className="profile-post-modal-side">
