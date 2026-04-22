@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Redirect, useRouter } from 'expo-router';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   Alert,
   Image,
@@ -32,6 +32,9 @@ type ProfileScreenProps = {
 };
 
 type ActiveList = 'followers' | 'following' | 'created' | null;
+type ProfileContentCounts = {
+  posts: number;
+};
 type EditFormState = {
   name: string;
   username: string;
@@ -81,13 +84,17 @@ function StatButton({
 }: {
   label: string;
   value: number;
-  onPress: () => void;
+  onPress?: () => void;
 }) {
   const theme = useAppTheme();
   const styles = useMemo(() => buildStyles(theme), [theme]);
+  const isInteractive = Boolean(onPress);
 
   return (
-    <Pressable style={styles.statCard} onPress={onPress}>
+    <Pressable
+      style={[styles.statCard, !isInteractive && styles.statCardStatic]}
+      onPress={onPress}
+      disabled={!isInteractive}>
       <Text style={styles.statValue}>{value}</Text>
       <Text style={styles.statLabel}>{label}</Text>
     </Pressable>
@@ -130,6 +137,17 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [editEventForm, setEditEventForm] = useState<EditEventFormState | null>(null);
   const [isSavingEvent, setIsSavingEvent] = useState(false);
+  const [profileContentCounts, setProfileContentCounts] =
+    useState<ProfileContentCounts>({ posts: 0 });
+  const handleProfileContentCountsChange = useCallback(
+    (counts: Partial<ProfileContentCounts>) => {
+      setProfileContentCounts((currentCounts) => ({
+        ...currentCounts,
+        ...counts,
+      }));
+    },
+    []
+  );
 
   const isOwnProfile = !username || username === currentUser.username;
   const resolvedProfile = isOwnProfile
@@ -284,7 +302,7 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
     : getAvatarImageSource(editForm.avatarUrl || profile.avatar);
 
   return (
-    <AppScreen>
+    <AppScreen style={styles.screen}>
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}>
@@ -300,9 +318,10 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
           </View>
 
           <View style={styles.statsRow}>
-            <StatButton label="Following" value={following.length} onPress={() => setActiveList('following')} />
             <StatButton label="Followers" value={followers.length} onPress={() => setActiveList('followers')} />
-            <StatButton label="Events" value={createdEvents.length} onPress={() => setActiveList('created')} />
+            <StatButton label="Following" value={following.length} onPress={() => setActiveList('following')} />
+            <StatButton label="Host" value={createdEvents.length} onPress={() => setActiveList('created')} />
+            <StatButton label="Posts" value={profileContentCounts.posts} />
           </View>
 
           <View style={styles.actionRow}>
@@ -346,7 +365,11 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
           </View>
         </View>
 
-        <ProfileContentTabs profileId={resolvedProfileId} isOwner={isOwnProfile} />
+        <ProfileContentTabs
+          profileId={resolvedProfileId}
+          isOwner={isOwnProfile}
+          onContentCountsChange={handleProfileContentCountsChange}
+        />
       </ScrollView>
 
       <Modal visible={activeList !== null} transparent animationType="slide" onRequestClose={() => setActiveList(null)}>
@@ -358,7 +381,7 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
                 ? 'Followers'
                 : activeList === 'following'
                   ? 'Following'
-                  : 'Created Events'}
+                  : 'Hosted Events'}
             </Text>
 
             <ScrollView contentContainerStyle={styles.modalContent} showsVerticalScrollIndicator={false}>
@@ -702,20 +725,32 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
   );
 }
 
-const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
-  StyleSheet.create({
+const buildStyles = (theme: ReturnType<typeof useAppTheme>) => {
+  const isDark = theme.background === '#05070b' || theme.background === '#000000';
+  const screenBackground = isDark ? '#000000' : theme.background;
+  const profileSurface = isDark ? '#101010' : theme.surface;
+  const profileSurfaceAlt = isDark ? '#1a1a1c' : theme.surfaceAlt;
+  const profileBorder = isDark ? 'rgba(255,255,255,0.10)' : theme.border;
+  const profileText = isDark ? '#ffffff' : theme.text;
+  const profileMutedText = isDark ? '#c7c7cc' : theme.textMuted;
+
+  return StyleSheet.create({
+    screen: {
+      backgroundColor: screenBackground,
+    },
     scrollContent: {
       padding: 18,
       gap: 18,
       paddingBottom: 120,
+      backgroundColor: screenBackground,
     },
     headerCard: {
-      padding: 18,
-      borderRadius: 28,
-      backgroundColor: theme.surface,
-      borderWidth: 1,
-      borderColor: theme.border,
-      gap: 18,
+      paddingVertical: 8,
+      paddingHorizontal: 0,
+      borderRadius: 0,
+      backgroundColor: 'transparent',
+      borderWidth: 0,
+      gap: 20,
     },
     headerTopRow: {
       flexDirection: 'row',
@@ -725,47 +760,57 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     avatar: {
       width: 88,
       height: 88,
-      borderRadius: 28,
+      borderRadius: 999,
+      borderWidth: isDark ? 1 : 0,
+      borderColor: profileBorder,
     },
     headerCopy: {
       flex: 1,
       gap: 4,
     },
     name: {
-      color: theme.text,
+      color: profileText,
       fontSize: 24,
       fontWeight: '800',
     },
     username: {
-      color: theme.textMuted,
+      color: profileMutedText,
       fontSize: 15,
       fontWeight: '700',
     },
     bio: {
-      color: theme.textMuted,
+      color: profileMutedText,
       fontSize: 14,
       lineHeight: 20,
     },
     statsRow: {
       flexDirection: 'row',
-      gap: 10,
+      gap: 0,
+      paddingVertical: 8,
+      borderTopWidth: 1,
+      borderBottomWidth: 1,
+      borderColor: profileBorder,
     },
     statCard: {
       flex: 1,
-      paddingVertical: 14,
-      borderRadius: 20,
-      backgroundColor: theme.surfaceAlt,
+      paddingVertical: 8,
+      paddingHorizontal: 2,
+      borderRadius: 0,
+      backgroundColor: 'transparent',
       alignItems: 'center',
-      gap: 4,
+      gap: 3,
+    },
+    statCardStatic: {
+      opacity: 1,
     },
     statValue: {
-      color: theme.text,
+      color: profileText,
       fontSize: 18,
       fontWeight: '800',
     },
     statLabel: {
-      color: theme.textMuted,
-      fontSize: 12,
+      color: profileMutedText,
+      fontSize: 11,
       fontWeight: '700',
     },
     actionRow: {
@@ -777,11 +822,11 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       alignItems: 'center',
       justifyContent: 'center',
       paddingVertical: 13,
-      borderRadius: 18,
-      backgroundColor: theme.accent,
+      borderRadius: 12,
+      backgroundColor: isDark ? '#ffffff' : theme.accent,
     },
     primaryButtonText: {
-      color: theme.background,
+      color: isDark ? '#000000' : theme.background,
       fontSize: 14,
       fontWeight: '800',
     },
@@ -790,13 +835,13 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       alignItems: 'center',
       justifyContent: 'center',
       paddingVertical: 13,
-      borderRadius: 18,
-      backgroundColor: theme.surfaceAlt,
+      borderRadius: 12,
+      backgroundColor: profileSurfaceAlt,
       borderWidth: 1,
-      borderColor: theme.border,
+      borderColor: profileBorder,
     },
     secondaryButtonText: {
-      color: theme.text,
+      color: profileText,
       fontSize: 14,
       fontWeight: '800',
     },
@@ -804,10 +849,10 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       width: 48,
       alignItems: 'center',
       justifyContent: 'center',
-      borderRadius: 18,
-      backgroundColor: theme.surfaceAlt,
+      borderRadius: 12,
+      backgroundColor: profileSurfaceAlt,
       borderWidth: 1,
-      borderColor: theme.border,
+      borderColor: profileBorder,
     },
     tabBar: {
       flexDirection: 'row',
@@ -866,20 +911,19 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     },
     emptyCard: {
       padding: 22,
-      borderRadius: 24,
-      backgroundColor: theme.surface,
-      borderWidth: 1,
-      borderColor: theme.border,
+      borderRadius: 0,
+      backgroundColor: 'transparent',
+      borderWidth: 0,
       gap: 6,
       alignItems: 'center',
     },
     emptyTitle: {
-      color: theme.text,
+      color: profileText,
       fontSize: 15,
       fontWeight: '800',
     },
     emptyCopy: {
-      color: theme.textMuted,
+      color: profileMutedText,
       fontSize: 13,
       textAlign: 'center',
       lineHeight: 18,
@@ -892,7 +936,7 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       gap: 12,
     },
     centeredTitle: {
-      color: theme.text,
+      color: profileText,
       fontSize: 20,
       fontWeight: '800',
     },
@@ -905,7 +949,7 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       maxHeight: '80%',
       borderTopLeftRadius: 28,
       borderTopRightRadius: 28,
-      backgroundColor: theme.surface,
+      backgroundColor: profileSurface,
       paddingHorizontal: 18,
       paddingTop: 12,
       paddingBottom: 24,
@@ -915,11 +959,11 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       width: 46,
       height: 5,
       borderRadius: 999,
-      backgroundColor: theme.border,
+      backgroundColor: profileBorder,
       marginBottom: 12,
     },
     modalTitle: {
-      color: theme.text,
+      color: profileText,
       fontSize: 18,
       fontWeight: '800',
       marginBottom: 14,
@@ -934,27 +978,27 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       gap: 14,
       padding: 14,
       borderRadius: 22,
-      backgroundColor: theme.surfaceAlt,
+      backgroundColor: profileSurfaceAlt,
       borderWidth: 1,
-      borderColor: theme.border,
+      borderColor: profileBorder,
     },
     editAvatarPreview: {
       width: 84,
       height: 84,
       borderRadius: 28,
-      backgroundColor: theme.background,
+      backgroundColor: screenBackground,
     },
     avatarEditorCopy: {
       flex: 1,
       gap: 6,
     },
     avatarHelperText: {
-      color: theme.textMuted,
+      color: profileMutedText,
       fontSize: 13,
       lineHeight: 18,
     },
     avatarMetaText: {
-      color: theme.textMuted,
+      color: profileMutedText,
       fontSize: 12,
       fontWeight: '700',
     },
@@ -964,19 +1008,19 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       marginBottom: 4,
     },
     editLabel: {
-      color: theme.text,
+      color: profileText,
       fontSize: 14,
       fontWeight: '800',
       marginTop: 6,
     },
     editInput: {
       borderWidth: 1,
-      borderColor: theme.border,
-      backgroundColor: theme.surfaceAlt,
+      borderColor: profileBorder,
+      backgroundColor: profileSurfaceAlt,
       borderRadius: 16,
       paddingHorizontal: 14,
       paddingVertical: 13,
-      color: theme.text,
+      color: profileText,
       fontSize: 14,
     },
     editTextarea: {
@@ -998,3 +1042,4 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       fontWeight: '800',
     },
   });
+};

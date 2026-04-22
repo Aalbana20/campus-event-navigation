@@ -2278,6 +2278,47 @@ body.theme-dark .profile-confirm-overlay {
   background: rgba(0, 0, 0, 0.7);
 }
 
+body.theme-dark .profile-card,
+body.theme-dark .public-profile-card {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  padding: clamp(18px, 3vw, 34px) 0;
+}
+
+body.theme-dark .profile-section,
+body.theme-dark .profile-tabbed-section,
+body.theme-dark .profile-created-section,
+body.theme-dark .profile-rsvp-section {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+body.theme-dark .profile-stat-card {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 8px 10px;
+}
+
+body.theme-dark .profile-stat-card:hover,
+body.theme-dark .profile-stat-card:active {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+body.theme-dark .profile-action-row,
+body.theme-dark .public-profile-action-row {
+  margin-top: 18px;
+}
+
 @media (max-width: 720px) {
   .profile-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));

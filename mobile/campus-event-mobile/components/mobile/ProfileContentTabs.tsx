@@ -28,6 +28,7 @@ import type { EventRecord } from '@/types/models';
 type ProfileContentTabsProps = {
   profileId: string;
   isOwner: boolean;
+  onContentCountsChange?: (counts: { posts: number }) => void;
 };
 
 type ProfileTab = 'grid' | 'posts' | 'reposts' | 'tags';
@@ -99,7 +100,11 @@ function MemoryMedia({
   return <Image source={{ uri: memory.mediaUrl }} style={style} />;
 }
 
-export function ProfileContentTabs({ profileId, isOwner }: ProfileContentTabsProps) {
+export function ProfileContentTabs({
+  profileId,
+  isOwner,
+  onContentCountsChange,
+}: ProfileContentTabsProps) {
   const router = useRouter();
   const theme = useAppTheme();
   const styles = useMemo(() => buildStyles(theme), [theme]);
@@ -174,6 +179,10 @@ export function ProfileContentTabs({ profileId, isOwner }: ProfileContentTabsPro
   useEffect(() => {
     void loadProfileContent();
   }, [loadProfileContent]);
+
+  useEffect(() => {
+    onContentCountsChange?.({ posts: authorPosts.length });
+  }, [authorPosts.length, onContentCountsChange]);
 
   const handleToggleGrid = async (post: DiscoverPostRecord, onGrid: boolean) => {
     const updated = await setPostGridVisibility(post.id, onGrid);
@@ -507,8 +516,15 @@ export function ProfileContentTabs({ profileId, isOwner }: ProfileContentTabsPro
   );
 }
 
-const buildStyles = (theme: AppTheme) =>
-  StyleSheet.create({
+const buildStyles = (theme: AppTheme) => {
+  const isDark = theme.background === '#05070b' || theme.background === '#000000';
+  const profileSurface = isDark ? '#101010' : theme.surface;
+  const profileSurfaceAlt = isDark ? '#1a1a1c' : theme.surfaceAlt;
+  const profileBorder = isDark ? 'rgba(255,255,255,0.10)' : theme.border;
+  const profileText = isDark ? '#ffffff' : theme.text;
+  const profileMutedText = isDark ? '#c7c7cc' : theme.textMuted;
+
+  return StyleSheet.create({
     wrap: {
       gap: 14,
     },
@@ -516,7 +532,7 @@ const buildStyles = (theme: AppTheme) =>
       flexDirection: 'row',
       borderTopWidth: 1,
       borderBottomWidth: 1,
-      borderColor: theme.border,
+      borderColor: profileBorder,
       marginTop: 4,
     },
     tabButton: {
@@ -531,7 +547,7 @@ const buildStyles = (theme: AppTheme) =>
       width: 36,
       height: 2,
       borderRadius: 999,
-      backgroundColor: theme.text,
+      backgroundColor: profileText,
     },
     tagsIcon: {
       width: 22,
@@ -539,7 +555,7 @@ const buildStyles = (theme: AppTheme) =>
       alignItems: 'center',
       justifyContent: 'center',
       borderWidth: 1.7,
-      borderColor: theme.textMuted,
+      borderColor: profileMutedText,
       transform: [{ rotate: '45deg' }],
     },
     mediaGrid: {
@@ -556,13 +572,13 @@ const buildStyles = (theme: AppTheme) =>
       aspectRatio: 1,
       overflow: 'hidden',
       borderRadius: 18,
-      backgroundColor: theme.surfaceAlt,
+      backgroundColor: profileSurfaceAlt,
       position: 'relative',
     },
     mediaTileImage: {
       width: '100%',
       height: '100%',
-      backgroundColor: theme.surfaceAlt,
+      backgroundColor: profileSurfaceAlt,
     },
     mediaTilePill: {
       position: 'absolute',
@@ -583,31 +599,30 @@ const buildStyles = (theme: AppTheme) =>
       borderRadius: 999,
       paddingHorizontal: 9,
       paddingVertical: 6,
-      backgroundColor: theme.surfaceAlt,
+      backgroundColor: profileSurfaceAlt,
       borderWidth: 1,
-      borderColor: theme.border,
+      borderColor: profileBorder,
     },
     gridActionText: {
-      color: theme.text,
+      color: profileText,
       fontSize: 10,
       fontWeight: '800',
     },
     emptyCard: {
-      borderRadius: 24,
+      borderRadius: 0,
       padding: 24,
-      backgroundColor: theme.surface,
-      borderWidth: 1,
-      borderColor: theme.border,
+      backgroundColor: 'transparent',
+      borderWidth: 0,
       alignItems: 'center',
     },
     emptyTitle: {
-      color: theme.text,
+      color: profileText,
       fontSize: 17,
       fontWeight: '800',
       marginBottom: 6,
     },
     emptyCopy: {
-      color: theme.textMuted,
+      color: profileMutedText,
       fontSize: 14,
       textAlign: 'center',
       lineHeight: 20,
@@ -618,9 +633,9 @@ const buildStyles = (theme: AppTheme) =>
       gap: 4,
       padding: 4,
       borderRadius: 999,
-      backgroundColor: theme.surface,
+      backgroundColor: profileSurface,
       borderWidth: 1,
-      borderColor: theme.border,
+      borderColor: profileBorder,
       marginBottom: 14,
     },
     modeButton: {
@@ -629,15 +644,15 @@ const buildStyles = (theme: AppTheme) =>
       paddingVertical: 8,
     },
     modeButtonActive: {
-      backgroundColor: theme.text,
+      backgroundColor: profileText,
     },
     modeButtonText: {
-      color: theme.textMuted,
+      color: profileMutedText,
       fontSize: 13,
       fontWeight: '800',
     },
     modeButtonTextActive: {
-      color: theme.background,
+      color: isDark ? '#000000' : theme.background,
     },
     listStack: {
       gap: 12,
@@ -647,9 +662,9 @@ const buildStyles = (theme: AppTheme) =>
       gap: 12,
       borderRadius: 22,
       padding: 10,
-      backgroundColor: theme.surface,
+      backgroundColor: profileSurface,
       borderWidth: 1,
-      borderColor: theme.border,
+      borderColor: profileBorder,
       marginBottom: 12,
     },
     postListThumb: {
@@ -657,13 +672,13 @@ const buildStyles = (theme: AppTheme) =>
       height: 92,
       overflow: 'hidden',
       borderRadius: 16,
-      backgroundColor: theme.surfaceAlt,
+      backgroundColor: profileSurfaceAlt,
     },
     postListImage: {
       width: 92,
       height: 92,
       borderRadius: 16,
-      backgroundColor: theme.surfaceAlt,
+      backgroundColor: profileSurfaceAlt,
     },
     postListCopy: {
       flex: 1,
@@ -671,19 +686,19 @@ const buildStyles = (theme: AppTheme) =>
       minWidth: 0,
     },
     postListKicker: {
-      color: theme.textMuted,
+      color: profileMutedText,
       fontSize: 12,
       fontWeight: '800',
       textTransform: 'uppercase',
     },
     postListTitle: {
-      color: theme.text,
+      color: profileText,
       fontSize: 16,
       fontWeight: '800',
       marginTop: 4,
     },
     postListMeta: {
-      color: theme.textMuted,
+      color: profileMutedText,
       fontSize: 12,
       marginTop: 4,
     },
@@ -695,24 +710,24 @@ const buildStyles = (theme: AppTheme) =>
       borderRadius: 999,
       paddingHorizontal: 14,
       paddingVertical: 8,
-      backgroundColor: theme.surface,
+      backgroundColor: profileSurface,
       borderWidth: 1,
-      borderColor: theme.border,
+      borderColor: profileBorder,
     },
     filterChipActive: {
-      backgroundColor: theme.text,
-      borderColor: theme.text,
+      backgroundColor: profileText,
+      borderColor: profileText,
     },
     filterChipText: {
-      color: theme.textMuted,
+      color: profileMutedText,
       fontSize: 12,
       fontWeight: '800',
     },
     filterChipTextActive: {
-      color: theme.background,
+      color: isDark ? '#000000' : theme.background,
     },
     memoryTitle: {
-      color: theme.textMuted,
+      color: profileMutedText,
       fontSize: 11,
       fontWeight: '700',
     },
@@ -754,3 +769,4 @@ const buildStyles = (theme: AppTheme) =>
       lineHeight: 21,
     },
   });
+};
