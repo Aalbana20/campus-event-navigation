@@ -495,8 +495,28 @@ function MainLayout() {
     return mergedReal.slice(0, 8).map((item) => ({ ...item, read: false }))
   }, [eventUpdateNotifications, followNotifications, upcomingEventNotifications])
 
-  const [readIds, setReadIds] = useState(new Set())
-  const [deletedIds, setDeletedIds] = useState(new Set())
+  const notifStorageKey = currentUserId ? `notif_read_${currentUserId}` : null
+  const notifDeletedKey = currentUserId ? `notif_deleted_${currentUserId}` : null
+
+  const [readIds, setReadIds] = useState(() => {
+    try {
+      const stored = notifStorageKey && localStorage.getItem(notifStorageKey)
+      return stored ? new Set(JSON.parse(stored)) : new Set()
+    } catch { return new Set() }
+  })
+  const [deletedIds, setDeletedIds] = useState(() => {
+    try {
+      const stored = notifDeletedKey && localStorage.getItem(notifDeletedKey)
+      return stored ? new Set(JSON.parse(stored)) : new Set()
+    } catch { return new Set() }
+  })
+
+  const persistReadIds = (next) => {
+    if (notifStorageKey) localStorage.setItem(notifStorageKey, JSON.stringify([...next]))
+  }
+  const persistDeletedIds = (next) => {
+    if (notifDeletedKey) localStorage.setItem(notifDeletedKey, JSON.stringify([...next]))
+  }
 
   const notifications = useMemo(
     () =>
@@ -507,17 +527,27 @@ function MainLayout() {
   )
 
   const clearAllNotifications = () => {
-    setReadIds(new Set(notificationSeed.map((item) => item.id)))
+    const next = new Set(notificationSeed.map((item) => item.id))
+    setReadIds(next)
+    persistReadIds(next)
   }
 
   const markNotificationRead = (id) => {
-    setReadIds((prev) => new Set([...prev, id]))
+    setReadIds((prev) => {
+      const next = new Set([...prev, id])
+      persistReadIds(next)
+      return next
+    })
   }
 
   const unreadNotificationCount = notifications.filter((item) => !item.read).length
 
   const deleteNotification = (id) => {
-    setDeletedIds((prev) => new Set([...prev, id]))
+    setDeletedIds((prev) => {
+      const next = new Set([...prev, id])
+      persistDeletedIds(next)
+      return next
+    })
     setOpenNotificationMenuId((prev) => (prev === id ? null : prev))
   }
 
