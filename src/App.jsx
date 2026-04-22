@@ -623,7 +623,7 @@ function MainLayout() {
         .eq("recipient_id", currentUserId)
         .eq("sender_id", thread.id)
         .eq("read", false)
-        .then(() => {})
+        .then(({ error }) => { if (error) console.error("Failed to mark messages read:", error) })
     }
   }
 
