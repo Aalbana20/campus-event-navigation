@@ -20,6 +20,8 @@ const Messages = lazy(() => import("./pages/Messages"))
 const MyEvents = lazy(() => import("./pages/MyEvents"))
 const Profile = lazy(() => import("./pages/Profile"))
 const PublicProfile = lazy(() => import("./pages/PublicProfile"))
+const Settings = lazy(() => import("./pages/Settings"))
+const EditProfile = lazy(() => import("./pages/EditProfile"))
 const SignUp = lazy(() => import("./pages/SignUp"))
 const Login = lazy(() => import("./pages/Login"))
 const Logout = lazy(() => import("./pages/Logout"))
@@ -176,6 +178,19 @@ function AppRailIcon({ name }) {
         <svg {...commonProps}>
           <path d="M12 4.5c-2.9 0-5.25 2.35-5.25 5.25v2.06c0 .63-.25 1.24-.69 1.69l-1.32 1.32a.75.75 0 0 0 .53 1.28h13.46a.75.75 0 0 0 .53-1.28l-1.32-1.32a2.4 2.4 0 0 1-.69-1.69V9.75A5.25 5.25 0 0 0 12 4.5Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
           <path d="M9.75 18a2.25 2.25 0 0 0 4.5 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+        </svg>
+      )
+    case "settings":
+      return (
+        <svg {...commonProps}>
+          <circle cx="12" cy="12" r="3.2" stroke="currentColor" strokeWidth="1.8" />
+          <path
+            d="M19.4 13.5c.07-.49.1-.98.1-1.5s-.03-1.01-.1-1.5l2-1.55-2-3.45-2.35.95a7.7 7.7 0 0 0-2.6-1.5L14.1 2.5h-4.2l-.35 2.45a7.7 7.7 0 0 0-2.6 1.5L4.6 5.5l-2 3.45 2 1.55c-.07.49-.1.98-.1 1.5s.03 1.01.1 1.5l-2 1.55 2 3.45 2.35-.95a7.7 7.7 0 0 0 2.6 1.5l.35 2.45h4.2l.35-2.45a7.7 7.7 0 0 0 2.6-1.5l2.35.95 2-3.45-2-1.55Z"
+            stroke="currentColor"
+            strokeWidth="1.65"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
         </svg>
       )
     case "plus":
@@ -876,6 +891,18 @@ function MainLayout() {
               </div>
             ) : null}
           </div>
+
+          <NavLink
+            to="/settings"
+            className={({ isActive }) => `app-rail-item ${isActive ? "active" : ""}`}
+            aria-label="Settings"
+            title="Settings"
+          >
+            <span className="app-rail-icon">
+              <AppRailIcon name="settings" />
+            </span>
+            <span className="app-rail-label">Settings</span>
+          </NavLink>
         </div>
 
         <div className="app-rail-footer">
@@ -1199,6 +1226,8 @@ function App() {
           <Route path="/create" element={<Navigate to="/events?create=event" replace />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/profile/:username" element={<PublicProfile />} />
+          <Route path="/settings" element={<Settings />} />
+          <Route path="/edit-profile" element={<EditProfile />} />
         </Route>
 
         <Route path="/auth" element={<AuthLayout />}>

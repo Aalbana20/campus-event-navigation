@@ -183,15 +183,6 @@ function Profile() {
     }))
   }, [])
 
-  const openEditProfile = () => {
-    setDraftName(name)
-    setDraftUsername(username)
-    setDraftBio(bio)
-    setDraftProfileImage(profileImage || storedUserAvatarValue || "")
-    setDraftProfileImagePreview("")
-    setIsEditProfileOpen(true)
-  }
-
   const closeEditProfile = () => {
     setIsCropModalOpen(false)
     setIsEditProfileOpen(false)
@@ -200,11 +191,6 @@ function Profile() {
     setCrop({ x: 0, y: 0 })
     setZoom(1)
     setCroppedAreaPixels(null)
-  }
-
-  const openSettings = () => {
-    setActiveSettingsView("main")
-    setIsSettingsOpen(true)
   }
 
   const closeSettings = () => {
@@ -611,6 +597,16 @@ function Profile() {
   return (
     <main className="profile-page">
       <div className="profile-card">
+        <button
+          type="button"
+          className="profile-settings-trigger"
+          onClick={() => navigate("/settings")}
+          aria-label="Open profile settings"
+          title="Settings"
+        >
+          <span aria-hidden="true">...</span>
+        </button>
+
         <div className="profile-header">
           <div className="profile-avatar-wrap">
             <img
@@ -667,7 +663,7 @@ function Profile() {
               <button
                 type="button"
                 className="profile-action-btn"
-                onClick={openEditProfile}
+                onClick={() => navigate("/edit-profile")}
               >
                 Edit Profile
               </button>
@@ -681,7 +677,7 @@ function Profile() {
               <button
                 type="button"
                 className="profile-action-btn secondary"
-                onClick={openSettings}
+                onClick={() => navigate("/settings")}
               >
                 Settings
               </button>

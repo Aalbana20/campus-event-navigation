@@ -2444,6 +2444,40 @@ body.theme-dark .public-profile-action-row {
   margin-top: 18px;
 }
 
+.profile-settings-trigger {
+  position: absolute;
+  top: clamp(18px, 2.4vw, 34px);
+  right: 0;
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+  color: #f5f5f5;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+  z-index: 2;
+}
+
+.profile-card {
+  position: relative;
+}
+
+.profile-settings-trigger:hover,
+.profile-settings-trigger:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.26);
+  outline: none;
+  transform: translateY(-1px);
+}
+
 @media (max-width: 720px) {
   .profile-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
