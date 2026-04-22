@@ -36,6 +36,7 @@ type ProfileContentTabsProps = {
 type ProfileTab = 'grid' | 'posts' | 'reposts' | 'tags';
 type PostMode = 'grid' | 'list';
 type TagFilter = 'all' | 'posts' | 'event-tags';
+type ProfileTabDropdown = 'layout' | 'tags' | null;
 
 const tabs: { id: ProfileTab; label: string }[] = [
   { id: 'grid', label: 'Grid' },
@@ -133,6 +134,7 @@ export function ProfileContentTabs({
   const [activeTab, setActiveTab] = useState<ProfileTab>('grid');
   const [postMode, setPostMode] = useState<PostMode>('grid');
   const [tagFilter, setTagFilter] = useState<TagFilter>('all');
+  const [openDropdown, setOpenDropdown] = useState<ProfileTabDropdown>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [gridPosts, setGridPosts] = useState<DiscoverPostRecord[]>([]);
   const [authorPosts, setAuthorPosts] = useState<DiscoverPostRecord[]>([]);
@@ -214,6 +216,47 @@ export function ProfileContentTabs({
     setSelectedPost((currentPost) =>
       currentPost?.id === post.id ? { ...currentPost, onGrid } : currentPost
     );
+  };
+
+  const handleTabPress = (tabId: ProfileTab) => {
+    if (tabId === 'posts') {
+      if (activeTab !== 'posts') {
+        setActiveTab('posts');
+        setOpenDropdown(null);
+        return;
+      }
+
+      setOpenDropdown((currentDropdown) =>
+        currentDropdown === 'layout' ? null : 'layout'
+      );
+      return;
+    }
+
+    if (tabId === 'tags') {
+      if (activeTab !== 'tags') {
+        setActiveTab('tags');
+        setOpenDropdown(null);
+        return;
+      }
+
+      setOpenDropdown((currentDropdown) =>
+        currentDropdown === 'tags' ? null : 'tags'
+      );
+      return;
+    }
+
+    setActiveTab(tabId);
+    setOpenDropdown(null);
+  };
+
+  const handleSelectPostMode = (mode: PostMode) => {
+    setPostMode(mode);
+    setOpenDropdown(null);
+  };
+
+  const handleSelectTagFilter = (filter: TagFilter) => {
+    setTagFilter(filter);
+    setOpenDropdown(null);
   };
 
   const handleOpenPost = (post: DiscoverPostRecord) => {
@@ -411,23 +454,6 @@ export function ProfileContentTabs({
 
   const renderPostsTab = () => (
     <View>
-      <View style={styles.modeSwitch}>
-        {(['grid', 'list'] as PostMode[]).map((mode) => (
-          <Pressable
-            key={mode}
-            style={[styles.modeButton, postMode === mode && styles.modeButtonActive]}
-            onPress={() => setPostMode(mode)}>
-            <Text
-              style={[
-                styles.modeButtonText,
-                postMode === mode && styles.modeButtonTextActive,
-              ]}>
-              {mode === 'grid' ? 'Grid' : 'List'}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
-
       {authorPosts.length
         ? postMode === 'grid'
           ? renderGrid(authorPosts)
@@ -453,26 +479,6 @@ export function ProfileContentTabs({
 
   const renderTagsTab = () => (
     <View>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.filterRow}>
-        {tagFilters.map((filter) => (
-          <Pressable
-            key={filter.id}
-            style={[styles.filterChip, tagFilter === filter.id && styles.filterChipActive]}
-            onPress={() => setTagFilter(filter.id)}>
-            <Text
-              style={[
-                styles.filterChipText,
-                tagFilter === filter.id && styles.filterChipTextActive,
-              ]}>
-              {filter.label}
-            </Text>
-          </Pressable>
-        ))}
-      </ScrollView>
-
       {tagItems.length ? (
         <View style={styles.mediaGrid}>
           {tagItems.map((item) =>
@@ -521,38 +527,90 @@ export function ProfileContentTabs({
 
   return (
     <View style={styles.wrap}>
+      {openDropdown ? (
+        <Pressable
+          style={styles.dropdownDismissLayer}
+          onPress={() => setOpenDropdown(null)}
+        />
+      ) : null}
+
       <View style={styles.tabBar}>
         {tabs.map((tab) => (
-          <Pressable
-            key={tab.id}
-            style={styles.tabButton}
-            accessibilityRole="tab"
-            accessibilityLabel={tab.label}
-            accessibilityState={{ selected: activeTab === tab.id }}
-            onPress={() => setActiveTab(tab.id)}>
-            {tab.id === 'tags' ? (
-              <View style={styles.tagsIcon}>
+          <View key={tab.id} style={styles.tabSlot}>
+            <Pressable
+              style={styles.tabButton}
+              accessibilityRole="tab"
+              accessibilityLabel={tab.label}
+              accessibilityState={{ selected: activeTab === tab.id }}
+              onPress={() => handleTabPress(tab.id)}>
+              {tab.id === 'tags' ? (
+                <View style={styles.tagsIcon}>
+                  <Ionicons
+                    name="person-outline"
+                    size={14}
+                    color={activeTab === tab.id ? theme.text : theme.textMuted}
+                  />
+                </View>
+              ) : (
                 <Ionicons
-                  name="person-outline"
-                  size={14}
+                  name={
+                    tab.id === 'grid'
+                      ? 'grid-outline'
+                      : tab.id === 'posts'
+                        ? 'camera-outline'
+                        : 'repeat-outline'
+                  }
+                  size={22}
                   color={activeTab === tab.id ? theme.text : theme.textMuted}
                 />
+              )}
+              {activeTab === tab.id ? <View style={styles.tabIndicator} /> : null}
+            </Pressable>
+
+            {tab.id === 'posts' && openDropdown === 'layout' ? (
+              <View style={styles.tabDropdown}>
+                {(['grid', 'list'] as PostMode[]).map((mode) => (
+                  <Pressable
+                    key={mode}
+                    style={styles.dropdownItem}
+                    onPress={() => handleSelectPostMode(mode)}>
+                    <Text
+                      style={[
+                        styles.dropdownItemText,
+                        postMode === mode && styles.dropdownItemTextActive,
+                      ]}>
+                      {mode === 'grid' ? 'Grid' : 'List'}
+                    </Text>
+                    {postMode === mode ? (
+                      <Ionicons name="checkmark" size={16} color="#ffffff" />
+                    ) : null}
+                  </Pressable>
+                ))}
               </View>
-            ) : (
-              <Ionicons
-                name={
-                  tab.id === 'grid'
-                    ? 'grid-outline'
-                    : tab.id === 'posts'
-                      ? 'camera-outline'
-                      : 'repeat-outline'
-                }
-                size={22}
-                color={activeTab === tab.id ? theme.text : theme.textMuted}
-              />
-            )}
-            {activeTab === tab.id ? <View style={styles.tabIndicator} /> : null}
-          </Pressable>
+            ) : null}
+
+            {tab.id === 'tags' && openDropdown === 'tags' ? (
+              <View style={styles.tabDropdown}>
+                {tagFilters.map((filter) => (
+                  <Pressable
+                    key={filter.id}
+                    style={styles.dropdownItem}
+                    onPress={() => handleSelectTagFilter(filter.id)}>
+                    <Text
+                      style={[
+                        styles.dropdownItemText,
+                        tagFilter === filter.id && styles.dropdownItemTextActive,
+                      ]}>
+                      {filter.label}
+                    </Text>
+                    {tagFilter === filter.id ? (
+                      <Ionicons name="checkmark" size={16} color="#ffffff" />
+                    ) : null}
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
+          </View>
         ))}
       </View>
 
@@ -679,7 +737,17 @@ const buildStyles = (theme: AppTheme) => {
 
   return StyleSheet.create({
     wrap: {
+      position: 'relative',
       gap: 14,
+    },
+    dropdownDismissLayer: {
+      position: 'absolute',
+      top: 52,
+      right: 0,
+      bottom: 0,
+      left: 0,
+      zIndex: 3,
+      backgroundColor: 'transparent',
     },
     tabBar: {
       flexDirection: 'row',
@@ -687,9 +755,14 @@ const buildStyles = (theme: AppTheme) => {
       borderBottomWidth: 1,
       borderColor: profileBorder,
       marginTop: 4,
+      zIndex: 6,
+    },
+    tabSlot: {
+      flex: 1,
+      position: 'relative',
+      alignItems: 'stretch',
     },
     tabButton: {
-      flex: 1,
       minHeight: 52,
       alignItems: 'center',
       justifyContent: 'center',
@@ -710,6 +783,35 @@ const buildStyles = (theme: AppTheme) => {
       borderWidth: 1.7,
       borderColor: profileMutedText,
       transform: [{ rotate: '45deg' }],
+    },
+    tabDropdown: {
+      position: 'absolute',
+      top: 50,
+      alignSelf: 'center',
+      minWidth: 142,
+      borderRadius: 16,
+      padding: 6,
+      backgroundColor: 'rgba(16,16,18,0.98)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.12)',
+      zIndex: 12,
+    },
+    dropdownItem: {
+      minHeight: 40,
+      borderRadius: 11,
+      paddingHorizontal: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    dropdownItemText: {
+      color: 'rgba(255,255,255,0.72)',
+      fontSize: 13,
+      fontWeight: '800',
+    },
+    dropdownItemTextActive: {
+      color: '#ffffff',
     },
     mediaGrid: {
       flexDirection: 'row',
@@ -743,6 +845,20 @@ const buildStyles = (theme: AppTheme) => {
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: 'rgba(0,0,0,0.36)',
+    },
+    mediaTilePill: {
+      position: 'absolute',
+      right: 7,
+      top: 7,
+      borderRadius: 999,
+      paddingHorizontal: 7,
+      paddingVertical: 4,
+      backgroundColor: 'rgba(0,0,0,0.52)',
+    },
+    mediaTilePillText: {
+      color: '#ffffff',
+      fontSize: 9,
+      fontWeight: '900',
     },
     emptyCard: {
       borderRadius: 0,
