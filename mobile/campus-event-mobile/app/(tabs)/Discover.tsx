@@ -8,7 +8,6 @@ import {
   PanResponder,
   Pressable,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -44,6 +43,7 @@ import {
   recordStoryView,
   toggleStoryHeart,
 } from '@/lib/mobile-stories';
+import { shareEventRecord } from '@/lib/mobile-event-share';
 import { supabase } from '@/lib/supabase';
 import { useMobileApp } from '@/providers/mobile-app-provider';
 import { useMobileInbox } from '@/providers/mobile-inbox-provider';
@@ -83,6 +83,7 @@ export default function DiscoverScreen({
   const { sendDmMessage, unreadNotificationCount } = useMobileInbox();
 
   const translate = useRef(new Animated.ValueXY()).current;
+  const storiesScrollY = useRef(new Animated.Value(0)).current;
   const isSubmittingCommentRef = useRef(false);
   const [refreshing, setRefreshing] = useState(false);
   const [scrollEnabled, setScrollEnabled] = useState(true);
@@ -103,6 +104,7 @@ export default function DiscoverScreen({
   const [isMutualsSheetVisible, setIsMutualsSheetVisible] = useState(false);
   const [mutualSheetTitle, setMutualSheetTitle] = useState('');
   const [mutualSheetProfiles, setMutualSheetProfiles] = useState<ProfileRecord[]>([]);
+  const [storiesMeasuredHeight, setStoriesMeasuredHeight] = useState(112);
 
   const loadPosts = useCallback(async () => {
     const [nextPosts, nextLikedIds] = await Promise.all([
@@ -213,6 +215,14 @@ export default function DiscoverScreen({
     },
     [toggleSaveEvent]
   );
+
+  const handleCardShare = useCallback(async (event: EventRecord) => {
+    try {
+      await shareEventRecord(event);
+    } catch (error) {
+      console.warn('Unable to share event:', error);
+    }
+  }, []);
 
   const handleOpenMutuals = useCallback((event: EventRecord, mutualProfiles: ProfileRecord[]) => {
     setMutualSheetTitle(event.title || 'Campus Event');
@@ -522,6 +532,34 @@ export default function DiscoverScreen({
     outputRange: ['-8deg', '0deg', '8deg'],
   });
 
+  const storiesCollapseDistance = 78;
+  const storySectionHeight = storiesScrollY.interpolate({
+    inputRange: [-56, 0, storiesCollapseDistance],
+    outputRange: [storiesMeasuredHeight + 18, storiesMeasuredHeight, 0],
+    extrapolate: 'clamp',
+  });
+  const storySectionTranslateY = storiesScrollY.interpolate({
+    inputRange: [-56, 0, storiesCollapseDistance],
+    outputRange: [10, 0, -18],
+    extrapolate: 'clamp',
+  });
+  const storySectionOpacity = storiesScrollY.interpolate({
+    inputRange: [0, storiesCollapseDistance * 0.58, storiesCollapseDistance],
+    outputRange: [1, 0.45, 0],
+    extrapolate: 'clamp',
+  });
+  const storySectionMarginBottom = storiesScrollY.interpolate({
+    inputRange: [0, storiesCollapseDistance],
+    outputRange: [12, 0],
+    extrapolate: 'clamp',
+  });
+  const handleStoriesLayout = useCallback(({ nativeEvent }: { nativeEvent: { layout: { height: number } } }) => {
+    const nextHeight = Math.ceil(nativeEvent.layout.height);
+    if (nextHeight > 0 && Math.abs(nextHeight - storiesMeasuredHeight) > 1) {
+      setStoriesMeasuredHeight(nextHeight);
+    }
+  }, [storiesMeasuredHeight]);
+
   const openNotifications = () => {
     router.push('/inbox');
   };
@@ -683,39 +721,59 @@ export default function DiscoverScreen({
         </View>
       ) : null}
       {activeTab === 'events' ? (
-        <ScrollView
+        <Animated.ScrollView
           scrollEnabled={scrollEnabled}
           contentContainerStyle={styles.container}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.textMuted} />}
           showsVerticalScrollIndicator={false}
+          scrollEventThrottle={16}
+          onScroll={Animated.event(
+            [{ nativeEvent: { contentOffset: { y: storiesScrollY } } }],
+            { useNativeDriver: false }
+          )}
         >
-          <View style={styles.headerBar}>
-            <View style={styles.headerActionsLeft}>
-              <Pressable style={styles.headerIconButton} onPress={() => router.push('/story/create')}>
-                <Ionicons name="add-outline" size={20} color={theme.text} />
-              </Pressable>
+          {!(embedded && hideModeSwitch) ? (
+            <View style={styles.headerBar}>
+              <View style={styles.headerActionsLeft}>
+                <Pressable style={styles.headerIconButton} onPress={() => router.push('/story/create')}>
+                  <Ionicons name="add-outline" size={20} color={theme.text} />
+                </Pressable>
+              </View>
+
+              {!hideModeSwitch ? (
+                <DiscoverModeSwitch activeMode={activeTab} onChange={setActiveTab} isDark={false} />
+              ) : (
+                <View style={{ flex: 1 }} />
+              )}
+
+              <View style={styles.headerActions}>
+                <Pressable style={styles.headerIconButton} onPress={openNotifications}>
+                  <Ionicons name="notifications-outline" size={18} color={theme.text} />
+                  {unreadNotificationCount > 0 ? <View style={styles.headerBadge} /> : null}
+                </Pressable>
+              </View>
             </View>
+          ) : null}
 
-            {!hideModeSwitch ? (
-              <DiscoverModeSwitch activeMode={activeTab} onChange={setActiveTab} isDark={false} />
-            ) : (
-              <View style={{ flex: 1 }} />
-            )}
-
-            <View style={styles.headerActions}>
-              <Pressable style={styles.headerIconButton} onPress={openNotifications}>
-                <Ionicons name="notifications-outline" size={18} color={theme.text} />
-                {unreadNotificationCount > 0 ? <View style={styles.headerBadge} /> : null}
-              </Pressable>
+          <Animated.View
+            style={[
+              styles.storiesReveal,
+              {
+                height: storySectionHeight,
+                marginBottom: storySectionMarginBottom,
+                opacity: storySectionOpacity,
+                transform: [{ translateY: storySectionTranslateY }],
+              },
+            ]}>
+            <View onLayout={handleStoriesLayout}>
+              <DiscoverStoriesRow
+                items={storyItems}
+                onOpenStory={handleOpenStory}
+                onOpenSuggestion={() => setActiveTab('friends')}
+                onOpenCreateStory={handleOpenCreateStory}
+              />
             </View>
-          </View>
-
-          <DiscoverStoriesRow
-            items={storyItems}
-            onOpenStory={handleOpenStory}
-            onOpenSuggestion={() => setActiveTab('friends')}
-            onOpenCreateStory={handleOpenCreateStory}
-          />
+          </Animated.View>
 
           <View style={styles.cardStage}>
           {currentEvent ? (
@@ -742,6 +800,7 @@ export default function DiscoverScreen({
                   onPressRsvp={handleCardRsvp}
                   onPressComment={handleCardComment}
                   onPressSave={handleCardSaveForLater}
+                  onPressShare={handleCardShare}
                   onPressMutuals={handleOpenMutuals}
                   onPress={() =>
                     router.push({
@@ -765,13 +824,7 @@ export default function DiscoverScreen({
           )}
           </View>
 
-          {currentEvent ? (
-            <View style={styles.swipeHint}>
-              <Ionicons name="swap-horizontal-outline" size={16} color={theme.textMuted} />
-              <Text style={styles.swipeHintText}>Swipe left to pass or right to save</Text>
-            </View>
-          ) : null}
-        </ScrollView>
+        </Animated.ScrollView>
       ) : (
         <View style={styles.videoFeedContainer}>
           <DiscoverPostsImmersiveFeed
@@ -862,7 +915,7 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     container: {
       flexGrow: 1,
       paddingHorizontal: 16,
-      paddingTop: 2,
+      paddingTop: 0,
       paddingBottom: 12,
       backgroundColor: theme.background,
     },
@@ -912,6 +965,10 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     },
     cardStage: {
       justifyContent: 'flex-start',
+      paddingTop: 10,
+    },
+    storiesReveal: {
+      overflow: 'hidden',
     },
     cardDeck: {
       justifyContent: 'flex-start',
@@ -930,19 +987,6 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     },
     animatedCard: {
       width: '100%',
-    },
-    swipeHint: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 8,
-      paddingTop: 12,
-      paddingBottom: 4,
-    },
-    swipeHintText: {
-      color: theme.textMuted,
-      fontSize: 13,
-      fontWeight: '600',
     },
     endState: {
       padding: 24,

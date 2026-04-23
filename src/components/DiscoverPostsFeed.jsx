@@ -124,13 +124,14 @@ function CommentIcon() {
   )
 }
 
-function RepostIcon() {
+function SaveIcon({ filled = false }) {
   return (
-    <svg {...iconProps}>
-      <polyline points="17 1 21 5 17 9" />
-      <path d="M3 11V9a4 4 0 0 1 4-4h14" />
-      <polyline points="7 23 3 19 7 15" />
-      <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+    <svg
+      {...iconProps}
+      fill={filled ? "currentColor" : "none"}
+      stroke={filled ? "currentColor" : "currentColor"}
+    >
+      <path d="M6 3.5h12a1.5 1.5 0 0 1 1.5 1.5v15.4l-7.5-4.6-7.5 4.6V5A1.5 1.5 0 0 1 6 3.5z" />
     </svg>
   )
 }
@@ -194,10 +195,27 @@ function DiscoverPostsFeed({
   const [commentsByPostId, setCommentsByPostId] = useState({})
   const [commentDraft, setCommentDraft] = useState("")
   const [isSubmittingComment, setIsSubmittingComment] = useState(false)
+  const savedPostsStorageKey =
+    currentUserId && currentUserId !== "current-user"
+      ? `campus-saved-posts:${currentUserId}`
+      : "campus-saved-posts:guest"
+  const [savedPostIds, setSavedPostIds] = useState(new Set())
 
   useEffect(() => {
     setLocalPosts(posts || [])
   }, [posts])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    try {
+      const stored = JSON.parse(window.localStorage.getItem(savedPostsStorageKey) || "[]")
+      const normalized = Array.isArray(stored) ? stored.map((value) => String(value)) : []
+      setSavedPostIds(new Set(normalized))
+    } catch {
+      setSavedPostIds(new Set())
+    }
+  }, [savedPostsStorageKey])
 
   const updateLocalPost = (postId, updater) => {
     setLocalPosts((prev) =>
@@ -218,6 +236,17 @@ function DiscoverPostsFeed({
     if (currentUserId && currentUserId !== "current-user") return true
     showToast(message, "error")
     return false
+  }
+
+  const persistSavedPostIds = (nextSavedIds) => {
+    setSavedPostIds(nextSavedIds)
+
+    if (typeof window === "undefined") return
+
+    window.localStorage.setItem(
+      savedPostsStorageKey,
+      JSON.stringify(Array.from(nextSavedIds))
+    )
   }
 
   const handleToggleLike = async (post) => {
@@ -275,6 +304,26 @@ function DiscoverPostsFeed({
       }))
       showToast(error?.message || "Could not update repost.", "error")
     }
+  }
+
+  const handleToggleSave = (post) => {
+    if (!requireCurrentUser("Sign in to save posts.")) return
+
+    const postId = String(post.id)
+    const nextSavedIds = new Set(savedPostIds)
+    const isSaved = nextSavedIds.has(postId)
+
+    if (isSaved) {
+      nextSavedIds.delete(postId)
+    } else {
+      nextSavedIds.add(postId)
+    }
+
+    persistSavedPostIds(nextSavedIds)
+    updateLocalPost(postId, () => ({
+      isSavedByCurrentUser: !isSaved,
+    }))
+    showToast(isSaved ? "Removed from saved posts." : "Saved to your posts.", "success")
   }
 
   const handleOpenComments = async (post) => {
@@ -467,9 +516,9 @@ function DiscoverPostsFeed({
       {localPosts.map((post) => {
         const isVideo = post.mediaType === "video"
         const isLiked = Boolean(post.isLikedByCurrentUser)
-        const isReposted =
-          Boolean(post.isRepostedByCurrentUser) ||
-          repostedPostIds?.has(String(post.id))
+        const isSaved =
+          Boolean(post.isSavedByCurrentUser) ||
+          savedPostIds.has(String(post.id))
 
         return (
           <article key={post.id} className="video-feed-item">
@@ -516,16 +565,16 @@ function DiscoverPostsFeed({
               </button>
               <button
                 type="button"
-                className={`video-action-btn ${isReposted ? "active repost" : ""}`}
-                onClick={() => handleToggleRepost(post)}
-                aria-label={isReposted ? "Remove repost" : "Repost post"}
-                aria-pressed={isReposted}
+                className={`video-action-btn ${isSaved ? "active save" : ""}`}
+                onClick={() => handleToggleSave(post)}
+                aria-label={isSaved ? "Remove saved post" : "Save post"}
+                aria-pressed={isSaved}
               >
                 <div className="video-action-icon">
-                  <RepostIcon />
+                  <SaveIcon filled={isSaved} />
                 </div>
                 <span className="video-action-count">
-                  {formatActionCount(post.repostCount)}
+                  {formatActionCount(post.saveCount, isSaved ? "Saved" : "Save")}
                 </span>
               </button>
               <button type="button" className="video-action-btn" aria-label="Share post" onClick={() => setSharePost(post)}>

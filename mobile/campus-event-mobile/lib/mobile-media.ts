@@ -25,6 +25,18 @@ export const getAvatarImageUri = (url: string | null | undefined) =>
 export const getEventImageUri = (url: string | null | undefined) =>
   sanitizeMediaUrl(url, DEFAULT_EVENT_IMAGE);
 
+export const getEventGalleryUris = (
+  imageUrls: string[] | null | undefined,
+  primaryImage?: string | null
+) => {
+  const ordered = [
+    primaryImage ? getEventImageUri(primaryImage) : '',
+    ...(imageUrls || []).map((imageUrl) => getEventImageUri(imageUrl)),
+  ].filter(Boolean);
+
+  return [...new Set(ordered)];
+};
+
 export const getAvatarImageSource = (
   url: string | null | undefined
 ): ImageSourcePropType => ({

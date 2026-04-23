@@ -163,6 +163,15 @@ const MobileAppContext = createContext<MobileAppContextValue | null>(null);
 
 const uniqueValues = (values: string[]) => [...new Set(values.filter(Boolean))];
 
+const normalizeEventImageUrls = (input: CreateEventInput) => {
+  const coverImage = sanitizeMediaUrl(input.image?.trim(), '');
+  const galleryImages = (input.imageUrls || [])
+    .map((imageUrl) => sanitizeMediaUrl(imageUrl, ''))
+    .filter(Boolean);
+
+  return uniqueValues([coverImage, ...galleryImages]);
+};
+
 const formatDateLabel = (value: string) => {
   if (!value) return 'TBD';
 
@@ -1096,9 +1105,15 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
         input.description.trim() || 'A new event just dropped on campus.';
       const locationName = input.locationName.trim() || 'Campus Event Space';
       const locationAddress = input.locationAddress.trim() || locationName;
-      const organizer = input.organizer.trim() || currentUser.name;
+      const host =
+        input.host?.trim() ||
+        input.organizer?.trim() ||
+        currentUser.name ||
+        currentUser.username ||
+        'Campus Host';
       const dressCode = input.dressCode.trim() || 'Open';
-      const sanitizedImage = sanitizeMediaUrl(input.image?.trim(), '');
+      const sanitizedImageUrls = normalizeEventImageUrls(input);
+      const sanitizedImage = sanitizedImageUrls[0] || '';
       const price = input.eventType === 'Paid' ? '$10' : 'Free';
       const normalizedCapacity = input.capacity?.trim()
         ? Number.parseInt(input.capacity.trim(), 10)
@@ -1113,9 +1128,11 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
         event_date: input.eventDate,
         start_time: input.startTime,
         end_time: input.endTime,
-        organizer,
+        location_coordinates: input.locationCoordinates || null,
+        organizer: host,
         dress_code: dressCode,
         image: sanitizedImage || null,
+        image_urls: sanitizedImageUrls,
         price,
         capacity: Number.isFinite(normalizedCapacity) ? normalizedCapacity : null,
         tags: input.tags,
@@ -1156,9 +1173,15 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
         input.description.trim() || 'A new event just dropped on campus.';
       const locationName = input.locationName.trim() || 'Campus Event Space';
       const locationAddress = input.locationAddress.trim() || locationName;
-      const organizer = input.organizer.trim() || currentUser.name;
+      const host =
+        input.host?.trim() ||
+        input.organizer?.trim() ||
+        currentUser.name ||
+        currentUser.username ||
+        'Campus Host';
       const dressCode = input.dressCode.trim() || 'Open';
-      const sanitizedImage = sanitizeMediaUrl(input.image?.trim(), '');
+      const sanitizedImageUrls = normalizeEventImageUrls(input);
+      const sanitizedImage = sanitizedImageUrls[0] || '';
       const price = input.eventType === 'Paid' ? '$10' : 'Free';
       const normalizedCapacity = input.capacity?.trim()
         ? Number.parseInt(input.capacity.trim(), 10)
@@ -1173,9 +1196,11 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
         event_date: input.eventDate,
         start_time: input.startTime,
         end_time: input.endTime,
-        organizer,
+        location_coordinates: input.locationCoordinates || null,
+        organizer: host,
         dress_code: dressCode,
         image: sanitizedImage || null,
+        image_urls: sanitizedImageUrls,
         price,
         capacity: Number.isFinite(normalizedCapacity) ? normalizedCapacity : null,
         tags: input.tags,

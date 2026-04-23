@@ -100,7 +100,7 @@ const buildSuggestedTagOptions = (draft) => {
     draft.description,
     draft.locationName,
     draft.locationAddress,
-    draft.organizer,
+    draft.host,
     draft.dressCode,
   ]
     .filter(Boolean)
@@ -316,7 +316,6 @@ function CreateEvent({ embedded = false, modal = false, onPublished }) {
   const [isUploading, setIsUploading] = useState(false)
   const [tagInput, setTagInput] = useState("")
   const [tags, setTags] = useState([])
-  const [organizer, setOrganizer] = useState("")
   const [dressCode, setDressCode] = useState("")
   const [addressMeta, setAddressMeta] = useState(() => buildAddressDraft())
   const [addressSuggestions, setAddressSuggestions] = useState([])
@@ -346,12 +345,12 @@ function CreateEvent({ embedded = false, modal = false, onPublished }) {
         description,
         locationName,
         locationAddress,
-        organizer,
+        host: creatorName,
         dressCode,
         eventType,
         isPrivate,
       }),
-    [description, dressCode, eventType, isPrivate, locationAddress, locationName, organizer, title]
+    [creatorName, description, dressCode, eventType, isPrivate, locationAddress, locationName, title]
   )
 
   useEffect(() => {
@@ -685,7 +684,6 @@ function CreateEvent({ embedded = false, modal = false, onPublished }) {
     setCapacity("")
     setTagInput("")
     setTags([])
-    setOrganizer("")
     setDressCode("")
     setFlyerPreview("")
     setFlyerFile(null)
@@ -729,7 +727,7 @@ function CreateEvent({ embedded = false, modal = false, onPublished }) {
       const shortLocation = locationName.trim() || addressMeta.displayName || "UMES Campus"
       const fullAddress = locationAddress.trim() || addressMeta.formattedAddress || shortLocation
       const cleanDescription = description.trim() || "No description available."
-      const cleanOrganizer = organizer.trim() || creatorName || "Campus Organization"
+      const cleanHost = creatorName || contextUser?.username || "Campus Organization"
       const cleanDressCode = dressCode.trim() || "Open"
       const normalizedTags = tags.map(normalizeTag).filter(Boolean)
 
@@ -748,6 +746,20 @@ function CreateEvent({ embedded = false, modal = false, onPublished }) {
         input: fullAddress,
         formattedAddress: fullAddress,
       })
+      const locationCoordinates =
+        finalAddressMeta.coordinates?.latitude != null &&
+        finalAddressMeta.coordinates?.longitude != null
+          ? {
+              latitude: finalAddressMeta.coordinates.latitude,
+              longitude: finalAddressMeta.coordinates.longitude,
+            }
+          : finalAddressMeta.coordinates?.lat != null &&
+              finalAddressMeta.coordinates?.lng != null
+            ? {
+                latitude: finalAddressMeta.coordinates.lat,
+                longitude: finalAddressMeta.coordinates.lng,
+              }
+            : null
 
       const newEvent = {
         id: Date.now(),
@@ -766,11 +778,14 @@ function CreateEvent({ embedded = false, modal = false, onPublished }) {
         price: eventType === "Paid" ? "$10" : "Free",
         rsvp: "0 Going",
         image: uploadedImageUrl,
+        imageUrls: [uploadedImageUrl],
         description: cleanDescription,
-        organizer: cleanOrganizer,
+        host: cleanHost,
+        organizer: cleanHost,
         dressCode: cleanDressCode,
         capacity,
         tags: normalizedTags,
+        locationCoordinates,
         createdBy: contextUser?.id || creatorUsername,
         creatorUsername,
         creatorName,
@@ -791,9 +806,11 @@ function CreateEvent({ embedded = false, modal = false, onPublished }) {
         end_time: newEvent.endTime || null,
         price: newEvent.price,
         capacity: newEvent.capacity ? parseInt(newEvent.capacity, 10) : null,
-        organizer: newEvent.organizer,
+        organizer: newEvent.host,
         dress_code: newEvent.dressCode,
         image: newEvent.image,
+        image_urls: newEvent.imageUrls,
+        location_coordinates: newEvent.locationCoordinates,
         tags: newEvent.tags,
         created_by: contextUser?.id || null,
         creator_username: newEvent.creatorUsername,
@@ -1222,12 +1239,12 @@ function CreateEvent({ embedded = false, modal = false, onPublished }) {
 
           <div className="form-row">
             <div className="form-group">
-              <label>Organizer</label>
+              <label>Host</label>
               <input
                 type="text"
-                placeholder="Student Activities Board"
-                value={organizer}
-                onChange={(event) => setOrganizer(event.target.value)}
+                placeholder="Event creator"
+                value={creatorName}
+                readOnly
               />
             </div>
 

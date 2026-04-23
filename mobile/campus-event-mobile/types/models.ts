@@ -1,5 +1,10 @@
 export type EventPrivacy = 'public' | 'private';
 
+export type EventLocationCoordinates = {
+  latitude: number;
+  longitude: number;
+};
+
 export type EventRecord = {
   id: string;
   title: string;
@@ -12,9 +17,12 @@ export type EventRecord = {
   location: string;
   locationName: string;
   locationAddress: string;
+  locationCoordinates?: EventLocationCoordinates | null;
+  host: string;
   organizer: string;
   dressCode: string;
   image: string;
+  imageUrls: string[];
   price?: string;
   capacity?: number | null;
   tags: string[];
@@ -118,13 +126,16 @@ export type CreateEventInput = {
   endTime: string;
   locationName: string;
   locationAddress: string;
-  organizer: string;
+  locationCoordinates?: EventLocationCoordinates | null;
+  host?: string;
+  organizer?: string;
   dressCode: string;
   tags: string[];
   privacy: EventPrivacy;
   eventType?: 'Free' | 'Paid';
   capacity?: string;
   image?: string;
+  imageUrls?: string[];
 };
 
 export type CreatePersonalCalendarItemInput = {

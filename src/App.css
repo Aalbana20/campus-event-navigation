@@ -9026,6 +9026,12 @@ body.theme-dark .profile-rsvp-title {
   stroke: #00e676;
 }
 
+.video-action-btn.active.save svg {
+  fill: #ffffff;
+  stroke: #ffffff;
+  color: #ffffff;
+}
+
 .video-action-count {
   font-size: 13px;
   font-weight: 700;

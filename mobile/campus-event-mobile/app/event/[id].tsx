@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import * as Location from 'expo-location';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
@@ -14,10 +15,12 @@ import {
 
 import { AppScreen } from '@/components/mobile/AppScreen';
 import { EventActionTrigger } from '@/components/mobile/EventActionTrigger';
+import { EventGalleryViewer } from '@/components/mobile/EventGalleryViewer';
 import { useAppTheme } from '@/lib/app-theme';
 import { getEventCreatorLabel } from '@/lib/mobile-backend';
+import { calculateDistanceMiles, formatDistanceAway } from '@/lib/mobile-event-distance';
 import type { EventMemoryRecord } from '@/lib/mobile-event-memories';
-import { getAvatarImageSource, getEventImageSource } from '@/lib/mobile-media';
+import { getAvatarImageSource, getEventGalleryUris, getEventImageSource } from '@/lib/mobile-media';
 import { pickStoryMediaFromLibrary } from '@/lib/mobile-story-composer';
 import { useMobileApp } from '@/providers/mobile-app-provider';
 
@@ -37,8 +40,14 @@ export default function EventDetailScreen() {
   const [canAddMemory, setCanAddMemory] = useState(false);
   const [eventMemories, setEventMemories] = useState<EventMemoryRecord[]>([]);
   const [isMemoryBusy, setIsMemoryBusy] = useState(false);
+  const [isGalleryVisible, setIsGalleryVisible] = useState(false);
+  const [mapButtonLabel, setMapButtonLabel] = useState('Open in Maps');
 
   const event = id ? getEventById(String(id)) : undefined;
+  const galleryImages = getEventGalleryUris(event?.imageUrls, event?.image);
+  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+    event?.locationAddress || event?.locationName || ''
+  )}`;
 
   useEffect(() => {
     if (!event?.id) return;
@@ -61,6 +70,58 @@ export default function EventDetailScreen() {
     };
   }, [currentUserAttendedEvent, event?.id, loadEventMemoriesForEvent]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadDistanceLabel = async () => {
+      if (!event?.locationCoordinates) {
+        setMapButtonLabel('Open in Maps');
+        return;
+      }
+
+      setMapButtonLabel('Locating...');
+
+      try {
+        const existingPermission = await Location.getForegroundPermissionsAsync();
+        const permission =
+          existingPermission.status === 'granted'
+            ? existingPermission
+            : await Location.requestForegroundPermissionsAsync();
+
+        if (permission.status !== 'granted') {
+          if (!cancelled) setMapButtonLabel('Open in Maps');
+          return;
+        }
+
+        const currentPosition = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+
+        const distanceLabel = formatDistanceAway(
+          calculateDistanceMiles(
+            {
+              latitude: currentPosition.coords.latitude,
+              longitude: currentPosition.coords.longitude,
+            },
+            event.locationCoordinates
+          )
+        );
+
+        if (!cancelled) {
+          setMapButtonLabel(distanceLabel || 'Open in Maps');
+        }
+      } catch {
+        if (!cancelled) setMapButtonLabel('Open in Maps');
+      }
+    };
+
+    void loadDistanceLabel();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [event?.id, event?.locationCoordinates]);
+
   if (!event) {
     return (
       <AppScreen>
@@ -75,10 +136,6 @@ export default function EventDetailScreen() {
   }
 
   const isSaved = savedEventIds.includes(String(event.id));
-  const detailTags = (event.tags || []).filter(Boolean);
-  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-    event.locationAddress || event.locationName
-  )}`;
 
   const handleAddMemory = async () => {
     if (!event?.id || isMemoryBusy) return;
@@ -106,7 +163,15 @@ export default function EventDetailScreen() {
     <AppScreen>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.heroWrap}>
-          <Image source={getEventImageSource(event.image)} style={styles.heroImage} />
+          <Pressable style={styles.heroImagePressable} onPress={() => setIsGalleryVisible(true)}>
+            <Image source={getEventImageSource(event.image)} style={styles.heroImage} />
+            {galleryImages.length > 1 ? (
+              <View style={styles.galleryCountPill}>
+                <Ionicons name="images-outline" size={14} color="#ffffff" />
+                <Text style={styles.galleryCountText}>{galleryImages.length}</Text>
+              </View>
+            ) : null}
+          </Pressable>
           <Pressable style={styles.backButton} onPress={() => router.back()}>
             <Ionicons name="chevron-back" size={20} color="#ffffff" />
           </Pressable>
@@ -145,10 +210,6 @@ export default function EventDetailScreen() {
 
           <View style={styles.detailsCard}>
             <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Organizer</Text>
-              <Text style={styles.detailValue}>{event.organizer || 'Campus Host'}</Text>
-            </View>
-            <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Dress Code</Text>
               <Text style={styles.detailValue}>{event.dressCode || 'Open'}</Text>
             </View>
@@ -160,25 +221,12 @@ export default function EventDetailScreen() {
             </View>
           </View>
 
-          {detailTags.length > 0 ? (
-            <View style={styles.tagsSection}>
-              <Text style={styles.sectionEyebrow}>Tags</Text>
-              <View style={styles.tagsRow}>
-                {detailTags.map((tag) => (
-                  <View key={tag} style={styles.tagChip}>
-                    <Text style={styles.tagText}>#{tag}</Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-          ) : null}
-
           <View style={styles.memoriesSection}>
             <View style={styles.memoryHeader}>
               <View>
-                <Text style={styles.sectionEyebrow}>Event Memories</Text>
+                <Text style={styles.sectionEyebrow}>Tag Photos</Text>
                 <Text style={styles.memoryCopy}>
-                  RSVP-based photos and videos from people tied to this event.
+                  Photos people tagged to this event after attending.
                 </Text>
               </View>
               {canAddMemory ? (
@@ -187,7 +235,7 @@ export default function EventDetailScreen() {
                   disabled={isMemoryBusy}
                   onPress={() => void handleAddMemory()}>
                   <Text style={styles.memoryButtonText}>
-                    {isMemoryBusy ? 'Adding...' : 'Add Memory'}
+                    {isMemoryBusy ? 'Adding...' : 'Tag Photo'}
                   </Text>
                 </Pressable>
               ) : null}
@@ -211,7 +259,7 @@ export default function EventDetailScreen() {
               </ScrollView>
             ) : (
               <View style={styles.memoryEmpty}>
-                <Text style={styles.memoryEmptyText}>No memories yet.</Text>
+                <Text style={styles.memoryEmptyText}>No tagged photos yet.</Text>
               </View>
             )}
           </View>
@@ -222,14 +270,21 @@ export default function EventDetailScreen() {
             </Pressable>
             {(event.locationAddress || event.locationName) ? (
               <Pressable
-                style={styles.secondaryButton}
+                style={[styles.secondaryButton, styles.mapButton]}
                 onPress={() => Linking.openURL(mapsUrl).catch(() => {})}>
-                <Text style={styles.secondaryButtonText}>View Map</Text>
+                <Ionicons name="map-outline" size={16} color={theme.text} />
+                <Text style={styles.secondaryButtonText}>{mapButtonLabel}</Text>
               </Pressable>
             ) : null}
           </View>
         </View>
       </ScrollView>
+
+      <EventGalleryViewer
+        visible={isGalleryVisible}
+        images={galleryImages}
+        onClose={() => setIsGalleryVisible(false)}
+      />
     </AppScreen>
   );
 }
@@ -243,9 +298,31 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       height: 340,
       position: 'relative',
     },
+    heroImagePressable: {
+      flex: 1,
+    },
     heroImage: {
       width: '100%',
       height: '100%',
+    },
+    galleryCountPill: {
+      position: 'absolute',
+      right: 18,
+      bottom: 18,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 10,
+      paddingVertical: 7,
+      borderRadius: 999,
+      backgroundColor: 'rgba(8, 11, 16, 0.66)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.1)',
+    },
+    galleryCountText: {
+      color: '#ffffff',
+      fontSize: 12,
+      fontWeight: '800',
     },
     backButton: {
       position: 'absolute',
@@ -376,33 +453,12 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       fontSize: 15,
       lineHeight: 22,
     },
-    tagsSection: {
-      gap: 10,
-    },
     sectionEyebrow: {
       color: theme.textMuted,
       fontSize: 11,
       fontWeight: '800',
       textTransform: 'uppercase',
       letterSpacing: 0.7,
-    },
-    tagsRow: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 10,
-    },
-    tagChip: {
-      paddingHorizontal: 12,
-      paddingVertical: 7,
-      borderRadius: 999,
-      backgroundColor: theme.surface,
-      borderWidth: 1,
-      borderColor: theme.border,
-    },
-    tagText: {
-      color: theme.text,
-      fontSize: 11,
-      fontWeight: '700',
     },
     memoriesSection: {
       gap: 12,
@@ -498,6 +554,10 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       backgroundColor: theme.surface,
       borderWidth: 1,
       borderColor: theme.border,
+    },
+    mapButton: {
+      flexDirection: 'row',
+      gap: 8,
     },
     secondaryButtonText: {
       color: theme.text,

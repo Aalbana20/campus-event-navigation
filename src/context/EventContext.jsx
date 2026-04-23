@@ -114,6 +114,29 @@ const normalizeEventTimes = (event) => {
   }
 }
 
+const normalizeEventImageUrls = (event) => {
+  const galleryImages = Array.isArray(event?.image_urls)
+    ? event.image_urls
+    : typeof event?.image_urls === "string"
+      ? event.image_urls.split(",")
+      : Array.isArray(event?.imageUrls)
+        ? event.imageUrls
+        : []
+
+  return [...new Set([event?.image, ...galleryImages].filter(Boolean))]
+}
+
+const normalizeEventCoordinates = (value) => {
+  if (!value || typeof value !== "object") return null
+
+  const latitude = Number(value.latitude ?? value.lat)
+  const longitude = Number(value.longitude ?? value.lng)
+
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null
+
+  return { latitude, longitude }
+}
+
 const buildProfileLookup = (profiles) =>
   (profiles || []).reduce(
     (lookup, profile) => {
@@ -142,6 +165,20 @@ const enrichEventWithCreator = (event, creatorProfile = null, fallbackCreator = 
 
   return {
     ...event,
+    host:
+      event?.host ||
+      event?.organizer ||
+      creatorName ||
+      fallbackCreator?.name ||
+      fallbackCreator?.username ||
+      "Campus Host",
+    organizer:
+      event?.host ||
+      event?.organizer ||
+      creatorName ||
+      fallbackCreator?.name ||
+      fallbackCreator?.username ||
+      "Campus Host",
     creatorName,
     creatorUsername,
     creatorAvatar: sanitizeAvatarUrl(
@@ -278,9 +315,12 @@ export function EventProvider({ children }) {
               startTime: e.start_time,
               endTime: e.end_time,
               price: e.price,
+              host: e.organizer,
               organizer: e.organizer,
               dressCode: e.dress_code,
               image: e.image,
+              imageUrls: normalizeEventImageUrls(e),
+              locationCoordinates: normalizeEventCoordinates(e.location_coordinates),
               tags: e.tags || [],
               createdBy: e.created_by,
               created_by: e.created_by,

@@ -4,6 +4,7 @@ import { normalizeAvatarStorageValue } from '@/lib/avatar-storage';
 import { buildLegacyBirthday } from '@/lib/signup-data';
 import {
   EventPrivacy,
+  EventLocationCoordinates,
   EventRecord,
   FollowRelationship,
   ProfileRecord,
@@ -120,9 +121,11 @@ type EventRow = {
   end_time?: string | null;
   location?: string | null;
   location_address?: string | null;
+  location_coordinates?: Record<string, unknown> | null;
   organizer?: string | null;
   dress_code?: string | null;
   image?: string | null;
+  image_urls?: string[] | string | null;
   price?: string | null;
   capacity?: number | null;
   tags?: string[] | string | null;
@@ -186,6 +189,38 @@ const normalizeTags = (value: EventRow['tags']) => {
   }
 
   return [];
+};
+
+const normalizeImageUrls = (
+  primaryImage: string,
+  value: EventRow['image_urls']
+) => {
+  const candidateValues = Array.isArray(value)
+    ? value
+    : typeof value === 'string'
+      ? value.split(',')
+      : [];
+
+  const ordered = [
+    primaryImage,
+    ...candidateValues.map((imageUrl) => toStringValue(imageUrl)),
+  ].filter(Boolean);
+
+  return [...new Set(ordered)];
+};
+
+const normalizeLocationCoordinates = (
+  value: EventRow['location_coordinates']
+): EventLocationCoordinates | null => {
+  if (!value || typeof value !== 'object') return null;
+
+  const source = value as Record<string, unknown>;
+  const latitude = Number(source.latitude ?? source.lat);
+  const longitude = Number(source.longitude ?? source.lng);
+
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+
+  return { latitude, longitude };
 };
 
 const normalizeInterests = (value: ProfileRow['interests']) => {
@@ -447,6 +482,8 @@ export const normalizeEventRow = (
     row.privacy === 'private' || row.is_private ? 'private' : 'public';
   const startTime = toStringValue(row.start_time);
   const endTime = toStringValue(row.end_time);
+  const primaryImage = toStringValue(row.image) || DEFAULT_EVENT_IMAGE;
+  const organizer = toStringValue(row.organizer) || 'Campus Event Navigation';
 
   return {
     id: String(row.id),
@@ -465,9 +502,12 @@ export const normalizeEventRow = (
       toStringValue(row.location_address) ||
       toStringValue(row.location) ||
       'Campus Event Space',
-    organizer: toStringValue(row.organizer) || 'Campus Event Navigation',
+    locationCoordinates: normalizeLocationCoordinates(row.location_coordinates),
+    host: organizer,
+    organizer,
     dressCode: toStringValue(row.dress_code) || 'Open',
-    image: toStringValue(row.image) || DEFAULT_EVENT_IMAGE,
+    image: primaryImage,
+    imageUrls: normalizeImageUrls(primaryImage, row.image_urls),
     price: toStringValue(row.price) || 'Free',
     capacity: typeof row.capacity === 'number' ? row.capacity : null,
     tags: normalizeTags(row.tags),
@@ -504,11 +544,14 @@ export const enrichEventWithCreator = (
     toStringValue(event.creatorName) ||
     sanitizeDisplayUsername(event.creatorUsername) ||
     'Campus User';
+  const host = creatorName || event.host || event.organizer || 'Campus User';
 
   return {
     ...event,
     creatorName,
     creatorUsername,
+    host,
+    organizer: host,
     creatorAvatar:
       creatorProfile?.avatar ||
       event.creatorAvatar ||

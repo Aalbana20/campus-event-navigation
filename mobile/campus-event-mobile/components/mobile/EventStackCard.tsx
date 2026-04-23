@@ -16,8 +16,6 @@ import { getAvatarImageSource, getEventImageSource } from '@/lib/mobile-media';
 import { useMobileApp } from '@/providers/mobile-app-provider';
 import { EventRecord, ProfileRecord } from '@/types/models';
 
-import { EventActionTrigger } from './EventActionTrigger';
-
 type EventStackCardProps = {
   event: EventRecord;
   height: number;
@@ -27,6 +25,7 @@ type EventStackCardProps = {
   onPressRsvp?: (event: EventRecord) => void;
   onPressComment?: (event: EventRecord) => void;
   onPressSave?: (event: EventRecord) => void;
+  onPressShare?: (event: EventRecord) => void;
   onPressMutuals?: (event: EventRecord, mutuals: ProfileRecord[]) => void;
   swipeDirection?: 'left' | 'right' | null;
   swipeIntensity?: number;
@@ -41,6 +40,7 @@ export function EventStackCard({
   onPressRsvp,
   onPressComment,
   onPressSave,
+  onPressShare,
   onPressMutuals,
   swipeDirection = null,
   swipeIntensity = 0,
@@ -118,6 +118,11 @@ export function EventStackCard({
     onPressSave?.(event);
   };
 
+  const handleSharePress = (eventPress: GestureResponderEvent) => {
+    stopEventPress(eventPress);
+    onPressShare?.(event);
+  };
+
   return (
     <Pressable style={[styles.card, { height }]} onPress={onPress}>
       <ImageBackground
@@ -136,31 +141,29 @@ export function EventStackCard({
                   {creatorFirstName}
                 </Text>
               </View>
-
-              <Pressable style={styles.mutualInlineButton} onPress={handleMutualsPress}>
-                {visibleAttendees.length > 0 ? (
-                  <View style={styles.mutualsInlineStack}>
-                    {visibleAttendees.map((attendee, index) => (
-                      <Image
-                        key={attendee.id}
-                        source={getAvatarImageSource(attendee.avatar)}
-                        style={[
-                          styles.mutualInlineAvatar,
-                          { marginLeft: index > 0 ? -8 : 0, zIndex: 2 - index },
-                        ]}
-                      />
-                    ))}
-                  </View>
-                ) : (
-                  <View style={styles.mutualInlineEmpty}>
-                    <Ionicons name="people-outline" size={14} color="rgba(255,255,255,0.76)" />
-                  </View>
-                )}
-                <Text style={styles.mutualInlineCount}>{goingCount}</Text>
-              </Pressable>
             </View>
 
-            <EventActionTrigger event={event} style={styles.actions} />
+            <Pressable style={styles.mutualInlineButton} onPress={handleMutualsPress}>
+              {visibleAttendees.length > 0 ? (
+                <View style={styles.mutualsInlineStack}>
+                  {visibleAttendees.map((attendee, index) => (
+                    <Image
+                      key={attendee.id}
+                      source={getAvatarImageSource(attendee.avatar)}
+                      style={[
+                        styles.mutualInlineAvatar,
+                        { marginLeft: index > 0 ? -8 : 0, zIndex: 2 - index },
+                      ]}
+                    />
+                  ))}
+                </View>
+              ) : (
+                <View style={styles.mutualInlineEmpty}>
+                  <Ionicons name="people-outline" size={14} color="rgba(255,255,255,0.76)" />
+                </View>
+              )}
+              <Text style={styles.mutualInlineCount}>{goingCount}</Text>
+            </Pressable>
           </View>
         </View>
 
@@ -218,6 +221,11 @@ export function EventStackCard({
                 color="#ffffff"
               />
               <Text style={styles.actionCount}>0</Text>
+            </Pressable>
+
+            <Pressable style={styles.actionButton} onPress={handleSharePress}>
+              <Ionicons name="share-social-outline" size={30} color="#ffffff" />
+              <Text style={styles.actionCount}>Share</Text>
             </Pressable>
           </View>
         </View>
@@ -340,10 +348,6 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       fontWeight: '700',
       minWidth: 12,
       textAlign: 'center',
-    },
-    actions: {
-      backgroundColor: 'rgba(8, 11, 16, 0.5)',
-      borderColor: 'rgba(255,255,255,0.14)',
     },
     bottomContent: {
       zIndex: 3,

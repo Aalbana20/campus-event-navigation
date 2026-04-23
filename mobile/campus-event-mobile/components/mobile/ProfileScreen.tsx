@@ -49,7 +49,7 @@ type EditEventFormState = {
   endTime: string;
   locationName: string;
   locationAddress: string;
-  organizer: string;
+  host: string;
   dressCode: string;
   tagsText: string;
   privacy: EventPrivacy;
@@ -64,7 +64,7 @@ const toEditEventForm = (event: EventRecord): EditEventFormState => ({
   endTime: event.endTime || '',
   locationName: event.locationName || '',
   locationAddress: event.locationAddress || '',
-  organizer: event.organizer || '',
+  host: event.host || event.organizer || '',
   dressCode: event.dressCode || '',
   tagsText: (event.tags || []).join(', '),
   privacy: event.privacy || 'public',
@@ -261,7 +261,7 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
       endTime: editEventForm.endTime,
       locationName: editEventForm.locationName,
       locationAddress: editEventForm.locationAddress,
-      organizer: editEventForm.organizer,
+      host: editEventForm.host,
       dressCode: editEventForm.dressCode,
       tags: parseEditEventTags(editEventForm.tagsText),
       privacy: editEventForm.privacy,
@@ -664,16 +664,16 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
                   placeholderTextColor={theme.textMuted}
                 />
 
-                <Text style={styles.editLabel}>Organizer</Text>
+                <Text style={styles.editLabel}>Host</Text>
                 <TextInput
                   style={styles.editInput}
-                  value={editEventForm.organizer}
+                  value={editEventForm.host}
                   onChangeText={(text) =>
                     setEditEventForm((form) =>
-                      form ? { ...form, organizer: text } : form
+                      form ? { ...form, host: text } : form
                     )
                   }
-                  placeholder="Organizer"
+                  placeholder="Host"
                   placeholderTextColor={theme.textMuted}
                 />
 

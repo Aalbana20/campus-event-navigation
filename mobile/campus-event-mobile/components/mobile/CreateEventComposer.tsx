@@ -5,6 +5,7 @@ import {
   Alert,
   Image,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -25,6 +26,8 @@ const TAG_RULES = [
   { keywords: ['party', 'mixer', 'night'], tags: ['social', 'nightlife', 'party'] },
   { keywords: ['workshop', 'panel', 'career'], tags: ['learning', 'networking', 'campus'] },
 ];
+
+const EVENT_IMAGE_BUCKET_CANDIDATES = ['event-flyers', 'event-images', 'event-image'];
 
 const normalizeTag = (value: string) =>
   value
@@ -83,7 +86,7 @@ export function CreateEventComposer({
 }) {
   const theme = useAppTheme();
   const styles = useMemo(() => buildStyles(theme), [theme]);
-  const { createEvent } = useMobileApp();
+  const { createEvent, currentUser } = useMobileApp();
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -95,12 +98,12 @@ export function CreateEventComposer({
   const [privacy, setPrivacy] = useState<EventPrivacy>('public');
   const [tagInput, setTagInput] = useState('');
   const [tags, setTags] = useState<string[]>([]);
-  const [organizer, setOrganizer] = useState('');
   const [dressCode, setDressCode] = useState('');
   const [eventType, setEventType] = useState<'Free' | 'Paid'>('Free');
   const [capacity, setCapacity] = useState('');
-  const [imageUrl, setImageUrl] = useState('');
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const hostName = currentUser.name || currentUser.username || 'Campus Host';
 
   useEffect(() => {
     if (initialDate && !date) {
@@ -119,48 +122,72 @@ export function CreateEventComposer({
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [4, 5] as [number, number],
+      allowsMultipleSelection: true,
+      orderedSelection: true,
+      selectionLimit: 6,
       quality: 0.8,
     });
 
-    if (result.canceled || !result.assets[0]) return;
-
-    const asset = result.assets[0];
-    const fileExt = asset.uri.split('.').pop()?.toLowerCase() || 'jpg';
-    const fileName = `event-${Date.now()}.${fileExt}`;
-    const filePath = `events/${fileName}`;
+    if (result.canceled || !result.assets.length) return;
 
     setIsUploadingImage(true);
 
     try {
-      const response = await fetch(asset.uri);
-      const blob = await response.blob();
-      const arrayBuffer = await blob.arrayBuffer();
+      const nextUrls: string[] = [];
 
-      const { error: uploadError } = await supabase.storage
-        .from('event-image')
-        .upload(filePath, arrayBuffer, {
-          contentType: asset.mimeType || `image/${fileExt}`,
-          upsert: true,
-        });
+      for (const [index, asset] of result.assets.entries()) {
+        const fileExt = asset.uri.split('.').pop()?.toLowerCase() || 'jpg';
+        const fileName = `event-${Date.now()}-${index}.${fileExt}`;
+        const filePath = `events/${fileName}`;
+        const response = await fetch(asset.uri);
+        const blob = await response.blob();
+        const arrayBuffer = await blob.arrayBuffer();
 
-      if (uploadError) {
-        Alert.alert('Upload failed', 'Could not upload the image. Try again.');
+        let uploadedBucket = '';
+        let uploadErrorMessage = 'Could not upload the images. Try again.';
+
+        for (const bucketName of EVENT_IMAGE_BUCKET_CANDIDATES) {
+          const { error: uploadError } = await supabase.storage
+            .from(bucketName)
+            .upload(filePath, arrayBuffer, {
+              contentType: asset.mimeType || `image/${fileExt}`,
+              upsert: false,
+            });
+
+          if (!uploadError) {
+            uploadedBucket = bucketName;
+            break;
+          }
+
+          uploadErrorMessage = uploadError.message || uploadErrorMessage;
+        }
+
+        if (!uploadedBucket) {
+          Alert.alert('Upload failed', uploadErrorMessage);
+          return;
+        }
+
+        const { data } = supabase.storage.from(uploadedBucket).getPublicUrl(filePath);
+        if (data?.publicUrl) {
+          nextUrls.push(data.publicUrl);
+        }
+      }
+
+      if (!nextUrls.length) {
+        Alert.alert('Upload failed', 'Could not upload the images. Try again.');
         return;
       }
 
-      const { data } = supabase.storage.from('event-image').getPublicUrl(filePath);
-      setImageUrl(data.publicUrl);
+      setImageUrls((currentUrls) => [...new Set([...currentUrls, ...nextUrls])]);
     } catch {
-      Alert.alert('Upload failed', 'Something went wrong. Try again.');
+      Alert.alert('Upload failed', 'Something went wrong while uploading the event gallery.');
     } finally {
       setIsUploadingImage(false);
     }
   };
 
   const suggestedTags = useMemo(() => {
-    const haystack = [title, description, locationName, locationAddress, organizer].join(' ').toLowerCase();
+    const haystack = [title, description, locationName, locationAddress, hostName].join(' ').toLowerCase();
 
     const dynamicTags = TAG_RULES.flatMap((rule) =>
       rule.keywords.some((keyword) => haystack.includes(keyword)) ? rule.tags : []
@@ -170,7 +197,7 @@ export function CreateEventComposer({
     const uniqueTags = [...new Set([...BASE_TAGS, ...dynamicTags, ...privacyTags])];
 
     return uniqueTags.map(normalizeTag).filter(Boolean);
-  }, [description, locationAddress, locationName, organizer, privacy, title]);
+  }, [description, hostName, locationAddress, locationName, privacy, title]);
 
   const addTag = (rawTag: string) => {
     const nextTag = normalizeTag(rawTag);
@@ -198,13 +225,14 @@ export function CreateEventComposer({
       endTime,
       locationName,
       locationAddress,
-      organizer,
+      host: hostName,
       dressCode,
       tags,
       privacy,
       eventType,
       capacity,
-      image: imageUrl,
+      image: imageUrls[0],
+      imageUrls,
     };
 
     const createdEvent = await createEvent(payload);
@@ -224,11 +252,10 @@ export function CreateEventComposer({
     setPrivacy('public');
     setTagInput('');
     setTags([]);
-    setOrganizer('');
     setDressCode('');
     setEventType('Free');
     setCapacity('');
-    setImageUrl('');
+    setImageUrls([]);
 
     Alert.alert('Event Published', `"${createdEvent.title}" is now live in your Events flow.`);
     onPublished?.();
@@ -364,16 +391,12 @@ export function CreateEventComposer({
 
       <View style={styles.row}>
         <View style={styles.rowItem}>
-          <Text style={styles.label}>Organizer</Text>
-          <FieldShell onVoicePress={showVoicePlaceholder}>
-            <TextInput
-              value={organizer}
-              onChangeText={setOrganizer}
-              placeholder="Student Activities Board"
-              placeholderTextColor={theme.textMuted}
-              style={styles.input}
-            />
-          </FieldShell>
+          <Text style={styles.label}>Host</Text>
+          <View style={styles.readOnlyField}>
+            <Text style={styles.readOnlyFieldText} numberOfLines={1}>
+              {hostName}
+            </Text>
+          </View>
         </View>
         <View style={styles.rowItem}>
           <Text style={styles.label}>Dress Code</Text>
@@ -457,26 +480,55 @@ export function CreateEventComposer({
           .join(' • ') || 'Your event details will preview here as you type.'}
       </Text>
 
-      <Text style={styles.label}>Flyer / Image</Text>
+      <Text style={styles.label}>Flyer / Gallery</Text>
       <Pressable
         style={[styles.imagePicker, isUploadingImage && styles.imagePickerUploading]}
         onPress={() => void handlePickImage()}
         disabled={isUploadingImage}>
-        {imageUrl ? (
-          <Image source={{ uri: imageUrl }} style={styles.imagePreview} resizeMode="cover" />
+        {imageUrls[0] ? (
+          <>
+            <Image source={{ uri: imageUrls[0] }} style={styles.imagePreview} resizeMode="cover" />
+            {imageUrls.length > 1 ? (
+              <View style={styles.imageCountBadge}>
+                <Text style={styles.imageCountText}>+{imageUrls.length - 1}</Text>
+              </View>
+            ) : null}
+          </>
         ) : (
           <View style={styles.imagePickerPlaceholder}>
             <Ionicons name="image-outline" size={28} color={theme.textMuted} />
             <Text style={styles.imagePickerText}>
-              {isUploadingImage ? 'Uploading...' : 'Tap to choose a flyer'}
+              {isUploadingImage ? 'Uploading...' : 'Tap to choose a flyer and gallery images'}
             </Text>
           </View>
         )}
       </Pressable>
-      {imageUrl ? (
-        <Pressable onPress={() => setImageUrl('')}>
-          <Text style={[styles.helperText, { color: theme.accent }]}>Remove image</Text>
-        </Pressable>
+      {imageUrls.length > 0 ? (
+        <>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.imageThumbRow}>
+            {imageUrls.map((imageUrl, index) => (
+              <Pressable
+                key={`${imageUrl}-${index}`}
+                style={styles.imageThumbWrap}
+                onPress={() =>
+                  setImageUrls((currentUrls) => currentUrls.filter((_, currentIndex) => currentIndex !== index))
+                }>
+                <Image source={{ uri: imageUrl }} style={styles.imageThumb} />
+                {index === 0 ? (
+                  <View style={styles.coverBadge}>
+                    <Text style={styles.coverBadgeText}>Cover</Text>
+                  </View>
+                ) : null}
+              </Pressable>
+            ))}
+          </ScrollView>
+          <Text style={[styles.helperText, { color: theme.accent }]}>
+            Tap a thumbnail to remove it. The first image stays the event cover.
+          </Text>
+        </>
       ) : null}
 
       <Pressable style={styles.publishButton} onPress={() => void handlePublish()}>
@@ -549,6 +601,21 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       fontSize: 12,
       lineHeight: 17,
       marginTop: -2,
+    },
+    readOnlyField: {
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.08)',
+      backgroundColor: 'rgba(58,58,60,0.4)',
+      borderRadius: 13,
+      paddingHorizontal: 14,
+      paddingVertical: 13,
+      minHeight: 48,
+      justifyContent: 'center',
+    },
+    readOnlyFieldText: {
+      color: theme.text,
+      fontSize: 15,
+      fontWeight: '600',
     },
     tagsWrap: {
       flexDirection: 'row',
@@ -657,6 +724,25 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       width: '100%',
       height: '100%',
     },
+    imageCountBadge: {
+      position: 'absolute',
+      right: 12,
+      top: 12,
+      minWidth: 34,
+      height: 26,
+      paddingHorizontal: 8,
+      borderRadius: 13,
+      backgroundColor: 'rgba(8,11,16,0.7)',
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.12)',
+    },
+    imageCountText: {
+      color: '#ffffff',
+      fontSize: 12,
+      fontWeight: '800',
+    },
     imagePickerPlaceholder: {
       flex: 1,
       alignItems: 'center',
@@ -668,6 +754,39 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       color: theme.textMuted,
       fontSize: 14,
       fontWeight: '600',
+    },
+    imageThumbRow: {
+      gap: 10,
+      paddingVertical: 2,
+    },
+    imageThumbWrap: {
+      width: 82,
+      height: 96,
+      borderRadius: 16,
+      overflow: 'hidden',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.08)',
+      backgroundColor: 'rgba(44,44,46,0.45)',
+    },
+    imageThumb: {
+      width: '100%',
+      height: '100%',
+    },
+    coverBadge: {
+      position: 'absolute',
+      left: 8,
+      bottom: 8,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 999,
+      backgroundColor: 'rgba(8,11,16,0.72)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.08)',
+    },
+    coverBadgeText: {
+      color: '#ffffff',
+      fontSize: 10,
+      fontWeight: '800',
     },
     publishButton: {
       marginTop: 10,

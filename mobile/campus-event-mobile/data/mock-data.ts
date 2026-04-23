@@ -68,10 +68,14 @@ export const mockEvents: EventRecord[] = [
     location: 'Hytche Arena',
     locationName: 'Hytche Arena',
     locationAddress: 'Hytche Athletic Center, Princess Anne, MD',
+    host: 'Maya Chen',
     organizer: 'Campus Recreation',
     dressCode: 'School colors',
     image:
       'https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&w=1200&q=80',
+    imageUrls: [
+      'https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&w=1200&q=80',
+    ],
     tags: ['sports', 'game', 'basketball'],
     createdBy: 'user-maya',
     creatorUsername: 'mayaruns',
@@ -94,10 +98,14 @@ export const mockEvents: EventRecord[] = [
     location: 'Student Center Roof',
     locationName: 'Student Center Roof',
     locationAddress: 'Student Center, Princess Anne, MD',
+    host: 'Jordan Fields',
     organizer: 'Student Life',
     dressCode: 'Casual',
     image:
       'https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=1200&q=80',
+    imageUrls: [
+      'https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=1200&q=80',
+    ],
     tags: ['networking', 'social', 'campus'],
     createdBy: 'user-jordan',
     creatorUsername: 'jordxfields',
@@ -120,10 +128,14 @@ export const mockEvents: EventRecord[] = [
     location: 'Arts Lounge',
     locationName: 'Arts Lounge',
     locationAddress: 'Fine Arts Center, Princess Anne, MD',
+    host: 'Ava Brooks',
     organizer: 'Creative Collective',
     dressCode: 'Come as you are',
     image:
       'https://images.unsplash.com/photo-1501386761578-eac5c94b800a?auto=format&fit=crop&w=1200&q=80',
+    imageUrls: [
+      'https://images.unsplash.com/photo-1501386761578-eac5c94b800a?auto=format&fit=crop&w=1200&q=80',
+    ],
     tags: ['arts', 'creative', 'showcase'],
     createdBy: 'user-ava',
     creatorUsername: 'avaafterdark',
@@ -146,10 +158,14 @@ export const mockEvents: EventRecord[] = [
     location: 'Library Auditorium',
     locationName: 'Library Auditorium',
     locationAddress: 'Frederick Douglass Library, Princess Anne, MD',
+    host: 'Elias Grant',
     organizer: 'Film Club',
     dressCode: 'Cozy casual',
     image:
       'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=1200&q=80',
+    imageUrls: [
+      'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=1200&q=80',
+    ],
     tags: ['film', 'movie', 'screening'],
     createdBy: 'user-elias',
     creatorUsername: 'eliascreates',
@@ -172,10 +188,14 @@ export const mockEvents: EventRecord[] = [
     location: 'Innovation Lab',
     locationName: 'Innovation Lab',
     locationAddress: 'Engineering Building, Princess Anne, MD',
+    host: 'Success Myers',
     organizer: 'Startup Circle',
     dressCode: 'Smart casual',
     image:
       'https://images.unsplash.com/photo-1559339352-11d035aa65de?auto=format&fit=crop&w=1200&q=80',
+    imageUrls: [
+      'https://images.unsplash.com/photo-1559339352-11d035aa65de?auto=format&fit=crop&w=1200&q=80',
+    ],
     tags: ['networking', 'career', 'private'],
     createdBy: CURRENT_USER_ID,
     creatorUsername: 'itzmesuccess1',
@@ -198,10 +218,14 @@ export const mockEvents: EventRecord[] = [
     location: 'Campus Quad',
     locationName: 'Campus Quad',
     locationAddress: 'Main Quad, Princess Anne, MD',
+    host: 'Maya Chen',
     organizer: 'Run Club',
     dressCode: 'Athletic',
     image:
       'https://images.unsplash.com/photo-1486218119243-13883505764c?auto=format&fit=crop&w=1200&q=80',
+    imageUrls: [
+      'https://images.unsplash.com/photo-1486218119243-13883505764c?auto=format&fit=crop&w=1200&q=80',
+    ],
     tags: ['sports', 'wellness', 'community'],
     createdBy: 'user-maya',
     creatorUsername: 'mayaruns',

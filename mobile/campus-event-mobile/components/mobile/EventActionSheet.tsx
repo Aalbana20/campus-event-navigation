@@ -7,7 +7,6 @@ import {
   Modal,
   Pressable,
   ScrollView,
-  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -15,6 +14,7 @@ import {
 } from 'react-native';
 
 import { useAppTheme } from '@/lib/app-theme';
+import { shareEventRecord } from '@/lib/mobile-event-share';
 import { getAvatarImageSource, getEventImageSource } from '@/lib/mobile-media';
 import { useMobileApp } from '@/providers/mobile-app-provider';
 import { useMobileInbox } from '@/providers/mobile-inbox-provider';
@@ -71,11 +71,7 @@ export function EventActionSheet({ event, visible, onClose }: EventActionSheetPr
 
   const handleShareTo = async () => {
     try {
-      await Share.share({
-        title: event.title,
-        message: `${event.title}\n${eventLink}`,
-        url: eventLink,
-      });
+      await shareEventRecord(event);
     } catch {
       Alert.alert('Share', 'The native share sheet is not available right now.');
     } finally {
@@ -125,7 +121,7 @@ export function EventActionSheet({ event, visible, onClose }: EventActionSheetPr
             <View style={styles.previewCopy}>
               <Text style={styles.previewTitle}>{event.title}</Text>
               <Text style={styles.previewMeta} numberOfLines={2}>
-                {[event.date, event.locationName, event.organizer].filter(Boolean).join(' • ')}
+                {[event.date, event.locationName, event.host || event.organizer].filter(Boolean).join(' • ')}
               </Text>
             </View>
           </View>
