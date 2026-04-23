@@ -28,7 +28,7 @@ import { AppScreen } from './AppScreen';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 
 const QUICK_REACTIONS = ['❤️', '😂', '😮', '😢', '😡', '👍', '＋'];
-const MESSAGE_MENU_WIDTH = 300;
+const MESSAGE_MENU_WIDTH = 260;
 const THREAD_ACTION_SWIPE_WIDTH = 166;
 
 type InboxScreenProps = {
@@ -103,8 +103,12 @@ function InboxThreadRow({
     () =>
       PanResponder.create({
         onMoveShouldSetPanResponder: (_, gestureState) =>
-          Math.abs(gestureState.dx) > 8 &&
-          Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.2,
+          Math.abs(gestureState.dx) > 10 &&
+          Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.8,
+        onMoveShouldSetPanResponderCapture: (_, gestureState) =>
+          Math.abs(gestureState.dx) > 14 &&
+          Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.8,
+        onPanResponderTerminationRequest: () => false,
         onPanResponderGrant: () => {
           translateX.stopAnimation((value) => {
             offsetRef.current = value;
@@ -118,8 +122,11 @@ function InboxThreadRow({
           translateX.setValue(nextValue);
         },
         onPanResponderRelease: (_, gestureState) => {
+          const currentOffset = offsetRef.current + gestureState.dx;
+          const openThreshold = -THREAD_ACTION_SWIPE_WIDTH * 0.4;
           const shouldOpen =
-            gestureState.vx < -0.2 || offsetRef.current + gestureState.dx < -THREAD_ACTION_SWIPE_WIDTH * 0.42;
+            gestureState.vx < -0.25 ||
+            (currentOffset < openThreshold && gestureState.vx < 0.25);
 
           if (shouldOpen) {
             onSwipeOpen();
@@ -130,16 +137,19 @@ function InboxThreadRow({
           onSwipeClose();
           animateTo(0);
         },
-        onPanResponderTerminate: () => {
-          if (isSwipeOpen) {
+        onPanResponderTerminate: (_, gestureState) => {
+          const currentOffset = offsetRef.current + (gestureState?.dx ?? 0);
+          if (currentOffset < -THREAD_ACTION_SWIPE_WIDTH * 0.4) {
+            onSwipeOpen();
             animateTo(-THREAD_ACTION_SWIPE_WIDTH);
             return;
           }
 
+          onSwipeClose();
           animateTo(0);
         },
       }),
-    [animateTo, isSwipeOpen, onSwipeClose, onSwipeOpen, translateX]
+    [animateTo, onSwipeClose, onSwipeOpen, translateX]
   );
 
   return (
@@ -382,7 +392,7 @@ export function InboxScreen({
       Math.max(16, pageX - MESSAGE_MENU_WIDTH / 2),
       width - MESSAGE_MENU_WIDTH - 16
     );
-    const top = Math.min(Math.max(72, pageY - 88), height - 360);
+    const top = Math.min(Math.max(72, pageY - 80), height - 220);
 
     setActiveMessageMenu({ message, left, top });
   };
@@ -614,15 +624,15 @@ export function InboxScreen({
 
                     <View style={styles.messageActionMenu}>
                       <Pressable style={styles.messageActionRow} onPress={handleReply}>
-                        <Ionicons name="arrow-undo-outline" size={23} color={theme.text} />
+                        <Ionicons name="arrow-undo-outline" size={18} color={theme.text} />
                         <Text style={styles.messageActionText}>Reply</Text>
                       </Pressable>
                       <Pressable style={styles.messageActionRow} onPress={handleAddSticker}>
-                        <Ionicons name="images-outline" size={23} color={theme.text} />
+                        <Ionicons name="images-outline" size={18} color={theme.text} />
                         <Text style={styles.messageActionText}>Add sticker</Text>
                       </Pressable>
                       <Pressable style={styles.messageActionRow} onPress={handleDeleteMessage}>
-                        <Ionicons name="trash-outline" size={23} color="#ff6b8a" />
+                        <Ionicons name="trash-outline" size={18} color="#ff5d73" />
                         <Text style={[styles.messageActionText, styles.messageActionDanger]}>
                           Delete message
                         </Text>
@@ -687,33 +697,33 @@ export function InboxScreen({
 
                 <View style={styles.threadActionMenu}>
                   <Pressable style={styles.threadActionRow} onPress={handleMarkThreadRead}>
-                    <Ionicons name="mail-open-outline" size={21} color={theme.text} />
+                    <Ionicons name="mail-open-outline" size={18} color={theme.text} />
                     <Text style={styles.threadActionText}>Mark as read</Text>
                   </Pressable>
                   <View style={[styles.threadActionRow, styles.threadActionRowDisabled]}>
-                    <Ionicons name="folder-open-outline" size={21} color={theme.textMuted} />
+                    <Ionicons name="folder-open-outline" size={18} color={theme.textMuted} />
                     <Text style={[styles.threadActionText, styles.threadActionTextDisabled]}>Move</Text>
                     <Text style={styles.threadActionBadge}>Soon</Text>
                   </View>
                   <View style={[styles.threadActionRow, styles.threadActionRowDisabled]}>
-                    <Ionicons name="pricetag-outline" size={21} color={theme.textMuted} />
+                    <Ionicons name="pricetag-outline" size={18} color={theme.textMuted} />
                     <Text style={[styles.threadActionText, styles.threadActionTextDisabled]}>Add label</Text>
                     <Text style={styles.threadActionBadge}>Soon</Text>
                   </View>
                   <Pressable style={styles.threadActionRow} onPress={handleToggleThreadPinned}>
-                    <Ionicons name="pin-outline" size={21} color={theme.text} />
+                    <Ionicons name="pin-outline" size={18} color={theme.text} />
                     <Text style={styles.threadActionText}>
                       {activeThreadMenu.isPinned ? 'Unpin' : 'Pin'}
                     </Text>
                   </Pressable>
                   <Pressable style={styles.threadActionRow} onPress={handleToggleThreadMuted}>
-                    <Ionicons name="volume-mute-outline" size={21} color={theme.text} />
+                    <Ionicons name="volume-mute-outline" size={18} color={theme.text} />
                     <Text style={styles.threadActionText}>
                       {activeThreadMenu.isMuted ? 'Unmute' : 'Mute'}
                     </Text>
                   </Pressable>
                   <Pressable style={styles.threadActionRow} onPress={() => handleDeleteThread()}>
-                    <IconSymbol name="trash" size={21} color={theme.danger} />
+                    <IconSymbol name="trash" size={18} color="#ff5d73" />
                     <Text style={[styles.threadActionText, styles.threadActionDanger]}>Delete</Text>
                   </Pressable>
                 </View>
@@ -1141,159 +1151,164 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     },
     messageMenuBackdrop: {
       flex: 1,
-      backgroundColor: 'rgba(0, 0, 0, 0.32)',
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
     },
     messageMenuShell: {
       position: 'absolute',
       width: MESSAGE_MENU_WIDTH,
-      gap: 12,
+      gap: 8,
     },
     reactionBar: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       borderRadius: 999,
-      padding: 8,
-      backgroundColor: 'rgba(18, 22, 29, 0.96)',
+      padding: 6,
+      backgroundColor: '#0b0b0d',
       borderWidth: 1,
-      borderColor: 'rgba(255, 255, 255, 0.08)',
+      borderColor: 'rgba(255, 255, 255, 0.06)',
       shadowColor: '#000',
-      shadowOpacity: 0.28,
+      shadowOpacity: 0.4,
       shadowRadius: 22,
       shadowOffset: { width: 0, height: 12 },
       elevation: 12,
     },
     reactionButton: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
+      width: 30,
+      height: 30,
+      borderRadius: 15,
       alignItems: 'center',
       justifyContent: 'center',
     },
     reactionText: {
-      fontSize: 24,
-      lineHeight: 28,
+      fontSize: 20,
+      lineHeight: 24,
     },
     messageActionMenu: {
-      borderRadius: 24,
-      padding: 8,
-      backgroundColor: 'rgba(24, 22, 34, 0.96)',
+      borderRadius: 16,
+      paddingVertical: 4,
+      backgroundColor: '#0b0b0d',
       borderWidth: 1,
-      borderColor: 'rgba(255, 255, 255, 0.08)',
+      borderColor: 'rgba(255, 255, 255, 0.06)',
       shadowColor: '#000',
-      shadowOpacity: 0.3,
+      shadowOpacity: 0.4,
       shadowRadius: 24,
       shadowOffset: { width: 0, height: 14 },
       elevation: 14,
     },
     messageActionRow: {
-      minHeight: 54,
+      minHeight: 40,
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 14,
-      borderRadius: 16,
+      gap: 12,
+      borderRadius: 10,
       paddingHorizontal: 12,
+      paddingVertical: 8,
     },
     messageActionText: {
-      color: theme.text,
-      fontSize: 17,
-      fontWeight: '700',
+      color: '#ffffff',
+      fontSize: 14,
+      fontWeight: '600',
     },
     messageActionDanger: {
-      color: '#ff6b8a',
+      color: '#ff5d73',
     },
     threadMenuBackdrop: {
       flex: 1,
       justifyContent: 'center',
       alignItems: 'center',
-      paddingHorizontal: 18,
-      backgroundColor: 'rgba(0, 0, 0, 0.44)',
+      paddingHorizontal: 24,
+      backgroundColor: 'rgba(0, 0, 0, 0.55)',
     },
     threadMenuCard: {
       width: '100%',
-      maxWidth: 360,
-      borderRadius: 28,
-      paddingHorizontal: 14,
-      paddingTop: 12,
-      paddingBottom: 14,
-      backgroundColor: 'rgba(18, 18, 22, 0.98)',
+      maxWidth: 300,
+      borderRadius: 18,
+      paddingHorizontal: 10,
+      paddingTop: 8,
+      paddingBottom: 8,
+      backgroundColor: '#0b0b0d',
       borderWidth: 1,
-      borderColor: 'rgba(255, 255, 255, 0.08)',
+      borderColor: 'rgba(255, 255, 255, 0.06)',
       shadowColor: '#000',
-      shadowOpacity: 0.3,
-      shadowRadius: 24,
+      shadowOpacity: 0.45,
+      shadowRadius: 28,
       shadowOffset: { width: 0, height: 18 },
       elevation: 18,
-      gap: 12,
+      gap: 6,
     },
     threadMenuHandle: {
       alignSelf: 'center',
-      width: 42,
-      height: 4,
+      width: 34,
+      height: 3,
       borderRadius: 999,
-      backgroundColor: 'rgba(255, 255, 255, 0.12)',
+      backgroundColor: 'rgba(255, 255, 255, 0.14)',
+      marginTop: 2,
     },
     threadMenuHeader: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 12,
-      paddingHorizontal: 4,
+      gap: 10,
+      paddingHorizontal: 8,
+      paddingVertical: 6,
     },
     threadMenuAvatar: {
-      width: 48,
-      height: 48,
-      borderRadius: 24,
-      backgroundColor: theme.surfaceAlt,
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      backgroundColor: '#141417',
     },
     threadMenuCopy: {
       flex: 1,
-      gap: 4,
+      gap: 2,
     },
     threadMenuTitle: {
-      color: theme.text,
-      fontSize: 18,
-      fontWeight: '800',
-    },
-    threadMenuSubtitle: {
-      color: theme.textMuted,
-      fontSize: 12,
+      color: '#ffffff',
+      fontSize: 14,
       fontWeight: '700',
     },
+    threadMenuSubtitle: {
+      color: 'rgba(255, 255, 255, 0.52)',
+      fontSize: 11,
+      fontWeight: '600',
+    },
     threadActionMenu: {
-      borderRadius: 24,
+      borderRadius: 12,
       overflow: 'hidden',
+      paddingVertical: 2,
     },
     threadActionRow: {
-      minHeight: 56,
+      minHeight: 40,
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 14,
-      paddingHorizontal: 14,
-      backgroundColor: 'rgba(255, 255, 255, 0.02)',
+      gap: 12,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 10,
     },
     threadActionRowDisabled: {
-      opacity: 0.78,
+      opacity: 0.55,
     },
     threadActionText: {
       flex: 1,
-      color: theme.text,
-      fontSize: 17,
-      fontWeight: '700',
+      color: '#ffffff',
+      fontSize: 14,
+      fontWeight: '600',
     },
     threadActionTextDisabled: {
-      color: theme.textMuted,
+      color: 'rgba(255, 255, 255, 0.46)',
     },
     threadActionBadge: {
-      paddingHorizontal: 8,
-      paddingVertical: 4,
+      paddingHorizontal: 7,
+      paddingVertical: 2,
       borderRadius: 999,
-      backgroundColor: 'rgba(255, 255, 255, 0.08)',
-      color: theme.textMuted,
-      fontSize: 11,
-      fontWeight: '800',
+      backgroundColor: 'rgba(255, 255, 255, 0.06)',
+      color: 'rgba(255, 255, 255, 0.6)',
+      fontSize: 10,
+      fontWeight: '700',
       overflow: 'hidden',
     },
     threadActionDanger: {
-      color: theme.danger,
+      color: '#ff5d73',
     },
   });

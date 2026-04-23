@@ -320,7 +320,7 @@ export function MobileInboxProvider({ children }: { children: React.ReactNode })
           id: threadId,
           name: profile?.name || 'Campus User',
           username: profile?.username || '',
-          image: profile?.avatar || currentUser.avatar,
+          image: profile?.avatar || '',
           preview: message.content,
           time: formatRelativeTime(message.created_at),
           isMuted: mutedIds.has(threadId),

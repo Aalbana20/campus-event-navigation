@@ -130,12 +130,12 @@ function Messages() {
 
   const openMessageMenu = (message, element) => {
     const rect = element.getBoundingClientRect()
-    const menuWidth = 260
+    const menuWidth = 224
     const left = Math.min(
       Math.max(16, message.sender === "me" ? rect.right - menuWidth : rect.left),
       window.innerWidth - menuWidth - 16
     )
-    const top = Math.min(Math.max(72, rect.top - 76), window.innerHeight - 330)
+    const top = Math.min(Math.max(72, rect.top - 64), window.innerHeight - 240)
 
     setActiveThreadMenu(null)
     setActiveMessageMenu({
@@ -147,9 +147,9 @@ function Messages() {
 
   const openThreadMenu = (thread, element) => {
     const rect = element.getBoundingClientRect()
-    const menuWidth = 286
+    const menuWidth = 236
     const left = Math.min(Math.max(16, rect.left), window.innerWidth - menuWidth - 16)
-    const top = Math.min(Math.max(72, rect.top + rect.height / 2 - 136), window.innerHeight - 420)
+    const top = Math.min(Math.max(72, rect.top + rect.height / 2 - 112), window.innerHeight - 300)
 
     suppressThreadClickRef.current = true
     setActiveMessageMenu(null)
