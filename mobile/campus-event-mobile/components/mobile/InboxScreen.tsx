@@ -1,10 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { GestureResponderEvent } from 'react-native';
 import {
+  Animated,
   Dimensions,
+  Image,
   Modal,
+  PanResponder,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,12 +17,19 @@ import {
 } from 'react-native';
 
 import { useAppTheme } from '@/lib/app-theme';
-import { MobileInboxTab, useMobileInbox } from '@/providers/mobile-inbox-provider';
+import { getAvatarImageSource } from '@/lib/mobile-media';
+import {
+  MobileDmThread,
+  MobileInboxTab,
+  useMobileInbox,
+} from '@/providers/mobile-inbox-provider';
 
 import { AppScreen } from './AppScreen';
+import { IconSymbol } from '@/components/ui/icon-symbol';
 
 const QUICK_REACTIONS = ['❤️', '😂', '😮', '😢', '😡', '👍', '＋'];
 const MESSAGE_MENU_WIDTH = 300;
+const THREAD_ACTION_SWIPE_WIDTH = 166;
 
 type InboxScreenProps = {
   initialTab?: MobileInboxTab;
@@ -41,6 +51,174 @@ type ActiveMessageMenu = {
   top: number;
 };
 
+type InboxThreadRowProps = {
+  thread: MobileDmThread;
+  isUnread: boolean;
+  styles: ReturnType<typeof buildStyles>;
+  theme: ReturnType<typeof useAppTheme>;
+  isSwipeOpen: boolean;
+  onPress: () => void;
+  onLongPress: () => void;
+  onSwipeOpen: () => void;
+  onSwipeClose: () => void;
+  onMute: () => void;
+  onDelete: () => void;
+};
+
+function InboxThreadRow({
+  thread,
+  isUnread,
+  styles,
+  theme,
+  isSwipeOpen,
+  onPress,
+  onLongPress,
+  onSwipeOpen,
+  onSwipeClose,
+  onMute,
+  onDelete,
+}: InboxThreadRowProps) {
+  const translateX = useRef(new Animated.Value(0)).current;
+  const offsetRef = useRef(0);
+
+  const animateTo = useCallback((toValue: number, onComplete?: () => void) => {
+    offsetRef.current = toValue;
+    Animated.spring(translateX, {
+      toValue,
+      useNativeDriver: true,
+      tension: 180,
+      friction: 22,
+    }).start(({ finished }) => {
+      if (finished) {
+        onComplete?.();
+      }
+    });
+  }, [translateX]);
+
+  useEffect(() => {
+    animateTo(isSwipeOpen ? -THREAD_ACTION_SWIPE_WIDTH : 0);
+  }, [animateTo, isSwipeOpen]);
+
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, gestureState) =>
+          Math.abs(gestureState.dx) > 8 &&
+          Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.2,
+        onPanResponderGrant: () => {
+          translateX.stopAnimation((value) => {
+            offsetRef.current = value;
+          });
+        },
+        onPanResponderMove: (_, gestureState) => {
+          const nextValue = Math.max(
+            -THREAD_ACTION_SWIPE_WIDTH,
+            Math.min(0, offsetRef.current + gestureState.dx)
+          );
+          translateX.setValue(nextValue);
+        },
+        onPanResponderRelease: (_, gestureState) => {
+          const shouldOpen =
+            gestureState.vx < -0.2 || offsetRef.current + gestureState.dx < -THREAD_ACTION_SWIPE_WIDTH * 0.42;
+
+          if (shouldOpen) {
+            onSwipeOpen();
+            animateTo(-THREAD_ACTION_SWIPE_WIDTH);
+            return;
+          }
+
+          onSwipeClose();
+          animateTo(0);
+        },
+        onPanResponderTerminate: () => {
+          if (isSwipeOpen) {
+            animateTo(-THREAD_ACTION_SWIPE_WIDTH);
+            return;
+          }
+
+          animateTo(0);
+        },
+      }),
+    [animateTo, isSwipeOpen, onSwipeClose, onSwipeOpen, translateX]
+  );
+
+  return (
+    <View style={styles.threadSwipeShell}>
+      <View style={styles.threadQuickActions}>
+        <Pressable
+          style={[styles.threadQuickActionButton, styles.threadQuickMuteButton]}
+          onPress={() => {
+            onSwipeClose();
+            animateTo(0, onMute);
+          }}>
+          <Ionicons name="volume-mute-outline" size={20} color="#ffffff" />
+          <Text style={styles.threadQuickActionLabel}>Mute</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.threadQuickActionButton, styles.threadQuickDeleteButton]}
+          onPress={() => {
+            onSwipeClose();
+            animateTo(0, onDelete);
+          }}>
+          <IconSymbol name="trash" size={20} color="#ffffff" />
+          <Text style={styles.threadQuickActionLabel}>Delete</Text>
+        </Pressable>
+      </View>
+
+      <Animated.View
+        style={[
+          styles.threadSwipeCard,
+          {
+            transform: [{ translateX }],
+          },
+        ]}
+        {...panResponder.panHandlers}>
+        <Pressable
+          style={[styles.threadCard, isSwipeOpen && styles.threadCardOpen]}
+          delayLongPress={240}
+          onLongPress={onLongPress}
+          onPress={() => {
+            if (isSwipeOpen) {
+              onSwipeClose();
+              animateTo(0);
+              return;
+            }
+
+            onPress();
+          }}>
+          <Image source={getAvatarImageSource(thread.image)} style={styles.threadAvatarImage} />
+          <View style={styles.threadCopy}>
+            <Text style={styles.threadName} numberOfLines={1}>
+              {thread.name}
+            </Text>
+            <Text style={styles.threadPreview} numberOfLines={1}>
+              {thread.preview}
+            </Text>
+            <View style={styles.threadMetaRow}>
+              <Text style={styles.threadTime}>{thread.time}</Text>
+              <View style={styles.threadStateRow}>
+                {thread.isPinned ? (
+                  <View style={styles.threadStatePill}>
+                    <Ionicons name="pin" size={11} color={theme.textMuted} />
+                  </View>
+                ) : null}
+                {thread.isMuted ? (
+                  <View style={styles.threadStatePill}>
+                    <Ionicons name="volume-mute" size={11} color={theme.textMuted} />
+                  </View>
+                ) : null}
+              </View>
+            </View>
+          </View>
+          <View style={styles.threadAside}>
+            {isUnread ? <View style={styles.unreadDot} /> : null}
+          </View>
+        </Pressable>
+      </Animated.View>
+    </View>
+  );
+}
+
 export function InboxScreen({
   initialTab = 'notifications',
   lockedTab,
@@ -57,10 +235,15 @@ export function InboxScreen({
     dmThreads,
     messagesByThread,
     unreadNotificationCount,
+    unreadDmThreadIds,
     getThreadById,
     markNotificationRead,
     clearNotifications,
     deleteNotification,
+    markDmThreadRead,
+    toggleDmThreadMuted,
+    toggleDmThreadPinned,
+    deleteDmThread,
     openDmThread,
     sendDmMessage,
     deleteDmMessage,
@@ -69,6 +252,8 @@ export function InboxScreen({
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [draftMessage, setDraftMessage] = useState('');
   const [activeMessageMenu, setActiveMessageMenu] = useState<ActiveMessageMenu | null>(null);
+  const [activeThreadMenu, setActiveThreadMenu] = useState<MobileDmThread | null>(null);
+  const [openSwipeThreadId, setOpenSwipeThreadId] = useState<string | null>(null);
   const [messageReactions, setMessageReactions] = useState<Record<string, string>>({});
   const [messageStickers, setMessageStickers] = useState<Record<string, string>>({});
   const [replyingTo, setReplyingTo] = useState<MenuMessage | null>(null);
@@ -101,6 +286,12 @@ export function InboxScreen({
     openDmThread(params.dm);
   }, [openDmThread, params.dm]);
 
+  useEffect(() => {
+    if (activeThreadId && !getThreadById(activeThreadId)) {
+      setActiveThreadId(null);
+    }
+  }, [activeThreadId, getThreadById, dmThreads]);
+
   const activeThread = activeThreadId ? getThreadById(activeThreadId) : null;
 
   const handleNotificationPress = (notificationId: string, notification: typeof notifications[number]) => {
@@ -132,8 +323,47 @@ export function InboxScreen({
   };
 
   const handleOpenThread = (threadId: string) => {
+    setOpenSwipeThreadId(null);
     setActiveThreadId(threadId);
     openDmThread(threadId);
+  };
+
+  const handleOpenThreadMenu = (thread: MobileDmThread) => {
+    setOpenSwipeThreadId(null);
+    setActiveThreadMenu(thread);
+  };
+
+  const handleMarkThreadRead = () => {
+    if (!activeThreadMenu) return;
+    markDmThreadRead(activeThreadMenu.id);
+    setActiveThreadMenu(null);
+  };
+
+  const handleToggleThreadPinned = () => {
+    if (!activeThreadMenu) return;
+    toggleDmThreadPinned(activeThreadMenu.id);
+    setActiveThreadMenu(null);
+  };
+
+  const handleToggleThreadMuted = () => {
+    if (!activeThreadMenu) return;
+    toggleDmThreadMuted(activeThreadMenu.id);
+    setActiveThreadMenu(null);
+  };
+
+  const handleDeleteThread = (threadId?: string) => {
+    const resolvedThreadId = threadId || activeThreadMenu?.id;
+    if (!resolvedThreadId) return;
+
+    if (activeThreadId === resolvedThreadId) {
+      setActiveThreadId(null);
+    }
+
+    setOpenSwipeThreadId((currentThreadId) =>
+      currentThreadId === resolvedThreadId ? null : currentThreadId
+    );
+    deleteDmThread(resolvedThreadId);
+    setActiveThreadMenu(null);
   };
 
   const handleSend = () => {
@@ -407,21 +637,20 @@ export function InboxScreen({
           <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
             {dmThreads.length > 0 ? (
               dmThreads.map((thread) => (
-                <Pressable
+                <InboxThreadRow
                   key={thread.id}
-                  style={styles.threadCard}
-                  onPress={() => handleOpenThread(thread.id)}>
-                  <View style={styles.threadAvatar}>
-                    <Ionicons name="paper-plane-outline" size={18} color={theme.text} />
-                  </View>
-                  <View style={styles.threadCopy}>
-                    <Text style={styles.threadName}>{thread.name}</Text>
-                    <Text style={styles.threadPreview} numberOfLines={1}>
-                      {thread.preview}
-                    </Text>
-                  </View>
-                  <Text style={styles.threadTime}>{thread.time}</Text>
-                </Pressable>
+                  thread={thread}
+                  isUnread={unreadDmThreadIds.has(thread.id)}
+                  styles={styles}
+                  theme={theme}
+                  isSwipeOpen={openSwipeThreadId === thread.id}
+                  onPress={() => handleOpenThread(thread.id)}
+                  onLongPress={() => handleOpenThreadMenu(thread)}
+                  onSwipeOpen={() => setOpenSwipeThreadId(thread.id)}
+                  onSwipeClose={() => setOpenSwipeThreadId((currentId) => (currentId === thread.id ? null : currentId))}
+                  onMute={() => toggleDmThreadMuted(thread.id)}
+                  onDelete={() => handleDeleteThread(thread.id)}
+                />
               ))
             ) : (
               <View style={styles.emptyState}>
@@ -433,6 +662,65 @@ export function InboxScreen({
             )}
           </ScrollView>
         )}
+
+        <Modal
+          transparent
+          visible={Boolean(activeThreadMenu)}
+          animationType="fade"
+          onRequestClose={() => setActiveThreadMenu(null)}>
+          <Pressable style={styles.threadMenuBackdrop} onPress={() => setActiveThreadMenu(null)}>
+            {activeThreadMenu ? (
+              <Pressable style={styles.threadMenuCard} onPress={(event) => event.stopPropagation()}>
+                <View style={styles.threadMenuHandle} />
+                <View style={styles.threadMenuHeader}>
+                  <Image
+                    source={getAvatarImageSource(activeThreadMenu.image)}
+                    style={styles.threadMenuAvatar}
+                  />
+                  <View style={styles.threadMenuCopy}>
+                    <Text style={styles.threadMenuTitle} numberOfLines={1}>
+                      {activeThreadMenu.name}
+                    </Text>
+                    <Text style={styles.threadMenuSubtitle}>Conversation actions</Text>
+                  </View>
+                </View>
+
+                <View style={styles.threadActionMenu}>
+                  <Pressable style={styles.threadActionRow} onPress={handleMarkThreadRead}>
+                    <Ionicons name="mail-open-outline" size={21} color={theme.text} />
+                    <Text style={styles.threadActionText}>Mark as read</Text>
+                  </Pressable>
+                  <View style={[styles.threadActionRow, styles.threadActionRowDisabled]}>
+                    <Ionicons name="folder-open-outline" size={21} color={theme.textMuted} />
+                    <Text style={[styles.threadActionText, styles.threadActionTextDisabled]}>Move</Text>
+                    <Text style={styles.threadActionBadge}>Soon</Text>
+                  </View>
+                  <View style={[styles.threadActionRow, styles.threadActionRowDisabled]}>
+                    <Ionicons name="pricetag-outline" size={21} color={theme.textMuted} />
+                    <Text style={[styles.threadActionText, styles.threadActionTextDisabled]}>Add label</Text>
+                    <Text style={styles.threadActionBadge}>Soon</Text>
+                  </View>
+                  <Pressable style={styles.threadActionRow} onPress={handleToggleThreadPinned}>
+                    <Ionicons name="pin-outline" size={21} color={theme.text} />
+                    <Text style={styles.threadActionText}>
+                      {activeThreadMenu.isPinned ? 'Unpin' : 'Pin'}
+                    </Text>
+                  </Pressable>
+                  <Pressable style={styles.threadActionRow} onPress={handleToggleThreadMuted}>
+                    <Ionicons name="volume-mute-outline" size={21} color={theme.text} />
+                    <Text style={styles.threadActionText}>
+                      {activeThreadMenu.isMuted ? 'Unmute' : 'Mute'}
+                    </Text>
+                  </Pressable>
+                  <Pressable style={styles.threadActionRow} onPress={() => handleDeleteThread()}>
+                    <IconSymbol name="trash" size={21} color={theme.danger} />
+                    <Text style={[styles.threadActionText, styles.threadActionDanger]}>Delete</Text>
+                  </Pressable>
+                </View>
+              </Pressable>
+            ) : null}
+          </Pressable>
+        </Modal>
       </View>
     </AppScreen>
   );
@@ -611,6 +899,45 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       lineHeight: 18,
       textAlign: 'center',
     },
+    threadSwipeShell: {
+      borderRadius: 24,
+      overflow: 'hidden',
+      backgroundColor: theme.surfaceAlt,
+    },
+    threadQuickActions: {
+      position: 'absolute',
+      top: 0,
+      right: 0,
+      bottom: 0,
+      width: THREAD_ACTION_SWIPE_WIDTH,
+      flexDirection: 'row',
+      alignItems: 'stretch',
+      justifyContent: 'flex-end',
+      gap: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+    },
+    threadQuickActionButton: {
+      width: 72,
+      borderRadius: 22,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+    },
+    threadQuickMuteButton: {
+      backgroundColor: '#5d6bff',
+    },
+    threadQuickDeleteButton: {
+      backgroundColor: '#ff4f62',
+    },
+    threadQuickActionLabel: {
+      color: '#ffffff',
+      fontSize: 12,
+      fontWeight: '800',
+    },
+    threadSwipeCard: {
+      zIndex: 1,
+    },
     threadCard: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -621,12 +948,13 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       borderWidth: 1,
       borderColor: theme.border,
     },
-    threadAvatar: {
-      width: 46,
-      height: 46,
-      borderRadius: 23,
-      alignItems: 'center',
-      justifyContent: 'center',
+    threadCardOpen: {
+      borderColor: 'rgba(255, 255, 255, 0.18)',
+    },
+    threadAvatarImage: {
+      width: 50,
+      height: 50,
+      borderRadius: 25,
       backgroundColor: theme.surfaceAlt,
     },
     threadCopy: {
@@ -643,10 +971,33 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       fontSize: 13,
       lineHeight: 18,
     },
+    threadMetaRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
     threadTime: {
       color: theme.textMuted,
       fontSize: 12,
       fontWeight: '700',
+    },
+    threadStateRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    threadStatePill: {
+      width: 18,
+      height: 18,
+      borderRadius: 999,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: theme.surfaceAlt,
+    },
+    threadAside: {
+      minWidth: 10,
+      alignItems: 'flex-end',
+      justifyContent: 'center',
     },
     chatShell: {
       flex: 1,
@@ -850,5 +1201,99 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     },
     messageActionDanger: {
       color: '#ff6b8a',
+    },
+    threadMenuBackdrop: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingHorizontal: 18,
+      backgroundColor: 'rgba(0, 0, 0, 0.44)',
+    },
+    threadMenuCard: {
+      width: '100%',
+      maxWidth: 360,
+      borderRadius: 28,
+      paddingHorizontal: 14,
+      paddingTop: 12,
+      paddingBottom: 14,
+      backgroundColor: 'rgba(18, 18, 22, 0.98)',
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.08)',
+      shadowColor: '#000',
+      shadowOpacity: 0.3,
+      shadowRadius: 24,
+      shadowOffset: { width: 0, height: 18 },
+      elevation: 18,
+      gap: 12,
+    },
+    threadMenuHandle: {
+      alignSelf: 'center',
+      width: 42,
+      height: 4,
+      borderRadius: 999,
+      backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    },
+    threadMenuHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      paddingHorizontal: 4,
+    },
+    threadMenuAvatar: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      backgroundColor: theme.surfaceAlt,
+    },
+    threadMenuCopy: {
+      flex: 1,
+      gap: 4,
+    },
+    threadMenuTitle: {
+      color: theme.text,
+      fontSize: 18,
+      fontWeight: '800',
+    },
+    threadMenuSubtitle: {
+      color: theme.textMuted,
+      fontSize: 12,
+      fontWeight: '700',
+    },
+    threadActionMenu: {
+      borderRadius: 24,
+      overflow: 'hidden',
+    },
+    threadActionRow: {
+      minHeight: 56,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 14,
+      paddingHorizontal: 14,
+      backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    },
+    threadActionRowDisabled: {
+      opacity: 0.78,
+    },
+    threadActionText: {
+      flex: 1,
+      color: theme.text,
+      fontSize: 17,
+      fontWeight: '700',
+    },
+    threadActionTextDisabled: {
+      color: theme.textMuted,
+    },
+    threadActionBadge: {
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 999,
+      backgroundColor: 'rgba(255, 255, 255, 0.08)',
+      color: theme.textMuted,
+      fontSize: 11,
+      fontWeight: '800',
+      overflow: 'hidden',
+    },
+    threadActionDanger: {
+      color: theme.danger,
     },
   });

@@ -4,6 +4,62 @@ import { useOutletContext } from "react-router-dom"
 const QUICK_REACTIONS = ["❤️", "😂", "😮", "😢", "😡", "👍", "＋"]
 const LONG_PRESS_MS = 420
 
+function ActionIcon({ type, size = 20, stroke = 1.9 }) {
+  const commonProps = {
+    width: size,
+    height: size,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    xmlns: "http://www.w3.org/2000/svg",
+    "aria-hidden": "true",
+  }
+
+  switch (type) {
+    case "read":
+      return (
+        <svg {...commonProps}>
+          <path d="M4.5 7.5h15v9a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2v-9Z" stroke="currentColor" strokeWidth={stroke} strokeLinejoin="round" />
+          <path d="m5 8 7 5 7-5" stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      )
+    case "move":
+      return (
+        <svg {...commonProps}>
+          <path d="M4.5 8.5a2 2 0 0 1 2-2h4l1.8 2h5.2a2 2 0 0 1 2 2v6.5a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2v-8.5Z" stroke="currentColor" strokeWidth={stroke} strokeLinejoin="round" />
+          <path d="M10 14h6m0 0-2.2-2.2M16 14l-2.2 2.2" stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      )
+    case "label":
+      return (
+        <svg {...commonProps}>
+          <path d="M12.5 4.5H7.8a2 2 0 0 0-1.4.6L4.9 6.6a2 2 0 0 0 0 2.8l7.7 7.7a2 2 0 0 0 2.8 0l3-3a2 2 0 0 0 0-2.8l-4.5-4.5a2 2 0 0 0-1.4-.6Z" stroke="currentColor" strokeWidth={stroke} strokeLinejoin="round" />
+          <circle cx="9" cy="9" r="1.2" fill="currentColor" />
+        </svg>
+      )
+    case "pin":
+      return (
+        <svg {...commonProps}>
+          <path d="m14 4.5 5.5 5.5-3.1 1-3.5 3.5.5 4-1.4 1.4-3.7-3.7L4.6 19l-.6-.6 3.4-3.7-3.7-3.7 1.4-1.4 4 .5 3.5-3.5 1-3.1Z" stroke="currentColor" strokeWidth={stroke} strokeLinejoin="round" />
+        </svg>
+      )
+    case "mute":
+      return (
+        <svg {...commonProps}>
+          <path d="M14.8 6.2 10.9 10H7.5v4h3.4l3.9 3.8V6.2Z" stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round" />
+          <path d="m5 5 14 14" stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" />
+        </svg>
+      )
+    case "trash":
+      return (
+        <svg {...commonProps}>
+          <path d="M9.25 5.75h5.5m-8 2.25h10.5m-9 0 .7 9.2a2 2 0 0 0 2 1.8h2.9a2 2 0 0 0 2-1.8l.7-9.2m-6.3 3v4.8m3.4-4.8v4.8M9.8 5.8l.5-1.2a1.8 1.8 0 0 1 1.7-1.1h0a1.8 1.8 0 0 1 1.7 1.1l.5 1.2" stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      )
+    default:
+      return null
+  }
+}
+
 function Messages() {
   const {
     defaultAvatar,
@@ -15,31 +71,44 @@ function Messages() {
     setDmDraftMessage,
     openDmThread,
     closeDmThread,
+    markDmThreadRead,
+    toggleDmThreadPinned,
+    toggleDmThreadMuted,
+    deleteDmThread,
     handleSendDmMessage,
     handleDeleteDmMessage,
   } = useOutletContext()
   const [activeMessageMenu, setActiveMessageMenu] = useState(null)
+  const [activeThreadMenu, setActiveThreadMenu] = useState(null)
   const [messageReactions, setMessageReactions] = useState({})
   const [messageStickers, setMessageStickers] = useState({})
   const [replyingTo, setReplyingTo] = useState(null)
-  const longPressTimerRef = useRef(null)
-  const menuRef = useRef(null)
+  const messageLongPressTimerRef = useRef(null)
+  const threadLongPressTimerRef = useRef(null)
+  const suppressThreadClickRef = useRef(false)
+  const messageMenuRef = useRef(null)
+  const threadMenuRef = useRef(null)
 
   const selectedMessages = selectedDmThread
     ? dmMessagesByThread[selectedDmThread.id] || []
     : []
 
   useEffect(() => {
-    if (!activeMessageMenu) return undefined
+    if (!activeMessageMenu && !activeThreadMenu) return undefined
 
     const handlePointerDown = (event) => {
-      if (menuRef.current?.contains(event.target)) return
+      if (messageMenuRef.current?.contains(event.target) || threadMenuRef.current?.contains(event.target)) {
+        return
+      }
+
       setActiveMessageMenu(null)
+      setActiveThreadMenu(null)
     }
 
     const handleKeyDown = (event) => {
       if (event.key === "Escape") {
         setActiveMessageMenu(null)
+        setActiveThreadMenu(null)
       }
     }
 
@@ -50,12 +119,12 @@ function Messages() {
       document.removeEventListener("pointerdown", handlePointerDown)
       document.removeEventListener("keydown", handleKeyDown)
     }
-  }, [activeMessageMenu])
+  }, [activeMessageMenu, activeThreadMenu])
 
-  const clearLongPressTimer = () => {
-    if (longPressTimerRef.current) {
-      window.clearTimeout(longPressTimerRef.current)
-      longPressTimerRef.current = null
+  const clearLongPressTimer = (timerRef) => {
+    if (timerRef.current) {
+      window.clearTimeout(timerRef.current)
+      timerRef.current = null
     }
   }
 
@@ -68,6 +137,7 @@ function Messages() {
     )
     const top = Math.min(Math.max(72, rect.top - 76), window.innerHeight - 330)
 
+    setActiveThreadMenu(null)
     setActiveMessageMenu({
       message,
       left,
@@ -75,17 +145,54 @@ function Messages() {
     })
   }
 
+  const openThreadMenu = (thread, element) => {
+    const rect = element.getBoundingClientRect()
+    const menuWidth = 286
+    const left = Math.min(Math.max(16, rect.left), window.innerWidth - menuWidth - 16)
+    const top = Math.min(Math.max(72, rect.top + rect.height / 2 - 136), window.innerHeight - 420)
+
+    suppressThreadClickRef.current = true
+    setActiveMessageMenu(null)
+    setActiveThreadMenu({
+      thread,
+      left,
+      top,
+    })
+  }
+
   const handleMessagePointerDown = (event, message) => {
-    clearLongPressTimer()
-    longPressTimerRef.current = window.setTimeout(() => {
+    clearLongPressTimer(messageLongPressTimerRef)
+    messageLongPressTimerRef.current = window.setTimeout(() => {
       openMessageMenu(message, event.currentTarget)
+    }, LONG_PRESS_MS)
+  }
+
+  const handleThreadPointerDown = (event, thread) => {
+    clearLongPressTimer(threadLongPressTimerRef)
+    threadLongPressTimerRef.current = window.setTimeout(() => {
+      openThreadMenu(thread, event.currentTarget)
     }, LONG_PRESS_MS)
   }
 
   const handleMessageContextMenu = (event, message) => {
     event.preventDefault()
-    clearLongPressTimer()
+    clearLongPressTimer(messageLongPressTimerRef)
     openMessageMenu(message, event.currentTarget)
+  }
+
+  const handleThreadContextMenu = (event, thread) => {
+    event.preventDefault()
+    clearLongPressTimer(threadLongPressTimerRef)
+    openThreadMenu(thread, event.currentTarget)
+  }
+
+  const handleThreadClick = (thread) => {
+    if (suppressThreadClickRef.current) {
+      suppressThreadClickRef.current = false
+      return
+    }
+
+    openDmThread(thread)
   }
 
   const handleReaction = (emoji) => {
@@ -116,6 +223,30 @@ function Messages() {
     setActiveMessageMenu(null)
   }
 
+  const handleThreadMarkRead = () => {
+    if (!activeThreadMenu?.thread) return
+    markDmThreadRead?.(activeThreadMenu.thread.id)
+    setActiveThreadMenu(null)
+  }
+
+  const handleThreadPin = () => {
+    if (!activeThreadMenu?.thread) return
+    toggleDmThreadPinned?.(activeThreadMenu.thread.id)
+    setActiveThreadMenu(null)
+  }
+
+  const handleThreadMute = () => {
+    if (!activeThreadMenu?.thread) return
+    toggleDmThreadMuted?.(activeThreadMenu.thread.id)
+    setActiveThreadMenu(null)
+  }
+
+  const handleThreadDelete = () => {
+    if (!activeThreadMenu?.thread) return
+    deleteDmThread?.(activeThreadMenu.thread.id)
+    setActiveThreadMenu(null)
+  }
+
   return (
     <main className="messages-page">
       <div className="messages-page-header">
@@ -138,9 +269,14 @@ function Messages() {
               {displayDmThreads.map((thread) => (
                 <button
                   type="button"
-                  className={`inbox-item ${unreadDmThreadIds.has(thread.id) ? "inbox-item-unread" : ""}`}
+                  className={`inbox-item ${unreadDmThreadIds.has(thread.id) ? "inbox-item-unread" : ""} ${activeThreadMenu?.thread?.id === thread.id ? "menu-open" : ""}`}
                   key={thread.id}
-                  onClick={() => openDmThread(thread)}
+                  onClick={() => handleThreadClick(thread)}
+                  onPointerDown={(event) => handleThreadPointerDown(event, thread)}
+                  onPointerUp={() => clearLongPressTimer(threadLongPressTimerRef)}
+                  onPointerLeave={() => clearLongPressTimer(threadLongPressTimerRef)}
+                  onPointerCancel={() => clearLongPressTimer(threadLongPressTimerRef)}
+                  onContextMenu={(event) => handleThreadContextMenu(event, thread)}
                 >
                   <img
                     className="inbox-item-avatar"
@@ -153,11 +289,27 @@ function Messages() {
                   <div className="inbox-item-main">
                     <span className="inbox-item-text">{thread.name}</span>
                     <span className="inbox-item-preview">{thread.preview}</span>
-                    <span className="inbox-item-time">{thread.time}</span>
+                    <div className="messages-thread-meta-row">
+                      <span className="inbox-item-time">{thread.time}</span>
+                      <span className="messages-thread-state">
+                        {thread.isPinned ? (
+                          <span className="messages-thread-state-pill" aria-label="Pinned">
+                            <ActionIcon type="pin" size={12} stroke={2} />
+                          </span>
+                        ) : null}
+                        {thread.isMuted ? (
+                          <span className="messages-thread-state-pill" aria-label="Muted">
+                            <ActionIcon type="mute" size={12} stroke={2} />
+                          </span>
+                        ) : null}
+                      </span>
+                    </div>
                   </div>
-                  {unreadDmThreadIds.has(thread.id) && (
-                    <span className="inbox-item-unread-dot" />
-                  )}
+                  <div className="messages-thread-endcap">
+                    {unreadDmThreadIds.has(thread.id) && (
+                      <span className="inbox-item-unread-dot" />
+                    )}
+                  </div>
                 </button>
               ))}
             </div>
@@ -193,9 +345,9 @@ function Messages() {
                     className={`dm-chat-bubble ${message.sender}`}
                     key={message.id}
                     onPointerDown={(event) => handleMessagePointerDown(event, message)}
-                    onPointerUp={clearLongPressTimer}
-                    onPointerLeave={clearLongPressTimer}
-                    onPointerCancel={clearLongPressTimer}
+                    onPointerUp={() => clearLongPressTimer(messageLongPressTimerRef)}
+                    onPointerLeave={() => clearLongPressTimer(messageLongPressTimerRef)}
+                    onPointerCancel={() => clearLongPressTimer(messageLongPressTimerRef)}
                     onContextMenu={(event) => handleMessageContextMenu(event, message)}
                   >
                     {message.text}
@@ -237,7 +389,7 @@ function Messages() {
               {activeMessageMenu ? (
                 <div
                   className="dm-message-popover"
-                  ref={menuRef}
+                  ref={messageMenuRef}
                   style={{
                     left: `${activeMessageMenu.left}px`,
                     top: `${activeMessageMenu.top}px`,
@@ -280,6 +432,46 @@ function Messages() {
           )}
         </section>
       </div>
+
+      {activeThreadMenu ? (
+        <div
+          className="dm-thread-popover"
+          ref={threadMenuRef}
+          style={{
+            left: `${activeThreadMenu.left}px`,
+            top: `${activeThreadMenu.top}px`,
+          }}
+        >
+          <div className="dm-thread-action-menu" role="menu">
+            <button type="button" role="menuitem" onClick={handleThreadMarkRead}>
+              <span className="dm-thread-action-icon"><ActionIcon type="read" /></span>
+              <span>Mark as read</span>
+            </button>
+            <button type="button" role="menuitem" disabled>
+              <span className="dm-thread-action-icon"><ActionIcon type="move" /></span>
+              <span>Move</span>
+              <span className="dm-thread-action-note">Soon</span>
+            </button>
+            <button type="button" role="menuitem" disabled>
+              <span className="dm-thread-action-icon"><ActionIcon type="label" /></span>
+              <span>Add label</span>
+              <span className="dm-thread-action-note">Soon</span>
+            </button>
+            <button type="button" role="menuitem" onClick={handleThreadPin}>
+              <span className="dm-thread-action-icon"><ActionIcon type="pin" /></span>
+              <span>{activeThreadMenu.thread.isPinned ? "Unpin" : "Pin"}</span>
+            </button>
+            <button type="button" role="menuitem" onClick={handleThreadMute}>
+              <span className="dm-thread-action-icon"><ActionIcon type="mute" /></span>
+              <span>{activeThreadMenu.thread.isMuted ? "Unmute" : "Mute"}</span>
+            </button>
+            <button type="button" role="menuitem" className="danger" onClick={handleThreadDelete}>
+              <span className="dm-thread-action-icon"><ActionIcon type="trash" /></span>
+              <span>Delete</span>
+            </button>
+          </div>
+        </div>
+      ) : null}
     </main>
   )
 }

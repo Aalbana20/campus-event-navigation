@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useEffect, useMemo, useRef, useState, Component } from "react"
+import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, Component } from "react"
 import "./App.css"
 import {
   Routes,
@@ -88,6 +88,50 @@ const timeAgoLabel = (dateInput) => {
   if (hours < 24) return `${hours}h`
   return `${Math.max(1, days)}d`
 }
+
+const createEmptyDmThreadPreferences = () => ({
+  muted: [],
+  pinned: [],
+  deleted: [],
+})
+
+const normalizeDmThreadPreferences = (value) => {
+  if (!value || typeof value !== "object") {
+    return createEmptyDmThreadPreferences()
+  }
+
+  const readIds = (key) =>
+    Array.isArray(value[key])
+      ? [...new Set(value[key].map((id) => String(id)).filter(Boolean))]
+      : []
+
+  return {
+    muted: readIds("muted"),
+    pinned: readIds("pinned"),
+    deleted: readIds("deleted"),
+  }
+}
+
+const toggleDmThreadPreferenceEntry = (preferences, key, threadId) => {
+  const normalizedThreadId = String(threadId)
+  const nextEntries = new Set(preferences[key] || [])
+
+  if (nextEntries.has(normalizedThreadId)) {
+    nextEntries.delete(normalizedThreadId)
+  } else {
+    nextEntries.add(normalizedThreadId)
+  }
+
+  return {
+    ...preferences,
+    [key]: [...nextEntries],
+  }
+}
+
+const removeDmThreadPreferenceEntry = (preferences, key, threadId) => ({
+  ...preferences,
+  [key]: (preferences[key] || []).filter((id) => String(id) !== String(threadId)),
+})
 
 const parseEventDate = (event) => {
   if (event?.eventDate) {
@@ -226,9 +270,100 @@ function MainLayout() {
   const [dmThreads, setDmThreads] = useState([])
   const [dmMessagesByThread, setDmMessagesByThread] = useState({})
   const [unreadDmThreadIds, setUnreadDmThreadIds] = useState(new Set())
+  const [dmThreadPreferences, setDmThreadPreferences] = useState(createEmptyDmThreadPreferences)
   const createMenuRef = useRef(null)
   const defaultAvatar = DEFAULT_AVATAR_URL
   const currentUserId = currentUser?.id
+  const dmThreadPreferencesStorageKey = currentUserId ? `dm_thread_preferences_${currentUserId}` : null
+
+  useEffect(() => {
+    const loadPreferences = async () => {
+      try {
+        if (!dmThreadPreferencesStorageKey) {
+          setDmThreadPreferences(createEmptyDmThreadPreferences())
+          return
+        }
+
+        const stored = localStorage.getItem(dmThreadPreferencesStorageKey)
+        setDmThreadPreferences(
+          stored ? normalizeDmThreadPreferences(JSON.parse(stored)) : createEmptyDmThreadPreferences()
+        )
+      } catch {
+        setDmThreadPreferences(createEmptyDmThreadPreferences())
+      }
+    }
+
+    void loadPreferences()
+  }, [dmThreadPreferencesStorageKey])
+
+  const persistDmThreadPreferences = useCallback((nextPreferences) => {
+    if (!dmThreadPreferencesStorageKey) return
+    localStorage.setItem(dmThreadPreferencesStorageKey, JSON.stringify(nextPreferences))
+  }, [dmThreadPreferencesStorageKey])
+
+  const updateDmThreadPreferences = useCallback((updater) => {
+    setDmThreadPreferences((currentPreferences) => {
+      const nextPreferences = updater(currentPreferences)
+      persistDmThreadPreferences(nextPreferences)
+      return nextPreferences
+    })
+  }, [persistDmThreadPreferences])
+
+  const markDmThreadRead = useCallback((threadId) => {
+    setUnreadDmThreadIds((prev) => {
+      const next = new Set(prev)
+      next.delete(String(threadId))
+      return next
+    })
+
+    if (currentUserId) {
+      void supabase
+        .from("messages")
+        .update({ read: true })
+        .eq("recipient_id", currentUserId)
+        .eq("sender_id", threadId)
+        .eq("read", false)
+        .then(({ error }) => {
+          if (error) console.error("Failed to mark messages read:", error)
+        })
+    }
+  }, [currentUserId])
+
+  const toggleDmThreadPinned = (threadId) => {
+    updateDmThreadPreferences((currentPreferences) =>
+      toggleDmThreadPreferenceEntry(currentPreferences, "pinned", threadId)
+    )
+  }
+
+  const toggleDmThreadMuted = (threadId) => {
+    updateDmThreadPreferences((currentPreferences) =>
+      toggleDmThreadPreferenceEntry(currentPreferences, "muted", threadId)
+    )
+  }
+
+  const deleteDmThread = (threadId) => {
+    updateDmThreadPreferences((currentPreferences) =>
+      toggleDmThreadPreferenceEntry(
+        removeDmThreadPreferenceEntry(currentPreferences, "pinned", threadId),
+        "deleted",
+        threadId
+      )
+    )
+
+    setUnreadDmThreadIds((prev) => {
+      const next = new Set(prev)
+      next.delete(String(threadId))
+      return next
+    })
+
+    if (String(activeDmThreadId) === String(threadId)) {
+      setActiveDmThreadId(null)
+      setDmDraftMessage("")
+      if (location.pathname === "/messages") {
+        navigate("/messages", { replace: true })
+      }
+    }
+  }
 
   // Normalize old DM query params into the dedicated messages page.
   useEffect(() => {
@@ -265,11 +400,10 @@ function MainLayout() {
 
       setActiveDmThreadId(dmUserId)
       setDmDraftMessage("")
-      setUnreadDmThreadIds((prev) => {
-        const next = new Set(prev)
-        next.delete(dmUserId)
-        return next
-      })
+      updateDmThreadPreferences((currentPreferences) =>
+        removeDmThreadPreferenceEntry(currentPreferences, "deleted", dmUserId)
+      )
+      markDmThreadRead(dmUserId)
 
       if (location.pathname !== "/messages" || searchParams.get("dm")) {
         navigate(`/messages?thread=${dmUserId}`, { replace: true })
@@ -281,7 +415,7 @@ function MainLayout() {
     return () => {
       isActive = false
     }
-  }, [searchParams, currentUserId, defaultAvatar, dmThreads, location.pathname, navigate])
+  }, [searchParams, currentUserId, defaultAvatar, dmThreads, location.pathname, markDmThreadRead, navigate, updateDmThreadPreferences])
 
   // Load DM threads — all users the current user has messaged or been messaged by
   useEffect(() => {
@@ -327,7 +461,7 @@ function MainLayout() {
     }
 
     loadThreads()
-  }, [currentUserId, defaultAvatar])
+  }, [currentUserId, defaultAvatar, updateDmThreadPreferences])
 
   // Load messages when a thread is opened
   useEffect(() => {
@@ -368,6 +502,10 @@ function MainLayout() {
         (payload) => {
           const msg = payload.new
           const threadId = msg.sender_id
+
+          updateDmThreadPreferences((currentPreferences) =>
+            removeDmThreadPreferenceEntry(currentPreferences, "deleted", threadId)
+          )
 
           setDmMessagesByThread((prev) => ({
             ...prev,
@@ -410,7 +548,7 @@ function MainLayout() {
       .subscribe()
 
     return () => supabase.removeChannel(channel)
-  }, [currentUserId, defaultAvatar])
+  }, [currentUserId, defaultAvatar, updateDmThreadPreferences])
 
   const mutualUsers = useMemo(
     () =>
@@ -596,20 +734,46 @@ function MainLayout() {
   )
 
   const displayDmThreads = useMemo(
-    () =>
-      dmThreads.map((thread) => {
+    () => {
+      const pinnedIds = new Set(dmThreadPreferences.pinned)
+      const mutedIds = new Set(dmThreadPreferences.muted)
+      const deletedIds = new Set(dmThreadPreferences.deleted)
+
+      return dmThreads
+        .filter((thread) => !deletedIds.has(String(thread.id)))
+        .map((thread, index) => {
         const messages = dmMessagesByThread[thread.id] || []
         const latestMessage = messages[messages.length - 1]
+        const isPinned = pinnedIds.has(String(thread.id))
+        const isMuted = mutedIds.has(String(thread.id))
 
-        if (!latestMessage) return thread
+        if (!latestMessage) {
+          return {
+            ...thread,
+            isMuted,
+            isPinned,
+            sortIndex: index,
+          }
+        }
 
         return {
           ...thread,
+          isMuted,
+          isPinned,
           preview: latestMessage.text,
           time: latestMessage.sender === "me" ? "now" : thread.time,
+          sortIndex: index,
         }
-      }),
-    [dmMessagesByThread, dmThreads]
+      })
+        .sort((left, right) => {
+          if (left.isPinned !== right.isPinned) {
+            return left.isPinned ? -1 : 1
+          }
+
+          return left.sortIndex - right.sortIndex
+        })
+    },
+    [dmMessagesByThread, dmThreadPreferences.deleted, dmThreadPreferences.muted, dmThreadPreferences.pinned, dmThreads]
   )
 
   const selectedDmThread = activeDmThread
@@ -620,26 +784,14 @@ function MainLayout() {
   const openDmThread = (thread) => {
     setActiveDmThreadId(thread.id)
     setDmDraftMessage("")
-    setUnreadDmThreadIds((prev) => {
-      const next = new Set(prev)
-      next.delete(thread.id)
-      return next
-    })
+    updateDmThreadPreferences((currentPreferences) =>
+      removeDmThreadPreferenceEntry(currentPreferences, "deleted", thread.id)
+    )
+    markDmThreadRead(thread.id)
     // When already on /messages, switching threads should replace rather than
     // stack history — otherwise every thread click pollutes the back stack.
     const alreadyOnMessages = location.pathname === "/messages"
     navigate(`/messages?thread=${thread.id}`, { replace: alreadyOnMessages })
-
-    // Persist read state so unread dots don't reappear on reload
-    if (currentUserId) {
-      supabase
-        .from("messages")
-        .update({ read: true })
-        .eq("recipient_id", currentUserId)
-        .eq("sender_id", thread.id)
-        .eq("read", false)
-        .then(({ error }) => { if (error) console.error("Failed to mark messages read:", error) })
-    }
   }
 
   const closeDmThread = () => {
@@ -790,6 +942,10 @@ function MainLayout() {
     setDmDraftMessage,
     openDmThread,
     closeDmThread,
+    markDmThreadRead,
+    toggleDmThreadPinned,
+    toggleDmThreadMuted,
+    deleteDmThread,
     handleSendDmMessage,
     handleDeleteDmMessage,
   }

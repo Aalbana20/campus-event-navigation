@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
@@ -35,6 +36,14 @@ type MobileDmThread = {
   image: string;
   preview: string;
   time: string;
+  isMuted: boolean;
+  isPinned: boolean;
+};
+
+type MobileDmThreadPreferences = {
+  muted: string[];
+  pinned: string[];
+  deleted: string[];
 };
 
 type MobileInboxContextValue = {
@@ -43,11 +52,16 @@ type MobileInboxContextValue = {
   messagesByThread: Record<string, MobileDmMessage[]>;
   unreadNotificationCount: number;
   unreadDmCount: number;
+  unreadDmThreadIds: Set<string>;
   defaultThreadId: string | null;
   getThreadById: (threadId: string) => MobileDmThread | undefined;
   markNotificationRead: (notificationId: string) => void;
   clearNotifications: () => void;
   deleteNotification: (notificationId: string) => void;
+  markDmThreadRead: (threadId: string) => void;
+  toggleDmThreadMuted: (threadId: string) => void;
+  toggleDmThreadPinned: (threadId: string) => void;
+  deleteDmThread: (threadId: string) => void;
   openDmThread: (threadId: string) => void;
   sendDmMessage: (threadId: string, text: string) => Promise<void>;
   deleteDmMessage: (threadId: string, messageId: string) => Promise<void>;
@@ -63,6 +77,58 @@ type MessageRow = {
   created_at?: string | null;
 };
 
+const createEmptyDmThreadPreferences = (): MobileDmThreadPreferences => ({
+  muted: [],
+  pinned: [],
+  deleted: [],
+});
+
+const normalizeDmThreadPreferences = (value: unknown): MobileDmThreadPreferences => {
+  if (!value || typeof value !== 'object') {
+    return createEmptyDmThreadPreferences();
+  }
+
+  const readIds = (key: keyof MobileDmThreadPreferences) =>
+    Array.isArray((value as MobileDmThreadPreferences)[key])
+      ? [...new Set((value as MobileDmThreadPreferences)[key].map((id) => String(id)).filter(Boolean))]
+      : [];
+
+  return {
+    muted: readIds('muted'),
+    pinned: readIds('pinned'),
+    deleted: readIds('deleted'),
+  };
+};
+
+const toggleDmThreadPreferenceEntry = (
+  preferences: MobileDmThreadPreferences,
+  key: keyof MobileDmThreadPreferences,
+  threadId: string
+): MobileDmThreadPreferences => {
+  const nextIds = new Set(preferences[key]);
+  const normalizedThreadId = String(threadId);
+
+  if (nextIds.has(normalizedThreadId)) {
+    nextIds.delete(normalizedThreadId);
+  } else {
+    nextIds.add(normalizedThreadId);
+  }
+
+  return {
+    ...preferences,
+    [key]: [...nextIds],
+  };
+};
+
+const removeDmThreadPreferenceEntry = (
+  preferences: MobileDmThreadPreferences,
+  key: keyof MobileDmThreadPreferences,
+  threadId: string
+): MobileDmThreadPreferences => ({
+  ...preferences,
+  [key]: preferences[key].filter((id) => String(id) !== String(threadId)),
+});
+
 export function MobileInboxProvider({ children }: { children: React.ReactNode }) {
   const {
     session,
@@ -77,7 +143,63 @@ export function MobileInboxProvider({ children }: { children: React.ReactNode })
   const [unreadDmThreadIds, setUnreadDmThreadIds] = useState<Set<string>>(new Set());
   const [readNotificationIds, setReadNotificationIds] = useState<Set<string>>(new Set());
   const [deletedNotificationIds, setDeletedNotificationIds] = useState<Set<string>>(new Set());
+  const [dmThreadPreferences, setDmThreadPreferences] = useState<MobileDmThreadPreferences>(
+    createEmptyDmThreadPreferences()
+  );
   const hasInitializedUnreadThreads = useRef(false);
+  const dmThreadPreferencesStorageKey = currentUser.id
+    ? `mobile-dm-thread-preferences-${currentUser.id}`
+    : null;
+
+  useEffect(() => {
+    if (!dmThreadPreferencesStorageKey) {
+      setDmThreadPreferences(createEmptyDmThreadPreferences());
+      return;
+    }
+
+    let isActive = true;
+
+    const loadPreferences = async () => {
+      try {
+        const stored = await AsyncStorage.getItem(dmThreadPreferencesStorageKey);
+        if (!isActive) return;
+
+        setDmThreadPreferences(
+          stored
+            ? normalizeDmThreadPreferences(JSON.parse(stored))
+            : createEmptyDmThreadPreferences()
+        );
+      } catch (error) {
+        console.error('Unable to load mobile DM thread preferences:', error);
+        if (isActive) {
+          setDmThreadPreferences(createEmptyDmThreadPreferences());
+        }
+      }
+    };
+
+    void loadPreferences();
+
+    return () => {
+      isActive = false;
+    };
+  }, [dmThreadPreferencesStorageKey]);
+
+  useEffect(() => {
+    if (!dmThreadPreferencesStorageKey) return;
+
+    void AsyncStorage.setItem(
+      dmThreadPreferencesStorageKey,
+      JSON.stringify(dmThreadPreferences)
+    ).catch((error) => {
+      console.error('Unable to persist mobile DM thread preferences:', error);
+    });
+  }, [dmThreadPreferences, dmThreadPreferencesStorageKey]);
+
+  const updateDmThreadPreferences = (
+    updater: (currentPreferences: MobileDmThreadPreferences) => MobileDmThreadPreferences
+  ) => {
+    setDmThreadPreferences((currentPreferences) => updater(currentPreferences));
+  };
 
   useEffect(() => {
     const client = supabase;
@@ -139,6 +261,14 @@ export function MobileInboxProvider({ children }: { children: React.ReactNode })
         (payload) => {
           const nextMessage = payload.new as MessageRow;
 
+          updateDmThreadPreferences((currentPreferences) =>
+            removeDmThreadPreferenceEntry(
+              currentPreferences,
+              'deleted',
+              String(nextMessage.sender_id)
+            )
+          );
+
           setMessageRows((currentRows) => {
             if (currentRows.some((message) => message.id === nextMessage.id)) {
               return currentRows;
@@ -165,6 +295,9 @@ export function MobileInboxProvider({ children }: { children: React.ReactNode })
   const dmThreads = useMemo(() => {
     if (!currentUser.id) return [];
 
+    const pinnedIds = new Set(dmThreadPreferences.pinned);
+    const mutedIds = new Set(dmThreadPreferences.muted);
+    const deletedIds = new Set(dmThreadPreferences.deleted);
     const threadsById = new Map<string, MobileDmThread>();
 
     [...messageRows]
@@ -190,6 +323,8 @@ export function MobileInboxProvider({ children }: { children: React.ReactNode })
           image: profile?.avatar || currentUser.avatar,
           preview: message.content,
           time: formatRelativeTime(message.created_at),
+          isMuted: mutedIds.has(threadId),
+          isPinned: pinnedIds.has(threadId),
         });
       });
 
@@ -203,12 +338,22 @@ export function MobileInboxProvider({ children }: { children: React.ReactNode })
           image: profile.avatar,
           preview: 'Start a conversation',
           time: 'new',
+          isMuted: mutedIds.has(profile.id),
+          isPinned: pinnedIds.has(profile.id),
         });
       });
     }
 
-    return [...threadsById.values()];
-  }, [currentUser.avatar, currentUser.id, getProfileById, messageRows, recentDmPeople]);
+    return [...threadsById.values()]
+      .filter((thread) => !deletedIds.has(String(thread.id)))
+      .sort((left, right) => {
+        if (left.isPinned !== right.isPinned) {
+          return left.isPinned ? -1 : 1;
+        }
+
+        return 0;
+      });
+  }, [currentUser.avatar, currentUser.id, dmThreadPreferences.deleted, dmThreadPreferences.muted, dmThreadPreferences.pinned, getProfileById, messageRows, recentDmPeople]);
 
   const messagesByThread = useMemo(
     () =>
@@ -382,7 +527,7 @@ export function MobileInboxProvider({ children }: { children: React.ReactNode })
     });
   };
 
-  const openDmThread = (threadId: string) => {
+  const markDmThreadRead = (threadId: string) => {
     setUnreadDmThreadIds((currentIds) => {
       const nextIds = new Set(currentIds);
       nextIds.delete(threadId);
@@ -397,6 +542,41 @@ export function MobileInboxProvider({ children }: { children: React.ReactNode })
         .eq('sender_id', threadId)
         .eq('read', false);
     }
+  };
+
+  const openDmThread = (threadId: string) => {
+    updateDmThreadPreferences((currentPreferences) =>
+      removeDmThreadPreferenceEntry(currentPreferences, 'deleted', threadId)
+    );
+    markDmThreadRead(threadId);
+  };
+
+  const toggleDmThreadMuted = (threadId: string) => {
+    updateDmThreadPreferences((currentPreferences) =>
+      toggleDmThreadPreferenceEntry(currentPreferences, 'muted', threadId)
+    );
+  };
+
+  const toggleDmThreadPinned = (threadId: string) => {
+    updateDmThreadPreferences((currentPreferences) =>
+      toggleDmThreadPreferenceEntry(currentPreferences, 'pinned', threadId)
+    );
+  };
+
+  const deleteDmThread = (threadId: string) => {
+    updateDmThreadPreferences((currentPreferences) =>
+      toggleDmThreadPreferenceEntry(
+        removeDmThreadPreferenceEntry(currentPreferences, 'pinned', threadId),
+        'deleted',
+        threadId
+      )
+    );
+
+    setUnreadDmThreadIds((currentIds) => {
+      const nextIds = new Set(currentIds);
+      nextIds.delete(threadId);
+      return nextIds;
+    });
   };
 
   const sendDmMessage = async (threadId: string, text: string) => {
@@ -476,11 +656,16 @@ export function MobileInboxProvider({ children }: { children: React.ReactNode })
     messagesByThread,
     unreadNotificationCount,
     unreadDmCount,
+    unreadDmThreadIds,
     defaultThreadId: dmThreads[0]?.id || null,
     getThreadById,
     markNotificationRead,
     clearNotifications,
     deleteNotification,
+    markDmThreadRead,
+    toggleDmThreadMuted,
+    toggleDmThreadPinned,
+    deleteDmThread,
     openDmThread,
     sendDmMessage,
     deleteDmMessage,

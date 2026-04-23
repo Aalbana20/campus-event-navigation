@@ -779,6 +779,8 @@ body {
   padding: 12px;
   border-radius: 16px;
   background: #f8f8fa;
+  align-items: center;
+  position: relative;
 }
 
 .notification-item {
@@ -899,6 +901,7 @@ body {
   flex-direction: column;
   gap: 4px;
   min-width: 0;
+  flex: 1;
 }
 
 .inbox-item-text {
@@ -918,6 +921,36 @@ body {
 .inbox-item-time {
   font-size: 0.8rem;
   color: #777;
+}
+
+.messages-thread-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.messages-thread-state {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.messages-thread-state-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: rgba(17, 24, 39, 0.08);
+  color: #6b7280;
+}
+
+.messages-thread-endcap {
+  min-width: 10px;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .inbox-item-unread-dot {
@@ -944,6 +977,12 @@ button.inbox-item {
 
 button.inbox-item:hover {
   background: var(--bg-soft-2, #eef1f6);
+}
+
+button.inbox-item.menu-open {
+  box-shadow:
+    0 0 0 1px rgba(99, 102, 241, 0.18),
+    0 18px 36px rgba(15, 23, 42, 0.12);
 }
 
 .dm-chat-view {
@@ -1081,8 +1120,15 @@ button.inbox-item:hover {
   gap: 10px;
 }
 
+.dm-thread-popover {
+  position: fixed;
+  z-index: 1200;
+  width: min(286px, calc(100vw - 32px));
+}
+
 .dm-message-reaction-bar,
-.dm-message-action-menu {
+.dm-message-action-menu,
+.dm-thread-action-menu {
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(18, 22, 29, 0.94);
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.32);
@@ -1100,7 +1146,8 @@ button.inbox-item:hover {
 }
 
 .dm-message-reaction-bar button,
-.dm-message-action-menu button {
+.dm-message-action-menu button,
+.dm-thread-action-menu button {
   border: none;
   background: transparent;
   color: #f5f7fb;
@@ -1116,18 +1163,21 @@ button.inbox-item:hover {
 }
 
 .dm-message-reaction-bar button:hover,
-.dm-message-action-menu button:hover {
+.dm-message-action-menu button:hover,
+.dm-thread-action-menu button:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.08);
 }
 
-.dm-message-action-menu {
+.dm-message-action-menu,
+.dm-thread-action-menu {
   display: flex;
   flex-direction: column;
   padding: 8px;
   border-radius: 22px;
 }
 
-.dm-message-action-menu button {
+.dm-message-action-menu button,
+.dm-thread-action-menu button {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -1146,8 +1196,34 @@ button.inbox-item:hover {
   text-align: center;
 }
 
-.dm-message-action-menu button.danger {
+.dm-message-action-menu button.danger,
+.dm-thread-action-menu button.danger {
   color: #ff6b8a;
+}
+
+.dm-thread-action-icon {
+  width: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+}
+
+.dm-thread-action-note {
+  margin-left: auto;
+  min-width: auto;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(245, 247, 251, 0.72);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.dm-thread-action-menu button:disabled {
+  cursor: default;
+  opacity: 0.78;
 }
 
 .dm-chat-input-row input {
@@ -10535,6 +10611,11 @@ body.theme-dark select {
   background: var(--bg-soft);
   border-color: var(--border-soft);
   color: var(--text-main);
+}
+
+body.theme-dark .messages-thread-state-pill {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.78);
 }
 
 body.theme-dark .calendar-page-shell,
