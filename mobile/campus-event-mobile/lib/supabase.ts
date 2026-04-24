@@ -32,7 +32,7 @@ console.info('[mobile:supabase] configuration', {
 
 export const SUPABASE_CONFIG_ERROR = hasSupabaseConfig
   ? null
-  : 'Missing Supabase config. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to the repo root .env or EXPO_PUBLIC_SUPABASE_* vars for Expo.';
+  : 'Missing mobile Supabase config. Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY to mobile/campus-event-mobile/.env (see .env.example) or provide them through expo.extra.';
 
 export const supabase = hasSupabaseConfig
   ? createClient(supabaseUrl, supabaseAnonKey, {

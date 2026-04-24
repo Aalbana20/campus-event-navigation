@@ -134,6 +134,8 @@ create table if not exists events (
   event_date       date,
   start_time       text,
   end_time         text,
+  start_at         timestamptz,
+  end_at           timestamptz,
   price            text default 'Free',
   capacity         integer,
   organizer        text,
@@ -494,6 +496,17 @@ alter table discover_posts
 create index if not exists discover_posts_event_id_idx
   on discover_posts(event_id)
   where event_id is not null;
+
+-- Optional media metadata (legacy + canonical names both supported during the
+-- transition so web + mobile can read/write the same rows safely).
+alter table discover_posts
+  add column if not exists thumbnail_url text,
+  add column if not exists duration numeric,
+  add column if not exists width integer,
+  add column if not exists height integer,
+  add column if not exists duration_seconds numeric,
+  add column if not exists media_width integer,
+  add column if not exists media_height integer;
 
 
 -- ============================================================

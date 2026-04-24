@@ -112,6 +112,14 @@ const normalizeStoryRecord = ({ row, profile, currentUser, baseItem }) => ({
   mediaUrl: resolveStoryMediaUrl(row.media_url),
   mediaType: row.media_type === "video" ? "video" : "image",
   caption: toTrimmedString(row.caption),
+  eventId: row.event_id ? String(row.event_id) : null,
+  storyType:
+    row.story_type === "event_share" ||
+    row.story_type === "post_share" ||
+    row.story_type === "video_share"
+      ? row.story_type
+      : "standard",
+  stickers: Array.isArray(row.stickers) ? row.stickers : [],
   createdAt: row.created_at || new Date().toISOString(),
   expiresAt: row.expires_at || "",
   authorName:
@@ -128,8 +136,9 @@ const normalizeStoryRecord = ({ row, profile, currentUser, baseItem }) => ({
   authorAvatar: sanitizeAvatarUrl(
     profile?.avatar_url ||
       baseItem?.avatar ||
-      currentUser?.image ||
-      currentUser?.avatar,
+      (String(currentUser?.id || "") === String(row.author_id || "")
+        ? currentUser?.image || currentUser?.avatar
+        : ""),
     DEFAULT_AVATAR_URL
   ),
 })
@@ -142,7 +151,7 @@ export const loadActiveDiscoverStories = async ({
 
   const { data: storyRows, error: storyError } = await supabase
     .from("stories")
-    .select("id, author_id, media_url, media_type, caption, created_at, expires_at")
+    .select("id, author_id, media_url, media_type, caption, event_id, story_type, stickers, created_at, expires_at")
     .gt("expires_at", new Date().toISOString())
     .order("created_at", { ascending: false })
 

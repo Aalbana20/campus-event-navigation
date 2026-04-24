@@ -62,6 +62,9 @@ type DiscoverPostRow = {
   on_grid?: boolean | null;
   event_id?: string | null;
   thumbnail_url?: string | null;
+  duration_seconds?: number | string | null;
+  media_width?: number | null;
+  media_height?: number | null;
   duration?: number | string | null;
   width?: number | null;
   height?: number | null;
@@ -69,7 +72,7 @@ type DiscoverPostRow = {
 };
 
 const POST_SELECT_COLUMNS =
-  'id, author_id, media_url, media_type, caption, created_at, on_grid, event_id, thumbnail_url, duration, width, height, like_count';
+  'id, author_id, media_url, media_type, caption, created_at, on_grid, event_id, thumbnail_url, duration_seconds, media_width, media_height, duration, width, height, like_count';
 
 type ProfileRow = {
   id: string;
@@ -159,9 +162,23 @@ const normalizePostRow = (
   mediaType: row.media_type === 'video' ? 'video' : 'image',
   thumbnailUrl: resolveDiscoverPostMediaUrl(row.thumbnail_url, ''),
   durationSeconds:
-    row.duration == null ? null : Number(row.duration) || null,
-  mediaWidth: row.width ? Number(row.width) || null : null,
-  mediaHeight: row.height ? Number(row.height) || null : null,
+    row.duration_seconds == null
+      ? row.duration == null
+        ? null
+        : Number(row.duration) || null
+      : Number(row.duration_seconds) || null,
+  mediaWidth:
+    row.media_width != null
+      ? Number(row.media_width) || null
+      : row.width
+        ? Number(row.width) || null
+        : null,
+  mediaHeight:
+    row.media_height != null
+      ? Number(row.media_height) || null
+      : row.height
+        ? Number(row.height) || null
+        : null,
   caption: toTrimmedString(row.caption),
   createdAt: row.created_at || new Date().toISOString(),
   onGrid: row.on_grid !== false,
@@ -544,6 +561,9 @@ export const uploadDiscoverPost = async ({
       on_grid: Boolean(onGrid),
       event_id: eventId || null,
       thumbnail_url: thumbnailPath || null,
+      duration_seconds: durationSeconds,
+      media_width: mediaWidth,
+      media_height: mediaHeight,
       duration: durationSeconds,
       width: mediaWidth,
       height: mediaHeight,

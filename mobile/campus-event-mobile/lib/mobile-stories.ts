@@ -67,7 +67,9 @@ const getProfileIdentity = (
     return {
       name: profile.name || profile.username || 'Campus User',
       username: profile.username || '',
-      avatar: profile.avatar || currentUser.avatar,
+      avatar:
+        profile.avatar ||
+        (String(currentUser.id) === String(authorId) ? currentUser.avatar : DEFAULT_AVATAR),
     };
   }
 
