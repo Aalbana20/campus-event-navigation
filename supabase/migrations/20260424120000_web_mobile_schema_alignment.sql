@@ -17,22 +17,33 @@ alter table if exists public.story_reactions
 
 do $$
 begin
-  if to_regclass('public.story_reactions') is not null then
-    if exists (
-      select 1
-      from information_schema.columns
-      where table_schema = 'public'
-        and table_name = 'story_reactions'
-        and column_name = 'reaction'
-    ) then
+  if to_regclass('public.story_reactions') is null then
+    return;
+  end if;
+
+  -- Always backfill reaction_type on its own; this is guaranteed to parse
+  -- because reaction_type is added just above.
+  update public.story_reactions
+  set reaction_type = coalesce(nullif(reaction_type, ''), 'heart')
+  where reaction_type is null or reaction_type = '';
+
+  -- Legacy copy-over: only run when a `reaction` column actually exists on
+  -- this project. Wrapping the UPDATE in EXECUTE ensures Postgres does NOT
+  -- statically parse `reaction` on databases where that column is absent
+  -- (parse-time reference would otherwise fail with "column reaction does
+  -- not exist").
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'story_reactions'
+      and column_name = 'reaction'
+  ) then
+    execute $sql$
       update public.story_reactions
       set reaction_type = coalesce(nullif(reaction_type, ''), nullif(reaction, ''), 'heart')
-      where reaction_type is null or reaction_type = '';
-    else
-      update public.story_reactions
-      set reaction_type = coalesce(nullif(reaction_type, ''), 'heart')
-      where reaction_type is null or reaction_type = '';
-    end if;
+      where reaction_type is null or reaction_type = ''
+    $sql$;
   end if;
 end $$;
 
