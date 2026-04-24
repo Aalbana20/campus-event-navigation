@@ -106,6 +106,7 @@ export type StoryStickerRecord =
   | {
       type: 'post_card' | 'video_card';
       postId: string;
+      aspectRatio?: number;
       transform: StoryStickerTransform;
     };
 

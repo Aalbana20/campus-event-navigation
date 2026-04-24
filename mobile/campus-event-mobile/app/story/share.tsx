@@ -16,22 +16,24 @@ import {
 } from 'react-native';
 
 import { EventCardSticker } from '@/components/mobile/EventCardSticker';
+import { SharedMediaStorySticker } from '@/components/mobile/SharedMediaStorySticker';
 import { getEventImageUri } from '@/lib/mobile-media';
-import { createEventShareStory } from '@/lib/mobile-story-composer';
+import {
+  createEventShareStory,
+  createPostShareStory,
+} from '@/lib/mobile-story-composer';
 import {
   createEventStickerTransform,
+  DEFAULT_MEDIA_STICKER_ASPECT,
   EVENT_CARD_ASPECT,
   EVENT_CARD_WIDTH_FRACTION,
+  MEDIA_STICKER_WIDTH_FRACTION,
 } from '@/lib/mobile-story-stickers';
 import { useMobileApp } from '@/providers/mobile-app-provider';
 
 const WINDOW = Dimensions.get('window');
 
-const TOOL_RAIL: Array<{
-  key: string;
-  label: string;
-  icon: keyof typeof Ionicons.glyphMap;
-}> = [
+const TOOL_RAIL = [
   { key: 'text', label: 'Text', icon: 'text-outline' },
   { key: 'stickers', label: 'Stickers', icon: 'happy-outline' },
   { key: 'audio', label: 'Audio', icon: 'musical-notes-outline' },
@@ -39,7 +41,7 @@ const TOOL_RAIL: Array<{
   { key: 'draw', label: 'Draw', icon: 'brush-outline' },
   { key: 'download', label: 'Download', icon: 'download-outline' },
   { key: 'more', label: 'More', icon: 'ellipsis-horizontal' },
-];
+] as const;
 
 const CENTER_SNAP_THRESHOLD_PX = 8;
 
@@ -49,13 +51,79 @@ const distance = (ax: number, ay: number, bx: number, by: number) =>
 const angleBetween = (ax: number, ay: number, bx: number, by: number) =>
   Math.atan2(by - ay, bx - ax);
 
+const parseOptionalNumber = (value: string | string[] | undefined) => {
+  if (typeof value !== 'string') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
 export default function StoryShareScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ sharedEventId?: string }>();
+  const params = useLocalSearchParams<{
+    sharedEventId?: string;
+    sharedPostId?: string;
+    sharedVideoId?: string;
+    sharedMediaUrl?: string;
+    sharedThumbnailUrl?: string;
+    sharedAspectRatio?: string;
+  }>();
   const { currentUser, getEventById } = useMobileApp();
 
   const sharedEventId = typeof params.sharedEventId === 'string' ? params.sharedEventId : null;
-  const event = sharedEventId ? getEventById(sharedEventId) : undefined;
+  const sharedPostId = typeof params.sharedPostId === 'string' ? params.sharedPostId : null;
+  const sharedVideoId = typeof params.sharedVideoId === 'string' ? params.sharedVideoId : null;
+  const sharedMediaUrl = typeof params.sharedMediaUrl === 'string' ? params.sharedMediaUrl : '';
+  const sharedThumbnailUrl =
+    typeof params.sharedThumbnailUrl === 'string' ? params.sharedThumbnailUrl : '';
+  const sharedEvent = sharedEventId ? getEventById(sharedEventId) : undefined;
+
+  const shareTarget = useMemo(() => {
+    if (sharedEventId && sharedEvent) {
+      return {
+        kind: 'event' as const,
+        id: sharedEventId,
+        mediaUrl: sharedEvent.image || '',
+        backgroundUrl: getEventImageUri(sharedEvent.image),
+        aspectRatio: EVENT_CARD_ASPECT,
+      };
+    }
+
+    if (sharedPostId && sharedMediaUrl) {
+      return {
+        kind: 'post' as const,
+        id: sharedPostId,
+        mediaUrl: sharedMediaUrl,
+        backgroundUrl: sharedMediaUrl,
+        aspectRatio: Math.max(
+          0.65,
+          Math.min(parseOptionalNumber(params.sharedAspectRatio) || DEFAULT_MEDIA_STICKER_ASPECT, 1.8)
+        ),
+      };
+    }
+
+    if (sharedVideoId && sharedMediaUrl) {
+      return {
+        kind: 'video' as const,
+        id: sharedVideoId,
+        mediaUrl: sharedMediaUrl,
+        backgroundUrl: sharedThumbnailUrl,
+        aspectRatio: Math.max(
+          0.65,
+          Math.min(parseOptionalNumber(params.sharedAspectRatio) || DEFAULT_MEDIA_STICKER_ASPECT, 1.8)
+        ),
+      };
+    }
+
+    return null;
+  }, [
+    params.sharedAspectRatio,
+    sharedEvent,
+    sharedEventId,
+    sharedMediaUrl,
+    sharedPostId,
+    sharedThumbnailUrl,
+    sharedVideoId,
+  ]);
 
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
   const [isInteracting, setIsInteracting] = useState(false);
@@ -64,14 +132,11 @@ export default function StoryShareScreen() {
   const [toolToast, setToolToast] = useState<string | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
 
-  // Absolute transform state in layout pixels, kept in refs for gesture math.
   const translateX = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(1)).current;
   const rotation = useRef(new Animated.Value(0)).current;
 
-  // Refs that always hold the "committed" latest values for saving the
-  // transform. Updated on every gesture move so publish can read synchronously.
   const currentXRef = useRef(0);
   const currentYRef = useRef(0);
   const currentScaleRef = useRef(1);
@@ -83,7 +148,6 @@ export default function StoryShareScreen() {
   const pinchStartDistanceRef = useRef(0);
   const pinchStartAngleRef = useRef(0);
   const activeTouchesRef = useRef(0);
-
   const toolToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const flashToolToast = useCallback((label: string) => {
@@ -92,10 +156,18 @@ export default function StoryShareScreen() {
     toolToastTimerRef.current = setTimeout(() => setToolToast(null), 1400);
   }, []);
 
-  const cardWidth = useMemo(() => {
+  const stickerWidth = useMemo(() => {
     const baseWidth = canvasSize.width > 0 ? canvasSize.width : WINDOW.width;
-    return baseWidth * EVENT_CARD_WIDTH_FRACTION;
-  }, [canvasSize.width]);
+    const fraction =
+      shareTarget?.kind === 'event'
+        ? EVENT_CARD_WIDTH_FRACTION
+        : MEDIA_STICKER_WIDTH_FRACTION;
+    return baseWidth * fraction;
+  }, [canvasSize.width, shareTarget?.kind]);
+
+  const stickerAspect = shareTarget?.kind === 'event'
+    ? EVENT_CARD_ASPECT
+    : shareTarget?.aspectRatio || DEFAULT_MEDIA_STICKER_ASPECT;
 
   const handleCanvasLayout = useCallback(
     (e: { nativeEvent: { layout: { width: number; height: number } } }) => {
@@ -108,10 +180,8 @@ export default function StoryShareScreen() {
   const updateGuides = useCallback(
     (xPx: number, yPx: number) => {
       if (canvasSize.width === 0 || canvasSize.height === 0) return;
-      const centerX = 0;
-      const centerY = 0;
-      setShowVerticalGuide(Math.abs(xPx - centerX) < CENTER_SNAP_THRESHOLD_PX);
-      setShowHorizontalGuide(Math.abs(yPx - centerY) < CENTER_SNAP_THRESHOLD_PX);
+      setShowVerticalGuide(Math.abs(xPx) < CENTER_SNAP_THRESHOLD_PX);
+      setShowHorizontalGuide(Math.abs(yPx) < CENTER_SNAP_THRESHOLD_PX);
     },
     [canvasSize.height, canvasSize.width]
   );
@@ -148,18 +218,8 @@ export default function StoryShareScreen() {
           activeTouchesRef.current = touches.length;
           if (touches.length >= 2) {
             const [a, b] = touches;
-            pinchStartDistanceRef.current = distance(
-              a.pageX,
-              a.pageY,
-              b.pageX,
-              b.pageY
-            );
-            pinchStartAngleRef.current = angleBetween(
-              a.pageX,
-              a.pageY,
-              b.pageX,
-              b.pageY
-            );
+            pinchStartDistanceRef.current = distance(a.pageX, a.pageY, b.pageX, b.pageY);
+            pinchStartAngleRef.current = angleBetween(a.pageX, a.pageY, b.pageX, b.pageY);
           }
         },
         onPanResponderMove: (
@@ -174,7 +234,6 @@ export default function StoryShareScreen() {
             const currentAngle = angleBetween(a.pageX, a.pageY, b.pageX, b.pageY);
 
             if (activeTouchesRef.current < 2) {
-              // Upgraded from 1 to 2 fingers mid-gesture.
               activeTouchesRef.current = 2;
               pinchStartDistanceRef.current = currentDistance || 1;
               pinchStartAngleRef.current = currentAngle;
@@ -183,10 +242,7 @@ export default function StoryShareScreen() {
                 pinchStartDistanceRef.current > 0
                   ? currentDistance / pinchStartDistanceRef.current
                   : 1;
-              const nextScale = Math.max(
-                0.4,
-                Math.min(3.2, baseScaleRef.current * ratio)
-              );
+              const nextScale = Math.max(0.4, Math.min(3.2, baseScaleRef.current * ratio));
               scale.setValue(nextScale);
               currentScaleRef.current = nextScale;
 
@@ -208,7 +264,6 @@ export default function StoryShareScreen() {
           updateGuides(nextX, nextY);
         },
         onPanResponderRelease: () => {
-          // Snap to center if within threshold on either axis.
           const xValue = currentXRef.current;
           const yValue = currentYRef.current;
 
@@ -264,23 +319,40 @@ export default function StoryShareScreen() {
   }, [canvasSize.height, canvasSize.width]);
 
   const handlePost = useCallback(async () => {
-    if (!event || !sharedEventId || isPublishing) return;
+    if (!shareTarget || isPublishing) return;
 
     setIsPublishing(true);
     try {
       const transform = readTransformForSave();
-      await createEventShareStory({
-        authorId: currentUser.id,
-        eventId: sharedEventId,
-        eventImageUrl: event.image || '',
-        stickers: [
-          {
-            type: 'event_card',
-            eventId: sharedEventId,
-            transform,
-          },
-        ],
-      });
+      if (shareTarget.kind === 'event' && sharedEvent) {
+        await createEventShareStory({
+          authorId: currentUser.id,
+          eventId: shareTarget.id,
+          eventImageUrl: sharedEvent.image || '',
+          stickers: [
+            {
+              type: 'event_card',
+              eventId: shareTarget.id,
+              transform,
+            },
+          ],
+        });
+      } else {
+        await createPostShareStory({
+          authorId: currentUser.id,
+          postId: shareTarget.id,
+          mediaUrl: shareTarget.mediaUrl,
+          mediaType: shareTarget.kind === 'video' ? 'video' : 'image',
+          stickers: [
+            {
+              type: shareTarget.kind === 'video' ? 'video_card' : 'post_card',
+              postId: shareTarget.id,
+              aspectRatio: shareTarget.aspectRatio,
+              transform,
+            },
+          ],
+        });
+      }
       router.back();
     } catch (error) {
       Alert.alert(
@@ -290,14 +362,14 @@ export default function StoryShareScreen() {
     } finally {
       setIsPublishing(false);
     }
-  }, [currentUser.id, event, isPublishing, readTransformForSave, router, sharedEventId]);
+  }, [currentUser.id, isPublishing, readTransformForSave, router, shareTarget, sharedEvent]);
 
-  if (!sharedEventId || !event) {
+  if (!shareTarget || (shareTarget.kind === 'event' && !sharedEvent)) {
     return (
       <View style={styles.missingScreen}>
-        <Text style={styles.missingTitle}>No event selected</Text>
+        <Text style={styles.missingTitle}>Nothing selected</Text>
         <Text style={styles.missingCopy}>
-          Open the share sheet from an event and tap Add to story.
+          Open the share sheet from an event, post, or video and tap Add to story.
         </Text>
         <Pressable style={styles.missingButton} onPress={handleClose}>
           <Text style={styles.missingButtonText}>Close</Text>
@@ -307,17 +379,18 @@ export default function StoryShareScreen() {
   }
 
   const defaultTransform = createEventStickerTransform();
-  const backgroundUri = getEventImageUri(event.image);
 
   return (
     <View style={styles.screen}>
       <View style={styles.canvas} onLayout={handleCanvasLayout}>
-        <ExpoImage
-          source={{ uri: backgroundUri }}
-          style={StyleSheet.absoluteFill}
-          contentFit="cover"
-          blurRadius={60}
-        />
+        {shareTarget.backgroundUrl ? (
+          <ExpoImage
+            source={{ uri: shareTarget.backgroundUrl }}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+            blurRadius={60}
+          />
+        ) : null}
         <View style={styles.canvasDim} pointerEvents="none" />
 
         {canvasSize.width > 0 && canvasSize.height > 0 ? (
@@ -326,10 +399,10 @@ export default function StoryShareScreen() {
             style={[
               styles.stickerLayer,
               {
-                left: canvasSize.width * defaultTransform.x - cardWidth / 2,
-                top: canvasSize.height * defaultTransform.y - (cardWidth * EVENT_CARD_ASPECT) / 2,
-                width: cardWidth,
-                height: cardWidth * EVENT_CARD_ASPECT,
+                left: canvasSize.width * defaultTransform.x - stickerWidth / 2,
+                top: canvasSize.height * defaultTransform.y - (stickerWidth * stickerAspect) / 2,
+                width: stickerWidth,
+                height: stickerWidth * stickerAspect,
                 transform: [
                   { translateX },
                   { translateY },
@@ -343,28 +416,25 @@ export default function StoryShareScreen() {
                 ],
               },
             ]}>
-            <EventCardSticker event={event} width={cardWidth} />
+            {shareTarget.kind === 'event' && sharedEvent ? (
+              <EventCardSticker event={sharedEvent} width={stickerWidth} />
+            ) : (
+              <SharedMediaStorySticker
+                mediaUrl={shareTarget.mediaUrl}
+                mediaType={shareTarget.kind === 'video' ? 'video' : 'image'}
+                width={stickerWidth}
+                aspectRatio={stickerAspect}
+              />
+            )}
           </Animated.View>
         ) : null}
 
         {isInteracting && showVerticalGuide ? (
-          <View
-            pointerEvents="none"
-            style={[
-              styles.guideVertical,
-              { left: canvasSize.width / 2 - 0.5 },
-            ]}
-          />
+          <View pointerEvents="none" style={[styles.guideVertical, { left: canvasSize.width / 2 - 0.5 }]} />
         ) : null}
 
         {isInteracting && showHorizontalGuide ? (
-          <View
-            pointerEvents="none"
-            style={[
-              styles.guideHorizontal,
-              { top: canvasSize.height / 2 - 0.5 },
-            ]}
-          />
+          <View pointerEvents="none" style={[styles.guideHorizontal, { top: canvasSize.height / 2 - 0.5 }]} />
         ) : null}
 
         <View style={styles.topBar} pointerEvents="box-none">
@@ -375,10 +445,7 @@ export default function StoryShareScreen() {
 
         <View style={styles.toolRail} pointerEvents="box-none">
           {TOOL_RAIL.map((tool) => (
-            <Pressable
-              key={tool.key}
-              style={styles.toolCell}
-              onPress={() => flashToolToast(tool.label)}>
+            <Pressable key={tool.key} style={styles.toolCell} onPress={() => flashToolToast(tool.label)}>
               <View style={styles.toolCircle}>
                 <Ionicons name={tool.icon} size={18} color="#ffffff" />
               </View>
@@ -398,9 +465,7 @@ export default function StoryShareScreen() {
           style={[styles.postButton, isPublishing && styles.postButtonDisabled]}
           disabled={isPublishing}
           onPress={() => void handlePost()}>
-          <Text style={styles.postButtonText}>
-            {isPublishing ? 'Posting…' : 'Post to story'}
-          </Text>
+          <Text style={styles.postButtonText}>{isPublishing ? 'Posting…' : 'Post to story'}</Text>
           <Ionicons name="arrow-forward" size={18} color="#000000" />
         </Pressable>
       </View>
@@ -528,26 +593,28 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 28,
-    gap: 10,
+    paddingHorizontal: 28,
     backgroundColor: '#04060a',
+    gap: 12,
   },
   missingTitle: {
     color: '#ffffff',
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '800',
   },
   missingCopy: {
-    color: 'rgba(255,255,255,0.6)',
+    color: 'rgba(255,255,255,0.72)',
     fontSize: 14,
-    textAlign: 'center',
     lineHeight: 20,
+    textAlign: 'center',
   },
   missingButton: {
-    marginTop: 10,
+    marginTop: 8,
+    minHeight: 44,
     paddingHorizontal: 18,
-    paddingVertical: 12,
     borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#ffffff',
   },
   missingButtonText: {

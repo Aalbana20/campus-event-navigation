@@ -565,7 +565,7 @@ export const loadLikedPostIds = async (userId: string): Promise<Set<string>> => 
   if (!supabase || !userId || userId === 'current-user') return new Set();
 
   const { data, error } = await supabase
-    .from('post_likes')
+    .from('discover_post_likes')
     .select('post_id')
     .eq('user_id', userId);
 
@@ -590,14 +590,14 @@ export const togglePostLike = async ({
 
   if (isLiked) {
     const { error } = await supabase
-      .from('post_likes')
+      .from('discover_post_likes')
       .delete()
       .eq('post_id', postId)
       .eq('user_id', userId);
     if (error) console.error('Unable to unlike post:', error);
   } else {
     const { error } = await supabase
-      .from('post_likes')
+      .from('discover_post_likes')
       .insert({ post_id: postId, user_id: userId });
     if (error && error.code !== '23505') console.error('Unable to like post:', error);
   }

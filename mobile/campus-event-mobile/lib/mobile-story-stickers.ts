@@ -12,10 +12,12 @@ export const STORY_CANVAS_ASPECT = 9 / 16;
 // Reference event-card sticker size in normalized canvas width units. The
 // editor uses the live canvas width * CARD_WIDTH_FRACTION to compute actual
 // pixels.
-// 0.92 = roughly the feed event card's visible width after page padding, so the
+// 0.95 = roughly the feed event card's visible width after page padding, so the
 // default sticker size matches the real EventStackCard the user already knows.
-export const EVENT_CARD_WIDTH_FRACTION = 0.92;
+export const EVENT_CARD_WIDTH_FRACTION = 0.95;
 export const EVENT_CARD_ASPECT = 1.35; // height / width, portrait-ish card (matches EventCardSticker)
+export const MEDIA_STICKER_WIDTH_FRACTION = 0.9;
+export const DEFAULT_MEDIA_STICKER_ASPECT = 1.25;
 
 export const createEventStickerTransform = (): StoryStickerTransform => ({
   x: 0.5,
@@ -70,6 +72,7 @@ export const normalizeStoryStickers = (value: unknown): StoryStickerRecord[] => 
       stickers.push({
         type,
         postId: String(record.postId),
+        aspectRatio: toFiniteNumber(record.aspectRatio, DEFAULT_MEDIA_STICKER_ASPECT),
         transform,
       });
     }
@@ -94,6 +97,15 @@ export const findEventStickerInStory = (
 ): Extract<StoryStickerRecord, { type: 'event_card' }> | null => {
   for (const sticker of stickers) {
     if (sticker.type === 'event_card') return sticker;
+  }
+  return null;
+};
+
+export const findMediaStickerInStory = (
+  stickers: StoryStickerRecord[]
+): Extract<StoryStickerRecord, { type: 'post_card' | 'video_card' }> | null => {
+  for (const sticker of stickers) {
+    if (sticker.type === 'post_card' || sticker.type === 'video_card') return sticker;
   }
   return null;
 };

@@ -224,7 +224,7 @@ export function EventStackCard({
             </Pressable>
 
             <Pressable style={styles.actionButton} onPress={handleSharePress}>
-              <Ionicons name="share-social-outline" size={30} color="#ffffff" />
+              <Ionicons name="paper-plane-outline" size={30} color="#ffffff" />
               <Text style={styles.actionCount}>Share</Text>
             </Pressable>
           </View>

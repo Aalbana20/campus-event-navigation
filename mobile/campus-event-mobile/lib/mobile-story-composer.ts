@@ -283,6 +283,7 @@ export const createEventShareStory = async ({
     .from('stories')
     .insert({
       author_id: effectiveAuthorId,
+      event_id: eventId,
       media_url: trimmedImageUrl,
       media_type: 'image',
       caption: toTrimmedString(caption) || null,
@@ -311,5 +312,80 @@ export const createEventShareStory = async ({
   return {
     storyId: String(data.id),
     eventId: String(eventId),
+  };
+};
+
+export const createPostShareStory = async ({
+  authorId,
+  postId,
+  mediaUrl,
+  mediaType,
+  caption,
+  stickers,
+}: {
+  authorId: string;
+  postId: string;
+  mediaUrl: string;
+  mediaType: StoryMediaType;
+  caption?: string;
+  stickers: StoryStickerRecord[];
+}) => {
+  if (!supabase) {
+    throw new Error('Stories are unavailable right now. Please try again later.');
+  }
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError) {
+    console.error('Unable to resolve authenticated story author:', authError);
+  }
+
+  const effectiveAuthorId = user?.id || authorId;
+  if (!effectiveAuthorId || effectiveAuthorId === 'current-user') {
+    throw new Error('You need to be signed in to publish a story.');
+  }
+
+  const trimmedMediaUrl = toTrimmedString(mediaUrl);
+  if (!trimmedMediaUrl) {
+    throw new Error('This post does not have media to share yet.');
+  }
+
+  const storyType: StoryType = mediaType === 'video' ? 'video_share' : 'post_share';
+
+  const { data, error } = await supabase
+    .from('stories')
+    .insert({
+      media_url: trimmedMediaUrl,
+      media_type: mediaType,
+      author_id: effectiveAuthorId,
+      caption: toTrimmedString(caption) || null,
+      story_type: storyType,
+      stickers,
+    })
+    .select('id')
+    .single();
+
+  if (error) {
+    console.error('Post share story insert failed:', error);
+    const message = typeof error.message === 'string' ? error.message : '';
+    if (
+      error.code === 'PGRST204' ||
+      /column.*(stickers|story_type).*schema cache/i.test(message) ||
+      /Could not find the .*(stickers|story_type). column/i.test(message)
+    ) {
+      throw new Error(
+        "Stories can't save sticker data yet. Run the latest Supabase migration " +
+          '(adds stories.story_type and stories.stickers) and try again.'
+      );
+    }
+    throw new Error('Could not publish your story. Please try again.');
+  }
+
+  return {
+    storyId: String(data.id),
+    postId: String(postId),
   };
 };

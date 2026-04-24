@@ -207,15 +207,21 @@ export function MobileShareSheetProvider({ children }: { children: React.ReactNo
       return;
     }
 
-    // Post / video share-to-story editors aren't built out yet — fall back to the
-    // camera-first composer with the shared id on the URL so the follow-up pass
-    // can render them there.
-    const params: Record<string, string> =
-      payload.kind === 'video'
-        ? { sharedVideoId: String(payload.post.id) }
-        : { sharedPostId: String(payload.post.id) };
+    const aspectRatio =
+      payload.post.mediaWidth && payload.post.mediaHeight
+        ? payload.post.mediaHeight / payload.post.mediaWidth
+        : undefined;
 
-    router.push({ pathname: '/story/create', params });
+    router.push({
+      pathname: '/story/share',
+      params: {
+        sharedPostId: payload.kind === 'post' ? String(payload.post.id) : undefined,
+        sharedVideoId: payload.kind === 'video' ? String(payload.post.id) : undefined,
+        sharedMediaUrl: payload.post.mediaUrl,
+        sharedThumbnailUrl: payload.post.thumbnailUrl || undefined,
+        sharedAspectRatio: aspectRatio ? String(aspectRatio) : undefined,
+      },
+    });
   }, [closeShareSheet, payload]);
 
   const handleRepost = useCallback(async () => {

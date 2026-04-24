@@ -20,16 +20,18 @@ import {
 } from 'react-native';
 
 import { EventCardSticker } from '@/components/mobile/EventCardSticker';
+import { SharedMediaStorySticker } from '@/components/mobile/SharedMediaStorySticker';
+import { useAppTheme } from '@/lib/app-theme';
 import {
+  DEFAULT_MEDIA_STICKER_ASPECT,
   EVENT_CARD_ASPECT,
   EVENT_CARD_WIDTH_FRACTION,
   findEventStickerInStory,
+  findMediaStickerInStory,
+  MEDIA_STICKER_WIDTH_FRACTION,
 } from '@/lib/mobile-story-stickers';
 import { useMobileApp } from '@/providers/mobile-app-provider';
-
 const WINDOW_HEIGHT = Dimensions.get('window').height;
-
-import { useAppTheme } from '@/lib/app-theme';
 import { formatRelativeTime } from '@/lib/mobile-backend';
 import { getAvatarImageSource } from '@/lib/mobile-media';
 import type { MobileStoryStripItem } from '@/lib/mobile-stories';
@@ -147,12 +149,25 @@ export function StoryViewerModal({
     if (!currentStory || currentStory.storyType !== 'event_share') return null;
     return findEventStickerInStory(currentStory.stickers);
   }, [currentStory]);
+  const mediaSticker = useMemo(() => {
+    if (
+      !currentStory ||
+      (currentStory.storyType !== 'post_share' &&
+        currentStory.storyType !== 'video_share')
+    ) {
+      return null;
+    }
+    return findMediaStickerInStory(currentStory.stickers);
+  }, [currentStory]);
   const sharedEventRecord = eventSticker ? getEventById(eventSticker.eventId) : undefined;
+  const isSharedStickerStory = Boolean(eventSticker || mediaSticker);
+  const isFullBleedVideoStory = Boolean(isVideoStory && !isSharedStickerStory);
   const storyDurationMs = isVideoStory ? VIDEO_STORY_DURATION_MS : IMAGE_STORY_DURATION_MS;
   const hasHeart = Boolean(currentStory && reactedStoryIds.has(String(currentStory.id)));
   const currentViewers = currentStory ? viewersByStoryId[currentStory.id] || [] : [];
 
-  const videoSource = isVideoStory && currentStory?.mediaUrl ? currentStory.mediaUrl : null;
+  const videoSource =
+    isFullBleedVideoStory && currentStory?.mediaUrl ? currentStory.mediaUrl : null;
   const videoPlayer = useVideoPlayer(videoSource, (player) => {
     player.loop = true;
     player.muted = false;
@@ -277,7 +292,7 @@ export function StoryViewerModal({
   ]);
 
   useEffect(() => {
-    if (!videoPlayer || !isVideoStory) return;
+    if (!videoPlayer || !isFullBleedVideoStory) return;
 
     const shouldPause =
       !visible ||
@@ -293,7 +308,7 @@ export function StoryViewerModal({
       videoPlayer.play();
     }
   }, [
-    isVideoStory,
+    isFullBleedVideoStory,
     isPaused,
     isReplySheetVisible,
     isShareSheetVisible,
@@ -505,7 +520,22 @@ export function StoryViewerModal({
               const { width, height } = layoutEvent.nativeEvent.layout;
               setMediaStageSize({ width, height });
             }}>
-            {isVideoStory ? (
+            {isSharedStickerStory ? (
+              <>
+                {currentStory.storyType !== 'video_share' ? (
+                  <ExpoImage
+                    source={{ uri: currentStory.mediaUrl }}
+                    style={StyleSheet.absoluteFill}
+                    contentFit="cover"
+                    blurRadius={60}
+                  />
+                ) : null}
+                <View
+                  pointerEvents="none"
+                  style={[StyleSheet.absoluteFill, styles.eventShareDim]}
+                />
+              </>
+            ) : isFullBleedVideoStory ? (
               <VideoView
                 player={videoPlayer}
                 style={styles.media}
@@ -628,6 +658,40 @@ export function StoryViewerModal({
                       </View>
                     ) : null}
                   </>
+                );
+              })()
+            ) : null}
+
+            {mediaSticker && mediaStageSize.width > 0 && mediaStageSize.height > 0 ? (
+              (() => {
+                const aspectRatio = mediaSticker.aspectRatio || DEFAULT_MEDIA_STICKER_ASPECT;
+                const stickerWidth = mediaStageSize.width * MEDIA_STICKER_WIDTH_FRACTION;
+                const stickerHeight = stickerWidth * aspectRatio;
+                const centerX = mediaStageSize.width * mediaSticker.transform.x;
+                const centerY = mediaStageSize.height * mediaSticker.transform.y;
+                return (
+                  <View
+                    pointerEvents="box-none"
+                    style={[
+                      styles.stickerOverlay,
+                      {
+                        left: centerX - stickerWidth / 2,
+                        top: centerY - stickerHeight / 2,
+                        width: stickerWidth,
+                        height: stickerHeight,
+                        transform: [
+                          { scale: mediaSticker.transform.scale },
+                          { rotate: `${mediaSticker.transform.rotation}rad` },
+                        ],
+                      },
+                    ]}>
+                    <SharedMediaStorySticker
+                      mediaUrl={currentStory.mediaUrl}
+                      mediaType={currentStory.mediaType}
+                      width={stickerWidth}
+                      aspectRatio={aspectRatio}
+                    />
+                  </View>
                 );
               })()
             ) : null}
@@ -937,9 +1001,9 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     },
     mediaStage: {
       flex: 1,
-      marginTop: 8,
-      marginBottom: 120,
-      marginHorizontal: 6,
+      marginTop: -18,
+      marginBottom: 88,
+      marginHorizontal: 4,
       borderRadius: 22,
       overflow: 'hidden',
       justifyContent: 'center',

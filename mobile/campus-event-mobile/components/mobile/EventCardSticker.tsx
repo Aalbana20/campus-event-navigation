@@ -26,16 +26,12 @@ type EventCardStickerProps = {
 };
 
 export function EventCardSticker({ event, width }: EventCardStickerProps) {
-  // Match the real EventStackCard's portrait aspect. Real feed cards run ~9:14;
-  // we use 1:1.35 so the flyer has room and the title pills don't crowd.
   const height = width * 1.35;
-  const radius = Math.max(20, width * 0.08);
-  const horizontalPad = Math.max(10, width * 0.04);
-  // Reduced from width*0.085 so the title doesn't dominate when the sticker is
-  // at full feed-card size; still readable when pinched smaller.
-  const titleFontSize = Math.max(15, width * 0.065);
-  const metaFontSize = Math.max(11, width * 0.05);
-  const creatorFontSize = Math.max(11, width * 0.045);
+  const radius = Math.max(24, width * 0.085);
+  const horizontalPad = Math.max(14, width * 0.043);
+  const titleFontSize = Math.max(18, width * 0.058);
+  const metaFontSize = Math.max(12, width * 0.035);
+  const creatorFontSize = Math.max(12, width * 0.035);
 
   const creatorLabel = getEventCreatorLabel(event as EventRecord);
   const creatorFirstName = creatorLabel.split(' ')[0] || creatorLabel;
@@ -51,58 +47,64 @@ export function EventCardSticker({ event, width }: EventCardStickerProps) {
         imageStyle={{ borderRadius: radius }}>
         <View style={styles.overlay} pointerEvents="none" />
 
-        <View style={[styles.topContent, { paddingHorizontal: horizontalPad, paddingTop: horizontalPad }]}>
-          <View style={styles.creatorPill}>
-            <Image
-              source={getAvatarImageSource(event.creatorAvatar)}
-              style={styles.creatorAvatar}
-            />
-            <Text
-              style={[styles.creatorName, { fontSize: creatorFontSize }]}
-              numberOfLines={1}>
-              {creatorFirstName}
-            </Text>
+        <View style={[styles.topContent, { paddingTop: horizontalPad, paddingHorizontal: horizontalPad }]}>
+          <View style={styles.topRow}>
+            <View style={styles.creatorCluster}>
+              <View style={styles.creatorPill}>
+                <Image
+                  source={getAvatarImageSource(event.creatorAvatar)}
+                  style={styles.creatorAvatar}
+                />
+                <Text
+                  style={[styles.creatorName, { fontSize: creatorFontSize }]}
+                  numberOfLines={1}>
+                  {creatorFirstName}
+                </Text>
+              </View>
+            </View>
           </View>
         </View>
 
         <View
           style={[
             styles.bottomContent,
-            { left: horizontalPad, right: horizontalPad, bottom: horizontalPad },
+            { left: horizontalPad, right: horizontalPad, bottom: Math.max(18, width * 0.06) },
           ]}>
-          <View style={[styles.titlePill, { borderRadius: radius * 0.55 }]}>
-            <Text
-              style={[styles.title, { fontSize: titleFontSize, lineHeight: titleFontSize * 1.15 }]}
-              numberOfLines={2}>
-              {eventTitle}
-            </Text>
-          </View>
-
-          <View style={styles.metaRow}>
-            <View style={styles.infoPill}>
-              <Ionicons
-                name="calendar-outline"
-                size={Math.max(11, width * 0.05)}
-                color="rgba(255,255,255,0.92)"
-              />
+          <View style={styles.infoPills}>
+            <View style={[styles.titlePill, { borderRadius: Math.max(16, width * 0.045) }]}>
               <Text
-                style={[styles.infoPillText, { fontSize: metaFontSize }]}
-                numberOfLines={1}>
-                {eventDate}
+                style={[styles.title, { fontSize: titleFontSize, lineHeight: titleFontSize * 1.16 }]}
+                numberOfLines={2}>
+                {eventTitle}
               </Text>
             </View>
 
-            <View style={styles.infoPill}>
-              <Ionicons
-                name="time-outline"
-                size={Math.max(11, width * 0.05)}
-                color="rgba(255,255,255,0.92)"
-              />
-              <Text
-                style={[styles.infoPillText, { fontSize: metaFontSize }]}
-                numberOfLines={1}>
-                {eventTime}
-              </Text>
+            <View style={styles.metaRow}>
+              <View style={styles.infoPill}>
+                <Ionicons
+                  name="calendar-outline"
+                  size={Math.max(14, width * 0.04)}
+                  color="rgba(255,255,255,0.92)"
+                />
+                <Text
+                  style={[styles.infoPillText, { fontSize: metaFontSize }]}
+                  numberOfLines={1}>
+                  {eventDate}
+                </Text>
+              </View>
+
+              <View style={styles.infoPill}>
+                <Ionicons
+                  name="time-outline"
+                  size={Math.max(14, width * 0.04)}
+                  color="rgba(255,255,255,0.92)"
+                />
+                <Text
+                  style={[styles.infoPillText, { fontSize: metaFontSize }]}
+                  numberOfLines={1}>
+                  {eventTime}
+                </Text>
+              </View>
             </View>
           </View>
         </View>
@@ -131,27 +133,39 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.28)',
   },
   topContent: {
+    zIndex: 2,
+  },
+  topRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    width: '100%',
+    gap: 10,
+  },
+  creatorCluster: {
     flexDirection: 'row',
     alignItems: 'center',
-    zIndex: 2,
+    gap: 10,
+    flex: 1,
+    minWidth: 0,
   },
   creatorPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
-    paddingVertical: 4,
-    paddingHorizontal: 5,
-    paddingRight: 10,
+    gap: 8,
+    paddingVertical: 5,
+    paddingHorizontal: 6,
+    paddingRight: 11,
     borderRadius: 999,
-    backgroundColor: 'rgba(8, 11, 16, 0.55)',
+    backgroundColor: 'rgba(8, 11, 16, 0.48)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.12)',
     maxWidth: '72%',
   },
   creatorAvatar: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: 25,
+    height: 25,
+    borderRadius: 12.5,
   },
   creatorName: {
     color: '#ffffff',
@@ -160,6 +174,12 @@ const styles = StyleSheet.create({
   },
   bottomContent: {
     position: 'absolute',
+    zIndex: 2,
+  },
+  infoPills: {
+    maxWidth: '78%',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
     gap: 6,
   },
   titlePill: {
@@ -167,7 +187,7 @@ const styles = StyleSheet.create({
     maxWidth: '100%',
     paddingVertical: 10,
     paddingHorizontal: 14,
-    backgroundColor: 'rgba(0,0,0,0.48)',
+    backgroundColor: 'rgba(0,0,0,0.45)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
   },
@@ -179,7 +199,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
-    marginTop: 6,
   },
   infoPill: {
     flexDirection: 'row',
