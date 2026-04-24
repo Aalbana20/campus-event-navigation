@@ -38,6 +38,7 @@ export function ProfileHighlightsRow({
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
+      style={styles.scrollWrap}
       contentContainerStyle={styles.row}>
       {isOwner ? (
         <Pressable
@@ -90,10 +91,13 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) => {
   const border = isDark ? 'rgba(255,255,255,0.12)' : theme.border;
 
   return StyleSheet.create({
+    scrollWrap: {
+      marginHorizontal: -18,
+    },
     row: {
       gap: 14,
       paddingVertical: 4,
-      paddingHorizontal: 2,
+      paddingHorizontal: 18,
     },
     tileWrap: {
       width: TILE_SIZE,
