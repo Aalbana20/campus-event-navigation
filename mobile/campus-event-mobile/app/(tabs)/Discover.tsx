@@ -43,10 +43,10 @@ import {
   recordStoryView,
   toggleStoryHeart,
 } from '@/lib/mobile-stories';
-import { shareEventRecord } from '@/lib/mobile-event-share';
 import { supabase } from '@/lib/supabase';
 import { useMobileApp } from '@/providers/mobile-app-provider';
 import { useMobileInbox } from '@/providers/mobile-inbox-provider';
+import { useShareSheet } from '@/providers/mobile-share-provider';
 import type { EventRecord, ProfileRecord, StoryRecord } from '@/types/models';
 
 type DiscoverScreenProps = {
@@ -216,13 +216,14 @@ export default function DiscoverScreen({
     [toggleSaveEvent]
   );
 
-  const handleCardShare = useCallback(async (event: EventRecord) => {
-    try {
-      await shareEventRecord(event);
-    } catch (error) {
-      console.warn('Unable to share event:', error);
-    }
-  }, []);
+  const { openShareSheet } = useShareSheet();
+
+  const handleCardShare = useCallback(
+    (event: EventRecord) => {
+      openShareSheet({ kind: 'event', event });
+    },
+    [openShareSheet]
+  );
 
   const handleOpenMutuals = useCallback((event: EventRecord, mutualProfiles: ProfileRecord[]) => {
     setMutualSheetTitle(event.title || 'Campus Event');
@@ -849,7 +850,12 @@ export default function DiscoverScreen({
             }}
             onPressComment={(post) => Alert.alert('Comment', `Comment on ${post.id}`)}
             onPressRepost={(post) => Alert.alert('Repost', `Reposted ${post.id}`)}
-            onPressShare={(post) => Alert.alert('Share', `Shared ${post.id}`)}
+            onPressShare={(post) =>
+              openShareSheet({
+                kind: post.mediaType === 'video' ? 'video' : 'post',
+                post,
+              })
+            }
             currentUserId={currentUser.id}
             onDeletePost={async (post) => {
               try {

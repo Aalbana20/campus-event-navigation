@@ -12,6 +12,7 @@ import {
   type DiscoverPostRecord,
 } from '@/lib/mobile-discover-posts';
 import { useMobileApp } from '@/providers/mobile-app-provider';
+import { useShareSheet } from '@/providers/mobile-share-provider';
 
 // Unified table: videos and image posts stay in discover_posts and split by
 // mediaType/metadata in the UI.
@@ -27,6 +28,7 @@ export default function VideoPostsScreen() {
   const styles = useMemo(() => buildStyles(theme), [theme]);
   const router = useRouter();
   const { currentUser } = useMobileApp();
+  const { openShareSheet } = useShareSheet();
 
   const [activeView, setActiveView] = useState<VideoPostsView>('video');
   const [posts, setPosts] = useState<DiscoverPostRecord[]>([]);
@@ -89,7 +91,12 @@ export default function VideoPostsScreen() {
           onPressLike={(post) => Alert.alert('Like', `Liked ${post.id}`)}
           onPressComment={(post) => Alert.alert('Comment', `Comment on ${post.id}`)}
           onPressRepost={(post) => Alert.alert('Repost', `Reposted ${post.id}`)}
-          onPressShare={(post) => Alert.alert('Share', `Shared ${post.id}`)}
+          onPressShare={(post) =>
+            openShareSheet({
+              kind: post.mediaType === 'video' ? 'video' : 'post',
+              post,
+            })
+          }
           currentUserId={currentUser.id}
           onDeletePost={async (post) => {
             try {

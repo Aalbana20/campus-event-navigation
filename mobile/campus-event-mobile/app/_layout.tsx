@@ -9,6 +9,7 @@ import 'react-native-reanimated';
 import { MobileAppProvider, useMobileApp } from '@/providers/mobile-app-provider';
 import { MobileInboxProvider } from '@/providers/mobile-inbox-provider';
 import { MobileSettingsProvider, useMobileSettings } from '@/providers/mobile-settings-provider';
+import { MobileShareSheetProvider } from '@/providers/mobile-share-provider';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -62,6 +63,10 @@ function AppBootstrap() {
         name="story/create"
         options={{ headerShown: false, presentation: 'fullScreenModal' }}
       />
+      <Stack.Screen
+        name="story/share"
+        options={{ headerShown: false, presentation: 'fullScreenModal' }}
+      />
       <Stack.Screen name="profile/[username]" options={{ headerShown: false }} />
       <Stack.Screen name="event/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="auth/sign-in" options={{ headerShown: false }} />
@@ -88,7 +93,9 @@ export default function RootLayout() {
     <MobileSettingsProvider>
       <MobileAppProvider>
         <MobileInboxProvider>
-          <RootNavigator />
+          <MobileShareSheetProvider>
+            <RootNavigator />
+          </MobileShareSheetProvider>
         </MobileInboxProvider>
       </MobileAppProvider>
     </MobileSettingsProvider>

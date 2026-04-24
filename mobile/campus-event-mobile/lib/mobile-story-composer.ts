@@ -4,7 +4,7 @@ import * as ImagePicker from 'expo-image-picker';
 
 import { compressImageMedia } from '@/lib/mobile-media-compression';
 import { supabase } from '@/lib/supabase';
-import type { StoryMediaType } from '@/types/models';
+import type { StoryMediaType, StoryStickerRecord, StoryType } from '@/types/models';
 
 export const STORY_MEDIA_BUCKET = 'stories';
 export const STORY_MEDIA_FOLDER = 'media';
@@ -169,10 +169,14 @@ export const uploadStoryMedia = async ({
   authorId,
   media,
   caption,
+  storyType,
+  stickers,
 }: {
   authorId: string;
   media: SelectedStoryMedia;
   caption?: string;
+  storyType?: StoryType;
+  stickers?: StoryStickerRecord[];
 }) => {
   if (!supabase) {
     throw new Error('Stories are unavailable right now. Please try again later.');
@@ -222,6 +226,8 @@ export const uploadStoryMedia = async ({
       media_url: filePath,
       media_type: media.mediaType,
       caption: toTrimmedString(caption) || null,
+      story_type: storyType || 'standard',
+      stickers: stickers ?? [],
     })
     .select('id')
     .single();
@@ -234,5 +240,65 @@ export const uploadStoryMedia = async ({
   return {
     storyId: String(data.id),
     storagePath: filePath,
+  };
+};
+
+export const createEventShareStory = async ({
+  authorId,
+  eventId,
+  eventImageUrl,
+  caption,
+  stickers,
+}: {
+  authorId: string;
+  eventId: string;
+  eventImageUrl: string;
+  caption?: string;
+  stickers: StoryStickerRecord[];
+}) => {
+  if (!supabase) {
+    throw new Error('Stories are unavailable right now. Please try again later.');
+  }
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError) {
+    console.error('Unable to resolve authenticated story author:', authError);
+  }
+
+  const effectiveAuthorId = user?.id || authorId;
+  if (!effectiveAuthorId || effectiveAuthorId === 'current-user') {
+    throw new Error('You need to be signed in to publish a story.');
+  }
+
+  const trimmedImageUrl = toTrimmedString(eventImageUrl);
+  if (!trimmedImageUrl) {
+    throw new Error('This event does not have a flyer image to share yet.');
+  }
+
+  const { data, error } = await supabase
+    .from('stories')
+    .insert({
+      author_id: effectiveAuthorId,
+      media_url: trimmedImageUrl,
+      media_type: 'image',
+      caption: toTrimmedString(caption) || null,
+      story_type: 'event_share' as StoryType,
+      stickers,
+    })
+    .select('id')
+    .single();
+
+  if (error) {
+    console.error('Event share story insert failed:', error);
+    throw new Error('Could not publish your story. Please try again.');
+  }
+
+  return {
+    storyId: String(data.id),
+    eventId: String(eventId),
   };
 };

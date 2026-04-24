@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { Image as ExpoImage } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -17,6 +18,13 @@ import {
   TextInput,
   View,
 } from 'react-native';
+
+import { EventCardSticker } from '@/components/mobile/EventCardSticker';
+import {
+  EVENT_CARD_WIDTH_FRACTION,
+  findEventStickerInStory,
+} from '@/lib/mobile-story-stickers';
+import { useMobileApp } from '@/providers/mobile-app-provider';
 
 const WINDOW_HEIGHT = Dimensions.get('window').height;
 
@@ -77,6 +85,8 @@ export function StoryViewerModal({
   const router = useRouter();
   const theme = useAppTheme();
   const styles = useMemo(() => buildStyles(theme), [theme]);
+  const { getEventById } = useMobileApp();
+  const [mediaStageSize, setMediaStageSize] = useState({ width: 0, height: 0 });
   const [groupIndex, setGroupIndex] = useState(0);
   const [storyIndex, setStoryIndex] = useState(0);
   const [progress, setProgress] = useState(0);
@@ -131,6 +141,11 @@ export function StoryViewerModal({
     currentStory && String(currentStory.authorId) === String(currentUserId)
   );
   const isVideoStory = currentStory?.mediaType === 'video';
+  const eventSticker = useMemo(() => {
+    if (!currentStory || currentStory.storyType !== 'event_share') return null;
+    return findEventStickerInStory(currentStory.stickers);
+  }, [currentStory]);
+  const sharedEventRecord = eventSticker ? getEventById(eventSticker.eventId) : undefined;
   const storyDurationMs = isVideoStory ? VIDEO_STORY_DURATION_MS : IMAGE_STORY_DURATION_MS;
   const hasHeart = Boolean(currentStory && reactedStoryIds.has(String(currentStory.id)));
   const currentViewers = currentStory ? viewersByStoryId[currentStory.id] || [] : [];
@@ -481,7 +496,12 @@ export function StoryViewerModal({
             </View>
           </View>
 
-          <View style={styles.mediaStage}>
+          <View
+            style={styles.mediaStage}
+            onLayout={(layoutEvent) => {
+              const { width, height } = layoutEvent.nativeEvent.layout;
+              setMediaStageSize({ width, height });
+            }}>
             {isVideoStory ? (
               <VideoView
                 player={videoPlayer}
@@ -491,6 +511,19 @@ export function StoryViewerModal({
                 allowsFullscreen={false}
                 allowsPictureInPicture={false}
               />
+            ) : eventSticker ? (
+              <>
+                <ExpoImage
+                  source={{ uri: currentStory.mediaUrl }}
+                  style={StyleSheet.absoluteFill}
+                  contentFit="cover"
+                  blurRadius={60}
+                />
+                <View
+                  pointerEvents="none"
+                  style={[StyleSheet.absoluteFill, styles.eventShareDim]}
+                />
+              </>
             ) : (
               <Image source={{ uri: currentStory.mediaUrl }} style={styles.media} />
             )}
@@ -515,6 +548,61 @@ export function StoryViewerModal({
                 onPressOut={() => setIsPaused(false)}
               />
             </View>
+
+            {eventSticker && mediaStageSize.width > 0 && mediaStageSize.height > 0 ? (
+              (() => {
+                const cardWidth = mediaStageSize.width * EVENT_CARD_WIDTH_FRACTION;
+                const cardHeight = cardWidth * 1.2;
+                const centerX = mediaStageSize.width * eventSticker.transform.x;
+                const centerY = mediaStageSize.height * eventSticker.transform.y;
+                return (
+                  <View
+                    pointerEvents="box-none"
+                    style={[
+                      styles.stickerOverlay,
+                      {
+                        left: centerX - cardWidth / 2,
+                        top: centerY - cardHeight / 2,
+                        width: cardWidth,
+                        height: cardHeight,
+                        transform: [
+                          { scale: eventSticker.transform.scale },
+                          { rotate: `${eventSticker.transform.rotation}rad` },
+                        ],
+                      },
+                    ]}>
+                    <Pressable
+                      onPress={() => {
+                        onClose();
+                        router.push({
+                          pathname: '/event/[id]',
+                          params: { id: eventSticker.eventId },
+                        });
+                      }}
+                      style={styles.stickerPressable}>
+                      <EventCardSticker
+                        event={
+                          sharedEventRecord || {
+                            title: 'Campus event',
+                            image: currentStory.mediaUrl,
+                            date: '',
+                            time: '',
+                            host: '',
+                            organizer: '',
+                            locationName: '',
+                          }
+                        }
+                        width={cardWidth}
+                      />
+                      <View style={styles.goToEventChip} pointerEvents="none">
+                        <Ionicons name="arrow-forward-circle" size={14} color="#000000" />
+                        <Text style={styles.goToEventChipText}>Go to event</Text>
+                      </View>
+                    </Pressable>
+                  </View>
+                );
+              })()
+            ) : null}
           </View>
 
           <View style={styles.bottomBar}>
@@ -852,6 +940,34 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     },
     tapZone: {
       flex: 1,
+    },
+    eventShareDim: {
+      backgroundColor: 'rgba(0,0,0,0.45)',
+    },
+    stickerOverlay: {
+      position: 'absolute',
+    },
+    stickerPressable: {
+      width: '100%',
+      height: '100%',
+    },
+    goToEventChip: {
+      position: 'absolute',
+      alignSelf: 'center',
+      bottom: -18,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 999,
+      backgroundColor: '#ffffff',
+    },
+    goToEventChipText: {
+      color: '#000000',
+      fontSize: 12,
+      fontWeight: '800',
     },
     bottomBar: {
       position: 'absolute',

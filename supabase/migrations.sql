@@ -346,6 +346,11 @@ create table if not exists stories (
   expires_at  timestamptz not null default (now() + interval '24 hours')
 );
 
+-- Sticker/share metadata. story_type = 'standard' | 'event_share' | 'post_share' | 'video_share'.
+-- stickers is a JSONB array of { type, transform: { x, y, scale, rotation }, eventId?, postId? }.
+alter table stories add column if not exists story_type text not null default 'standard';
+alter table stories add column if not exists stickers jsonb not null default '[]'::jsonb;
+
 create index if not exists stories_author_id_idx  on stories(author_id);
 create index if not exists stories_expires_at_idx on stories(expires_at);
 

@@ -242,22 +242,7 @@ function DiscoverPostItemOverlay({
   };
 
   const handlePressShare = () => {
-    const options: any[] = [
-      { text: 'Repost', onPress: () => onPressRepost(post) },
-      { text: 'Copy Link', onPress: () => {} },
-      { text: 'Share to...', onPress: () => onPressShare(post) },
-      { text: 'Send Message', onPress: () => {} },
-    ];
-    if (isOwner && onDeletePost) {
-      options.push({
-        text: 'Delete Post',
-        style: 'destructive',
-        onPress: handleOpenPostMenu,
-      });
-    }
-    options.push({ text: 'Cancel', style: 'cancel' });
-
-    Alert.alert('Share', undefined, options, { cancelable: true });
+    onPressShare(post);
   };
 
   return (

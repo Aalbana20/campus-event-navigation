@@ -1,6 +1,10 @@
 import { formatRelativeTime, DEFAULT_AVATAR } from '@/lib/mobile-backend';
 import { buildMobileDiscoverStoryItems } from '@/lib/mobile-discover-social';
 import { resolveStoryMediaUrl } from '@/lib/mobile-story-composer';
+import {
+  normalizeStoryStickers,
+  normalizeStoryType,
+} from '@/lib/mobile-story-stickers';
 import { supabase } from '@/lib/supabase';
 import type {
   EventRecord,
@@ -16,6 +20,8 @@ type StoryRow = {
   media_type: 'image' | 'video';
   caption?: string | null;
   event_id?: string | null;
+  story_type?: string | null;
+  stickers?: unknown;
   created_at?: string | null;
   expires_at?: string | null;
 };
@@ -95,6 +101,8 @@ const normalizeStoryRow = (
     mediaType: row.media_type,
     caption: toTrimmedString(row.caption),
     eventId: row.event_id || null,
+    storyType: normalizeStoryType(row.story_type),
+    stickers: normalizeStoryStickers(row.stickers),
     createdAt: row.created_at || new Date().toISOString(),
     expiresAt: row.expires_at || new Date().toISOString(),
     authorName: identity.name,
@@ -114,7 +122,9 @@ export const loadActiveStoryRecords = async ({
 
   const { data, error } = await supabase
     .from('stories')
-    .select('id, author_id, media_url, media_type, caption, event_id, created_at, expires_at')
+    .select(
+      'id, author_id, media_url, media_type, caption, event_id, story_type, stickers, created_at, expires_at'
+    )
     .gt('expires_at', new Date().toISOString())
     .order('created_at', { ascending: false });
 

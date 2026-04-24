@@ -84,6 +84,31 @@ export type TaggedMoment = {
 
 export type StoryMediaType = 'image' | 'video';
 
+export type StoryType =
+  | 'standard'
+  | 'event_share'
+  | 'post_share'
+  | 'video_share';
+
+export type StoryStickerTransform = {
+  x: number;      // 0..1 normalized center x on the canvas
+  y: number;      // 0..1 normalized center y on the canvas
+  scale: number;  // 1 = default card size
+  rotation: number; // radians
+};
+
+export type StoryStickerRecord =
+  | {
+      type: 'event_card';
+      eventId: string;
+      transform: StoryStickerTransform;
+    }
+  | {
+      type: 'post_card' | 'video_card';
+      postId: string;
+      transform: StoryStickerTransform;
+    };
+
 export type StoryRecord = {
   id: string;
   authorId: string;
@@ -91,6 +116,8 @@ export type StoryRecord = {
   mediaType: StoryMediaType;
   caption: string;
   eventId?: string | null;
+  storyType: StoryType;
+  stickers: StoryStickerRecord[];
   createdAt: string;
   expiresAt: string;
   authorName: string;
