@@ -376,11 +376,14 @@ export const loadDiscoverReactedStoryIds = async ({
     return new Set()
   }
 
+  // DB column is `reaction_type` (CHECK constraint pins it to 'heart').
+  // Earlier code used `reaction`, which silently returned no rows on both
+  // web and mobile.
   const { data, error } = await supabase
     .from("story_reactions")
     .select("story_id")
     .eq("user_id", authenticatedUserId)
-    .eq("reaction", "heart")
+    .eq("reaction_type", "heart")
     .in("story_id", storyIds)
 
   if (error) {
@@ -409,12 +412,15 @@ export const toggleDiscoverStoryHeart = async ({
 
   try {
     if (nextActive) {
+      // Plain INSERT + treat 23505 (unique violation) as success — safer than
+      // upsert here because story_reactions has no UPDATE policy in RLS, so
+      // upsert would silently fail on the UPDATE branch.
       const { error } = await supabase
         .from("story_reactions")
         .insert({
           story_id: storyId,
           user_id: authenticatedUserId,
-          reaction: "heart",
+          reaction_type: "heart",
         })
 
       if (error && error.code !== '23505') {
@@ -430,7 +436,7 @@ export const toggleDiscoverStoryHeart = async ({
       .delete()
       .eq("story_id", storyId)
       .eq("user_id", authenticatedUserId)
-      .eq("reaction", "heart")
+      .eq("reaction_type", "heart")
 
     if (error) {
       console.error("Unable to remove story reaction:", error)
