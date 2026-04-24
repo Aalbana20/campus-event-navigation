@@ -422,6 +422,11 @@ create policy "Users can delete their own story reactions"
   on story_reactions for delete
   using (auth.uid() = user_id);
 
+create policy "Users can update their own story reactions"
+  on story_reactions for update
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
 
 -- ============================================================
 -- 11. STORY SHARES

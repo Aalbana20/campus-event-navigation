@@ -427,6 +427,8 @@ export const fetchStoryViewers = async ({
   });
 };
 
+const pendingStoryReactions = new Set<string>();
+
 export const toggleStoryHeart = async ({
   storyId,
   userId,
@@ -437,6 +439,7 @@ export const toggleStoryHeart = async ({
   nextActive: boolean;
 }) => {
   if (!supabase || !storyId) return;
+  if (pendingStoryReactions.has(storyId)) return;
 
   const authenticatedUserId = (await loadAuthenticatedStoryUserId()) || userId;
 
@@ -444,31 +447,39 @@ export const toggleStoryHeart = async ({
     throw new Error('No authenticated user found for story reaction.');
   }
 
-  if (nextActive) {
-    const { error } = await supabase.from('story_reactions').insert({
-      story_id: storyId,
-      user_id: authenticatedUserId,
-      reaction: 'heart',
-    });
+  pendingStoryReactions.add(storyId);
 
-    if (error) {
-      console.error('Unable to like story:', error);
-      throw error;
+  try {
+    if (nextActive) {
+      const { error } = await supabase
+        .from('story_reactions')
+        .insert({
+          story_id: storyId,
+          user_id: authenticatedUserId,
+          reaction: 'heart',
+        });
+
+      if (error && error.code !== '23505') {
+        console.error('Unable to like story:', error);
+        throw error;
+      }
+
+      return;
     }
 
-    return;
-  }
+    const { error } = await supabase
+      .from('story_reactions')
+      .delete()
+      .eq('story_id', storyId)
+      .eq('user_id', authenticatedUserId)
+      .eq('reaction', 'heart');
 
-  const { error } = await supabase
-    .from('story_reactions')
-    .delete()
-    .eq('story_id', storyId)
-    .eq('user_id', authenticatedUserId)
-    .eq('reaction', 'heart');
-
-  if (error) {
-    console.error('Unable to unlike story:', error);
-    throw error;
+    if (error) {
+      console.error('Unable to unlike story:', error);
+      throw error;
+    }
+  } finally {
+    pendingStoryReactions.delete(storyId);
   }
 };
 

@@ -112,6 +112,7 @@ export function StoryViewerModal({
   const loadedViewerStoryIdsRef = useRef<Set<string>>(new Set());
   const panY = useRef(new Animated.Value(0)).current;
   const [isSwiping, setIsSwiping] = useState(false);
+  const isTogglingHeartRef = useRef(false);
 
   const activeItems = useMemo(
     () => items.filter((item) => !item.isPlaceholder && item.stories.length > 0),
@@ -347,12 +348,15 @@ export function StoryViewerModal({
   }, [advanceStory, currentStory, progress, visible]);
 
   const handleToggleHeart = async () => {
-    if (!currentStory || isOwnStory) return;
+    if (!currentStory || isOwnStory || isTogglingHeartRef.current) return;
 
+    isTogglingHeartRef.current = true;
     try {
       await onToggleHeart(currentStory);
     } catch {
       Alert.alert('Story', 'Could not update the heart right now.');
+    } finally {
+      isTogglingHeartRef.current = false;
     }
   };
 

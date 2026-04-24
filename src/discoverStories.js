@@ -391,41 +391,53 @@ export const loadDiscoverReactedStoryIds = async ({
   return new Set((data || []).map((row) => String(row.story_id)))
 }
 
+const pendingStoryReactions = new Set()
+
 export const toggleDiscoverStoryHeart = async ({
   storyId,
   nextActive,
 }) => {
+  if (pendingStoryReactions.has(storyId)) return
+
   const authenticatedUserId = await loadAuthenticatedDiscoverStoryUserId()
 
   if (!storyId || !authenticatedUserId) {
     throw new Error("You need to be signed in to react to stories.")
   }
 
-  if (nextActive) {
-    const { error } = await supabase.from("story_reactions").insert({
-      story_id: storyId,
-      user_id: authenticatedUserId,
-      reaction: "heart",
-    })
+  pendingStoryReactions.add(storyId)
 
-    if (error) {
-      console.error("Unable to react to story:", error)
-      throw new Error("Could not save your reaction right now.")
+  try {
+    if (nextActive) {
+      const { error } = await supabase
+        .from("story_reactions")
+        .insert({
+          story_id: storyId,
+          user_id: authenticatedUserId,
+          reaction: "heart",
+        })
+
+      if (error && error.code !== '23505') {
+        console.error("Unable to react to story:", error)
+        throw new Error("Could not save your reaction right now.")
+      }
+
+      return
     }
 
-    return
-  }
+    const { error } = await supabase
+      .from("story_reactions")
+      .delete()
+      .eq("story_id", storyId)
+      .eq("user_id", authenticatedUserId)
+      .eq("reaction", "heart")
 
-  const { error } = await supabase
-    .from("story_reactions")
-    .delete()
-    .eq("story_id", storyId)
-    .eq("user_id", authenticatedUserId)
-    .eq("reaction", "heart")
-
-  if (error) {
-    console.error("Unable to remove story reaction:", error)
-    throw new Error("Could not update your reaction right now.")
+    if (error) {
+      console.error("Unable to remove story reaction:", error)
+      throw new Error("Could not update your reaction right now.")
+    }
+  } finally {
+    pendingStoryReactions.delete(storyId)
   }
 }
 
