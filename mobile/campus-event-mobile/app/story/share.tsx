@@ -20,6 +20,7 @@ import { getEventImageUri } from '@/lib/mobile-media';
 import { createEventShareStory } from '@/lib/mobile-story-composer';
 import {
   createEventStickerTransform,
+  EVENT_CARD_ASPECT,
   EVENT_CARD_WIDTH_FRACTION,
 } from '@/lib/mobile-story-stickers';
 import { useMobileApp } from '@/providers/mobile-app-provider';
@@ -326,9 +327,9 @@ export default function StoryShareScreen() {
               styles.stickerLayer,
               {
                 left: canvasSize.width * defaultTransform.x - cardWidth / 2,
-                top: canvasSize.height * defaultTransform.y - (cardWidth * 1.2) / 2,
+                top: canvasSize.height * defaultTransform.y - (cardWidth * EVENT_CARD_ASPECT) / 2,
                 width: cardWidth,
-                height: cardWidth * 1.2,
+                height: cardWidth * EVENT_CARD_ASPECT,
                 transform: [
                   { translateX },
                   { translateY },

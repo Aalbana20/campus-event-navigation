@@ -25,6 +25,8 @@ export type ShareSheetActionKey =
   | 'copy_link'
   | 'share_to_native';
 
+export type ShareSheetSendMode = 'individual' | 'group';
+
 type ShareSheetAction = {
   key: ShareSheetActionKey;
   label: string;
@@ -47,7 +49,11 @@ type MobileShareSheetProps = {
   actions: ShareSheetAction[];
   toast?: string | null;
   onClose: () => void;
-  onSendToPerson: (profile: ProfileRecord) => void;
+  onSendToRecipients: (
+    recipients: ProfileRecord[],
+    message: string,
+    mode: ShareSheetSendMode
+  ) => void;
   onPressAction: (key: ShareSheetActionKey) => void;
   onPressNewGroup: () => void;
 };
@@ -71,17 +77,21 @@ export function MobileShareSheet({
   actions,
   toast,
   onClose,
-  onSendToPerson,
+  onSendToRecipients,
   onPressAction,
   onPressNewGroup,
 }: MobileShareSheetProps) {
   const translateY = useRef(new Animated.Value(WINDOW_HEIGHT)).current;
   const dragY = useRef(new Animated.Value(0)).current;
   const [query, setQuery] = useState('');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [messageDraft, setMessageDraft] = useState('');
 
   useEffect(() => {
     if (!visible) {
       setQuery('');
+      setSelectedIds(new Set());
+      setMessageDraft('');
       return;
     }
 
@@ -132,17 +142,45 @@ export function MobileShareSheet({
   );
 
   const normalizedQuery = query.trim().toLowerCase();
+  const uniquePeople = useMemo(
+    () =>
+      dedupeProfiles(people).filter(
+        (profile) => String(profile.id) !== String(currentUserId)
+      ),
+    [currentUserId, people]
+  );
   const filteredPeople = useMemo(() => {
-    const unique = dedupeProfiles(people).filter(
-      (profile) => String(profile.id) !== String(currentUserId)
-    );
-    if (!normalizedQuery) return unique;
-    return unique.filter((profile) =>
+    if (!normalizedQuery) return uniquePeople;
+    return uniquePeople.filter((profile) =>
       `${profile.name || ''} ${profile.username || ''}`
         .toLowerCase()
         .includes(normalizedQuery)
     );
-  }, [currentUserId, normalizedQuery, people]);
+  }, [normalizedQuery, uniquePeople]);
+
+  const selectedProfiles = useMemo(
+    () => uniquePeople.filter((profile) => selectedIds.has(String(profile.id))),
+    [selectedIds, uniquePeople]
+  );
+  const selectionCount = selectedProfiles.length;
+
+  const toggleSelection = (profile: ProfileRecord) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      const key = String(profile.id);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
+
+  const commitSend = (mode: ShareSheetSendMode) => {
+    if (selectionCount === 0) return;
+    onSendToRecipients(selectedProfiles, messageDraft.trim(), mode);
+  };
 
   return (
     <Modal
@@ -208,20 +246,35 @@ export function MobileShareSheet({
             contentContainerStyle={styles.peopleGrid}
             showsVerticalScrollIndicator={false}>
             {filteredPeople.length > 0 ? (
-              filteredPeople.map((profile) => (
-                <Pressable
-                  key={profile.id}
-                  style={styles.personCell}
-                  onPress={() => onSendToPerson(profile)}>
-                  <Image
-                    source={getAvatarImageSource(profile.avatar)}
-                    style={styles.personAvatar}
-                  />
-                  <Text style={styles.personName} numberOfLines={1}>
-                    {profile.username ? profile.username : profile.name || 'Campus'}
-                  </Text>
-                </Pressable>
-              ))
+              filteredPeople.map((profile) => {
+                const isSelected = selectedIds.has(String(profile.id));
+                return (
+                  <Pressable
+                    key={profile.id}
+                    style={styles.personCell}
+                    onPress={() => toggleSelection(profile)}>
+                    <View style={styles.personAvatarWrap}>
+                      <Image
+                        source={getAvatarImageSource(profile.avatar)}
+                        style={[styles.personAvatar, isSelected && styles.personAvatarSelected]}
+                      />
+                      {isSelected ? (
+                        <View style={styles.personSelectBadge}>
+                          <Ionicons name="checkmark" size={13} color="#000000" />
+                        </View>
+                      ) : null}
+                    </View>
+                    <Text
+                      style={[
+                        styles.personName,
+                        isSelected && styles.personNameSelected,
+                      ]}
+                      numberOfLines={1}>
+                      {profile.username ? profile.username : profile.name || 'Campus'}
+                    </Text>
+                  </Pressable>
+                );
+              })
             ) : (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyTitle}>No people matched.</Text>
@@ -232,32 +285,75 @@ export function MobileShareSheet({
             )}
           </ScrollView>
 
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.actionsRow}>
-            {actions.map((action) => {
-              const disabled = !action.available;
-              return (
+          {selectionCount > 0 ? (
+            <View style={styles.composeBar}>
+              <TextInput
+                value={messageDraft}
+                onChangeText={setMessageDraft}
+                placeholder="Write a message…"
+                placeholderTextColor="rgba(255,255,255,0.5)"
+                style={styles.composeInput}
+                multiline
+              />
+
+              {selectionCount >= 2 ? (
+                <View style={styles.sendModeRow}>
+                  <Pressable
+                    style={styles.sendPrimary}
+                    onPress={() => commitSend('individual')}>
+                    <Ionicons name="paper-plane" size={14} color="#000000" />
+                    <Text style={styles.sendPrimaryText}>
+                      Send separately ({selectionCount})
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    style={styles.sendSecondary}
+                    onPress={() => commitSend('group')}>
+                    <Ionicons
+                      name="people-outline"
+                      size={14}
+                      color="rgba(255,255,255,0.92)"
+                    />
+                    <Text style={styles.sendSecondaryText}>Send as group</Text>
+                  </Pressable>
+                </View>
+              ) : (
                 <Pressable
-                  key={action.key}
-                  disabled={disabled}
-                  onPress={() => onPressAction(action.key)}
-                  style={[styles.actionCell, disabled && styles.actionCellDisabled]}>
-                  <View
-                    style={[
-                      styles.actionCircle,
-                      action.key === 'add_to_story' && styles.actionCircleAdd,
-                    ]}>
-                    <Ionicons name={action.icon} size={22} color="#ffffff" />
-                  </View>
-                  <Text style={styles.actionLabel} numberOfLines={1}>
-                    {action.label}
-                  </Text>
+                  style={styles.sendPrimary}
+                  onPress={() => commitSend('individual')}>
+                  <Ionicons name="paper-plane" size={14} color="#000000" />
+                  <Text style={styles.sendPrimaryText}>Send</Text>
                 </Pressable>
-              );
-            })}
-          </ScrollView>
+              )}
+            </View>
+          ) : (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.actionsRow}>
+              {actions.map((action) => {
+                const disabled = !action.available;
+                return (
+                  <Pressable
+                    key={action.key}
+                    disabled={disabled}
+                    onPress={() => onPressAction(action.key)}
+                    style={[styles.actionCell, disabled && styles.actionCellDisabled]}>
+                    <View
+                      style={[
+                        styles.actionCircle,
+                        action.key === 'add_to_story' && styles.actionCircleAdd,
+                      ]}>
+                      <Ionicons name={action.icon} size={22} color="#ffffff" />
+                    </View>
+                    <Text style={styles.actionLabel} numberOfLines={1}>
+                      {action.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          )}
 
           {toast ? (
             <View style={styles.toast}>
@@ -390,11 +486,31 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 4,
   },
+  personAvatarWrap: {
+    position: 'relative',
+  },
   personAvatar: {
     width: 62,
     height: 62,
     borderRadius: 31,
     backgroundColor: '#1b1b20',
+  },
+  personAvatarSelected: {
+    borderWidth: 2,
+    borderColor: '#ffffff',
+  },
+  personSelectBadge: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#0b0b0d',
   },
   personName: {
     color: '#ffffff',
@@ -402,6 +518,66 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     maxWidth: 74,
     textAlign: 'center',
+  },
+  personNameSelected: {
+    fontWeight: '800',
+  },
+  composeBar: {
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: 4,
+    gap: 10,
+    borderTopWidth: 1,
+    borderColor: 'rgba(255,255,255,0.04)',
+  },
+  composeInput: {
+    minHeight: 42,
+    maxHeight: 110,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: '#17171a',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  sendModeRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  sendPrimary: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    minHeight: 44,
+    borderRadius: 999,
+    backgroundColor: '#ffffff',
+  },
+  sendPrimaryText: {
+    color: '#000000',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  sendSecondary: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    minHeight: 44,
+    borderRadius: 999,
+    backgroundColor: '#17171a',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  sendSecondaryText: {
+    color: 'rgba(255,255,255,0.92)',
+    fontSize: 13,
+    fontWeight: '700',
   },
   emptyState: {
     flexBasis: '100%',

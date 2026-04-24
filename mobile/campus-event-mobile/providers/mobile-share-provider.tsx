@@ -20,6 +20,7 @@ import { useMobileInbox } from '@/providers/mobile-inbox-provider';
 import {
   MobileShareSheet,
   type ShareSheetActionKey,
+  type ShareSheetSendMode,
 } from '@/components/mobile/MobileShareSheet';
 
 export type SharePayload =
@@ -148,15 +149,41 @@ export function MobileShareSheetProvider({ children }: { children: React.ReactNo
     return buildPostShareMessage(payload.post);
   }, [payload]);
 
-  const handleSendToPerson = useCallback(
-    async (profile: ProfileRecord) => {
-      if (!payload) return;
+  const handleSendToRecipients = useCallback(
+    async (
+      recipients: ProfileRecord[],
+      customMessage: string,
+      mode: ShareSheetSendMode
+    ) => {
+      if (!payload || recipients.length === 0) return;
+
+      if (mode === 'group') {
+        // Group DM infrastructure isn't wired yet — don't invent a send that
+        // doesn't actually deliver. Surface it and keep the sheet open.
+        flashToast('Group chat — coming soon');
+        return;
+      }
 
       const { body } = buildMessageForPayload();
+      const trimmedCustom = customMessage.trim();
+      const composedBody = trimmedCustom ? `${trimmedCustom}\n\n${body}` : body;
 
       try {
-        await sendDmMessage(String(profile.id), body);
-        flashToast(`Sent to ${profile.username ? '@' + profile.username : profile.name}`);
+        await Promise.all(
+          recipients.map((profile) =>
+            sendDmMessage(String(profile.id), composedBody)
+          )
+        );
+
+        if (recipients.length === 1) {
+          const only = recipients[0];
+          flashToast(
+            `Sent to ${only.username ? '@' + only.username : only.name || 'recipient'}`
+          );
+        } else {
+          flashToast(`Sent to ${recipients.length} people`);
+        }
+
         setTimeout(() => {
           closeShareSheet();
         }, 500);
@@ -306,7 +333,9 @@ export function MobileShareSheetProvider({ children }: { children: React.ReactNo
         actions={actions}
         toast={toast}
         onClose={closeShareSheet}
-        onSendToPerson={(profile) => void handleSendToPerson(profile)}
+        onSendToRecipients={(recipients, customMessage, mode) =>
+          void handleSendToRecipients(recipients, customMessage, mode)
+        }
         onPressAction={handlePressAction}
         onPressNewGroup={handleNewGroup}
       />

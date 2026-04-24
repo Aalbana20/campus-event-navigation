@@ -12,8 +12,10 @@ export const STORY_CANVAS_ASPECT = 9 / 16;
 // Reference event-card sticker size in normalized canvas width units. The
 // editor uses the live canvas width * CARD_WIDTH_FRACTION to compute actual
 // pixels.
-export const EVENT_CARD_WIDTH_FRACTION = 0.78;
-export const EVENT_CARD_ASPECT = 1.2; // height / width, portrait-ish card
+// 0.92 = roughly the feed event card's visible width after page padding, so the
+// default sticker size matches the real EventStackCard the user already knows.
+export const EVENT_CARD_WIDTH_FRACTION = 0.92;
+export const EVENT_CARD_ASPECT = 1.35; // height / width, portrait-ish card (matches EventCardSticker)
 
 export const createEventStickerTransform = (): StoryStickerTransform => ({
   x: 0.5,

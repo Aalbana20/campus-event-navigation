@@ -129,6 +129,34 @@ export const loadActiveStoryRecords = async ({
     .order('created_at', { ascending: false });
 
   if (error) {
+    const message = typeof error.message === 'string' ? error.message : '';
+    const isMissingColumn =
+      error.code === 'PGRST204' ||
+      /column.*(stickers|story_type).*schema cache/i.test(message) ||
+      /Could not find the .*(stickers|story_type). column/i.test(message);
+
+    if (isMissingColumn) {
+      console.warn(
+        '[mobile-stories] stories.story_type / stories.stickers are missing from the Supabase schema. ' +
+          'Run the latest migration. Falling back to base columns so the viewer still works.'
+      );
+
+      const { data: legacyData, error: legacyError } = await supabase
+        .from('stories')
+        .select('id, author_id, media_url, media_type, caption, event_id, created_at, expires_at')
+        .gt('expires_at', new Date().toISOString())
+        .order('created_at', { ascending: false });
+
+      if (legacyError) {
+        console.error('Unable to load stories (legacy select):', legacyError);
+        return [] as StoryRecord[];
+      }
+
+      return ((legacyData || []) as StoryRow[]).map((row) =>
+        normalizeStoryRow(row, getProfileById, currentUser)
+      );
+    }
+
     console.error('Unable to load stories:', error);
     return [] as StoryRecord[];
   }

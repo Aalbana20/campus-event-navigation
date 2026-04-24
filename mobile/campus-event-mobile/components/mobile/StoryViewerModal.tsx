@@ -21,6 +21,7 @@ import {
 
 import { EventCardSticker } from '@/components/mobile/EventCardSticker';
 import {
+  EVENT_CARD_ASPECT,
   EVENT_CARD_WIDTH_FRACTION,
   findEventStickerInStory,
 } from '@/lib/mobile-story-stickers';
@@ -87,6 +88,7 @@ export function StoryViewerModal({
   const styles = useMemo(() => buildStyles(theme), [theme]);
   const { getEventById } = useMobileApp();
   const [mediaStageSize, setMediaStageSize] = useState({ width: 0, height: 0 });
+  const [isGoToEventRevealed, setIsGoToEventRevealed] = useState(false);
   const [groupIndex, setGroupIndex] = useState(0);
   const [storyIndex, setStoryIndex] = useState(0);
   const [progress, setProgress] = useState(0);
@@ -243,6 +245,7 @@ export function StoryViewerModal({
     autoAdvancedStoryIdRef.current = null;
     onStoryOpen(currentStory);
     setProgress(0);
+    setIsGoToEventRevealed(false);
   }, [currentStory, onStoryOpen, visible]);
 
   useEffect(() => {
@@ -552,54 +555,79 @@ export function StoryViewerModal({
             {eventSticker && mediaStageSize.width > 0 && mediaStageSize.height > 0 ? (
               (() => {
                 const cardWidth = mediaStageSize.width * EVENT_CARD_WIDTH_FRACTION;
-                const cardHeight = cardWidth * 1.2;
+                const cardHeight = cardWidth * EVENT_CARD_ASPECT;
                 const centerX = mediaStageSize.width * eventSticker.transform.x;
                 const centerY = mediaStageSize.height * eventSticker.transform.y;
                 return (
-                  <View
-                    pointerEvents="box-none"
-                    style={[
-                      styles.stickerOverlay,
-                      {
-                        left: centerX - cardWidth / 2,
-                        top: centerY - cardHeight / 2,
-                        width: cardWidth,
-                        height: cardHeight,
-                        transform: [
-                          { scale: eventSticker.transform.scale },
-                          { rotate: `${eventSticker.transform.rotation}rad` },
-                        ],
-                      },
-                    ]}>
-                    <Pressable
-                      onPress={() => {
-                        onClose();
-                        router.push({
-                          pathname: '/event/[id]',
-                          params: { id: eventSticker.eventId },
-                        });
-                      }}
-                      style={styles.stickerPressable}>
-                      <EventCardSticker
-                        event={
-                          sharedEventRecord || {
-                            title: 'Campus event',
-                            image: currentStory.mediaUrl,
-                            date: '',
-                            time: '',
-                            host: '',
-                            organizer: '',
-                            locationName: '',
-                          }
-                        }
-                        width={cardWidth}
+                  <>
+                    {isGoToEventRevealed ? (
+                      <Pressable
+                        style={StyleSheet.absoluteFill}
+                        onPress={() => setIsGoToEventRevealed(false)}
                       />
-                      <View style={styles.goToEventChip} pointerEvents="none">
-                        <Ionicons name="arrow-forward-circle" size={14} color="#000000" />
-                        <Text style={styles.goToEventChipText}>Go to event</Text>
+                    ) : null}
+                    <View
+                      pointerEvents="box-none"
+                      style={[
+                        styles.stickerOverlay,
+                        {
+                          left: centerX - cardWidth / 2,
+                          top: centerY - cardHeight / 2,
+                          width: cardWidth,
+                          height: cardHeight,
+                          transform: [
+                            { scale: eventSticker.transform.scale },
+                            { rotate: `${eventSticker.transform.rotation}rad` },
+                          ],
+                        },
+                      ]}>
+                      <Pressable
+                        onPress={() => setIsGoToEventRevealed((prev) => !prev)}
+                        style={styles.stickerPressable}>
+                        <EventCardSticker
+                          event={
+                            sharedEventRecord || {
+                              title: 'Campus event',
+                              image: currentStory.mediaUrl,
+                              date: '',
+                              time: '',
+                              host: '',
+                              organizer: '',
+                              creatorAvatar: '',
+                              creatorName: '',
+                              creatorUsername: '',
+                              locationName: '',
+                            }
+                          }
+                          width={cardWidth}
+                        />
+                      </Pressable>
+                    </View>
+                    {isGoToEventRevealed ? (
+                      <View
+                        pointerEvents="box-none"
+                        style={[
+                          styles.goToEventChipWrap,
+                          {
+                            left: centerX - 90,
+                            top: centerY + (cardHeight * eventSticker.transform.scale) / 2 + 14,
+                          },
+                        ]}>
+                        <Pressable
+                          onPress={() => {
+                            onClose();
+                            router.push({
+                              pathname: '/event/[id]',
+                              params: { id: eventSticker.eventId },
+                            });
+                          }}
+                          style={styles.goToEventChip}>
+                          <Ionicons name="arrow-forward-circle" size={14} color="#000000" />
+                          <Text style={styles.goToEventChipText}>Go to event</Text>
+                        </Pressable>
                       </View>
-                    </Pressable>
-                  </View>
+                    ) : null}
+                  </>
                 );
               })()
             ) : null}
@@ -909,9 +937,15 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     },
     mediaStage: {
       flex: 1,
+      marginTop: 8,
+      marginBottom: 120,
+      marginHorizontal: 6,
+      borderRadius: 22,
+      overflow: 'hidden',
       justifyContent: 'center',
       alignItems: 'center',
       position: 'relative',
+      backgroundColor: '#000000',
     },
     media: {
       width: '100%',
@@ -951,18 +985,25 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       width: '100%',
       height: '100%',
     },
-    goToEventChip: {
+    goToEventChipWrap: {
       position: 'absolute',
-      alignSelf: 'center',
-      bottom: -18,
+      width: 180,
+      alignItems: 'center',
+    },
+    goToEventChip: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
       gap: 6,
-      paddingHorizontal: 12,
-      paddingVertical: 6,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
       borderRadius: 999,
       backgroundColor: '#ffffff',
+      shadowColor: '#000',
+      shadowOpacity: 0.4,
+      shadowRadius: 18,
+      shadowOffset: { width: 0, height: 10 },
+      elevation: 14,
     },
     goToEventChipText: {
       color: '#000000',
@@ -973,7 +1014,7 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       position: 'absolute',
       left: 16,
       right: 16,
-      bottom: 34,
+      bottom: 36,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',

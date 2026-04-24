@@ -17,14 +17,17 @@ import {
 } from 'react-native';
 
 import { useAppTheme } from '@/lib/app-theme';
+import { parseDmMessageForEventShare } from '@/lib/mobile-dm-content';
 import { getAvatarImageSource } from '@/lib/mobile-media';
 import {
   MobileDmThread,
   MobileInboxTab,
   useMobileInbox,
 } from '@/providers/mobile-inbox-provider';
+import { useMobileApp } from '@/providers/mobile-app-provider';
 
 import { AppScreen } from './AppScreen';
+import { DmEventPreviewCard } from './DmEventPreviewCard';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 
 const QUICK_REACTIONS = ['❤️', '😂', '😮', '😢', '😡', '👍', '＋'];
@@ -258,6 +261,7 @@ export function InboxScreen({
     sendDmMessage,
     deleteDmMessage,
   } = useMobileInbox();
+  const { getEventById } = useMobileApp();
   const [internalTab, setInternalTab] = useState<MobileInboxTab>(lockedTab || initialTab);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [draftMessage, setDraftMessage] = useState('');
@@ -535,38 +539,64 @@ export function InboxScreen({
             </View>
 
             <ScrollView contentContainerStyle={styles.chatMessages} showsVerticalScrollIndicator={false}>
-              {(messagesByThread[activeThread.id] || []).map((message) => (
-                <Pressable
-                  key={message.id}
-                  delayLongPress={360}
-                  onLongPress={(event) => openMessageMenu(message, event)}
-                  style={[
-                    styles.chatBubble,
-                    message.sender === 'me' ? styles.chatBubbleMe : styles.chatBubbleThem,
-                  ]}>
-                  <Text
+              {(messagesByThread[activeThread.id] || []).map((message) => {
+                const eventShare = parseDmMessageForEventShare(message.text);
+                const sharedEvent = eventShare ? getEventById(eventShare.eventId) : undefined;
+                const showEventPreview = Boolean(eventShare && sharedEvent);
+                const textToRender = showEventPreview
+                  ? (eventShare?.trimmedBody || '').trim()
+                  : message.text;
+
+                return (
+                  <Pressable
+                    key={message.id}
+                    delayLongPress={360}
+                    onLongPress={(event) => openMessageMenu(message, event)}
                     style={[
-                      styles.chatBubbleText,
-                      message.sender === 'me' && styles.chatBubbleTextMe,
+                      styles.chatBubble,
+                      message.sender === 'me' ? styles.chatBubbleMe : styles.chatBubbleThem,
+                      showEventPreview && styles.chatBubbleWithPreview,
                     ]}>
-                    {message.text}
-                  </Text>
-                  {messageReactions[message.id] || messageStickers[message.id] ? (
-                    <View
-                      style={[
-                        styles.messageBadge,
-                        message.sender === 'them' && styles.messageBadgeThem,
-                      ]}>
-                      {messageReactions[message.id] ? (
-                        <Text style={styles.messageBadgeText}>{messageReactions[message.id]}</Text>
-                      ) : null}
-                      {messageStickers[message.id] ? (
-                        <Text style={styles.messageBadgeText}>{messageStickers[message.id]}</Text>
-                      ) : null}
-                    </View>
-                  ) : null}
-                </Pressable>
-              ))}
+                    {showEventPreview && sharedEvent && eventShare ? (
+                      <DmEventPreviewCard
+                        event={sharedEvent}
+                        onPress={() => {
+                          router.push({
+                            pathname: '/event/[id]',
+                            params: { id: eventShare.eventId },
+                          });
+                        }}
+                      />
+                    ) : null}
+
+                    {textToRender ? (
+                      <Text
+                        style={[
+                          styles.chatBubbleText,
+                          message.sender === 'me' && styles.chatBubbleTextMe,
+                          showEventPreview && styles.chatBubbleTextWithPreview,
+                        ]}>
+                        {textToRender}
+                      </Text>
+                    ) : null}
+
+                    {messageReactions[message.id] || messageStickers[message.id] ? (
+                      <View
+                        style={[
+                          styles.messageBadge,
+                          message.sender === 'them' && styles.messageBadgeThem,
+                        ]}>
+                        {messageReactions[message.id] ? (
+                          <Text style={styles.messageBadgeText}>{messageReactions[message.id]}</Text>
+                        ) : null}
+                        {messageStickers[message.id] ? (
+                          <Text style={styles.messageBadgeText}>{messageStickers[message.id]}</Text>
+                        ) : null}
+                      </View>
+                    ) : null}
+                  </Pressable>
+                );
+              })}
             </ScrollView>
 
             {replyingTo ? (
@@ -1059,6 +1089,15 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     },
     chatBubbleTextMe: {
       color: theme.background,
+    },
+    chatBubbleWithPreview: {
+      padding: 6,
+      borderRadius: 22,
+      gap: 8,
+    },
+    chatBubbleTextWithPreview: {
+      paddingHorizontal: 6,
+      paddingBottom: 2,
     },
     messageBadge: {
       position: 'absolute',
