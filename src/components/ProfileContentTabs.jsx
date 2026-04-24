@@ -175,19 +175,22 @@ const PostListItem = ({ post, onOpen }) => (
   </article>
 )
 
-const EventCard = ({ event, label, onOpen }) => (
-  <button type="button" className="profile-tab-event-card" onClick={() => onOpen(event)}>
-    <div
-      className="profile-tab-event-image"
-      style={event.image ? { backgroundImage: `url(${event.image})` } : undefined}
-    >
-      <span className="profile-tab-event-pill">{label}</span>
-    </div>
-    <div className="profile-tab-event-body">
-      <strong>{event.title || "Untitled Event"}</strong>
-      <span>{event.date || event.eventDate || "Campus event"}</span>
-    </div>
-  </button>
+const ProfileEventTile = ({ event, onOpen }) => (
+  <article className="profile-post-tile">
+    <button type="button" className="profile-post-open" onClick={() => onOpen(event)}>
+      {event.image ? (
+        <img className="profile-post-media" src={event.image} alt={event.title || "Event"} />
+      ) : (
+        <div className="profile-post-media" style={{ backgroundImage: "var(--explore-event-fallback)", backgroundSize: "cover", backgroundPosition: "center" }} />
+      )}
+      <span className="profile-content-type-badge event">
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+          <circle cx="12" cy="10" r="3" />
+        </svg>
+      </span>
+    </button>
+  </article>
 )
 
 const MemoryCard = ({ memory, event }) => (
@@ -688,17 +691,16 @@ export default function ProfileContentTabs({ profileId, isOwner = false, allEven
 
   const renderRepostsCollection = () =>
     repostItems.length > 0 ? (
-      <div className="profile-mixed-list">
+      <div className="profile-media-grid">
         {repostItems.map((item) =>
           item.type === "event" ? (
-            <EventCard
+            <ProfileEventTile
               key={item.id}
               event={item.event}
-              label="Reposted Event"
               onOpen={setSelectedEvent}
             />
           ) : (
-            <PostListItem
+            <PostTile
               key={item.id}
               post={item.post}
               onOpen={setSelectedPost}

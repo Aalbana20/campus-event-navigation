@@ -498,27 +498,24 @@ export function ProfileContentTabs({
     </View>
   );
 
-  const renderEventRepost = (event: EventRecord, rowId: string) => (
-    <Pressable
-      key={rowId}
-      style={styles.postListItem}
-      onPress={() =>
-        router.push({
-          pathname: '/event/[id]',
-          params: { id: event.id },
-        })
-      }>
-      <Image source={getEventImageSource(event.image)} style={styles.postListImage} />
-      <View style={styles.postListCopy}>
-        <Text style={styles.postListKicker}>Reposted Event</Text>
-        <Text style={styles.postListTitle} numberOfLines={2}>
-          {event.title}
-        </Text>
-        <Text style={styles.postListMeta}>
-          {[event.eventDate, event.startTime].filter(Boolean).join(' · ') || 'Campus event'}
-        </Text>
-      </View>
-    </Pressable>
+  const renderEventRepostTile = (event: EventRecord, rowId: string) => (
+    <View key={rowId} style={styles.postTileWrap}>
+      <Pressable
+        style={styles.mediaTile}
+        accessibilityRole="button"
+        accessibilityLabel={event.title ? `Open ${event.title}` : 'Open event'}
+        onPress={() =>
+          router.push({
+            pathname: '/event/[id]',
+            params: { id: event.id },
+          })
+        }>
+        <Image source={getEventImageSource(event.image)} style={styles.mediaTileImage} />
+        <View style={styles.mediaTileIcon}>
+          <Ionicons name="location-sharp" size={14} color="#ffffff" />
+        </View>
+      </Pressable>
+    </View>
   );
 
   const renderGrid = (posts: DiscoverPostRecord[]) => {
@@ -554,25 +551,25 @@ export function ProfileContentTabs({
     </View>
   );
 
-  const renderRepostsCollection = () =>
-    repostItems.length ? (
-      <View style={styles.listStack}>
+  const renderRepostsCollection = () => {
+    if (!repostItems.length) {
+      return renderEmpty('No reposts yet.', 'Reposted events and posts will appear here.');
+    }
+
+    const repostPostItems = repostItems
+      .filter((item) => item.type === 'post')
+      .map((item) => item.post);
+
+    return (
+      <View style={styles.mediaGrid}>
         {repostItems.map((item) =>
-          item?.type === 'event'
-            ? renderEventRepost(item.event, item.id)
-            : item?.post
-              ? renderPostListItem(
-                  item.post,
-                  repostItems
-                    .filter((candidate) => candidate.type === 'post')
-                    .map((candidate) => candidate.post)
-                )
-              : null
+          item.type === 'event'
+            ? renderEventRepostTile(item.event, item.id)
+            : renderPostTile(item.post, repostPostItems)
         )}
       </View>
-    ) : (
-      renderEmpty('No reposts yet.', 'Reposted events and posts will appear here.')
     );
+  };
 
   const renderLikedCollection = () =>
     likedPosts.length
