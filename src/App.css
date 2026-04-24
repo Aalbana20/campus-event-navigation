@@ -1401,6 +1401,263 @@ button.inbox-item.menu-open {
   background: var(--explore-page-bg);
 }
 
+/* ----- IG-style Explore grid layout (new) ------------------------------ */
+.explore-page-grid {
+  position: relative;
+  padding: 12px 0 80px;
+  background: #050506;
+  color: #fff;
+}
+
+.explore-filter-bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 10px 16px;
+  background: linear-gradient(180deg, rgba(5,5,6,0.96), rgba(5,5,6,0.86));
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  scrollbar-width: none;
+}
+.explore-filter-bar::-webkit-scrollbar { display: none; }
+
+.explore-filter-tab-slot {
+  position: relative;
+  display: inline-flex;
+}
+
+.explore-filter-tab {
+  appearance: none;
+  border: 1px solid rgba(255,255,255,0.06);
+  background: #1a1a1e;
+  color: rgba(255,255,255,0.72);
+  font-size: 0.88rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  padding: 10px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  transition: background .14s ease, color .14s ease;
+}
+.explore-filter-tab:hover { color: #fff; }
+.explore-filter-tab.active {
+  background: #fff;
+  color: #000;
+  border-color: #fff;
+}
+
+.explore-filter-chevron {
+  width: 10px;
+  height: 10px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform .18s ease;
+}
+.explore-filter-chevron.open { transform: rotate(90deg); }
+
+.explore-filter-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  min-width: 160px;
+  padding: 4px;
+  border-radius: 14px;
+  background: #0b0b0d;
+  border: 1px solid rgba(255,255,255,0.06);
+  box-shadow: 0 18px 44px rgba(0,0,0,0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 12;
+}
+.explore-filter-dropdown-item {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: rgba(255,255,255,0.82);
+  padding: 10px 12px;
+  border-radius: 9px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+  transition: background .14s ease, color .14s ease;
+}
+.explore-filter-dropdown-item:hover { background: rgba(255,255,255,0.06); color: #fff; }
+.explore-filter-dropdown-item.active { background: rgba(255,255,255,0.1); color: #fff; }
+
+/* Masonry via CSS columns so we don't pull a new library. */
+.explore-grid {
+  column-count: 3;
+  column-gap: 3px;
+  padding: 4px 3px 0;
+}
+@media (max-width: 900px) {
+  .explore-grid { column-count: 3; column-gap: 2px; padding: 2px; }
+}
+@media (min-width: 1200px) {
+  .explore-grid { column-count: 4; }
+}
+
+.explore-grid-tile {
+  display: block;
+  break-inside: avoid;
+  margin: 0 0 3px;
+  border: none;
+  padding: 0;
+  background: #111115;
+  border-radius: 6px;
+  overflow: hidden;
+  width: 100%;
+  cursor: pointer;
+  position: relative;
+  color: inherit;
+}
+.explore-grid-tile-short { aspect-ratio: 1 / 1; }
+.explore-grid-tile-tall { aspect-ratio: 1 / 1.9; }
+.explore-grid-tile-event { padding: 0; }
+.explore-grid-tile-event .explore-event-tile {
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+}
+
+.explore-tile-media {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.explore-tile-video-overlay {
+  position: absolute;
+  bottom: 6px;
+  left: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.7);
+}
+
+.explore-tile-view-eye {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.explore-grid-empty {
+  grid-column: 1 / -1;
+  padding: 48px 20px;
+  text-align: center;
+  color: rgba(255,255,255,0.6);
+}
+.explore-grid-empty p { margin: 0 0 6px; font-weight: 800; color: #fff; }
+.explore-grid-empty small { font-size: 0.8rem; }
+
+.explore-globe-button {
+  position: fixed;
+  right: 18px;
+  bottom: 80px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(15,15,18,0.9);
+  color: #fff;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 14px 30px rgba(0,0,0,0.55);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  z-index: 30;
+}
+.explore-globe-icon {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.explore-map-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 22px;
+}
+.explore-map-modal {
+  width: min(520px, 100%);
+  max-height: min(600px, 86vh);
+  border-radius: 18px;
+  background: #0b0b0d;
+  border: 1px solid rgba(255,255,255,0.06);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.explore-map-modal-header {
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  color: #fff;
+}
+.explore-map-modal-close {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.06);
+  color: #fff;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+}
+.explore-map-modal-body { flex: 1; min-height: 260px; }
+.explore-map-placeholder {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 32px;
+  text-align: center;
+  color: rgba(255,255,255,0.78);
+  background:
+    radial-gradient(circle at 30% 20%, rgba(120,160,255,0.22), transparent 60%),
+    radial-gradient(circle at 75% 70%, rgba(90,200,180,0.18), transparent 55%),
+    #0b0b0d;
+}
+.explore-map-placeholder p { margin: 6px 0 0; font-weight: 800; color: #fff; }
+.explore-map-placeholder small { max-width: 340px; line-height: 1.4; }
+
 .explore-shell {
   width: 100%;
   max-width: 1120px;

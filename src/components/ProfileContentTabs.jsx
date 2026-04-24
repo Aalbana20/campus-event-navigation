@@ -13,7 +13,9 @@ import {
 import {
   addPostComment,
   deletePostComment,
+  loadLikedPostIds,
   loadPostComments,
+  loadSavedPostIds,
   recordPostShare,
   setPostCommentLike,
   setPostLike,
@@ -29,7 +31,7 @@ import PostShareSheet from "./PostShareSheet"
 const PROFILE_TABS = [
   { id: "grid", label: "Grid" },
   { id: "posts", label: "Posts / Videos" },
-  { id: "reposts", label: "Reposts" },
+  { id: "collection", label: "Reposts / Likes / Saved" },
   { id: "tags", label: "Tags" },
 ]
 
@@ -37,6 +39,12 @@ const TAG_FILTERS = [
   { id: "all", label: "All" },
   { id: "posts", label: "Posts" },
   { id: "event-tags", label: "Event Tags" },
+]
+
+const COLLECTION_OPTIONS = [
+  { id: "reposts", label: "Reposts", iconType: "reposts" },
+  { id: "likes", label: "Likes", iconType: "likes" },
+  { id: "saves", label: "Saved", iconType: "saves" },
 ]
 
 const toTime = (value) => {
@@ -73,6 +81,22 @@ const ProfileTabIcon = ({ type }) => {
         <path d="M4.1 11.1v-.65A2.65 2.65 0 0 1 6.75 7.8H20.4" />
         <path d="M6.2 18.8 3.6 16.2l2.6-2.6" />
         <path d="M19.9 12.9v.65a2.65 2.65 0 0 1-2.65 2.65H3.6" />
+      </svg>
+    )
+  }
+
+  if (type === "likes") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 20.3s-7.5-4.1-7.5-10A4.4 4.4 0 0 1 12 7.2 4.4 4.4 0 0 1 19.5 10.3c0 5.9-7.5 10-7.5 10Z" />
+      </svg>
+    )
+  }
+
+  if (type === "saves") {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M6.5 4.5h11v15.5l-5.5-3.5-5.5 3.5V4.5Z" />
       </svg>
     )
   }
@@ -196,12 +220,15 @@ export default function ProfileContentTabs({ profileId, isOwner = false, allEven
   const [activeTab, setActiveTab] = useState("grid")
   const [postViewMode, setPostViewMode] = useState("grid")
   const [tagFilter, setTagFilter] = useState("all")
+  const [collectionMode, setCollectionMode] = useState("reposts")
   const [activeDropdown, setActiveDropdown] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
   const [gridPosts, setGridPosts] = useState([])
   const [authorPosts, setAuthorPosts] = useState([])
   const [reposts, setReposts] = useState([])
   const [repostedPosts, setRepostedPosts] = useState([])
+  const [likedPosts, setLikedPosts] = useState([])
+  const [savedPosts, setSavedPosts] = useState([])
   const [taggedPostRows, setTaggedPostRows] = useState([])
   const [eventMemories, setEventMemories] = useState([])
   const [selectedEvent, setSelectedEvent] = useState(null)
@@ -226,19 +253,33 @@ export default function ProfileContentTabs({ profileId, isOwner = false, allEven
     if (!profileId) return
     setIsLoading(true)
     try {
-      const [nextGrid, nextAuthorPosts, nextReposts, nextTaggedPosts, nextMemories] =
-        await Promise.all([
-          loadGridPostsForAuthor(profileId),
-          loadDiscoverPostsForAuthor(profileId),
-          loadRepostsForUser(profileId),
-          loadPostsTaggingUser(profileId),
-          loadEventMemoriesForUser(profileId),
-        ])
+      const [
+        nextGrid,
+        nextAuthorPosts,
+        nextReposts,
+        nextTaggedPosts,
+        nextMemories,
+        nextLikedIdSet,
+        nextSavedIdSet,
+      ] = await Promise.all([
+        loadGridPostsForAuthor(profileId),
+        loadDiscoverPostsForAuthor(profileId),
+        loadRepostsForUser(profileId),
+        loadPostsTaggingUser(profileId),
+        loadEventMemoriesForUser(profileId),
+        loadLikedPostIds({ userId: profileId }),
+        loadSavedPostIds({ userId: profileId }),
+      ])
 
       const postRepostIds = nextReposts
         .filter((row) => row.targetType === "post" && row.postId)
         .map((row) => row.postId)
-      const nextRepostedPosts = await loadDiscoverPostsByIds(postRepostIds)
+
+      const [nextRepostedPosts, nextLikedPosts, nextSavedPosts] = await Promise.all([
+        loadDiscoverPostsByIds(postRepostIds),
+        loadDiscoverPostsByIds(Array.from(nextLikedIdSet)),
+        loadDiscoverPostsByIds(Array.from(nextSavedIdSet)),
+      ])
 
       setGridPosts(nextGrid)
       setAuthorPosts(nextAuthorPosts)
@@ -246,6 +287,8 @@ export default function ProfileContentTabs({ profileId, isOwner = false, allEven
       setTaggedPostRows(nextTaggedPosts)
       setEventMemories(nextMemories)
       setRepostedPosts(nextRepostedPosts)
+      setLikedPosts(nextLikedPosts)
+      setSavedPosts(nextSavedPosts)
     } finally {
       setIsLoading(false)
     }
@@ -513,7 +556,7 @@ export default function ProfileContentTabs({ profileId, isOwner = false, allEven
   }
 
   const handleTabTrigger = (tabId) => {
-    const hasDropdown = tabId === "posts" || tabId === "tags"
+    const hasDropdown = tabId === "posts" || tabId === "tags" || tabId === "collection"
 
     if (!hasDropdown) {
       setActiveTab(tabId)
@@ -643,7 +686,7 @@ export default function ProfileContentTabs({ profileId, isOwner = false, allEven
     </>
   )
 
-  const renderRepostsTab = () =>
+  const renderRepostsCollection = () =>
     repostItems.length > 0 ? (
       <div className="profile-mixed-list">
         {repostItems.map((item) =>
@@ -666,6 +709,34 @@ export default function ProfileContentTabs({ profileId, isOwner = false, allEven
     ) : (
       <EmptyState title="No reposts yet" copy="Reposted events and posts will live here." />
     )
+
+  const renderLikedCollection = () =>
+    likedPosts.length > 0 ? (
+      <div className="profile-media-grid">
+        {likedPosts.map((post) => (
+          <PostTile key={post.id} post={post} onOpen={setSelectedPost} />
+        ))}
+      </div>
+    ) : (
+      <EmptyState title="No liked posts yet" copy="Posts you like will appear here." />
+    )
+
+  const renderSavedCollection = () =>
+    savedPosts.length > 0 ? (
+      <div className="profile-media-grid">
+        {savedPosts.map((post) => (
+          <PostTile key={post.id} post={post} onOpen={setSelectedPost} />
+        ))}
+      </div>
+    ) : (
+      <EmptyState title="No saved posts yet" copy="Posts you save will appear here." />
+    )
+
+  const renderCollectionTab = () => {
+    if (collectionMode === "likes") return renderLikedCollection()
+    if (collectionMode === "saves") return renderSavedCollection()
+    return renderRepostsCollection()
+  }
 
   const renderTagsTab = () => (
     <>
@@ -693,8 +764,16 @@ export default function ProfileContentTabs({ profileId, isOwner = false, allEven
     <div className="profile-section profile-tabbed-section">
       <div className="profile-tab-bar" role="tablist" aria-label="Profile tabs" ref={dropdownRef}>
         {PROFILE_TABS.map((tab) => {
-          const hasDropdown = tab.id === "posts" || tab.id === "tags"
+          const hasDropdown =
+            tab.id === "posts" || tab.id === "tags" || tab.id === "collection"
           const isDropdownOpen = activeDropdown === tab.id
+          const activeCollection =
+            COLLECTION_OPTIONS.find((option) => option.id === collectionMode) ||
+            COLLECTION_OPTIONS[0]
+          const iconType =
+            tab.id === "collection" ? activeCollection.iconType : tab.id
+          const accessibleLabel =
+            tab.id === "collection" ? activeCollection.label : tab.label
 
           return (
             <div key={tab.id} className="profile-tab-slot">
@@ -710,13 +789,13 @@ export default function ProfileContentTabs({ profileId, isOwner = false, allEven
                 }}
                 role="tab"
                 aria-selected={activeTab === tab.id}
-                aria-label={tab.label}
+                aria-label={accessibleLabel}
                 aria-haspopup={hasDropdown ? "menu" : undefined}
                 aria-expanded={hasDropdown ? isDropdownOpen : undefined}
-                title={tab.label}
+                title={accessibleLabel}
                 tabIndex={0}
               >
-                <ProfileTabIcon type={tab.id} />
+                <ProfileTabIcon type={iconType} />
                 {hasDropdown ? <DropdownChevron open={isDropdownOpen} /> : null}
               </button>
 
@@ -744,6 +823,38 @@ export default function ProfileContentTabs({ profileId, isOwner = false, allEven
                 >
                   List
                 </button>
+              </div>
+            )}
+
+            {/* Dropdown for Collection icon (Reposts/Likes/Saved) */}
+            {activeDropdown === tab.id && tab.id === "collection" && (
+              <div
+                className="profile-icon-dropdown-menu"
+                role="menu"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {COLLECTION_OPTIONS.map((option, index) => (
+                  <div key={option.id} className="flex flex-col">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCollectionMode(option.id)
+                        setActiveDropdown(null)
+                      }}
+                      className={`profile-icon-dropdown-item ${collectionMode === option.id ? "active" : ""}`}
+                      role="menuitem"
+                      aria-label={option.label}
+                      title={option.label}
+                    >
+                      <span className="profile-icon-dropdown-icon" aria-hidden="true">
+                        <ProfileTabIcon type={option.iconType} />
+                      </span>
+                    </button>
+                    {index < COLLECTION_OPTIONS.length - 1 && (
+                      <div className="profile-icon-dropdown-separator" />
+                    )}
+                  </div>
+                ))}
               </div>
             )}
 
@@ -778,7 +889,7 @@ export default function ProfileContentTabs({ profileId, isOwner = false, allEven
         {isLoading && <div className="profile-tab-loading">Loading profile content...</div>}
         {!isLoading && activeTab === "grid" && renderGridTab()}
         {!isLoading && activeTab === "posts" && renderPostsTab()}
-        {!isLoading && activeTab === "reposts" && renderRepostsTab()}
+        {!isLoading && activeTab === "collection" && renderCollectionTab()}
         {!isLoading && activeTab === "tags" && renderTagsTab()}
       </div>
 

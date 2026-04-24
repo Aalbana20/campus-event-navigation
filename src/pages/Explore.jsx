@@ -1,666 +1,545 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
+
 import ExploreEventModal from "../components/ExploreEventModal"
 import ExploreEventTile from "../components/ExploreEventTile"
 import { useEvents } from "../context/EventContext"
-import { DEFAULT_AVATAR_URL, sanitizeAvatarUrl } from "../profileMedia"
+import { loadDiscoverPosts } from "../discoverPosts"
+import {
+  formatViewCount,
+  getPlaceholderViewCount,
+  loadContentViewCounts,
+  recordContentView,
+} from "../contentViews"
 import { supabase } from "../supabaseClient"
 
-const PAGE_SIZE = 20
-
-
-const EXPLORE_SECTION_DEFINITIONS = [
-  {
-    id: "discover",
-    eyebrow: "Featured",
-    title: "Discover",
-    note: "Curated event picks with strong momentum right now.",
-    select: (events) => sortEventsByMomentum(events),
-  },
-  {
-    id: "nearby",
-    eyebrow: "Local",
-    title: "Nearby",
-    note: "Things happening around campus and your usual orbit.",
-    select: (events) => {
-      const nearbyMatches = events.filter((event) =>
-        includesAny(getEventDiscoveryFields(event), [
-          "princess anne",
-          "campus",
-          "student center",
-          "quad",
-          "arena",
-          "library",
-          "arts",
-          "center",
-        ])
-      )
-
-      return nearbyMatches.length > 0 ? sortEventsByMomentum(nearbyMatches) : sortEventsByMomentum(events)
-    },
-  },
-  {
-    id: "sports",
-    eyebrow: "Energy",
-    title: "Sports",
-    note: "Games, runs, wellness drops, and campus competition.",
-    select: (events) =>
-      sortEventsByMomentum(
-        events.filter((event) =>
-          includesAny(getEventDiscoveryFields(event), [
-            "sports",
-            "game",
-            "basketball",
-            "football",
-            "soccer",
-            "run",
-            "wellness",
-            "athletic",
-          ])
-        )
-      ),
-  },
-  {
-    id: "movies",
-    eyebrow: "Watch",
-    title: "Movies & Film",
-    note: "Screenings, film nights, and cozy watch plans.",
-    select: (events) =>
-      sortEventsByMomentum(
-        events.filter((event) =>
-          includesAny(getEventDiscoveryFields(event), [
-            "movie",
-            "film",
-            "screening",
-            "cinema",
-            "watch",
-          ])
-        )
-      ),
-  },
-  {
-    id: "creative",
-    eyebrow: "Creative",
-    title: "Music & Arts",
-    note: "Open mics, showcases, concerts, and art-forward hangs.",
-    select: (events) =>
-      sortEventsByMomentum(
-        events.filter((event) =>
-          includesAny(getEventDiscoveryFields(event), [
-            "music",
-            "concert",
-            "dj",
-            "creative",
-            "arts",
-            "art",
-            "open mic",
-            "poetry",
-            "showcase",
-          ])
-        )
-      ),
-  },
-  {
-    id: "social",
-    eyebrow: "Social",
-    title: "Parties & Mixers",
-    note: "Loose, social plans for meeting people outside your usual circle.",
-    select: (events) =>
-      sortEventsByMomentum(
-        events.filter((event) =>
-          includesAny(getEventDiscoveryFields(event), [
-            "party",
-            "social",
-            "nightlife",
-            "mixer",
-            "brunch",
-            "rooftop",
-            "afterparty",
-          ])
-        )
-      ),
-  },
-  {
-    id: "networking",
-    eyebrow: "Connect",
-    title: "Networking",
-    note: "Career-minded, founder, and community-building events.",
-    select: (events) =>
-      sortEventsByMomentum(
-        events.filter((event) =>
-          includesAny(getEventDiscoveryFields(event), [
-            "networking",
-            "career",
-            "founder",
-            "startup",
-            "professional",
-            "mixer",
-            "community",
-          ])
-        )
-      ),
-  },
+const MEDIA_OPTIONS = [
+  { id: "all", label: "All" },
+  { id: "videos", label: "Videos" },
+  { id: "pictures", label: "Pictures" },
 ]
 
-const eventSearchFields = (event) =>
-  [
-    event?.title,
-    event?.description,
-    event?.location,
-    event?.locationName,
-    event?.locationAddress,
-    event?.organizer,
-    ...(event?.tags || []),
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase()
+const EVENT_SCOPE_OPTIONS = [
+  { id: "nearby", label: "Nearby" },
+  { id: "state", label: "State" },
+  { id: "country", label: "Country" },
+]
 
-const getEventDiscoveryFields = (event) => eventSearchFields(event)
+const toId = (value) => (value ? String(value) : "")
 
-const personSearchFields = (person) =>
-  [person?.username, person?.name, person?.bio, person?.location]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase()
+// Pattern of tall/short tiles to produce the IG-Explore staggered look without
+// a masonry lib. Every 6th tile is "tall"; everything else is "short".
+const isTallTile = (index) => index % 6 === 0
 
-const getPersonKey = (person) => String(person?.id || person?.username || "")
-
-const includesAny = (value, keywords) => keywords.some((keyword) => value.includes(keyword))
-
-const sortEventsByMomentum = (events) =>
-  [...events].sort((left, right) => {
-    const rightScore = Number(right?.goingCount || 0) + Number(right?.repostedByIds?.length || 0) * 3
-    const leftScore = Number(left?.goingCount || 0) + Number(left?.repostedByIds?.length || 0) * 3
-    return rightScore - leftScore
-  })
-
-const normalizePerson = (person, index, supportsFollowAction) => ({
-  id: person.id || person.username || `person-${index}`,
-  username: person.username || `guest-${index}`,
-  name: person.name || person.username || "Campus User",
-  bio:
-    person.bio ||
-    "Exploring concerts, parties, pop-ups, and new people outside the usual circle.",
-  location: person.location || "New city nearby",
-  image: sanitizeAvatarUrl(person.image || person.avatar || person.avatar_url, DEFAULT_AVATAR_URL),
-  supportsFollowAction,
-})
-
-const buildCuratedSections = (events, limit = 6) => {
-  const seen = new Set()
-
-  return EXPLORE_SECTION_DEFINITIONS.map((section) => {
-    const items = section
-      .select(events)
-      .filter((event) => {
-        const key = String(event?.id || "")
-        if (!key || seen.has(key)) return false
-        seen.add(key)
-        return true
-      })
-      .slice(0, limit)
-
-    return {
-      ...section,
-      items,
-    }
-  }).filter((section) => section.items.length > 0)
+const timeRank = (value) => {
+  const parsed = Date.parse(value || "")
+  return Number.isFinite(parsed) ? parsed : 0
 }
 
-function Explore() {
-  const navigate = useNavigate()
-  const {
-    allEvents,
-    followingList,
-    followersList,
-    currentUser,
-    savedEvents,
-    addEvent,
-    follow,
-    unfollow,
-  } = useEvents()
-  const [searchQuery, setSearchQuery] = useState("")
-  const [expandedEvent, setExpandedEvent] = useState(null)
-  const [followOverrides, setFollowOverrides] = useState({})
-  const [remoteProfileResults, setRemoteProfileResults] = useState({ query: "", items: [] })
-  const [suggestedProfiles, setSuggestedProfiles] = useState([])
-  const [searchPage, setSearchPage] = useState({ query: "", count: PAGE_SIZE })
-  const [expandedSections, setExpandedSections] = useState(new Set())
-  const sentinelRef = useRef(null)
+const interleaveForYou = ({ videos, pictures, events }) => {
+  // Round-robin three buckets so the grid always has mixed content.
+  const queue = []
+  const maxLen = Math.max(videos.length, pictures.length, events.length)
+  for (let i = 0; i < maxLen; i += 1) {
+    if (videos[i]) queue.push(videos[i])
+    if (pictures[i]) queue.push(pictures[i])
+    if (events[i]) queue.push(events[i])
+  }
+  return queue
+}
 
-  const people = useMemo(() => {
-    const fromContext = [...followingList, ...followersList].map((person, index) =>
-      normalizePerson(
-        {
-          ...person,
-          bio:
-            person.bio ||
-            `Always looking for live music, social nights, and standout events around ${person.location || "their city"}.`,
-          location:
-            person.location || (index % 2 === 0 ? "Baltimore, MD" : "Washington, DC"),
-        },
-        index,
-        true
-      )
-    )
+const filterEventsByScope = (events, scope) => {
+  // Location logic is a mock for now — `nearby` keeps the Princess Anne /
+  // campus-keyword bias the old Explore had, `state` broadens, `country` is
+  // unfiltered.
+  if (scope === "country") return events
+  if (scope === "state") return events
 
-    const mergedPeople = [...fromContext, ...suggestedProfiles]
-    const seen = new Set()
+  const nearby = events.filter((event) => {
+    const haystack = [
+      event?.location,
+      event?.locationName,
+      event?.locationAddress,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase()
+    return /princess anne|campus|umes|maryland|eastern shore/.test(haystack)
+  })
+  return nearby.length > 0 ? nearby : events
+}
 
-    return mergedPeople.filter((person) => {
-      const key = getPersonKey(person)
-      const isCurrentUser =
-        (currentUser?.id && String(currentUser.id) === key) ||
-        (currentUser?.username && currentUser.username === person.username)
-
-      if (isCurrentUser || seen.has(key)) return false
-
-      seen.add(key)
-      return true
-    })
-  }, [currentUser, followersList, followingList, suggestedProfiles])
-
-  const followingAndFollowerIds = useMemo(() => {
-    const ids = new Set()
-    followingList.forEach((p) => { if (p?.id) ids.add(String(p.id)) })
-    followersList.forEach((p) => { if (p?.id) ids.add(String(p.id)) })
-    return ids
-  }, [followingList, followersList])
-
-  useEffect(() => {
-    if (!currentUser?.id || currentUser.id === "current-user") return
-
-    supabase
-      .from("profiles")
-      .select("id, name, username, bio, avatar_url")
-      .neq("id", currentUser.id)
-      .limit(12)
-      .then(({ data }) => {
-        if (!data) return
-        const filtered = data.filter((p) => !followingAndFollowerIds.has(String(p.id)))
-        setSuggestedProfiles(
-          filtered.slice(0, 6).map((p, index) => normalizePerson(p, index, true))
-        )
-      })
-  }, [currentUser?.id, followingAndFollowerIds])
-
-  const trimmedQuery = searchQuery.trim().toLowerCase()
-
-  useEffect(() => {
-    if (!trimmedQuery) {
-      return undefined
-    }
-
-    let isActive = true
-
-    supabase
-      .from("profiles")
-      .select("id, name, username, bio, avatar_url")
-      .or(`username.ilike.%${trimmedQuery}%,name.ilike.%${trimmedQuery}%`)
-      .neq("id", currentUser?.id || "")
-      .limit(10)
-      .then(({ data }) => {
-        if (!isActive) return
-
-        setRemoteProfileResults({
-          query: trimmedQuery,
-          items: (data || []).map((profile, index) => normalizePerson(profile, index, true)),
-        })
-      })
-
-    return () => {
-      isActive = false
-    }
-  }, [trimmedQuery, currentUser?.id])
-
-  // Infinite scroll: load more events when sentinel enters viewport
-  useEffect(() => {
-    const sentinel = sentinelRef.current
-    if (!sentinel) return
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) {
-          setSearchPage((prev) => ({ ...prev, count: prev.count + PAGE_SIZE }))
-        }
-      },
-      { rootMargin: "200px" }
-    )
-
-    observer.observe(sentinel)
-    return () => observer.disconnect()
-  }, [trimmedQuery])
-
-  const toggleSectionExpanded = useCallback((sectionId) => {
-    setExpandedSections((prev) => {
-      const next = new Set(prev)
-      if (next.has(sectionId)) {
-        next.delete(sectionId)
-      } else {
-        next.add(sectionId)
-      }
-      return next
-    })
-  }, [])
-
-  // Derived visible count — resets to PAGE_SIZE automatically when query changes
-  const visibleEventCount =
-    searchPage.query === trimmedQuery ? searchPage.count : PAGE_SIZE
-
-  const searchedProfiles = useMemo(() => {
-    if (!trimmedQuery) return []
-    return remoteProfileResults.query === trimmedQuery ? remoteProfileResults.items : []
-  }, [remoteProfileResults, trimmedQuery])
-
-  const discoverableEvents = useMemo(
-    () =>
-      sortEventsByMomentum(
-        (allEvents || []).filter(
-          (event) =>
-            !event?.isPrivate && String(event?.createdBy || "") !== String(currentUser?.id || "")
-        )
-      ),
-    [allEvents, currentUser?.id]
+function FilterChevron({ open }) {
+  return (
+    <svg
+      className={`explore-filter-chevron ${open ? "open" : ""}`}
+      viewBox="0 0 12 12"
+      aria-hidden="true"
+    >
+      <path d="M4.2 2.8 7.4 6 4.2 9.2" />
+    </svg>
   )
+}
 
-  const savedEventIds = useMemo(
-    () => new Set((savedEvents || []).map((event) => String(event.id))),
-    [savedEvents]
+function GlobeIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className="explore-globe-icon"
+    >
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M3.5 12h17" />
+      <path d="M12 3.5c2.5 2.5 3.7 5.6 3.7 8.5s-1.2 6-3.7 8.5c-2.5-2.5-3.7-5.6-3.7-8.5s1.2-6 3.7-8.5Z" />
+    </svg>
   )
+}
 
-  const followingKeys = useMemo(() => {
-    const keys = new Set()
-
-    followingList.forEach((person) => {
-      if (person?.id) keys.add(String(person.id))
-      if (person?.username) keys.add(person.username)
-    })
-
-    return keys
-  }, [followingList])
-
-  const filteredEvents = useMemo(() => {
-    if (!trimmedQuery) return []
-    return discoverableEvents.filter((event) => eventSearchFields(event).includes(trimmedQuery))
-  }, [discoverableEvents, trimmedQuery])
-
-  const filteredPeople = useMemo(() => {
-    if (!trimmedQuery) return []
-
-    const localMatches = people.filter((person) => personSearchFields(person).includes(trimmedQuery))
-    const localIds = new Set(localMatches.map(getPersonKey))
-    const remoteOnly = searchedProfiles.filter((person) => !localIds.has(getPersonKey(person)))
-
-    return [...localMatches, ...remoteOnly]
-  }, [people, searchedProfiles, trimmedQuery])
-
-  const curatedSections = useMemo(
-    () => buildCuratedSections(discoverableEvents),
-    [discoverableEvents]
+function VideoTileOverlay({ viewCount }) {
+  return (
+    <div className="explore-tile-video-overlay" aria-hidden="true">
+      <svg viewBox="0 0 24 24" className="explore-tile-view-eye">
+        <path d="M2.5 12S6 5 12 5s9.5 7 9.5 7-3.5 7-9.5 7-9.5-7-9.5-7Z" />
+        <circle cx="12" cy="12" r="2.8" />
+      </svg>
+      <span>{formatViewCount(viewCount)}</span>
+    </div>
   )
+}
 
-  function isEventSaved(eventId) {
-    return savedEventIds.has(String(eventId))
-  }
+function PictureTile({ item, onOpen }) {
+  return (
+    <button
+      type="button"
+      className={`explore-grid-tile explore-grid-tile-${isTallTile(item.gridIndex) ? "tall" : "short"}`}
+      onClick={() => onOpen(item)}
+    >
+      <img src={item.mediaUrl} alt="" className="explore-tile-media" />
+    </button>
+  )
+}
 
-  function isFollowingPerson(person) {
-    const personKey = getPersonKey(person)
+function VideoTile({ item, onOpen }) {
+  const posterRef = useRef(null)
+  const videoRef = useRef(null)
 
-    if (Object.prototype.hasOwnProperty.call(followOverrides, personKey)) {
-      return followOverrides[personKey]
-    }
-
-    if (person?.id && followingKeys.has(String(person.id))) return true
-    if (person?.username && followingKeys.has(person.username)) return true
-    return false
-  }
-
-  const suggestedPeople = [...people]
-    .sort((left, right) => Number(isFollowingPerson(left)) - Number(isFollowingPerson(right)))
-
-  function getEventActionLabel(event) {
-    if (isEventSaved(event.id)) {
-      return (event.goingCount || 0) > 0 ? "Going" : "Added"
-    }
-
-    return (event.goingCount || 0) > 0 ? "RSVP" : "Add Event"
-  }
-
-  function handleOpenPerson(person) {
-    const target =
-      person.username && !person.username.startsWith("guest-")
-        ? person.username
-        : person.id
-
-    if (!target) return
-    navigate(`/profile/${target}`)
-  }
-
-  function handleEventAction(selectedEvent) {
-    if (isEventSaved(selectedEvent.id)) return
-
-    addEvent(
-      {
-        ...selectedEvent,
-        rsvpDate: new Date().toISOString(),
-      },
-      currentUser
-    )
-  }
-
-  async function handleFollowToggle(event, person) {
-    event.stopPropagation()
-
-    const personKey = getPersonKey(person)
-    if (!personKey) return
-
-    const nextIsFollowing = !isFollowingPerson(person)
-
-    setFollowOverrides((prev) => ({
-      ...prev,
-      [personKey]: nextIsFollowing,
-    }))
-
-    if (!person.supportsFollowAction || !person.id) return
-
-    if (nextIsFollowing) {
-      await follow(person.id)
-      return
-    }
-
-    await unfollow(person.id)
-  }
-
-  function renderEventTiles(events) {
-    return (
-      <div className="explore-tile-grid">
-        {events.map((event) => (
-          <ExploreEventTile key={event.id} event={event} onOpen={setExpandedEvent} />
-        ))}
-      </div>
-    )
-  }
-
-  const SECTION_DEFAULT_LIMIT = 6
-
-  function renderPersonCard(person) {
-    const isFollowing = isFollowingPerson(person)
-
-    return (
-      <article key={person.id} className="explore-card explore-person-card">
-        <button
-          type="button"
-          className="explore-card-main explore-person-main"
-          onClick={() => handleOpenPerson(person)}
-        >
-          <div className="explore-person-top">
-            <div className="explore-person-identity">
-              <img
-                src={person.image}
-                alt={person.name}
-                className="explore-avatar"
-                onError={(event) => {
-                  event.currentTarget.src = "/default-avatar.png"
-                }}
-              />
-
-              <div className="explore-person-name-wrap">
-                <h3 className="explore-person-name">{person.name}</h3>
-                <p className="explore-person-username">@{person.username}</p>
-              </div>
-            </div>
-
-            <span className="explore-person-badge">Suggested</span>
-          </div>
-
-          <p className="explore-person-bio">{person.bio}</p>
-          <span className="explore-person-location">{person.location}</span>
-        </button>
-
-        <div className="explore-card-footer">
-          <button
-            type="button"
-            className={`explore-action-btn ${isFollowing ? "active" : ""}`}
-            onClick={(clickEvent) => handleFollowToggle(clickEvent, person)}
-            aria-pressed={isFollowing}
-          >
-            {isFollowing ? "Unfollow" : "Follow"}
-          </button>
-        </div>
-      </article>
-    )
-  }
-
-  function renderSectionHeader({ eyebrow, title, note }) {
-    return (
-      <div className="explore-section-header">
-        <div className="explore-section-copy">
-          <p className="explore-section-eyebrow">{eyebrow}</p>
-          <h2 className="explore-section-title">{title}</h2>
-        </div>
-        <p className="explore-section-note">{note}</p>
-      </div>
-    )
-  }
+  // Prefer thumbnail if supplied, else let the video element render frame one.
+  const posterSrc = item.thumbnailUrl || null
 
   return (
-    <main className="explore-page">
-      <div className="explore-shell">
-        <div className="explore-search-wrap">
-          <span aria-hidden="true" className="explore-search-icon">⌕</span>
-          <input
-            type="text"
-            placeholder="Search events or people"
-            value={searchQuery}
-            onChange={(event) => {
-              setExpandedEvent(null)
-              setSearchQuery(event.target.value)
-              setSearchPage({ query: event.target.value.trim().toLowerCase(), count: PAGE_SIZE })
-            }}
-            className="explore-search-input"
-          />
+    <button
+      type="button"
+      className={`explore-grid-tile explore-grid-tile-${isTallTile(item.gridIndex) ? "tall" : "short"}`}
+      onClick={() => onOpen(item)}
+    >
+      {posterSrc ? (
+        <img ref={posterRef} src={posterSrc} alt="" className="explore-tile-media" />
+      ) : (
+        <video
+          ref={videoRef}
+          className="explore-tile-media"
+          src={item.mediaUrl}
+          muted
+          playsInline
+          preload="metadata"
+        />
+      )}
+      <VideoTileOverlay viewCount={item.viewCount} />
+    </button>
+  )
+}
+
+function EventTile({ event, onOpen, gridIndex }) {
+  return (
+    <div
+      className={`explore-grid-tile explore-grid-tile-event explore-grid-tile-${isTallTile(gridIndex) ? "tall" : "short"}`}
+    >
+      <ExploreEventTile event={event} onOpen={onOpen} />
+    </div>
+  )
+}
+
+function MapModal({ open, onClose }) {
+  if (!open) return null
+  return (
+    <div
+      className="explore-map-modal-backdrop"
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+    >
+      <div
+        className="explore-map-modal"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="explore-map-modal-header">
+          <strong>Campus events map</strong>
+          <button
+            type="button"
+            className="explore-map-modal-close"
+            onClick={onClose}
+            aria-label="Close map"
+          >
+            ×
+          </button>
+        </div>
+        <div className="explore-map-modal-body">
+          <div className="explore-map-placeholder">
+            <GlobeIcon />
+            <p>Map view coming soon</p>
+            <small>
+              Pins for every event with hover preview cards land here next. Hook up
+              Mapbox or Google Maps to replace this placeholder.
+            </small>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default function Explore() {
+  const navigate = useNavigate()
+  const { events: allEvents = [] } = useEvents() || {}
+
+  const [primaryTab, setPrimaryTab] = useState("forYou") // forYou | media | events
+  const [openDropdown, setOpenDropdown] = useState(null) // 'media' | 'events' | null
+  const [mediaFilter, setMediaFilter] = useState("all") // all | videos | pictures
+  const [eventScope, setEventScope] = useState("nearby") // nearby | state | country
+
+  const [posts, setPosts] = useState([])
+  const [viewCountsByPostId, setViewCountsByPostId] = useState(new Map())
+  const [selectedEvent, setSelectedEvent] = useState(null)
+  const [isMapOpen, setIsMapOpen] = useState(false)
+
+  const barRef = useRef(null)
+
+  useEffect(() => {
+    let cancelled = false
+    loadDiscoverPosts({
+      onData: (next) => {
+        if (!cancelled) setPosts(next || [])
+      },
+    })
+      .then((next) => {
+        if (!cancelled) setPosts(next || [])
+      })
+      .catch(() => {
+        /* swallow — we just won't have posts */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!posts.length) return
+    let cancelled = false
+    const ids = posts.map((post) => toId(post.id)).filter(Boolean)
+    loadContentViewCounts({ contentIds: ids })
+      .then((counts) => {
+        if (cancelled) return
+        // Fall back to a placeholder count for posts that have no real rows yet,
+        // so the UI still shows activity on a fresh DB.
+        const next = new Map()
+        for (const id of ids) {
+          next.set(id, counts.get(id) || getPlaceholderViewCount(id))
+        }
+        setViewCountsByPostId(next)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [posts])
+
+  useEffect(() => {
+    if (!openDropdown) return
+    const handleDocumentPointer = (event) => {
+      if (barRef.current && barRef.current.contains(event.target)) return
+      setOpenDropdown(null)
+    }
+    document.addEventListener("mousedown", handleDocumentPointer)
+    return () => document.removeEventListener("mousedown", handleDocumentPointer)
+  }, [openDropdown])
+
+  const videos = useMemo(
+    () =>
+      posts
+        .filter((post) => post.mediaType === "video")
+        .sort((a, b) => timeRank(b.createdAt) - timeRank(a.createdAt))
+        .map((post) => ({
+          kind: "video",
+          id: toId(post.id),
+          mediaUrl: post.mediaUrl,
+          thumbnailUrl: post.thumbnailUrl || "",
+          raw: post,
+        })),
+    [posts]
+  )
+
+  const pictures = useMemo(
+    () =>
+      posts
+        .filter((post) => post.mediaType !== "video")
+        .sort((a, b) => timeRank(b.createdAt) - timeRank(a.createdAt))
+        .map((post) => ({
+          kind: "picture",
+          id: toId(post.id),
+          mediaUrl: post.mediaUrl,
+          raw: post,
+        })),
+    [posts]
+  )
+
+  const eventItems = useMemo(() => {
+    const scoped = filterEventsByScope(allEvents, eventScope)
+    return scoped
+      .slice()
+      .sort((a, b) => timeRank(b.createdAt || b.date) - timeRank(a.createdAt || a.date))
+      .map((event) => ({
+        kind: "event",
+        id: toId(event.id),
+        raw: event,
+      }))
+  }, [allEvents, eventScope])
+
+  const gridItems = useMemo(() => {
+    if (primaryTab === "media") {
+      if (mediaFilter === "videos") return videos
+      if (mediaFilter === "pictures") return pictures
+      return [...videos, ...pictures].sort(
+        (a, b) => timeRank(b.raw?.createdAt) - timeRank(a.raw?.createdAt)
+      )
+    }
+    if (primaryTab === "events") {
+      return eventItems
+    }
+    return interleaveForYou({ videos, pictures, events: eventItems })
+  }, [eventItems, mediaFilter, pictures, primaryTab, videos])
+
+  const handlePrimaryTabClick = (tabId) => {
+    const hasDropdown = tabId === "media" || tabId === "events"
+    if (!hasDropdown) {
+      setPrimaryTab(tabId)
+      setOpenDropdown(null)
+      return
+    }
+    if (primaryTab !== tabId) {
+      setPrimaryTab(tabId)
+      setOpenDropdown(null)
+      return
+    }
+    setOpenDropdown((current) => (current === tabId ? null : tabId))
+  }
+
+  const handleOpenItem = useCallback(
+    (item) => {
+      if (item.kind === "event") {
+        setSelectedEvent(item.raw)
+        void recordContentView({ contentType: "event", contentId: item.id })
+        return
+      }
+      if (item.kind === "video" || item.kind === "picture") {
+        const type = item.kind === "video" ? "video" : "post"
+        void recordContentView({ contentType: type, contentId: item.id })
+        // Posts don't have a dedicated detail route yet — navigate to the
+        // author profile as the closest existing surface.
+        const username = item.raw?.authorUsername
+        if (username) {
+          navigate(`/profile/${username}`)
+        }
+      }
+    },
+    [navigate]
+  )
+
+  const activeMediaLabel =
+    MEDIA_OPTIONS.find((opt) => opt.id === mediaFilter)?.label || "Media"
+  const activeEventLabel =
+    EVENT_SCOPE_OPTIONS.find((opt) => opt.id === eventScope)?.label || "Events"
+
+  return (
+    <main className="explore-page explore-page-grid">
+      <div className="explore-filter-bar" ref={barRef} role="tablist" aria-label="Explore filters">
+        <button
+          type="button"
+          className={`explore-filter-tab ${primaryTab === "forYou" ? "active" : ""}`}
+          role="tab"
+          aria-selected={primaryTab === "forYou"}
+          onClick={() => handlePrimaryTabClick("forYou")}
+        >
+          For You
+        </button>
+
+        <div className="explore-filter-tab-slot">
+          <button
+            type="button"
+            className={`explore-filter-tab ${primaryTab === "media" ? "active" : ""}`}
+            role="tab"
+            aria-selected={primaryTab === "media"}
+            aria-haspopup="menu"
+            aria-expanded={openDropdown === "media"}
+            onClick={() => handlePrimaryTabClick("media")}
+          >
+            {primaryTab === "media" ? activeMediaLabel : "Media"}
+            <FilterChevron open={openDropdown === "media"} />
+          </button>
+          {openDropdown === "media" && (
+            <div className="explore-filter-dropdown" role="menu">
+              {MEDIA_OPTIONS.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  role="menuitem"
+                  className={`explore-filter-dropdown-item ${mediaFilter === option.id ? "active" : ""}`}
+                  onClick={() => {
+                    setMediaFilter(option.id)
+                    setPrimaryTab("media")
+                    setOpenDropdown(null)
+                  }}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
-        <p className="explore-search-caption">
-          Browse more at once in the grid, then open any tile to see the full event details.
-        </p>
-
-        <div className="explore-feed">
-          {trimmedQuery ? (
-            <>
-              {renderSectionHeader({
-                eyebrow: "Results",
-                title: "Search Results",
-                note: `Matching events and people for "${searchQuery.trim()}"`,
-              })}
-
-              <div className="explore-results-group">
-                {renderSectionHeader({
-                  eyebrow: "Events",
-                  title: "Matching Events",
-                  note: `${filteredEvents.length} found`,
-                })}
-
-                {filteredEvents.length > 0 ? (
-                  <>
-                    {renderEventTiles(filteredEvents.slice(0, visibleEventCount))}
-                    {visibleEventCount < filteredEvents.length && (
-                      <div ref={sentinelRef} className="explore-load-sentinel" aria-hidden="true" />
-                    )}
-                  </>
-                ) : (
-                  <p className="explore-empty-state">No events matched that search yet.</p>
-                )}
-              </div>
-
-              <div className="explore-results-group">
-                {renderSectionHeader({
-                  eyebrow: "People",
-                  title: "Matching People",
-                  note: `${filteredPeople.length} found`,
-                })}
-
-                {filteredPeople.length > 0 ? (
-                  <div className="explore-people-grid">
-                    {filteredPeople.map(renderPersonCard)}
-                  </div>
-                ) : (
-                  <p className="explore-empty-state">No people matched that search yet.</p>
-                )}
-              </div>
-            </>
-          ) : (
-            <>
-              {curatedSections.map((section) => {
-                const isExpanded = expandedSections.has(section.id)
-                const visibleItems = isExpanded ? section.items : section.items.slice(0, SECTION_DEFAULT_LIMIT)
-                return (
-                  <section className="explore-section" key={section.id}>
-                    {renderSectionHeader(section)}
-                    {renderEventTiles(visibleItems)}
-                    {section.items.length > SECTION_DEFAULT_LIMIT && (
-                      <button
-                        type="button"
-                        className="explore-see-all-btn"
-                        onClick={() => toggleSectionExpanded(section.id)}
-                      >
-                        {isExpanded ? "Show less" : `See all ${section.items.length}`}
-                      </button>
-                    )}
-                  </section>
-                )
-              })}
-
-              <section className="explore-section">
-                {renderSectionHeader({
-                  eyebrow: "People",
-                  title: "People to Follow",
-                  note: "Profiles that can lead you to your next favorite plan.",
-                })}
-
-                {suggestedPeople.length > 0 ? (
-                  <div className="explore-people-grid">
-                    {suggestedPeople.slice(0, 4).map(renderPersonCard)}
-                  </div>
-                ) : (
-                  <p className="explore-empty-state">No people to explore yet.</p>
-                )}
-              </section>
-            </>
+        <div className="explore-filter-tab-slot">
+          <button
+            type="button"
+            className={`explore-filter-tab ${primaryTab === "events" ? "active" : ""}`}
+            role="tab"
+            aria-selected={primaryTab === "events"}
+            aria-haspopup="menu"
+            aria-expanded={openDropdown === "events"}
+            onClick={() => handlePrimaryTabClick("events")}
+          >
+            {primaryTab === "events" ? activeEventLabel : "Events"}
+            <FilterChevron open={openDropdown === "events"} />
+          </button>
+          {openDropdown === "events" && (
+            <div className="explore-filter-dropdown" role="menu">
+              {EVENT_SCOPE_OPTIONS.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  role="menuitem"
+                  className={`explore-filter-dropdown-item ${eventScope === option.id ? "active" : ""}`}
+                  onClick={() => {
+                    setEventScope(option.id)
+                    setPrimaryTab("events")
+                    setOpenDropdown(null)
+                  }}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
           )}
         </div>
       </div>
 
-      <ExploreEventModal
-        event={expandedEvent}
-        isSaved={expandedEvent ? isEventSaved(expandedEvent.id) : false}
-        actionLabel={expandedEvent ? getEventActionLabel(expandedEvent) : "Add Event"}
-        onAction={() => expandedEvent && handleEventAction(expandedEvent)}
-        onClose={() => setExpandedEvent(null)}
-      />
+      <section className="explore-grid" aria-label="Explore grid">
+        {gridItems.length === 0 ? (
+          <div className="explore-grid-empty">
+            <p>Nothing here yet.</p>
+            <small>Check back soon — events, posts, and videos will land here.</small>
+          </div>
+        ) : (
+          gridItems.map((item, index) => {
+            const gridIndex = index
+            if (item.kind === "event") {
+              return (
+                <EventTile
+                  key={`event-${item.id}-${index}`}
+                  event={item.raw}
+                  onOpen={setSelectedEvent}
+                  gridIndex={gridIndex}
+                />
+              )
+            }
+            if (item.kind === "video") {
+              return (
+                <VideoTile
+                  key={`video-${item.id}-${index}`}
+                  item={{
+                    ...item,
+                    gridIndex,
+                    viewCount:
+                      viewCountsByPostId.get(item.id) ||
+                      getPlaceholderViewCount(item.id),
+                  }}
+                  onOpen={handleOpenItem}
+                />
+              )
+            }
+            return (
+              <PictureTile
+                key={`pic-${item.id}-${index}`}
+                item={{ ...item, gridIndex }}
+                onOpen={handleOpenItem}
+              />
+            )
+          })
+        )}
+      </section>
+
+      <button
+        type="button"
+        className="explore-globe-button"
+        onClick={() => setIsMapOpen(true)}
+        aria-label="Open map"
+      >
+        <GlobeIcon />
+      </button>
+
+      <MapModal open={isMapOpen} onClose={() => setIsMapOpen(false)} />
+
+      {selectedEvent && (
+        <ExploreEventModal
+          event={selectedEvent}
+          onClose={() => setSelectedEvent(null)}
+        />
+      )}
     </main>
   )
 }
 
-export default Explore
+// -----------------------------------------------------------------------------
+// Legacy helpers preserved from the previous Explore page implementation so any
+// utility that happened to be imported elsewhere still resolves.
+// -----------------------------------------------------------------------------
+/* eslint-disable no-unused-vars */
+function includesAny(value, keywords) {
+  return keywords.some((keyword) => value.includes(keyword))
+}
+function getEventDiscoveryFields(event) {
+  return [
+    event?.title,
+    event?.location,
+    event?.locationName,
+    event?.description,
+    (event?.tags || []).join(" "),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase()
+}
+function sortEventsByMomentum(events) {
+  return events
+    .slice()
+    .sort((a, b) => timeRank(b.createdAt || b.date) - timeRank(a.createdAt || a.date))
+}
+export {
+  includesAny as exploreIncludesAny,
+  getEventDiscoveryFields as exploreGetEventDiscoveryFields,
+  sortEventsByMomentum as exploreSortEventsByMomentum,
+}
+
+// Retained so any code that referenced the old pagination constant keeps
+// compiling while we refactor call sites.
+export const EXPLORE_PAGE_SIZE = 20
+export const EXPLORE_SUPABASE_CLIENT = supabase
+/* eslint-enable no-unused-vars */

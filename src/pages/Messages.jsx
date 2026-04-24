@@ -251,9 +251,9 @@ function Messages() {
     <main className="messages-page">
       <div className="messages-page-header">
         <p className="eyebrow">A dedicated home for conversations</p>
-        <h1>DMs</h1>
+        <h1>Messages</h1>
         <p className="messages-page-subtitle">
-          Keep direct messages separate from notifications while staying close to your campus plans.
+          Keep messages separate from notifications while staying close to your campus plans.
         </p>
       </div>
 
@@ -335,7 +335,7 @@ function Messages() {
                 </button>
                 <div className="inbox-item-main">
                   <span className="inbox-item-text">{selectedDmThread.name}</span>
-                  <span className="inbox-item-time">Direct messages</span>
+              <span className="inbox-item-time">Messages</span>
                 </div>
               </div>
 

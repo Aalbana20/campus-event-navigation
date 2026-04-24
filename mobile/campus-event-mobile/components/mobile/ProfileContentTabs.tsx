@@ -18,6 +18,8 @@ import { useAppTheme, type AppTheme } from '@/lib/app-theme';
 import {
   loadDiscoverPostsByIds,
   loadDiscoverPostsForAuthor,
+  loadLikedPostIds,
+  loadSavedPostIds,
   resolveDiscoverPostMediaUrl,
   type DiscoverPostRecord,
 } from '@/lib/mobile-discover-posts';
@@ -33,16 +35,27 @@ type ProfileContentTabsProps = {
   onContentCountsChange?: (counts: { posts: number }) => void;
 };
 
-type ProfileTab = 'grid' | 'posts' | 'reposts' | 'tags';
+type ProfileTab = 'grid' | 'posts' | 'collection' | 'tags';
 type PostMode = 'grid' | 'list';
 type TagFilter = 'all' | 'posts' | 'event-tags';
-type ProfileTabDropdown = 'layout' | 'tags' | null;
+type CollectionMode = 'reposts' | 'likes' | 'saves';
+type ProfileTabDropdown = 'layout' | 'collection' | 'tags' | null;
 
 const tabs: { id: ProfileTab; label: string }[] = [
   { id: 'grid', label: 'Grid' },
   { id: 'posts', label: 'Posts / Videos' },
-  { id: 'reposts', label: 'Reposts' },
+  { id: 'collection', label: 'Reposts, Likes, Saved' },
   { id: 'tags', label: 'Tags' },
+];
+
+const collectionOptions: {
+  id: CollectionMode;
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+}[] = [
+  { id: 'reposts', label: 'Reposts', icon: 'repeat-outline' },
+  { id: 'likes', label: 'Likes', icon: 'heart-outline' },
+  { id: 'saves', label: 'Saved', icon: 'bookmark-outline' },
 ];
 
 const tagFilters: { id: TagFilter; label: string }[] = [
@@ -147,12 +160,15 @@ export function ProfileContentTabs({
   const [activeTab, setActiveTab] = useState<ProfileTab>('grid');
   const [postMode, setPostMode] = useState<PostMode>('grid');
   const [tagFilter, setTagFilter] = useState<TagFilter>('all');
+  const [collectionMode, setCollectionMode] = useState<CollectionMode>('reposts');
   const [openDropdown, setOpenDropdown] = useState<ProfileTabDropdown>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [gridPosts, setGridPosts] = useState<DiscoverPostRecord[]>([]);
   const [authorPosts, setAuthorPosts] = useState<DiscoverPostRecord[]>([]);
   const [reposts, setReposts] = useState<RepostRecord[]>([]);
   const [repostedPosts, setRepostedPosts] = useState<DiscoverPostRecord[]>([]);
+  const [likedPosts, setLikedPosts] = useState<DiscoverPostRecord[]>([]);
+  const [savedPosts, setSavedPosts] = useState<DiscoverPostRecord[]>([]);
   const [taggedPosts, setTaggedPosts] = useState<DiscoverPostRecord[]>([]);
   const [eventMemories, setEventMemories] = useState<EventMemoryRecord[]>([]);
   const [selectedPost, setSelectedPost] = useState<DiscoverPostRecord | null>(null);
@@ -178,19 +194,34 @@ export function ProfileContentTabs({
 
     setIsLoading(true);
     try {
-      const [nextGrid, nextAuthorPosts, nextReposts, nextTagged, nextMemories] =
-        await Promise.all([
-          loadGridPostsForAuthor(profileId),
-          loadDiscoverPostsForAuthor(profileId),
-          loadRepostsForUser(profileId),
-          loadPostsTaggingUser(profileId),
-          loadEventMemoriesForUser(profileId),
-        ]);
+      const [
+        nextGrid,
+        nextAuthorPosts,
+        nextReposts,
+        nextTagged,
+        nextMemories,
+        nextLikedIds,
+        nextSavedIds,
+      ] = await Promise.all([
+        loadGridPostsForAuthor(profileId),
+        loadDiscoverPostsForAuthor(profileId),
+        loadRepostsForUser(profileId),
+        loadPostsTaggingUser(profileId),
+        loadEventMemoriesForUser(profileId),
+        loadLikedPostIds(profileId),
+        loadSavedPostIds(profileId),
+      ]);
 
       const postIds = nextReposts
         .filter((row) => row.targetType === 'post' && row.postId)
         .map((row) => row.postId as string);
-      const nextRepostedPosts = await loadDiscoverPostsByIds(postIds);
+
+      const [nextRepostedPosts, nextLikedPosts, nextSavedPosts] = await Promise.all([
+        loadDiscoverPostsByIds(postIds),
+        loadDiscoverPostsByIds(Array.from(nextLikedIds)),
+        loadDiscoverPostsByIds(Array.from(nextSavedIds)),
+      ]);
+
       const normalizedTaggedPosts = nextTagged
         .map((row) =>
           row.post
@@ -209,6 +240,8 @@ export function ProfileContentTabs({
       setAuthorPosts(nextAuthorPosts);
       setReposts(nextReposts);
       setRepostedPosts(nextRepostedPosts);
+      setLikedPosts(nextLikedPosts);
+      setSavedPosts(nextSavedPosts);
       setTaggedPosts(normalizedTaggedPosts);
       setEventMemories(nextMemories);
     } finally {
@@ -263,6 +296,19 @@ export function ProfileContentTabs({
       return;
     }
 
+    if (tabId === 'collection') {
+      if (activeTab !== 'collection') {
+        setActiveTab('collection');
+        setOpenDropdown(null);
+        return;
+      }
+
+      setOpenDropdown((currentDropdown) =>
+        currentDropdown === 'collection' ? null : 'collection'
+      );
+      return;
+    }
+
     if (tabId === 'tags') {
       if (activeTab !== 'tags') {
         setActiveTab('tags');
@@ -287,6 +333,11 @@ export function ProfileContentTabs({
 
   const handleSelectTagFilter = (filter: TagFilter) => {
     setTagFilter(filter);
+    setOpenDropdown(null);
+  };
+
+  const handleSelectCollectionMode = (mode: CollectionMode) => {
+    setCollectionMode(mode);
     setOpenDropdown(null);
   };
 
@@ -503,7 +554,7 @@ export function ProfileContentTabs({
     </View>
   );
 
-  const renderRepostsTab = () =>
+  const renderRepostsCollection = () =>
     repostItems.length ? (
       <View style={styles.listStack}>
         {repostItems.map((item) =>
@@ -522,6 +573,28 @@ export function ProfileContentTabs({
     ) : (
       renderEmpty('No reposts yet.', 'Reposted events and posts will appear here.')
     );
+
+  const renderLikedCollection = () =>
+    likedPosts.length
+      ? renderGrid(likedPosts)
+      : renderEmpty(
+          'No liked posts yet.',
+          'Posts you like will appear here.'
+        );
+
+  const renderSavedCollection = () =>
+    savedPosts.length
+      ? renderGrid(savedPosts)
+      : renderEmpty(
+          'No saved posts yet.',
+          'Posts you save will appear here.'
+        );
+
+  const renderCollectionTab = () => {
+    if (collectionMode === 'likes') return renderLikedCollection();
+    if (collectionMode === 'saves') return renderSavedCollection();
+    return renderRepostsCollection();
+  };
 
   const renderTagsTab = () => (
     <View>
@@ -567,7 +640,7 @@ export function ProfileContentTabs({
 
     if (activeTab === 'grid') return renderGridTab();
     if (activeTab === 'posts') return renderPostsTab();
-    if (activeTab === 'reposts') return renderRepostsTab();
+    if (activeTab === 'collection') return renderCollectionTab();
     return renderTagsTab();
   };
 
@@ -645,88 +718,155 @@ export function ProfileContentTabs({
       ) : null}
 
       <View style={styles.tabBar}>
-        {tabs.map((tab) => (
-          <View key={tab.id} style={styles.tabSlot}>
-            <Pressable
-              style={styles.tabButton}
-              accessibilityRole="tab"
-              accessibilityLabel={tab.label}
-              accessibilityState={{ selected: activeTab === tab.id }}
-              onPress={() => handleTabPress(tab.id)}>
-              {tab.id === 'tags' ? (
-                <View
-                  style={[
-                    styles.tagsIcon,
-                    activeTab === tab.id && styles.tagsIconActive,
-                  ]}>
-                  <Ionicons
-                    name="person-outline"
-                    size={14}
-                    color={activeTab === tab.id ? theme.text : theme.textMuted}
-                    style={styles.tagsIconPerson}
-                  />
+        {tabs.map((tab) => {
+          const hasDropdown =
+            tab.id === 'posts' || tab.id === 'tags' || tab.id === 'collection';
+          const ownDropdownKey: ProfileTabDropdown =
+            tab.id === 'posts'
+              ? 'layout'
+              : tab.id === 'collection'
+                ? 'collection'
+                : tab.id === 'tags'
+                  ? 'tags'
+                  : null;
+          const isDropdownOpen = hasDropdown && openDropdown === ownDropdownKey;
+          const isActive = activeTab === tab.id;
+          const activeCollection = collectionOptions.find(
+            (option) => option.id === collectionMode
+          );
+          const collectionLabel = activeCollection
+            ? activeCollection.label
+            : 'Reposts';
+          const accessibilityLabel =
+            tab.id === 'collection' ? collectionLabel : tab.label;
+
+          return (
+            <View key={tab.id} style={styles.tabSlot}>
+              <Pressable
+                style={styles.tabButton}
+                accessibilityRole="tab"
+                accessibilityLabel={accessibilityLabel}
+                accessibilityState={{ selected: isActive, expanded: isDropdownOpen }}
+                onPress={() => handleTabPress(tab.id)}>
+                <View style={styles.tabButtonContent}>
+                  {tab.id === 'tags' ? (
+                    <View
+                      style={[
+                        styles.tagsIcon,
+                        isActive && styles.tagsIconActive,
+                      ]}>
+                      <Ionicons
+                        name="person-outline"
+                        size={14}
+                        color={isActive ? theme.text : theme.textMuted}
+                        style={styles.tagsIconPerson}
+                      />
+                    </View>
+                  ) : (
+                    <Ionicons
+                      name={
+                        tab.id === 'grid'
+                          ? 'grid-outline'
+                          : tab.id === 'posts'
+                            ? 'camera-outline'
+                            : (activeCollection?.icon ?? 'repeat-outline')
+                      }
+                      size={22}
+                      color={isActive ? theme.text : theme.textMuted}
+                    />
+                  )}
+                  {hasDropdown ? (
+                    <Ionicons
+                      name={isDropdownOpen ? 'chevron-down' : 'chevron-forward'}
+                      size={10}
+                      color={isActive ? theme.text : theme.textMuted}
+                      style={styles.tabChevron}
+                    />
+                  ) : null}
                 </View>
-              ) : (
-                <Ionicons
-                  name={
-                    tab.id === 'grid'
-                      ? 'grid-outline'
-                      : tab.id === 'posts'
-                        ? 'camera-outline'
-                        : 'repeat-outline'
-                  }
-                  size={22}
-                  color={activeTab === tab.id ? theme.text : theme.textMuted}
-                />
-              )}
-              {activeTab === tab.id ? <View style={styles.tabIndicator} /> : null}
-            </Pressable>
+                {isActive ? <View style={styles.tabIndicator} /> : null}
+              </Pressable>
 
-            {tab.id === 'posts' && openDropdown === 'layout' ? (
-              <View style={styles.tabDropdown}>
-                {(['grid', 'list'] as PostMode[]).map((mode) => (
-                  <Pressable
-                    key={mode}
-                    style={styles.dropdownItem}
-                    onPress={() => handleSelectPostMode(mode)}>
-                    <Text
-                      style={[
-                        styles.dropdownItemText,
-                        postMode === mode && styles.dropdownItemTextActive,
-                      ]}>
-                      {mode === 'grid' ? 'Grid' : 'List'}
-                    </Text>
-                    {postMode === mode ? (
-                      <Ionicons name="checkmark" size={16} color="#ffffff" />
-                    ) : null}
-                  </Pressable>
-                ))}
-              </View>
-            ) : null}
+              {tab.id === 'posts' && openDropdown === 'layout' ? (
+                <View style={styles.tabDropdown}>
+                  {(['grid', 'list'] as PostMode[]).map((mode) => (
+                    <Pressable
+                      key={mode}
+                      style={styles.dropdownItem}
+                      onPress={() => handleSelectPostMode(mode)}>
+                      <Text
+                        style={[
+                          styles.dropdownItemText,
+                          postMode === mode && styles.dropdownItemTextActive,
+                        ]}>
+                        {mode === 'grid' ? 'Grid' : 'List'}
+                      </Text>
+                      {postMode === mode ? (
+                        <Ionicons name="checkmark" size={16} color="#ffffff" />
+                      ) : null}
+                    </Pressable>
+                  ))}
+                </View>
+              ) : null}
 
-            {tab.id === 'tags' && openDropdown === 'tags' ? (
-              <View style={styles.tabDropdown}>
-                {tagFilters.map((filter) => (
-                  <Pressable
-                    key={filter.id}
-                    style={styles.dropdownItem}
-                    onPress={() => handleSelectTagFilter(filter.id)}>
-                    <Text
-                      style={[
-                        styles.dropdownItemText,
-                        tagFilter === filter.id && styles.dropdownItemTextActive,
-                      ]}>
-                      {filter.label}
-                    </Text>
-                    {tagFilter === filter.id ? (
-                      <Ionicons name="checkmark" size={16} color="#ffffff" />
-                    ) : null}
-                  </Pressable>
-                ))}
-              </View>
-            ) : null}
-          </View>
-        ))}
+              {tab.id === 'collection' && openDropdown === 'collection' ? (
+                <View style={styles.tabDropdown}>
+                  {collectionOptions.map((option) => (
+                    <Pressable
+                      key={option.id}
+                      style={styles.dropdownItem}
+                      onPress={() => handleSelectCollectionMode(option.id)}>
+                      <View style={styles.dropdownIconRow}>
+                        <Ionicons
+                          name={option.icon}
+                          size={16}
+                          color={
+                            collectionMode === option.id
+                              ? '#ffffff'
+                              : 'rgba(255,255,255,0.72)'
+                          }
+                        />
+                        <Text
+                          style={[
+                            styles.dropdownItemText,
+                            collectionMode === option.id &&
+                              styles.dropdownItemTextActive,
+                          ]}>
+                          {option.label}
+                        </Text>
+                      </View>
+                      {collectionMode === option.id ? (
+                        <Ionicons name="checkmark" size={16} color="#ffffff" />
+                      ) : null}
+                    </Pressable>
+                  ))}
+                </View>
+              ) : null}
+
+              {tab.id === 'tags' && openDropdown === 'tags' ? (
+                <View style={styles.tabDropdown}>
+                  {tagFilters.map((filter) => (
+                    <Pressable
+                      key={filter.id}
+                      style={styles.dropdownItem}
+                      onPress={() => handleSelectTagFilter(filter.id)}>
+                      <Text
+                        style={[
+                          styles.dropdownItemText,
+                          tagFilter === filter.id && styles.dropdownItemTextActive,
+                        ]}>
+                        {filter.label}
+                      </Text>
+                      {tagFilter === filter.id ? (
+                        <Ionicons name="checkmark" size={16} color="#ffffff" />
+                      ) : null}
+                    </Pressable>
+                  ))}
+                </View>
+              ) : null}
+            </View>
+          );
+        })}
       </View>
 
       {renderContent()}
@@ -836,6 +976,15 @@ const buildStyles = (theme: AppTheme) => {
       alignItems: 'center',
       justifyContent: 'center',
     },
+    tabButtonContent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+    },
+    tabChevron: {
+      opacity: 0.85,
+      marginLeft: 1,
+    },
     tabIndicator: {
       position: 'absolute',
       bottom: 0,
@@ -879,6 +1028,11 @@ const buildStyles = (theme: AppTheme) => {
       alignItems: 'center',
       justifyContent: 'space-between',
       gap: 12,
+    },
+    dropdownIconRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
     },
     dropdownItemText: {
       color: 'rgba(255,255,255,0.72)',

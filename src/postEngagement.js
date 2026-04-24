@@ -337,6 +337,23 @@ export const setPostCommentLike = async ({ commentId, userId, liked }) => {
   return { userId: authenticatedUserId }
 }
 
+export const loadLikedPostIds = async ({ userId } = {}) => {
+  const id = toId(userId)
+  if (!id) return new Set()
+
+  const { data, error } = await supabase
+    .from("discover_post_likes")
+    .select("post_id")
+    .eq("user_id", id)
+
+  if (error) {
+    logSupabaseError("Unable to load liked post ids", error)
+    return new Set()
+  }
+
+  return new Set((data || []).map((row) => toId(row.post_id)).filter(Boolean))
+}
+
 export const loadSavedPostIds = async ({ userId } = {}) => {
   const id = toId(userId)
   if (!id) return new Set()
