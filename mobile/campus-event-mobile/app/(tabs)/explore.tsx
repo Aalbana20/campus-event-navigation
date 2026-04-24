@@ -109,7 +109,7 @@ const TILE_GAP = 2;
 
 export default function ExploreScreen() {
   const router = useRouter();
-  const { events: allEvents = [], currentUser } = useMobileApp();
+  const { events: allEvents = [], currentUser, savedEventIds, toggleSaveEvent } = useMobileApp();
 
   const [primaryTab, setPrimaryTab] = useState<ExploreTab>('forYou');
   const [openDropdown, setOpenDropdown] = useState<OpenDropdown>(null);
@@ -479,7 +479,19 @@ export default function ExploreScreen() {
       <ExploreEventDetailModal
         visible={Boolean(selectedEvent)}
         event={selectedEvent}
+        actionLabel={
+          selectedEvent && savedEventIds.includes(String(selectedEvent.id))
+            ? 'Going'
+            : "I'm Going"
+        }
+        actionActive={Boolean(
+          selectedEvent && savedEventIds.includes(String(selectedEvent.id))
+        )}
         onClose={() => setSelectedEvent(null)}
+        onActionPress={() => {
+          if (!selectedEvent) return;
+          void toggleSaveEvent(String(selectedEvent.id));
+        }}
       />
     </AppScreen>
   );

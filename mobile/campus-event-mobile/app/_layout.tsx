@@ -67,6 +67,10 @@ function AppBootstrap() {
         name="story/share"
         options={{ headerShown: false, presentation: 'fullScreenModal' }}
       />
+      <Stack.Screen
+        name="map"
+        options={{ headerShown: false, presentation: 'fullScreenModal' }}
+      />
       <Stack.Screen name="profile/[username]" options={{ headerShown: false }} />
       <Stack.Screen name="event/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="auth/sign-in" options={{ headerShown: false }} />
