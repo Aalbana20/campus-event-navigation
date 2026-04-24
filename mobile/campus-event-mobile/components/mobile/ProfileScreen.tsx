@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Redirect, useRouter } from 'expo-router';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Image,
@@ -19,6 +19,13 @@ import {
   pickProfileImage,
   type SelectedProfileImage,
 } from '@/lib/mobile-profile-image';
+import {
+  buildStoryRecordsFromHighlightItems,
+  deleteStoryHighlight,
+  loadStoryHighlightsForUser,
+  type StoryHighlightItemRecord,
+  type StoryHighlightRecord,
+} from '@/lib/mobile-story-highlights';
 import { useMobileApp } from '@/providers/mobile-app-provider';
 import type { EventPrivacy, EventRecord } from '@/types/models';
 
@@ -26,6 +33,9 @@ import { AppScreen } from './AppScreen';
 import { EventListCard } from './EventListCard';
 import { PersonRowCard } from './PersonRowCard';
 import { ProfileContentTabs } from './ProfileContentTabs';
+import { ProfileHighlightsRow } from './ProfileHighlightsRow';
+import { StoryHighlightPicker } from './StoryHighlightPicker';
+import { StoryViewerModal } from './StoryViewerModal';
 
 type ProfileScreenProps = {
   username?: string;
@@ -107,6 +117,8 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
   const styles = useMemo(() => buildStyles(theme), [theme]);
   const {
     currentUser,
+    followingProfiles,
+    recentDmPeople,
     getProfileByUsername,
     getFollowersForProfile,
     getFollowingForProfile,
@@ -119,6 +131,14 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
     updateProfile,
   } = useMobileApp();
   const [activeList, setActiveList] = useState<ActiveList>(null);
+
+  // Highlights state (owner sees "+ New"; visitors just see the grid).
+  const [highlights, setHighlights] = useState<StoryHighlightRecord[]>([]);
+  const [highlightItemsById, setHighlightItemsById] = useState<
+    Map<string, StoryHighlightItemRecord[]>
+  >(new Map());
+  const [isHighlightPickerVisible, setIsHighlightPickerVisible] = useState(false);
+  const [activeHighlightId, setActiveHighlightId] = useState<string | null>(null);
 
   // Edit Profile State
   const [isEditing, setIsEditing] = useState(false);
@@ -154,6 +174,68 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
     ? currentUser
     : getProfileByUsername(username || '');
   const resolvedProfileId = resolvedProfile?.id || '';
+
+  const refreshHighlights = useCallback(async () => {
+    if (!resolvedProfileId) return;
+    const { highlights: nextHighlights, itemsByHighlightId } =
+      await loadStoryHighlightsForUser(resolvedProfileId);
+    setHighlights(nextHighlights);
+    setHighlightItemsById(itemsByHighlightId);
+  }, [resolvedProfileId]);
+
+  useEffect(() => {
+    void refreshHighlights();
+  }, [refreshHighlights]);
+
+  const handleOpenHighlight = useCallback((highlight: StoryHighlightRecord) => {
+    setActiveHighlightId(highlight.id);
+  }, []);
+
+  const handleLongPressHighlight = useCallback(
+    (highlight: StoryHighlightRecord) => {
+      if (!isOwnProfile) return;
+      Alert.alert(highlight.title, 'Delete this highlight?', [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            const ok = await deleteStoryHighlight(highlight.id);
+            if (ok) void refreshHighlights();
+          },
+        },
+      ]);
+    },
+    [isOwnProfile, refreshHighlights]
+  );
+
+  const activeHighlight = useMemo(
+    () => highlights.find((h) => h.id === activeHighlightId) || null,
+    [activeHighlightId, highlights]
+  );
+
+  const viewerItems = useMemo(() => {
+    if (!activeHighlight || !resolvedProfile) return [];
+    const items = highlightItemsById.get(activeHighlight.id) || [];
+    const stories = buildStoryRecordsFromHighlightItems(items, resolvedProfile);
+    if (stories.length === 0) return [];
+    return [
+      {
+        id: `highlight-${activeHighlight.id}`,
+        profileId: String(resolvedProfile.id),
+        routeKey: resolvedProfile.username || String(resolvedProfile.id),
+        name: resolvedProfile.name || resolvedProfile.username || 'Campus User',
+        username: resolvedProfile.username || '',
+        avatar: resolvedProfile.avatar || '',
+        kind: 'story' as const,
+        meta: activeHighlight.title,
+        seen: true,
+        isPlaceholder: false,
+        stories,
+        latestStoryAt: stories[stories.length - 1]?.createdAt,
+      },
+    ];
+  }, [activeHighlight, highlightItemsById, resolvedProfile]);
 
   if (username && username === currentUser.username) {
     return <Redirect href="/(tabs)/profile" />;
@@ -366,12 +448,46 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
           </View>
         </View>
 
+        <ProfileHighlightsRow
+          highlights={highlights}
+          isOwner={isOwnProfile}
+          onPressHighlight={handleOpenHighlight}
+          onPressNew={() => setIsHighlightPickerVisible(true)}
+          onLongPressHighlight={handleLongPressHighlight}
+        />
+
         <ProfileContentTabs
           profileId={resolvedProfileId}
           isOwner={isOwnProfile}
           onContentCountsChange={handleProfileContentCountsChange}
         />
       </ScrollView>
+
+      <StoryHighlightPicker
+        visible={isHighlightPickerVisible}
+        userId={resolvedProfileId}
+        onClose={() => setIsHighlightPickerVisible(false)}
+        onCreated={() => {
+          setIsHighlightPickerVisible(false);
+          void refreshHighlights();
+        }}
+      />
+
+      <StoryViewerModal
+        visible={Boolean(activeHighlight) && viewerItems.length > 0}
+        items={viewerItems}
+        initialItemId={viewerItems[0]?.id || null}
+        currentUserId={currentUser.id}
+        followingProfiles={followingProfiles}
+        recentDmPeople={recentDmPeople}
+        reactedStoryIds={new Set()}
+        onClose={() => setActiveHighlightId(null)}
+        onStoryOpen={() => {}}
+        onToggleHeart={async () => {}}
+        onReplyToStory={async () => {}}
+        onShareStory={async () => {}}
+        onLoadViewers={async () => []}
+      />
 
       <Modal visible={activeList !== null} transparent animationType="slide" onRequestClose={() => setActiveList(null)}>
         <Pressable style={styles.modalOverlay} onPress={() => setActiveList(null)}>

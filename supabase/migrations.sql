@@ -1054,6 +1054,88 @@ begin
 end;
 $$;
 
+-- ============================================================
+-- 14. STORY HIGHLIGHTS
+-- ============================================================
+create table if not exists public.story_highlights (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid not null references profiles(id) on delete cascade,
+  title      text not null default 'Highlight' check (char_length(btrim(title)) > 0),
+  cover_url  text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists story_highlights_user_id_idx on public.story_highlights(user_id);
+
+create table if not exists public.story_highlight_items (
+  id               uuid primary key default gen_random_uuid(),
+  highlight_id     uuid not null references story_highlights(id) on delete cascade,
+  story_id         uuid references stories(id) on delete set null,
+  position         integer not null default 0,
+  media_url        text not null,
+  media_type       text not null check (media_type in ('image', 'video')),
+  caption          text,
+  story_created_at timestamptz,
+  created_at       timestamptz not null default now()
+);
+
+create index if not exists story_highlight_items_highlight_id_idx on public.story_highlight_items(highlight_id);
+create index if not exists story_highlight_items_position_idx on public.story_highlight_items(highlight_id, position);
+
+alter table public.story_highlights enable row level security;
+alter table public.story_highlight_items enable row level security;
+
+drop policy if exists "Story highlights readable by authenticated users" on public.story_highlights;
+create policy "Story highlights readable by authenticated users"
+  on public.story_highlights for select
+  to authenticated
+  using (true);
+
+drop policy if exists "Users can create their own story highlights" on public.story_highlights;
+create policy "Users can create their own story highlights"
+  on public.story_highlights for insert
+  to authenticated
+  with check ((select auth.uid()) = user_id);
+
+drop policy if exists "Users can update their own story highlights" on public.story_highlights;
+create policy "Users can update their own story highlights"
+  on public.story_highlights for update
+  to authenticated
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
+
+drop policy if exists "Users can delete their own story highlights" on public.story_highlights;
+create policy "Users can delete their own story highlights"
+  on public.story_highlights for delete
+  to authenticated
+  using ((select auth.uid()) = user_id);
+
+drop policy if exists "Story highlight items readable by authenticated users" on public.story_highlight_items;
+create policy "Story highlight items readable by authenticated users"
+  on public.story_highlight_items for select
+  to authenticated
+  using (true);
+
+drop policy if exists "Users can add items to their own highlights" on public.story_highlight_items;
+create policy "Users can add items to their own highlights"
+  on public.story_highlight_items for insert
+  to authenticated
+  with check (exists (select 1 from public.story_highlights h where h.id = story_highlight_items.highlight_id and h.user_id = (select auth.uid())));
+
+drop policy if exists "Users can update items on their own highlights" on public.story_highlight_items;
+create policy "Users can update items on their own highlights"
+  on public.story_highlight_items for update
+  to authenticated
+  using (exists (select 1 from public.story_highlights h where h.id = story_highlight_items.highlight_id and h.user_id = (select auth.uid())))
+  with check (exists (select 1 from public.story_highlights h where h.id = story_highlight_items.highlight_id and h.user_id = (select auth.uid())));
+
+drop policy if exists "Users can remove items from their own highlights" on public.story_highlight_items;
+create policy "Users can remove items from their own highlights"
+  on public.story_highlight_items for delete
+  to authenticated
+  using (exists (select 1 from public.story_highlights h where h.id = story_highlight_items.highlight_id and h.user_id = (select auth.uid())));
+
 -- Schedule hourly cleanup via pg_cron (requires pg_cron extension).
 -- Enable in Supabase Dashboard → Database → Extensions → pg_cron, then run:
 --
