@@ -203,8 +203,8 @@ export function ProfileContentTabs({
         nextLikedIds,
         nextSavedIds,
       ] = await Promise.all([
-        loadGridPostsForAuthor(profileId),
-        loadDiscoverPostsForAuthor(profileId),
+        loadGridPostsForAuthor(profileId, { currentUserId: currentUser.id }),
+        loadDiscoverPostsForAuthor(profileId, { currentUserId: currentUser.id }),
         loadRepostsForUser(profileId),
         loadPostsTaggingUser(profileId),
         loadEventMemoriesForUser(profileId),
@@ -217,9 +217,9 @@ export function ProfileContentTabs({
         .map((row) => row.postId as string);
 
       const [nextRepostedPosts, nextLikedPosts, nextSavedPosts] = await Promise.all([
-        loadDiscoverPostsByIds(postIds),
-        loadDiscoverPostsByIds(Array.from(nextLikedIds)),
-        loadDiscoverPostsByIds(Array.from(nextSavedIds)),
+        loadDiscoverPostsByIds(postIds, { currentUserId: currentUser.id }),
+        loadDiscoverPostsByIds(Array.from(nextLikedIds), { currentUserId: currentUser.id }),
+        loadDiscoverPostsByIds(Array.from(nextSavedIds), { currentUserId: currentUser.id }),
       ]);
 
       const normalizedTaggedPosts = nextTagged
@@ -231,6 +231,12 @@ export function ProfileContentTabs({
                 authorName: '',
                 authorUsername: '',
                 authorAvatar: '',
+                likeCount: row.post.likeCount || 0,
+                commentCount: row.post.commentCount || 0,
+                repostCount: row.post.repostCount || 0,
+                shareCount: row.post.shareCount || 0,
+                isLikedByCurrentUser: Boolean(row.post.isLikedByCurrentUser),
+                isRepostedByCurrentUser: Boolean(row.post.isRepostedByCurrentUser),
               } as DiscoverPostRecord)
             : null
         )
@@ -252,6 +258,7 @@ export function ProfileContentTabs({
     loadGridPostsForAuthor,
     loadPostsTaggingUser,
     profileId,
+    currentUser.id,
   ]);
 
   useEffect(() => {

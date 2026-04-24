@@ -149,11 +149,30 @@ export const loadActiveDiscoverStories = async ({
 }) => {
   if (!currentUser?.id) return []
 
-  const { data: storyRows, error: storyError } = await supabase
+  let { data: storyRows, error: storyError } = await supabase
     .from("stories")
     .select("id, author_id, media_url, media_type, caption, event_id, story_type, stickers, created_at, expires_at")
     .gt("expires_at", new Date().toISOString())
     .order("created_at", { ascending: false })
+
+  if (storyError) {
+    const message = String(storyError.message || "")
+    const isMissingOptionalStoryColumn =
+      storyError.code === "PGRST204" ||
+      /column.*(event_id|stickers|story_type).*schema cache/i.test(message) ||
+      /Could not find the .*(event_id|stickers|story_type). column/i.test(message)
+
+    if (isMissingOptionalStoryColumn) {
+      const legacyResult = await supabase
+        .from("stories")
+        .select("id, author_id, media_url, media_type, caption, created_at, expires_at")
+        .gt("expires_at", new Date().toISOString())
+        .order("created_at", { ascending: false })
+
+      storyRows = legacyResult.data
+      storyError = legacyResult.error
+    }
+  }
 
   if (storyError) {
     console.error("Unable to load discover stories:", storyError)

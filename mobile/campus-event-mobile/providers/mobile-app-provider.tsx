@@ -132,7 +132,10 @@ type MobileAppContextValue = {
     postId: string,
     onGrid: boolean
   ) => Promise<DiscoverPostRecord | null>;
-  loadGridPostsForAuthor: (authorId: string) => Promise<DiscoverPostRecord[]>;
+  loadGridPostsForAuthor: (
+    authorId: string,
+    options?: { currentUserId?: string }
+  ) => Promise<DiscoverPostRecord[]>;
   repostPost: (postId: string) => Promise<RepostRecord | null>;
   unrepostPost: (postId: string) => Promise<void>;
   hasRepostedPost: (postId: string) => Promise<boolean>;
@@ -415,6 +418,7 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
         }),
       email: user.email || '',
       phone: fallbackProfile.phoneNumber || '',
+      phone_number: fallbackProfile.phoneNumber || '',
       interests: fallbackProfile.interests || [],
       account_type: accountType,
       first_name: fallbackProfile.firstName || null,
@@ -555,7 +559,11 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
           runStartupQuery('refreshData.follows', supabase.from('follows').select('*')),
           runStartupQuery(
             'refreshData.reposts',
-            supabase.from('reposts').select('event_id').eq('user_id', userId)
+            supabase
+              .from('reposts')
+              .select('event_id')
+              .eq('user_id', userId)
+              .eq('target_type', 'event')
           ),
         ]);
 
@@ -639,6 +647,7 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
               bio?: string | null;
               avatar_url?: string | null;
               phone?: string | null;
+              phone_number?: string | null;
               birthday?: string | null;
               interests?: string[] | string | null;
               email?: string | null;
@@ -732,9 +741,10 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
         if (!repostsResult.error) {
           setRepostedEventIds(
             new Set(
-              ((repostsResult.data || []) as Array<{ event_id: string }>).map((r) =>
-                String(r.event_id)
-              )
+              ((repostsResult.data || []) as Array<{ event_id: string | null }>)
+                .map((r) => r.event_id)
+                .filter(Boolean)
+                .map(String)
             )
           );
           logStartup('refreshData:reposts:applied');
@@ -1470,7 +1480,8 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
   );
 
   const loadGridPostsForAuthorBound = useCallback(
-    (authorId: string) => loadGridPostsForAuthor(authorId),
+    (authorId: string, options?: { currentUserId?: string }) =>
+      loadGridPostsForAuthor(authorId, options),
     []
   );
 

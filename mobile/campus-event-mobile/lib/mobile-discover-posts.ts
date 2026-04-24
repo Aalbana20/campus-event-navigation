@@ -50,6 +50,11 @@ export type DiscoverPostRecord = {
   authorUsername: string;
   authorAvatar: string;
   likeCount: number;
+  commentCount: number;
+  repostCount: number;
+  shareCount: number;
+  isLikedByCurrentUser: boolean;
+  isRepostedByCurrentUser: boolean;
 };
 
 type DiscoverPostRow = {
@@ -68,11 +73,19 @@ type DiscoverPostRow = {
   duration?: number | string | null;
   width?: number | null;
   height?: number | null;
-  like_count?: number | null;
 };
 
 const POST_SELECT_COLUMNS =
-  'id, author_id, media_url, media_type, caption, created_at, on_grid, event_id, thumbnail_url, duration_seconds, media_width, media_height, duration, width, height, like_count';
+  'id, author_id, media_url, media_type, caption, created_at, on_grid, event_id, thumbnail_url, duration_seconds, media_width, media_height, duration, width, height';
+
+type PostEngagementSummary = {
+  likeCount: number;
+  commentCount: number;
+  repostCount: number;
+  shareCount: number;
+  isLikedByCurrentUser: boolean;
+  isRepostedByCurrentUser: boolean;
+};
 
 type ProfileRow = {
   id: string;
@@ -154,7 +167,8 @@ const readFileAsArrayBuffer = async (fileUri: string) => {
 
 const normalizePostRow = (
   row: DiscoverPostRow,
-  profile?: ProfileRow
+  profile?: ProfileRow,
+  engagement?: PostEngagementSummary
 ): DiscoverPostRecord => ({
   id: String(row.id),
   authorId: String(row.author_id),
@@ -189,7 +203,12 @@ const normalizePostRow = (
     'Campus User',
   authorUsername: toTrimmedString(profile?.username) || '',
   authorAvatar: toTrimmedString(profile?.avatar_url) || '',
-  likeCount: Number(row.like_count) || 0,
+  likeCount: engagement?.likeCount || 0,
+  commentCount: engagement?.commentCount || 0,
+  repostCount: engagement?.repostCount || 0,
+  shareCount: engagement?.shareCount || 0,
+  isLikedByCurrentUser: Boolean(engagement?.isLikedByCurrentUser),
+  isRepostedByCurrentUser: Boolean(engagement?.isRepostedByCurrentUser),
 });
 
 const loadAuthorProfiles = async (authorIds: string[]) => {
@@ -210,7 +229,100 @@ const loadAuthorProfiles = async (authorIds: string[]) => {
   );
 };
 
-const fetchDiscoverPostsFromNetwork = async (): Promise<DiscoverPostRecord[]> => {
+const emptyPostEngagementSummary = (): PostEngagementSummary => ({
+  likeCount: 0,
+  commentCount: 0,
+  repostCount: 0,
+  shareCount: 0,
+  isLikedByCurrentUser: false,
+  isRepostedByCurrentUser: false,
+});
+
+const ensurePostEngagementSummary = (
+  summaryByPostId: Map<string, PostEngagementSummary>,
+  postId: string
+) => {
+  const key = String(postId || '');
+  if (!summaryByPostId.has(key)) {
+    summaryByPostId.set(key, emptyPostEngagementSummary());
+  }
+  return summaryByPostId.get(key) as PostEngagementSummary;
+};
+
+export const loadPostEngagementSummary = async ({
+  postIds = [],
+  currentUserId = '',
+}: {
+  postIds?: string[];
+  currentUserId?: string;
+} = {}) => {
+  const ids = [...new Set(postIds.map((id) => String(id || '')).filter(Boolean))];
+  const summaryByPostId = new Map(
+    ids.map((id) => [id, emptyPostEngagementSummary()])
+  );
+
+  if (!supabase || !ids.length) return summaryByPostId;
+
+  const [likesResult, commentsResult, repostsResult, sharesResult] =
+    await Promise.all([
+      supabase.from('discover_post_likes').select('post_id, user_id').in('post_id', ids),
+      supabase.from('discover_post_comments').select('id, post_id').in('post_id', ids),
+      supabase
+        .from('reposts')
+        .select('post_id, user_id')
+        .eq('target_type', 'post')
+        .in('post_id', ids),
+      supabase.from('discover_post_shares').select('post_id').in('post_id', ids),
+    ]);
+
+  if (likesResult.error) {
+    console.error('Unable to load post likes:', likesResult.error);
+  } else {
+    (likesResult.data || []).forEach((row: { post_id: string; user_id: string }) => {
+      const summary = ensurePostEngagementSummary(summaryByPostId, row.post_id);
+      summary.likeCount += 1;
+      if (currentUserId && String(row.user_id) === String(currentUserId)) {
+        summary.isLikedByCurrentUser = true;
+      }
+    });
+  }
+
+  if (commentsResult.error) {
+    console.error('Unable to load post comment counts:', commentsResult.error);
+  } else {
+    (commentsResult.data || []).forEach((row: { post_id: string }) => {
+      ensurePostEngagementSummary(summaryByPostId, row.post_id).commentCount += 1;
+    });
+  }
+
+  if (repostsResult.error) {
+    console.error('Unable to load post repost counts:', repostsResult.error);
+  } else {
+    (repostsResult.data || []).forEach((row: { post_id: string; user_id: string }) => {
+      const summary = ensurePostEngagementSummary(summaryByPostId, row.post_id);
+      summary.repostCount += 1;
+      if (currentUserId && String(row.user_id) === String(currentUserId)) {
+        summary.isRepostedByCurrentUser = true;
+      }
+    });
+  }
+
+  if (sharesResult.error) {
+    console.error('Unable to load post share counts:', sharesResult.error);
+  } else {
+    (sharesResult.data || []).forEach((row: { post_id: string }) => {
+      ensurePostEngagementSummary(summaryByPostId, row.post_id).shareCount += 1;
+    });
+  }
+
+  return summaryByPostId;
+};
+
+const fetchDiscoverPostsFromNetwork = async ({
+  currentUserId = '',
+}: {
+  currentUserId?: string;
+} = {}): Promise<DiscoverPostRecord[]> => {
   if (!supabase) return [];
 
   const { data, error } = await supabase
@@ -229,14 +341,23 @@ const fetchDiscoverPostsFromNetwork = async (): Promise<DiscoverPostRecord[]> =>
     ...new Set(rows.map((row) => String(row.author_id || '')).filter(Boolean)),
   ];
   const profileLookup = await loadAuthorProfiles(authorIds);
+  const engagementLookup = await loadPostEngagementSummary({
+    postIds: rows.map((row) => String(row.id)),
+    currentUserId,
+  });
 
   return rows.map((row) =>
-    normalizePostRow(row, profileLookup.get(String(row.author_id || '')))
+    normalizePostRow(
+      row,
+      profileLookup.get(String(row.author_id || '')),
+      engagementLookup.get(String(row.id))
+    )
   );
 };
 
 export type LoadDiscoverPostsOptions = {
   forceRefresh?: boolean;
+  currentUserId?: string;
   onData?: (
     posts: DiscoverPostRecord[],
     meta: { fromCache: boolean }
@@ -252,11 +373,11 @@ export type LoadDiscoverPostsOptions = {
 export const loadDiscoverPosts = async (
   options: LoadDiscoverPostsOptions = {}
 ): Promise<DiscoverPostRecord[]> => {
-  const { forceRefresh = false, onData } = options;
+  const { forceRefresh = false, currentUserId = '', onData } = options;
   try {
     return await loadWithBackgroundRefresh<DiscoverPostRecord[]>(
-      DISCOVER_FEED_CACHE_KEY,
-      fetchDiscoverPostsFromNetwork,
+      `${DISCOVER_FEED_CACHE_KEY}:${currentUserId || 'anonymous'}`,
+      () => fetchDiscoverPostsFromNetwork({ currentUserId }),
       {
         ttlMs: DISCOVER_FEED_CACHE_TTL_MS,
         forceRefresh,
@@ -276,6 +397,7 @@ export const invalidateDiscoverFeedCache = () => {
 
 export type LoadDiscoverPostsForAuthorOptions = {
   onlyGrid?: boolean;
+  currentUserId?: string;
 };
 
 export const loadDiscoverPostsForAuthor = async (
@@ -303,17 +425,29 @@ export const loadDiscoverPostsForAuthor = async (
 
   const rows = (data || []) as DiscoverPostRow[];
   const profileLookup = await loadAuthorProfiles([authorId]);
+  const engagementLookup = await loadPostEngagementSummary({
+    postIds: rows.map((row) => String(row.id)),
+    currentUserId: options.currentUserId || '',
+  });
 
   return rows.map((row) =>
-    normalizePostRow(row, profileLookup.get(String(authorId)))
+    normalizePostRow(
+      row,
+      profileLookup.get(String(authorId)),
+      engagementLookup.get(String(row.id))
+    )
   );
 };
 
-export const loadGridPostsForAuthor = (authorId: string) =>
-  loadDiscoverPostsForAuthor(authorId, { onlyGrid: true });
+export const loadGridPostsForAuthor = (
+  authorId: string,
+  options: Omit<LoadDiscoverPostsForAuthorOptions, 'onlyGrid'> = {}
+) =>
+  loadDiscoverPostsForAuthor(authorId, { ...options, onlyGrid: true });
 
 export const loadDiscoverPostsByIds = async (
-  postIds: string[] = []
+  postIds: string[] = [],
+  options: { currentUserId?: string } = {}
 ): Promise<DiscoverPostRecord[]> => {
   if (!supabase) return [];
 
@@ -337,9 +471,17 @@ export const loadDiscoverPostsByIds = async (
     ...new Set(rows.map((row) => String(row.author_id || '')).filter(Boolean)),
   ];
   const profileLookup = await loadAuthorProfiles(authorIds);
+  const engagementLookup = await loadPostEngagementSummary({
+    postIds: rows.map((row) => String(row.id)),
+    currentUserId: options.currentUserId || '',
+  });
 
   return rows.map((row) =>
-    normalizePostRow(row, profileLookup.get(String(row.author_id || '')))
+    normalizePostRow(
+      row,
+      profileLookup.get(String(row.author_id || '')),
+      engagementLookup.get(String(row.id))
+    )
   );
 };
 
@@ -367,7 +509,15 @@ export const setDiscoverPostGridVisibility = async (
   invalidateDiscoverFeedCache();
 
   const profileLookup = await loadAuthorProfiles([String(row.author_id)]);
-  return normalizePostRow(row, profileLookup.get(String(row.author_id)));
+  const engagementLookup = await loadPostEngagementSummary({
+    postIds: [String(row.id)],
+  });
+
+  return normalizePostRow(
+    row,
+    profileLookup.get(String(row.author_id)),
+    engagementLookup.get(String(row.id))
+  );
 };
 
 export const deleteDiscoverPost = async (postId: string) => {

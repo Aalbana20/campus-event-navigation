@@ -298,12 +298,12 @@ export const createEventShareStory = async ({
     const message = typeof error.message === 'string' ? error.message : '';
     if (
       error.code === 'PGRST204' ||
-      /column.*(stickers|story_type).*schema cache/i.test(message) ||
-      /Could not find the .*(stickers|story_type). column/i.test(message)
+      /column.*(event_id|stickers|story_type).*schema cache/i.test(message) ||
+      /Could not find the .*(event_id|stickers|story_type). column/i.test(message)
     ) {
       throw new Error(
         "Stories can't save sticker data yet. Run the latest Supabase migration " +
-          "(adds stories.story_type and stories.stickers) and try again."
+          "(adds stories.event_id, stories.story_type, and stories.stickers) and try again."
       );
     }
     throw new Error('Could not publish your story. Please try again.');
@@ -373,12 +373,12 @@ export const createPostShareStory = async ({
     const message = typeof error.message === 'string' ? error.message : '';
     if (
       error.code === 'PGRST204' ||
-      /column.*(stickers|story_type).*schema cache/i.test(message) ||
-      /Could not find the .*(stickers|story_type). column/i.test(message)
+      /column.*(event_id|stickers|story_type).*schema cache/i.test(message) ||
+      /Could not find the .*(event_id|stickers|story_type). column/i.test(message)
     ) {
       throw new Error(
         "Stories can't save sticker data yet. Run the latest Supabase migration " +
-          '(adds stories.story_type and stories.stickers) and try again.'
+          '(adds stories.event_id, stories.story_type, and stories.stickers) and try again.'
       );
     }
     throw new Error('Could not publish your story. Please try again.');

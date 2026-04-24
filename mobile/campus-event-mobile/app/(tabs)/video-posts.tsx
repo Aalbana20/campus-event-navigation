@@ -51,6 +51,7 @@ export default function VideoPostsScreen() {
     let cancelled = false;
     Promise.all([
       loadDiscoverPosts({
+        currentUserId: currentUser.id,
         onData: (next) => { if (!cancelled) setPosts(next); },
       }),
       loadLikedPostIds(currentUser.id),

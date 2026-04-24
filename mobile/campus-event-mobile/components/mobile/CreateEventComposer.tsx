@@ -27,7 +27,7 @@ const TAG_RULES = [
   { keywords: ['workshop', 'panel', 'career'], tags: ['learning', 'networking', 'campus'] },
 ];
 
-const EVENT_IMAGE_BUCKET_CANDIDATES = ['event-flyers', 'event-images', 'event-image'];
+const EVENT_IMAGE_BUCKET_CANDIDATES = ['event-flyers', 'event-images'];
 
 const normalizeTag = (value: string) =>
   value

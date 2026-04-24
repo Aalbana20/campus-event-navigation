@@ -134,18 +134,18 @@ export const loadActiveStoryRecords = async ({
     const message = typeof error.message === 'string' ? error.message : '';
     const isMissingColumn =
       error.code === 'PGRST204' ||
-      /column.*(stickers|story_type).*schema cache/i.test(message) ||
-      /Could not find the .*(stickers|story_type). column/i.test(message);
+      /column.*(event_id|stickers|story_type).*schema cache/i.test(message) ||
+      /Could not find the .*(event_id|stickers|story_type). column/i.test(message);
 
     if (isMissingColumn) {
       console.warn(
-        '[mobile-stories] stories.story_type / stories.stickers are missing from the Supabase schema. ' +
+        '[mobile-stories] optional story columns are missing from the Supabase schema. ' +
           'Run the latest migration. Falling back to base columns so the viewer still works.'
       );
 
       const { data: legacyData, error: legacyError } = await supabase
         .from('stories')
-        .select('id, author_id, media_url, media_type, caption, event_id, created_at, expires_at')
+        .select('id, author_id, media_url, media_type, caption, created_at, expires_at')
         .gt('expires_at', new Date().toISOString())
         .order('created_at', { ascending: false });
 

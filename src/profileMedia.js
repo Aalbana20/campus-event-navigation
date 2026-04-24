@@ -192,6 +192,7 @@ export const buildProfilePayloadFromAuthUser = (authUser) => {
     ),
     email: authUser.email || toTrimmedString(metadata.email),
     phone: toTrimmedString(metadata.phone_number || metadata.phone),
+    phone_number: toTrimmedString(metadata.phone_number || metadata.phone),
     interests: Array.isArray(metadata.interests) ? metadata.interests : [],
     account_type: accountType,
     first_name: compactProfileValue(firstName),

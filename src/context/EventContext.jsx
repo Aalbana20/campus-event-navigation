@@ -240,7 +240,11 @@ export function EventProvider({ children }) {
             ? supabase.from("follows").select("follower_id").eq("following_id", userId)
             : Promise.resolve({ data: [], error: null }),
           userId
-            ? supabase.from("reposts").select("event_id").eq("user_id", userId)
+            ? supabase
+                .from("reposts")
+                .select("event_id")
+                .eq("user_id", userId)
+                .eq("target_type", "event")
             : Promise.resolve({ data: [], error: null }),
         ])
 
@@ -346,7 +350,9 @@ export function EventProvider({ children }) {
 
         setSavedEvents(matched)
 
-        setRepostedEventIds(new Set((repostsResult.data || []).map((r) => String(r.event_id))))
+        setRepostedEventIds(
+          new Set((repostsResult.data || []).map((r) => r.event_id).filter(Boolean).map(String))
+        )
 
         const toUserList = (profiles) =>
           (profiles || []).map((p) => ({

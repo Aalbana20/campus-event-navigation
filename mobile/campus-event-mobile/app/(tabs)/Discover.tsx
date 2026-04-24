@@ -123,7 +123,10 @@ export default function DiscoverScreen({
 
   const loadPosts = useCallback(async () => {
     const [nextPosts, nextLikedIds, nextSavedIds] = await Promise.all([
-      loadDiscoverPosts({ onData: (posts) => setDiscoverPosts(posts) }),
+      loadDiscoverPosts({
+        currentUserId: currentUser.id,
+        onData: (posts) => setDiscoverPosts(posts),
+      }),
       loadLikedPostIds(currentUser.id),
       loadSavedPostIds(currentUser.id),
     ]);

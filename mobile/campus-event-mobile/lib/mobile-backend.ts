@@ -89,6 +89,7 @@ type ProfileRow = {
   bio?: string | null;
   avatar_url?: string | null;
   phone?: string | null;
+  phone_number?: string | null;
   birthday?: string | null;
   interests?: string[] | string | null;
   email?: string | null;
@@ -424,7 +425,7 @@ export const normalizeProfileRow = (row: ProfileRow): ProfileRecord => ({
   bio: toStringValue(row.bio) || DEFAULT_PROFILE_BIO,
   avatar: normalizeAvatarStorageValue(toStringValue(row.avatar_url)),
   interests: normalizeInterests(row.interests),
-  phoneNumber: toStringValue(row.phone),
+  phoneNumber: toStringValue(row.phone) || toStringValue(row.phone_number),
   birthday: toStringValue(row.birthday),
   email: toStringValue(row.email),
   accountType: normalizeAccountType(row.account_type),
