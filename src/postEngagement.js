@@ -337,6 +337,47 @@ export const setPostCommentLike = async ({ commentId, userId, liked }) => {
   return { userId: authenticatedUserId }
 }
 
+export const loadSavedPostIds = async ({ userId } = {}) => {
+  const id = toId(userId)
+  if (!id) return new Set()
+
+  const { data, error } = await supabase
+    .from("discover_post_saves")
+    .select("post_id")
+    .eq("user_id", id)
+
+  if (error) {
+    logSupabaseError("Unable to load saved post ids", error)
+    return new Set()
+  }
+
+  return new Set((data || []).map((row) => toId(row.post_id)).filter(Boolean))
+}
+
+export const setPostSave = async ({ postId, userId, saved }) => {
+  if (!postId) throw new Error("Missing post.")
+  const authenticatedUserId = await getPostActionUserId(userId)
+
+  const request = saved
+    ? supabase.from("discover_post_saves").insert({
+        post_id: postId,
+        user_id: authenticatedUserId,
+      })
+    : supabase
+        .from("discover_post_saves")
+        .delete()
+        .eq("post_id", postId)
+        .eq("user_id", authenticatedUserId)
+
+  const { error } = await request
+  if (error && error.code !== "23505") {
+    logSupabaseError("Unable to update post save", error, { postId, saved })
+    throw new Error(getFriendlySupabaseMessage(error, "Could not update save right now."))
+  }
+
+  return { userId: authenticatedUserId }
+}
+
 export const recordPostShare = async ({
   postId,
   userId,

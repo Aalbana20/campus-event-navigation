@@ -25,10 +25,17 @@ import { EventStackCard } from '@/components/mobile/EventStackCard';
 import { StoryViewerModal } from '@/components/mobile/StoryViewerModal';
 import { useAppTheme } from '@/lib/app-theme';
 import {
+  addPostComment,
+  deletePostComment,
   deleteDiscoverPost,
   loadDiscoverPosts,
   loadLikedPostIds,
+  loadPostComments,
+  loadSavedPostIds,
+  togglePostCommentLike,
   togglePostLike,
+  togglePostSave,
+  type DiscoverPostComment,
   type DiscoverPostRecord,
 } from '@/lib/mobile-discover-posts';
 import {
@@ -78,6 +85,7 @@ export default function DiscoverScreen({
     getProfileById,
     recentDmPeople,
     repostEvent,
+    repostPost,
     toggleSaveEvent,
   } = useMobileApp();
   const { sendDmMessage, unreadNotificationCount } = useMobileInbox();
@@ -85,12 +93,14 @@ export default function DiscoverScreen({
   const translate = useRef(new Animated.ValueXY()).current;
   const storiesScrollY = useRef(new Animated.Value(0)).current;
   const isSubmittingCommentRef = useRef(false);
+  const isSubmittingPostCommentRef = useRef(false);
   const [refreshing, setRefreshing] = useState(false);
   const [scrollEnabled, setScrollEnabled] = useState(true);
   const [activeTab, setActiveTab] = useState<'events' | 'friends'>(initialMode || 'events');
   const [storyRecords, setStoryRecords] = useState<StoryRecord[]>([]);
   const [discoverPosts, setDiscoverPosts] = useState<DiscoverPostRecord[]>([]);
   const [likedPostIds, setLikedPostIds] = useState<Set<string>>(new Set());
+  const [savedPostIds, setSavedPostIds] = useState<Set<string>>(new Set());
   const [seenStoryIds, setSeenStoryIds] = useState<Set<string>>(new Set());
   const [reactedStoryIds, setReactedStoryIds] = useState<Set<string>>(new Set());
   const [isStoryViewerVisible, setIsStoryViewerVisible] = useState(false);
@@ -101,18 +111,25 @@ export default function DiscoverScreen({
   const [commentsByEventId, setCommentsByEventId] = useState<Record<string, EventCommentRecord[]>>(
     {}
   );
+  const [activeCommentPost, setActiveCommentPost] = useState<DiscoverPostRecord | null>(null);
+  const [postCommentDraft, setPostCommentDraft] = useState('');
+  const [postCommentsByPostId, setPostCommentsByPostId] = useState<Record<string, DiscoverPostComment[]>>(
+    {}
+  );
   const [isMutualsSheetVisible, setIsMutualsSheetVisible] = useState(false);
   const [mutualSheetTitle, setMutualSheetTitle] = useState('');
   const [mutualSheetProfiles, setMutualSheetProfiles] = useState<ProfileRecord[]>([]);
   const [storiesMeasuredHeight, setStoriesMeasuredHeight] = useState(112);
 
   const loadPosts = useCallback(async () => {
-    const [nextPosts, nextLikedIds] = await Promise.all([
+    const [nextPosts, nextLikedIds, nextSavedIds] = await Promise.all([
       loadDiscoverPosts({ onData: (posts) => setDiscoverPosts(posts) }),
       loadLikedPostIds(currentUser.id),
+      loadSavedPostIds(currentUser.id),
     ]);
     setDiscoverPosts(nextPosts);
     setLikedPostIds(nextLikedIds);
+    setSavedPostIds(nextSavedIds);
   }, [currentUser.id]);
 
   const loadStories = useCallback(async () => {
@@ -496,6 +513,114 @@ export default function DiscoverScreen({
     }
   }, [activeCommentEvent, commentDraft, currentUser.id, currentUser.name, currentUser.username]);
 
+  // ─── Post comment handlers ────────────────────────────────────────────────
+
+  const loadPostCommentsForPost = useCallback(async (postId: string) => {
+    const comments = await loadPostComments(postId, currentUser.id);
+    setPostCommentsByPostId((prev) => ({ ...prev, [postId]: comments }));
+  }, [currentUser.id]);
+
+  const handleOpenPostComments = useCallback((post: DiscoverPostRecord) => {
+    setActiveCommentPost(post);
+    void loadPostCommentsForPost(post.id);
+  }, [loadPostCommentsForPost]);
+
+  const handleClosePostComments = useCallback(() => {
+    setActiveCommentPost(null);
+    setPostCommentDraft('');
+  }, []);
+
+  const handleSubmitPostComment = useCallback(async (parentId: string | null = null) => {
+    if (!activeCommentPost || !postCommentDraft.trim() || isSubmittingPostCommentRef.current) return;
+    if (!currentUser.id || currentUser.id === 'current-user') return;
+    isSubmittingPostCommentRef.current = true;
+
+    const postId = activeCommentPost.id;
+    const body = postCommentDraft.trim();
+    const tempId = `temp-${Date.now()}`;
+
+    const optimistic: DiscoverPostComment = {
+      id: tempId,
+      authorName: currentUser.name || currentUser.username || 'Campus User',
+      authorUsername: currentUser.username || '',
+      authorAvatar: currentUser.avatar || '',
+      authorId: currentUser.id,
+      body,
+      createdAt: new Date().toISOString(),
+      likeCount: 0,
+      likedByMe: false,
+      parentId,
+    };
+
+    setPostCommentsByPostId((prev) => ({ ...prev, [postId]: [...(prev[postId] || []), optimistic] }));
+    setPostCommentDraft('');
+
+    const realId = await addPostComment({ postId, userId: currentUser.id, body, parentId });
+    isSubmittingPostCommentRef.current = false;
+
+    if (!realId) {
+      setPostCommentsByPostId((prev) => ({
+        ...prev,
+        [postId]: (prev[postId] || []).filter((c) => c.id !== tempId),
+      }));
+      return;
+    }
+
+    setPostCommentsByPostId((prev) => {
+      const list = prev[postId] || [];
+      return {
+        ...prev,
+        [postId]: list.map((c) => (c.id === tempId ? { ...c, id: realId } : c)),
+      };
+    });
+  }, [activeCommentPost, currentUser.avatar, currentUser.id, currentUser.name, currentUser.username, postCommentDraft]);
+
+  const handleTogglePostCommentLike = useCallback(async (commentId: string) => {
+    if (!activeCommentPost || !currentUser.id || currentUser.id === 'current-user') return;
+    const postId = activeCommentPost.id;
+
+    const currentlyLiked = (postCommentsByPostId[postId] || []).find((c) => c.id === commentId)?.likedByMe ?? false;
+
+    setPostCommentsByPostId((prev) => {
+      const list = prev[postId] || [];
+      return {
+        ...prev,
+        [postId]: list.map((c) => {
+          if (c.id !== commentId) return c;
+          const nextLiked = !c.likedByMe;
+          return { ...c, likedByMe: nextLiked, likeCount: Math.max(0, c.likeCount + (nextLiked ? 1 : -1)) };
+        }),
+      };
+    });
+
+    await togglePostCommentLike({ commentId, userId: currentUser.id, isLiked: currentlyLiked });
+  }, [activeCommentPost, currentUser.id, postCommentsByPostId]);
+
+  const handleDeletePostComment = useCallback(async (commentId: string) => {
+    if (!activeCommentPost || !currentUser.id || currentUser.id === 'current-user') return;
+    const postId = activeCommentPost.id;
+
+    setPostCommentsByPostId((prev) => ({
+      ...prev,
+      [postId]: (prev[postId] || []).filter((c) => c.id !== commentId && c.parentId !== commentId),
+    }));
+
+    if (!commentId.startsWith('temp-')) {
+      await deletePostComment({ commentId, userId: currentUser.id });
+    }
+  }, [activeCommentPost, currentUser.id]);
+
+  const handleSavePost = useCallback((post: DiscoverPostRecord) => {
+    if (!currentUser.id || currentUser.id === 'current-user') return;
+    const isSaved = savedPostIds.has(post.id);
+    setSavedPostIds((prev) => {
+      const next = new Set(prev);
+      isSaved ? next.delete(post.id) : next.add(post.id);
+      return next;
+    });
+    void togglePostSave({ postId: post.id, userId: currentUser.id, isSaved });
+  }, [currentUser.id, savedPostIds]);
+
   const panResponder = useMemo(
     () =>
       PanResponder.create({
@@ -831,7 +956,9 @@ export default function DiscoverScreen({
           <DiscoverPostsImmersiveFeed
             posts={discoverPosts}
             likedPostIds={likedPostIds}
+            savedPostIds={savedPostIds}
             onPressCreator={handleOpenPostAuthor}
+            onPressSave={handleSavePost}
             onPressLike={(post) => {
               const isLiked = likedPostIds.has(post.id);
               setLikedPostIds((prev) => {
@@ -848,8 +975,8 @@ export default function DiscoverScreen({
               );
               void togglePostLike({ postId: post.id, userId: currentUser.id, isLiked });
             }}
-            onPressComment={(post) => Alert.alert('Comment', `Comment on ${post.id}`)}
-            onPressRepost={(post) => Alert.alert('Repost', `Reposted ${post.id}`)}
+            onPressComment={handleOpenPostComments}
+            onPressRepost={(post) => void repostPost(String(post.id)).catch(() => Alert.alert('Repost', 'Could not repost right now.'))}
             onPressShare={(post) =>
               openShareSheet({
                 kind: post.mediaType === 'video' ? 'video' : 'post',
@@ -885,6 +1012,20 @@ export default function DiscoverScreen({
         onSubmit={handleSubmitComment}
         onToggleLike={handleToggleCommentLike}
         onDeleteComment={handleDeleteComment}
+      />
+
+      <EventCommentsSheet
+        visible={Boolean(activeCommentPost)}
+        event={null}
+        title={activeCommentPost?.caption?.trim() || `Post by @${activeCommentPost?.authorUsername || 'campus'}`}
+        comments={activeCommentPost ? (postCommentsByPostId[activeCommentPost.id] || []) : []}
+        draft={postCommentDraft}
+        currentUserId={currentUser.id}
+        onChangeDraft={setPostCommentDraft}
+        onClose={handleClosePostComments}
+        onSubmit={handleSubmitPostComment}
+        onToggleLike={handleTogglePostCommentLike}
+        onDeleteComment={handleDeletePostComment}
       />
 
       <EventMutualsSheet

@@ -3,9 +3,11 @@ import {
   addPostComment,
   deletePostComment,
   loadPostComments,
+  loadSavedPostIds,
   recordPostShare,
   setPostCommentLike,
   setPostLike,
+  setPostSave,
 } from "../postEngagement"
 import { invalidateDiscoverFeedCache } from "../discoverPosts"
 import { DEFAULT_AVATAR_URL } from "../profileMedia"
@@ -195,10 +197,6 @@ function DiscoverPostsFeed({
   const [commentsByPostId, setCommentsByPostId] = useState({})
   const [commentDraft, setCommentDraft] = useState("")
   const [isSubmittingComment, setIsSubmittingComment] = useState(false)
-  const savedPostsStorageKey =
-    currentUserId && currentUserId !== "current-user"
-      ? `campus-saved-posts:${currentUserId}`
-      : "campus-saved-posts:guest"
   const [savedPostIds, setSavedPostIds] = useState(new Set())
 
   useEffect(() => {
@@ -206,16 +204,9 @@ function DiscoverPostsFeed({
   }, [posts])
 
   useEffect(() => {
-    if (typeof window === "undefined") return
-
-    try {
-      const stored = JSON.parse(window.localStorage.getItem(savedPostsStorageKey) || "[]")
-      const normalized = Array.isArray(stored) ? stored.map((value) => String(value)) : []
-      setSavedPostIds(new Set(normalized))
-    } catch {
-      setSavedPostIds(new Set())
-    }
-  }, [savedPostsStorageKey])
+    if (!currentUserId || currentUserId === "current-user") return
+    loadSavedPostIds({ userId: currentUserId }).then(setSavedPostIds)
+  }, [currentUserId])
 
   const updateLocalPost = (postId, updater) => {
     setLocalPosts((prev) =>
@@ -236,17 +227,6 @@ function DiscoverPostsFeed({
     if (currentUserId && currentUserId !== "current-user") return true
     showToast(message, "error")
     return false
-  }
-
-  const persistSavedPostIds = (nextSavedIds) => {
-    setSavedPostIds(nextSavedIds)
-
-    if (typeof window === "undefined") return
-
-    window.localStorage.setItem(
-      savedPostsStorageKey,
-      JSON.stringify(Array.from(nextSavedIds))
-    )
   }
 
   const handleToggleLike = async (post) => {
@@ -306,24 +286,29 @@ function DiscoverPostsFeed({
     }
   }
 
-  const handleToggleSave = (post) => {
+  const handleToggleSave = async (post) => {
     if (!requireCurrentUser("Sign in to save posts.")) return
 
     const postId = String(post.id)
+    const isSaved = savedPostIds.has(postId)
     const nextSavedIds = new Set(savedPostIds)
-    const isSaved = nextSavedIds.has(postId)
-
     if (isSaved) {
       nextSavedIds.delete(postId)
     } else {
       nextSavedIds.add(postId)
     }
 
-    persistSavedPostIds(nextSavedIds)
-    updateLocalPost(postId, () => ({
-      isSavedByCurrentUser: !isSaved,
-    }))
-    showToast(isSaved ? "Removed from saved posts." : "Saved to your posts.", "success")
+    setSavedPostIds(nextSavedIds)
+    updateLocalPost(postId, () => ({ isSavedByCurrentUser: !isSaved }))
+
+    try {
+      await setPostSave({ postId, userId: currentUserId, saved: !isSaved })
+      showToast(isSaved ? "Removed from saved posts." : "Saved to your posts.", "success")
+    } catch (error) {
+      setSavedPostIds(savedPostIds)
+      updateLocalPost(postId, () => ({ isSavedByCurrentUser: isSaved }))
+      showToast(error?.message || "Could not update save.", "error")
+    }
   }
 
   const handleOpenComments = async (post) => {
