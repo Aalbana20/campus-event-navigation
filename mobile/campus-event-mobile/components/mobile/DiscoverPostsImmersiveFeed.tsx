@@ -13,10 +13,12 @@ type DiscoverPostsImmersiveFeedProps = {
   onPressComment: (post: DiscoverPostRecord) => void;
   onPressRepost: (post: DiscoverPostRecord) => void;
   onPressShare: (post: DiscoverPostRecord) => void;
+  onPressSave?: (post: DiscoverPostRecord) => void;
   onPressCreator?: (post: DiscoverPostRecord) => void;
   currentUserId?: string;
   onDeletePost?: (post: DiscoverPostRecord) => void | Promise<void>;
   likedPostIds?: Set<string>;
+  savedPostIds?: Set<string>;
 };
 
 export function DiscoverPostsImmersiveFeed({
@@ -25,10 +27,12 @@ export function DiscoverPostsImmersiveFeed({
   onPressComment,
   onPressRepost,
   onPressShare,
+  onPressSave,
   onPressCreator,
   currentUserId,
   onDeletePost,
   likedPostIds,
+  savedPostIds,
 }: DiscoverPostsImmersiveFeedProps) {
   const theme = useAppTheme();
   const styles = useMemo(() => buildStyles(theme), [theme]);
@@ -69,10 +73,12 @@ export function DiscoverPostsImmersiveFeed({
             onPressComment={onPressComment}
             onPressRepost={onPressRepost}
             onPressShare={onPressShare}
+            onPressSave={onPressSave}
             onPressCreator={onPressCreator}
             currentUserId={currentUserId}
             onDeletePost={onDeletePost}
             isLiked={likedPostIds?.has(item.id) ?? false}
+            isSaved={savedPostIds?.has(item.id) ?? false}
             styles={styles}
           />
         )}
@@ -89,10 +95,12 @@ function DiscoverPostItem({
   onPressComment,
   onPressRepost,
   onPressShare,
+  onPressSave,
   onPressCreator,
   currentUserId,
   onDeletePost,
   isLiked,
+  isSaved,
   styles,
 }: {
   post: DiscoverPostRecord;
@@ -102,10 +110,12 @@ function DiscoverPostItem({
   onPressComment: (post: DiscoverPostRecord) => void;
   onPressRepost: (post: DiscoverPostRecord) => void;
   onPressShare: (post: DiscoverPostRecord) => void;
+  onPressSave?: (post: DiscoverPostRecord) => void;
   onPressCreator?: (post: DiscoverPostRecord) => void;
   currentUserId?: string;
   onDeletePost?: (post: DiscoverPostRecord) => void | Promise<void>;
   isLiked: boolean;
+  isSaved: boolean;
   styles: any;
 }) {
   const isVideo = post.mediaType === 'video';
@@ -185,10 +195,12 @@ function DiscoverPostItem({
           onPressComment={onPressComment}
           onPressRepost={onPressRepost}
           onPressShare={onPressShare}
+          onPressSave={onPressSave}
           onPressCreator={onPressCreator}
           currentUserId={currentUserId}
           onDeletePost={onDeletePost}
           isLiked={isLiked}
+          isSaved={isSaved}
           styles={styles}
         />
       </View>
@@ -202,10 +214,12 @@ function DiscoverPostItemOverlay({
   onPressComment,
   onPressRepost,
   onPressShare,
+  onPressSave,
   onPressCreator,
   currentUserId,
   onDeletePost,
   isLiked,
+  isSaved,
   styles,
 }: {
   post: DiscoverPostRecord;
@@ -213,10 +227,12 @@ function DiscoverPostItemOverlay({
   onPressComment: (post: DiscoverPostRecord) => void;
   onPressRepost: (post: DiscoverPostRecord) => void;
   onPressShare: (post: DiscoverPostRecord) => void;
+  onPressSave?: (post: DiscoverPostRecord) => void;
   onPressCreator?: (post: DiscoverPostRecord) => void;
   currentUserId?: string;
   onDeletePost?: (post: DiscoverPostRecord) => void | Promise<void>;
   isLiked: boolean;
+  isSaved: boolean;
   styles: any;
 }) {
   const isOwner =
@@ -259,9 +275,11 @@ function DiscoverPostItemOverlay({
           <Text style={styles.actionText}>0</Text>
         </Pressable>
 
-        <Pressable style={styles.actionButton} onPress={() => {}}>
-          <Ionicons name="bookmark-outline" size={30} color="#ffffff" />
-          <Text style={styles.actionText}>0</Text>
+        <Pressable style={styles.actionButton} onPress={() => onPressSave?.(post)}>
+          <Ionicons name={isSaved ? 'bookmark' : 'bookmark-outline'} size={30} color={isSaved ? '#facc15' : '#ffffff'} />
+          <Text style={[styles.actionText, isSaved && styles.actionTextSaved]}>
+            {isSaved ? 'Saved' : 'Save'}
+          </Text>
         </Pressable>
 
         <Pressable style={styles.actionButton} onPress={handlePressShare}>
@@ -353,6 +371,9 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       textShadowColor: 'rgba(0,0,0,0.4)',
       textShadowOffset: { width: 0, height: 1 },
       textShadowRadius: 3,
+    },
+    actionTextSaved: {
+      color: '#facc15',
     },
     bottomArea: {
       paddingHorizontal: 16,

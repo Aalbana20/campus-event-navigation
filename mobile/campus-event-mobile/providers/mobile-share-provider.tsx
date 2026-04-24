@@ -11,7 +11,7 @@ import React, {
 } from 'react';
 import { Alert, Share } from 'react-native';
 
-import type { DiscoverPostRecord } from '@/lib/mobile-discover-posts';
+import { recordDiscoverPostShare, type DiscoverPostRecord } from '@/lib/mobile-discover-posts';
 import { buildEventShareMessage } from '@/lib/mobile-event-share';
 import type { EventRecord, ProfileRecord } from '@/types/models';
 import { useMobileApp } from '@/providers/mobile-app-provider';
@@ -175,6 +175,14 @@ export function MobileShareSheetProvider({ children }: { children: React.ReactNo
           )
         );
 
+        if (payload.kind === 'post' || payload.kind === 'video') {
+          void recordDiscoverPostShare({
+            postId: payload.post.id,
+            userId: currentUser.id,
+            method: 'message',
+          });
+        }
+
         if (recipients.length === 1) {
           const only = recipients[0];
           flashToast(
@@ -191,7 +199,7 @@ export function MobileShareSheetProvider({ children }: { children: React.ReactNo
         Alert.alert('Share', 'Could not send that right now.');
       }
     },
-    [buildMessageForPayload, closeShareSheet, flashToast, payload, sendDmMessage]
+    [buildMessageForPayload, closeShareSheet, currentUser.id, flashToast, payload, sendDmMessage]
   );
 
   const handleAddToStory = useCallback(() => {
@@ -251,11 +259,18 @@ export function MobileShareSheetProvider({ children }: { children: React.ReactNo
 
     try {
       await Clipboard.setStringAsync(link);
+      if (payload.kind === 'post' || payload.kind === 'video') {
+        void recordDiscoverPostShare({
+          postId: payload.post.id,
+          userId: currentUser.id,
+          method: 'copy_link',
+        });
+      }
       flashToast('Link copied');
     } catch {
       Alert.alert('Copy link', 'Could not copy the link right now.');
     }
-  }, [buildMessageForPayload, flashToast, payload]);
+  }, [buildMessageForPayload, currentUser.id, flashToast, payload]);
 
   const handleShareToNative = useCallback(async () => {
     if (!payload) return;
@@ -264,16 +279,19 @@ export function MobileShareSheetProvider({ children }: { children: React.ReactNo
     const title = payload.kind === 'event' ? payload.event.title : 'Share';
 
     try {
-      await Share.share({
-        title,
-        message: body,
-        url: link,
-      });
+      await Share.share({ title, message: body, url: link });
+      if (payload.kind === 'post' || payload.kind === 'video') {
+        void recordDiscoverPostShare({
+          postId: payload.post.id,
+          userId: currentUser.id,
+          method: 'native_share',
+        });
+      }
       closeShareSheet();
     } catch {
       Alert.alert('Share', 'The native share sheet is not available right now.');
     }
-  }, [buildMessageForPayload, closeShareSheet, payload]);
+  }, [buildMessageForPayload, closeShareSheet, currentUser.id, payload]);
 
   const handlePressAction = useCallback(
     (key: ShareSheetActionKey) => {

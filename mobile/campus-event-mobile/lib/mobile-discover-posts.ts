@@ -622,3 +622,222 @@ export const togglePostLike = async ({
     if (error && error.code !== '23505') console.error('Unable to like post:', error);
   }
 };
+
+// ─── Post comments ────────────────────────────────────────────────────────────
+
+export type DiscoverPostComment = {
+  id: string;
+  authorName: string;
+  authorUsername: string;
+  authorAvatar: string;
+  authorId: string;
+  body: string;
+  createdAt: string;
+  likeCount: number;
+  likedByMe: boolean;
+  parentId: string | null;
+};
+
+export const loadPostComments = async (
+  postId: string,
+  viewerUserId = ''
+): Promise<DiscoverPostComment[]> => {
+  if (!supabase || !postId) return [];
+
+  const { data: rows, error } = await supabase
+    .from('discover_post_comments')
+    .select('id, body, created_at, user_id, parent_id')
+    .eq('post_id', postId)
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    console.error('Unable to load post comments:', error);
+    return [];
+  }
+
+  const commentRows = (rows || []) as Array<{
+    id: string;
+    body: string;
+    created_at: string | null;
+    user_id: string;
+    parent_id: string | null;
+  }>;
+
+  const authorIds = [...new Set(commentRows.map((r) => r.user_id).filter(Boolean))];
+  const commentIds = commentRows.map((r) => r.id).filter(Boolean);
+
+  const profileMap = new Map<string, ProfileRow>();
+  if (authorIds.length > 0) {
+    const { data: profileRows } = await supabase
+      .from('profiles')
+      .select('id, name, username, avatar_url')
+      .in('id', authorIds);
+    ((profileRows || []) as ProfileRow[]).forEach((p) => profileMap.set(p.id, p));
+  }
+
+  const likeCountMap = new Map<string, number>();
+  const likedByMeSet = new Set<string>();
+  if (commentIds.length > 0) {
+    const { data: likeRows } = await supabase
+      .from('discover_post_comment_likes')
+      .select('comment_id, user_id')
+      .in('comment_id', commentIds);
+    ((likeRows || []) as Array<{ comment_id: string; user_id: string }>).forEach((r) => {
+      likeCountMap.set(r.comment_id, (likeCountMap.get(r.comment_id) || 0) + 1);
+      if (viewerUserId && r.user_id === viewerUserId) likedByMeSet.add(r.comment_id);
+    });
+  }
+
+  return commentRows.map((r) => {
+    const profile = profileMap.get(r.user_id);
+    return {
+      id: r.id,
+      authorName: toTrimmedString(profile?.name) || toTrimmedString(profile?.username) || 'Campus User',
+      authorUsername: toTrimmedString(profile?.username),
+      authorAvatar: toTrimmedString(profile?.avatar_url),
+      authorId: r.user_id,
+      body: r.body,
+      createdAt: r.created_at || new Date().toISOString(),
+      likeCount: likeCountMap.get(r.id) || 0,
+      likedByMe: likedByMeSet.has(r.id),
+      parentId: r.parent_id || null,
+    };
+  });
+};
+
+export const addPostComment = async ({
+  postId,
+  userId,
+  body,
+  parentId = null,
+}: {
+  postId: string;
+  userId: string;
+  body: string;
+  parentId?: string | null;
+}): Promise<string | null> => {
+  if (!supabase || !postId || !userId || userId === 'current-user') return null;
+  const trimmed = body.trim();
+  if (!trimmed) return null;
+
+  const { data, error } = await supabase
+    .from('discover_post_comments')
+    .insert({ post_id: postId, user_id: userId, body: trimmed, parent_id: parentId || null })
+    .select('id')
+    .single();
+
+  if (error) {
+    console.error('Unable to add post comment:', error);
+    return null;
+  }
+
+  return String((data as { id: string }).id);
+};
+
+export const deletePostComment = async ({
+  commentId,
+  userId,
+}: {
+  commentId: string;
+  userId: string;
+}): Promise<void> => {
+  if (!supabase || !commentId || !userId || userId === 'current-user') return;
+
+  const { error } = await supabase
+    .from('discover_post_comments')
+    .delete()
+    .eq('id', commentId)
+    .eq('user_id', userId);
+
+  if (error) console.error('Unable to delete post comment:', error);
+};
+
+export const togglePostCommentLike = async ({
+  commentId,
+  userId,
+  isLiked,
+}: {
+  commentId: string;
+  userId: string;
+  isLiked: boolean;
+}): Promise<void> => {
+  if (!supabase || !commentId || !userId || userId === 'current-user') return;
+
+  if (isLiked) {
+    const { error } = await supabase
+      .from('discover_post_comment_likes')
+      .delete()
+      .eq('comment_id', commentId)
+      .eq('user_id', userId);
+    if (error) console.error('Unable to unlike post comment:', error);
+  } else {
+    const { error } = await supabase
+      .from('discover_post_comment_likes')
+      .insert({ comment_id: commentId, user_id: userId });
+    if (error && error.code !== '23505') console.error('Unable to like post comment:', error);
+  }
+};
+
+// ─── Post saves ───────────────────────────────────────────────────────────────
+
+export const loadSavedPostIds = async (userId: string): Promise<Set<string>> => {
+  if (!supabase || !userId || userId === 'current-user') return new Set();
+
+  const { data, error } = await supabase
+    .from('discover_post_saves')
+    .select('post_id')
+    .eq('user_id', userId);
+
+  if (error) {
+    console.error('Unable to load saved post ids:', error);
+    return new Set();
+  }
+
+  return new Set((data || []).map((row: { post_id: string }) => String(row.post_id)));
+};
+
+export const togglePostSave = async ({
+  postId,
+  userId,
+  isSaved,
+}: {
+  postId: string;
+  userId: string;
+  isSaved: boolean;
+}): Promise<void> => {
+  if (!supabase || !postId || !userId || userId === 'current-user') return;
+
+  if (isSaved) {
+    const { error } = await supabase
+      .from('discover_post_saves')
+      .delete()
+      .eq('post_id', postId)
+      .eq('user_id', userId);
+    if (error) console.error('Unable to unsave post:', error);
+  } else {
+    const { error } = await supabase
+      .from('discover_post_saves')
+      .insert({ post_id: postId, user_id: userId });
+    if (error && error.code !== '23505') console.error('Unable to save post:', error);
+  }
+};
+
+// ─── Post shares ──────────────────────────────────────────────────────────────
+
+export const recordDiscoverPostShare = async ({
+  postId,
+  userId,
+  method = 'share',
+}: {
+  postId: string;
+  userId: string;
+  method?: 'copy_link' | 'native_share' | 'message' | 'share';
+}): Promise<void> => {
+  if (!supabase || !postId || !userId || userId === 'current-user') return;
+
+  const { error } = await supabase
+    .from('discover_post_shares')
+    .insert({ post_id: postId, user_id: userId, method });
+
+  if (error) console.error('Unable to record post share:', error);
+};

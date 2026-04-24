@@ -36,6 +36,7 @@ export type EventCommentRecord = {
 type EventCommentsSheetProps = {
   visible: boolean;
   event: EventRecord | null;
+  title?: string;
   comments: EventCommentRecord[];
   draft: string;
   currentUserId?: string;
@@ -66,6 +67,7 @@ const formatCommentTime = (value: string) => {
 export function EventCommentsSheet({
   visible,
   event,
+  title,
   comments,
   draft,
   currentUserId,
@@ -251,7 +253,7 @@ export function EventCommentsSheet({
             <View style={styles.headerCopy}>
               <Text style={styles.headerTitle}>Comments</Text>
               <Text style={styles.headerMeta} numberOfLines={1}>
-                {event?.title || 'Campus Event'}
+                {title ?? event?.title ?? 'Campus Event'}
               </Text>
             </View>
             <Pressable style={styles.closeButton} onPress={handleClose}>
