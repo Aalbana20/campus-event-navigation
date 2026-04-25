@@ -1,4 +1,5 @@
 import type { Session, User } from '@supabase/supabase-js';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, {
   createContext,
   useCallback,
@@ -206,7 +207,23 @@ const createProfilePayload = (
 const isNotFoundError = (error: { code?: string | null } | null) =>
   error?.code === 'PGRST116';
 
-const STARTUP_TIMEOUT_MS = 25000;
+const REQUEST_TIMEOUT_MS = 7000;
+const SESSION_TIMEOUT_MS = 5000;
+const STARTUP_CACHE_VERSION = 2;
+const STARTUP_CACHE_PREFIX = `mobileAppStartup:v${STARTUP_CACHE_VERSION}`;
+
+type StartupCache = {
+  profiles?: ProfileRecord[];
+  events?: EventRecord[];
+  followRelationships?: FollowRelationship[];
+  savedEventIds?: string[];
+  recentDmProfileIds?: string[];
+  repostedEventIds?: string[];
+  updatedAt?: string;
+};
+
+const getStartupCacheKey = (userId: string) =>
+  `${STARTUP_CACHE_PREFIX}:${userId}`;
 
 const logStartup = (step: string, details?: Record<string, unknown>) => {
   if (details) {
@@ -235,7 +252,7 @@ const createStartupError = (label: string, error: unknown) => {
 const withTimeout = async <T,>(
   label: string,
   promise: PromiseLike<T>,
-  timeoutMs = STARTUP_TIMEOUT_MS
+  timeoutMs = REQUEST_TIMEOUT_MS
 ): Promise<T> =>
   new Promise<T>((resolve, reject) => {
     const timeoutId = setTimeout(() => {
@@ -346,10 +363,85 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
   const [repostedEventIds, setRepostedEventIds] = useState<Set<string>>(new Set());
   const [taggedMoments] = useState<TaggedMoment[]>([]);
   const sessionRef = useRef<Session | null>(null);
+  const startupCacheRef = useRef<StartupCache>({});
+  const pushRegistrationAttemptedRef = useRef<string | null>(null);
 
   useEffect(() => {
     sessionRef.current = session;
   }, [session]);
+
+  const applyStartupCache = useCallback((cache: StartupCache, source: string) => {
+    if (Array.isArray(cache.profiles)) setProfilesState(cache.profiles);
+    if (Array.isArray(cache.events)) setEventsState(cache.events);
+    if (Array.isArray(cache.followRelationships)) {
+      setFollowRelationships(cache.followRelationships);
+    }
+    if (Array.isArray(cache.savedEventIds)) setSavedEventIds(cache.savedEventIds);
+    if (Array.isArray(cache.recentDmProfileIds)) {
+      setRecentDmProfileIds(cache.recentDmProfileIds);
+    }
+    if (Array.isArray(cache.repostedEventIds)) {
+      setRepostedEventIds(new Set(cache.repostedEventIds));
+    }
+
+    logStartup('startupCache:applied', {
+      source,
+      profiles: cache.profiles?.length || 0,
+      events: cache.events?.length || 0,
+      follows: cache.followRelationships?.length || 0,
+      savedEvents: cache.savedEventIds?.length || 0,
+      messages: cache.recentDmProfileIds?.length || 0,
+      reposts: cache.repostedEventIds?.length || 0,
+    });
+  }, []);
+
+  const hydrateStartupCache = useCallback(
+    async (userId: string) => {
+      if (!userId) return false;
+
+      try {
+        const raw = await AsyncStorage.getItem(getStartupCacheKey(userId));
+        if (!raw) {
+          startupCacheRef.current = {};
+          logStartup('startupCache:miss', { userId });
+          return false;
+        }
+
+        const cache = JSON.parse(raw) as StartupCache;
+        startupCacheRef.current = cache || {};
+        applyStartupCache(startupCacheRef.current, 'async-storage');
+        return true;
+      } catch (error) {
+        startupCacheRef.current = {};
+        console.warn('[mobile-app/startup] startupCache:failed', error);
+        return false;
+      }
+    },
+    [applyStartupCache]
+  );
+
+  const persistStartupCache = useCallback(
+    async (userId: string, patch: StartupCache) => {
+      if (!userId) return;
+
+      const nextCache: StartupCache = {
+        ...startupCacheRef.current,
+        ...patch,
+        updatedAt: new Date().toISOString(),
+      };
+      startupCacheRef.current = nextCache;
+
+      try {
+        await AsyncStorage.setItem(
+          getStartupCacheKey(userId),
+          JSON.stringify(nextCache)
+        );
+      } catch (error) {
+        console.warn('[mobile-app/startup] startupCache:persist-failed', error);
+      }
+    },
+    []
+  );
 
   const resetRuntimeData = useCallback(() => {
     setProfilesState([]);
@@ -360,6 +452,8 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
     setDiscoverDismissedIds([]);
     setPersonalCalendarItems([]);
     setLocalRepostsByEventId({});
+    setRepostedEventIds(new Set());
+    startupCacheRef.current = {};
   }, []);
 
   const currentUser = useMemo(() => {
@@ -511,76 +605,113 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      try {
-        const authUser = nextUser || activeSession?.user;
+      const client = supabase;
+      setIsReady(true);
 
-        // Kick off ensureProfileRow in parallel — do NOT block the main data
-        // fetches on it. Its result is only needed so the backend has a row
-        // for new users, and `ensureCurrentUserInProfiles` below still covers
-        // the UI case where the row hasn't landed yet.
-        if (authUser) {
-          void runStartupStep(
-            'refreshData.ensureProfileRow',
-            ensureProfileRowForUser(authUser)
-          );
+      const authUser = nextUser || activeSession?.user;
+      const fallbackCurrentUser = authUser ? createProfileFromAuthUser(authUser) : null;
+      const taskResults: Record<string, boolean> = {};
+      const markTask = (key: string, ok: boolean) => {
+        taskResults[key] = ok;
+        if (ok) setAuthError(null);
+      };
+
+      if (authUser) {
+        void runStartupStep(
+          'refreshData.ensureProfileRow',
+          ensureProfileRowForUser(authUser)
+        );
+      }
+
+      const loadProfiles = async () => {
+        const result = await runStartupQuery(
+          'refreshData.profiles',
+          client
+            .from('profiles')
+            .select('*')
+            .order('updated_at', { ascending: false })
+        );
+
+        if (result.error) {
+          logStartup('refreshData:profiles:preserved-prev', {
+            didTimeout: Boolean(result.didTimeout),
+          });
+          markTask('profiles', false);
+          return;
         }
 
-        const [
-          profilesResult,
-          eventsResult,
-          allRsvpsResult,
-          dmParticipantResult,
-          followsResult,
-          repostsResult,
-        ] = await Promise.all([
-          runStartupQuery(
-            'refreshData.profiles',
-            supabase
-              .from('profiles')
-              .select('*')
-              .order('updated_at', { ascending: false })
-          ),
-          runStartupQuery(
-            'refreshData.events',
-            supabase
-              .from('events')
-              .select('*, event_comments(count)')
-              .order('created_at', { ascending: false })
-          ),
-          runStartupQuery('refreshData.rsvps', supabase.from('rsvps').select('*')),
-          runStartupQuery(
-            'refreshData.messages',
-            supabase
-              .from('messages')
-              .select('sender_id, recipient_id, created_at')
-              .or(`sender_id.eq.${userId},recipient_id.eq.${userId}`)
-              .order('created_at', { ascending: false })
-          ),
-          runStartupQuery('refreshData.follows', supabase.from('follows').select('*')),
-          runStartupQuery(
-            'refreshData.reposts',
-            supabase
-              .from('reposts')
-              .select('event_id')
-              .eq('user_id', userId)
-              .eq('target_type', 'event')
-          ),
-        ]);
+        const normalizedProfiles = normalizeProfiles(
+          ((result.data || []) as Array<{
+            id: string;
+            name?: string | null;
+            username?: string | null;
+            bio?: string | null;
+            avatar_url?: string | null;
+            phone?: string | null;
+            phone_number?: string | null;
+            birthday?: string | null;
+            interests?: string[] | string | null;
+            email?: string | null;
+          }>)
+        );
+        const nextProfiles = fallbackCurrentUser
+          ? ensureCurrentUserInProfiles(normalizedProfiles, fallbackCurrentUser)
+          : normalizedProfiles;
 
-        // RSVPs: only compute fresh rows when we have a usable response.
-        // If the primary query failed and the fallback also fails, leave the
-        // prior savedEventIds untouched instead of wiping them.
+        setProfilesState(nextProfiles);
+        await persistStartupCache(userId, { profiles: nextProfiles });
+        markTask('profiles', true);
+        logStartup('refreshData:profiles:applied', { count: nextProfiles.length });
+      };
+
+      const loadEvents = async () => {
+        const result = await runStartupQuery(
+          'refreshData.events',
+          client
+            .from('events')
+            .select('*, event_comments(count)')
+            .order('created_at', { ascending: false })
+        );
+
+        if (result.error) {
+          logStartup('refreshData:events:preserved-prev', {
+            didTimeout: Boolean(result.didTimeout),
+          });
+          markTask('events', false);
+          return;
+        }
+
+        const normalizedEvents = (((result.data || []) as Array<{ id: string }>))
+          .map((row) => normalizeEventRow(row as Parameters<typeof normalizeEventRow>[0]))
+          .map((event) => ({
+            ...event,
+            image: getEventImageUri(event.image),
+          }));
+
+        setEventsState(normalizedEvents);
+        await persistStartupCache(userId, { events: normalizedEvents });
+        markTask('events', true);
+        logStartup('refreshData:events:applied', { count: normalizedEvents.length });
+      };
+
+      const loadRsvps = async () => {
+        const allRsvpsResult = await runStartupQuery(
+          'refreshData.rsvps',
+          client.from('rsvps').select('*')
+        );
         let rsvpRows: Array<{ user_id: string; event_id: string }> | null = null;
+        let hasAllRsvps = false;
 
         if (!allRsvpsResult.error) {
           rsvpRows = (allRsvpsResult.data || []) as Array<{
             user_id: string;
             event_id: string;
           }>;
+          hasAllRsvps = true;
         } else {
           const currentUserRsvpsResult = await runStartupQuery(
             'refreshData.currentUserRsvps',
-            supabase.from('rsvps').select('*').eq('user_id', userId)
+            client.from('rsvps').select('*').eq('user_id', userId)
           );
 
           if (!currentUserRsvpsResult.error) {
@@ -591,7 +722,81 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
           }
         }
 
-        // Follows: same principle — preserve prior data on total failure.
+        if (rsvpRows === null) {
+          logStartup('refreshData:savedEvents:preserved-prev', {
+            didTimeout: Boolean(allRsvpsResult.didTimeout),
+          });
+          markTask('rsvps', false);
+          return;
+        }
+
+        const nextSavedEventIds = uniqueValues(
+          rsvpRows
+            .filter((row) => String(row.user_id) === String(userId))
+            .map((row) => String(row.event_id))
+        );
+
+        setSavedEventIds(nextSavedEventIds);
+        if (hasAllRsvps) {
+          const rsvpMap = buildRsvpMap(rsvpRows);
+          setEventsState((currentEvents) =>
+            currentEvents.map((event) => {
+              const attendees = rsvpMap[String(event.id)] || [];
+              return {
+                ...event,
+                attendees,
+                goingCount: attendees.length || event.goingCount,
+              };
+            })
+          );
+        }
+
+        await persistStartupCache(userId, { savedEventIds: nextSavedEventIds });
+        markTask('rsvps', true);
+        logStartup('refreshData:savedEvents:applied', {
+          count: nextSavedEventIds.length,
+          hasAllRsvps,
+        });
+      };
+
+      const loadMessages = async () => {
+        const result = await runStartupQuery(
+          'refreshData.messages',
+          client
+            .from('messages')
+            .select('sender_id, recipient_id, created_at')
+            .or(`sender_id.eq.${userId},recipient_id.eq.${userId}`)
+            .order('created_at', { ascending: false })
+        );
+
+        if (result.error) {
+          logStartup('refreshData:messages:preserved-prev', {
+            didTimeout: Boolean(result.didTimeout),
+          });
+          markTask('messages', false);
+          return;
+        }
+
+        const dmProfileIds = uniqueValues(
+          ((result.data || []) as Array<{
+            sender_id: string;
+            recipient_id: string;
+          }>).map((message) =>
+            message.sender_id === userId ? message.recipient_id : message.sender_id
+          )
+        );
+
+        setRecentDmProfileIds(dmProfileIds);
+        await persistStartupCache(userId, { recentDmProfileIds: dmProfileIds });
+        markTask('messages', true);
+        logStartup('refreshData:messages:applied', { count: dmProfileIds.length });
+      };
+
+      const loadFollows = async () => {
+        const followsResult = await runStartupQuery(
+          'refreshData.follows',
+          client.from('follows').select('*')
+        );
         let followRows: Array<{
           follower_id: string;
           following_id: string;
@@ -605,16 +810,14 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
             created_at?: string | null;
           }>;
         } else {
-          const [followingResult, followerResult] = await Promise.all([
-            runStartupQuery(
-              'refreshData.followingForUser',
-              supabase.from('follows').select('*').eq('follower_id', userId)
-            ),
-            runStartupQuery(
-              'refreshData.followersForUser',
-              supabase.from('follows').select('*').eq('following_id', userId)
-            ),
-          ]);
+          const followingResult = await runStartupQuery(
+            'refreshData.followingForUser',
+            client.from('follows').select('*').eq('follower_id', userId)
+          );
+          const followerResult = await runStartupQuery(
+            'refreshData.followersForUser',
+            client.from('follows').select('*').eq('following_id', userId)
+          );
 
           if (!followingResult.error || !followerResult.error) {
             followRows = uniqueValues([
@@ -632,159 +835,88 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
           }
         }
 
-        const fallbackCurrentUser =
-          nextUser || activeSession?.user
-            ? createProfileFromAuthUser((nextUser || activeSession?.user) as User)
-            : null;
-
-        // Profiles — preserve prior state on error.
-        if (!profilesResult.error) {
-          const normalizedProfiles = normalizeProfiles(
-            ((profilesResult.data || []) as Array<{
-              id: string;
-              name?: string | null;
-              username?: string | null;
-              bio?: string | null;
-              avatar_url?: string | null;
-              phone?: string | null;
-              phone_number?: string | null;
-              birthday?: string | null;
-              interests?: string[] | string | null;
-              email?: string | null;
-            }>)
-          );
-
-          setProfilesState(
-            fallbackCurrentUser
-              ? ensureCurrentUserInProfiles(normalizedProfiles, fallbackCurrentUser)
-              : normalizedProfiles
-          );
-          logStartup('refreshData:profiles:applied', {
-            count: normalizedProfiles.length,
-          });
-        } else {
-          logStartup('refreshData:profiles:preserved-prev', {
-            didTimeout: Boolean(profilesResult.didTimeout),
-          });
-        }
-
-        // Events — preserve prior state on error. RSVP map only applied when
-        // we have fresh rsvpRows, otherwise leave attendees as-is (they'll be
-        // computed from whatever state previously held them).
-        if (!eventsResult.error) {
-          const rsvpMap = rsvpRows ? buildRsvpMap(rsvpRows) : {};
-          const normalizedEvents = (((eventsResult.data || []) as Array<{
-            id: string;
-          }>)).map((row) =>
-            normalizeEventRow(
-              row as Parameters<typeof normalizeEventRow>[0],
-              rsvpMap[String(row.id)] || []
-            )
-          ).map((event) => ({
-            ...event,
-            image: getEventImageUri(event.image),
-          }));
-
-          setEventsState(normalizedEvents);
-          logStartup('refreshData:events:applied', { count: normalizedEvents.length });
-        } else {
-          logStartup('refreshData:events:preserved-prev', {
-            didTimeout: Boolean(eventsResult.didTimeout),
-          });
-        }
-
-        // Follows
-        if (followRows !== null) {
-          setFollowRelationships(followRows.map((row) => normalizeFollowRow(row)));
-          logStartup('refreshData:follows:applied', { count: followRows.length });
-        } else {
+        if (followRows === null) {
           logStartup('refreshData:follows:preserved-prev', {
             didTimeout: Boolean(followsResult.didTimeout),
           });
+          markTask('follows', false);
+          return;
         }
 
-        // Saved (current-user RSVPs)
-        if (rsvpRows !== null) {
-          setSavedEventIds(
-            uniqueValues(
-              rsvpRows
-                .filter((row) => String(row.user_id) === String(userId))
-                .map((row) => String(row.event_id))
-            )
-          );
-          logStartup('refreshData:savedEvents:applied');
-        } else {
-          logStartup('refreshData:savedEvents:preserved-prev', {
-            didTimeout: Boolean(allRsvpsResult.didTimeout),
-          });
-        }
+        const normalizedFollows = followRows.map((row) => normalizeFollowRow(row));
+        setFollowRelationships(normalizedFollows);
+        await persistStartupCache(userId, { followRelationships: normalizedFollows });
+        markTask('follows', true);
+        logStartup('refreshData:follows:applied', { count: normalizedFollows.length });
+      };
 
-        // Recent DM partners
-        if (!dmParticipantResult.error) {
-          const dmProfileIds = uniqueValues(
-            ((dmParticipantResult.data || []) as Array<{
-              sender_id: string;
-              recipient_id: string;
-            }>).map((message) =>
-              message.sender_id === userId ? message.recipient_id : message.sender_id
-            )
-          );
-          setRecentDmProfileIds(dmProfileIds);
-          logStartup('refreshData:messages:applied', { count: dmProfileIds.length });
-        } else {
-          logStartup('refreshData:messages:preserved-prev', {
-            didTimeout: Boolean(dmParticipantResult.didTimeout),
-          });
-        }
+      const loadReposts = async () => {
+        const result = await runStartupQuery(
+          'refreshData.reposts',
+          client
+            .from('reposts')
+            .select('event_id')
+            .eq('user_id', userId)
+            .eq('target_type', 'event')
+        );
 
-        // Reposts
-        if (!repostsResult.error) {
-          setRepostedEventIds(
-            new Set(
-              ((repostsResult.data || []) as Array<{ event_id: string | null }>)
-                .map((r) => r.event_id)
-                .filter(Boolean)
-                .map(String)
-            )
-          );
-          logStartup('refreshData:reposts:applied');
-        } else {
+        if (result.error) {
           logStartup('refreshData:reposts:preserved-prev', {
-            didTimeout: Boolean(repostsResult.didTimeout),
+            didTimeout: Boolean(result.didTimeout),
+          });
+          markTask('reposts', false);
+          return;
+        }
+
+        const nextRepostedEventIds = ((result.data || []) as Array<{
+          event_id: string | null;
+        }>)
+          .map((r) => r.event_id)
+          .filter(Boolean)
+          .map(String);
+
+        setRepostedEventIds(new Set(nextRepostedEventIds));
+        await persistStartupCache(userId, { repostedEventIds: nextRepostedEventIds });
+        markTask('reposts', true);
+        logStartup('refreshData:reposts:applied', {
+          count: nextRepostedEventIds.length,
+        });
+      };
+
+      const taskSettledResults = await Promise.allSettled([
+        loadProfiles(),
+        loadEvents(),
+        loadRsvps(),
+        loadMessages(),
+        loadFollows(),
+        loadReposts(),
+      ]);
+
+      taskSettledResults.forEach((result, index) => {
+        if (result.status === 'rejected') {
+          console.warn('[mobile-app/startup] refreshData task crashed', {
+            index,
+            reason: result.reason,
           });
         }
+      });
 
-        const anyQuerySucceeded =
-          !profilesResult.error ||
-          !eventsResult.error ||
-          !allRsvpsResult.error ||
-          !dmParticipantResult.error ||
-          !followsResult.error ||
-          !repostsResult.error;
-
-        // Only clear the auth-error banner if something actually came back —
-        // a full-wipe failure should not masquerade as a successful refresh.
-        if (anyQuerySucceeded) {
-          setAuthError(null);
-        }
-
-        logStartup('refreshData:completed', {
-          anyQuerySucceeded,
-          profilesOk: !profilesResult.error,
-          eventsOk: !eventsResult.error,
-          rsvpsOk: !allRsvpsResult.error,
-          messagesOk: !dmParticipantResult.error,
-          followsOk: !followsResult.error,
-          repostsOk: !repostsResult.error,
-        });
-      } catch (error) {
-        console.warn('Unable to refresh mobile backend data:', error);
-      } finally {
-        setIsReady(true);
-        logStartup('refreshData:ready');
-      }
+      logStartup('refreshData:completed', {
+        anyQuerySucceeded: Object.values(taskResults).some(Boolean),
+        profilesOk: Boolean(taskResults.profiles),
+        eventsOk: Boolean(taskResults.events),
+        rsvpsOk: Boolean(taskResults.rsvps),
+        messagesOk: Boolean(taskResults.messages),
+        followsOk: Boolean(taskResults.follows),
+        repostsOk: Boolean(taskResults.reposts),
+      });
+      logStartup('refreshData:ready');
     },
-    [ensureProfileRowForUser, resetRuntimeData]
+    [
+      ensureProfileRowForUser,
+      persistStartupCache,
+      resetRuntimeData,
+    ]
   );
 
   useEffect(() => {
@@ -802,7 +934,11 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
         const {
           data: { session: restoredSession },
           error,
-        } = await withTimeout('auth.getSession', supabase.auth.getSession());
+        } = await withTimeout(
+          'auth.getSession',
+          supabase.auth.getSession(),
+          SESSION_TIMEOUT_MS
+        );
 
         if (error) throw error;
         if (!isMounted) return;
@@ -815,7 +951,9 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
         setSession(restoredSession);
 
         if (restoredSession?.user?.id) {
-          await refreshData(restoredSession.user.id, restoredSession.user);
+          await hydrateStartupCache(restoredSession.user.id);
+          setIsReady(true);
+          void refreshData(restoredSession.user.id, restoredSession.user);
           return;
         }
 
@@ -832,13 +970,20 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
         const isTimeout = error instanceof StartupTimeoutError;
 
         if (isTimeout) {
+          const knownSession = sessionRef.current;
           console.warn(
-            '[mobile-app/startup] auth.getSession timed out — continuing in signed-out-ready state:',
+            '[mobile-app/startup] auth.getSession timed out — continuing without blocking UI:',
             error instanceof Error ? error.message : error
           );
+          if (knownSession?.user?.id) {
+            setSession(knownSession);
+            await hydrateStartupCache(knownSession.user.id);
+            void refreshData(knownSession.user.id, knownSession.user);
+          }
           setIsReady(true);
           logStartup('initializeSession:timeout', {
             message: error instanceof Error ? error.message : 'Session restore timed out',
+            preservedKnownSession: Boolean(knownSession?.user?.id),
           });
           return;
         }
@@ -877,7 +1022,11 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
       setSession(nextSession);
 
       if (_event === 'INITIAL_SESSION') {
-        logStartup('authStateChange:skip-refresh', { event: _event });
+        if (nextSession?.user?.id) {
+          void hydrateStartupCache(nextSession.user.id);
+          setIsReady(true);
+        }
+        logStartup('authStateChange:initial-session', { event: _event });
         return;
       }
 
@@ -887,6 +1036,8 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (nextSession?.user?.id) {
+        void hydrateStartupCache(nextSession.user.id);
+        setIsReady(true);
         if (shouldRefreshForAuthEvent(_event)) {
           void refreshData(nextSession.user.id, nextSession.user);
         }
@@ -902,7 +1053,7 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
       isMounted = false;
       subscription.unsubscribe();
     };
-  }, [refreshData, resetRuntimeData]);
+  }, [hydrateStartupCache, refreshData, resetRuntimeData]);
 
   const getProfileById = useCallback(
     (profileId: string) =>
@@ -1696,10 +1847,16 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
 
       setSession(data.session);
       sessionRef.current = data.session;
+      setIsReady(true);
+
+      if (data.session?.user?.id) {
+        void hydrateStartupCache(data.session.user.id);
+        void refreshData(data.session.user.id, data.session.user);
+      }
 
       return { ok: true };
     },
-    []
+    [hydrateStartupCache, refreshData]
   );
 
   const signUp = useCallback(
@@ -1825,6 +1982,9 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
       if (data.session) {
         setSession(data.session);
         sessionRef.current = data.session;
+        setIsReady(true);
+        void hydrateStartupCache(data.session.user.id);
+        void refreshData(data.session.user.id, data.session.user);
       } else {
         setIsReady(true);
       }
@@ -1837,7 +1997,7 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
         requiresEmailConfirmation: !data.session,
       };
     },
-    []
+    [hydrateStartupCache, refreshData]
   );
 
   // Realtime — keep events in sync when other users create/update/delete.
@@ -1892,8 +2052,14 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
         Constants.expoConfig?.extra?.eas?.projectId ??
         Constants.easConfig?.projectId;
 
-      if (!projectId) {
-        console.info('[push] No EAS projectId found — add expo.extra.eas.projectId to app.json to enable push tokens.');
+      if (
+        !projectId ||
+        String(projectId).includes('YOUR_EAS_PROJECT_ID') ||
+        String(projectId).trim().length < 10
+      ) {
+        console.info(
+          '[push] Push token registration skipped — add a real expo.extra.eas.projectId outside Expo Go/dev placeholders.'
+        );
         return;
       }
 
@@ -1910,7 +2076,11 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
+      const tokenData = await withTimeout(
+        'push.getExpoPushToken',
+        Notifications.getExpoPushTokenAsync({ projectId }),
+        REQUEST_TIMEOUT_MS
+      );
       const token = tokenData.data;
 
       const { error } = await supabase
@@ -1927,9 +2097,16 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!session?.user?.id) return;
-    void registerPushToken(session.user.id);
-  }, [session?.user?.id, registerPushToken]);
+    if (!isReady || !session?.user?.id) return;
+    if (pushRegistrationAttemptedRef.current === session.user.id) return;
+
+    pushRegistrationAttemptedRef.current = session.user.id;
+    const timeoutId = setTimeout(() => {
+      void registerPushToken(session.user.id);
+    }, 1500);
+
+    return () => clearTimeout(timeoutId);
+  }, [isReady, session?.user?.id, registerPushToken]);
 
   const signOut = useCallback(async () => {
     if (!supabase) {

@@ -224,23 +224,25 @@ export function ProfileContentTabs({
       ]);
 
       const normalizedTaggedPosts = nextTagged
-        .map((row) =>
-          row.post
-            ? ({
-                ...row.post,
-                mediaUrl: resolveDiscoverPostMediaUrl(row.post.mediaUrl),
-                authorName: '',
-                authorUsername: '',
-                authorAvatar: '',
-                likeCount: row.post.likeCount || 0,
-                commentCount: row.post.commentCount || 0,
-                repostCount: row.post.repostCount || 0,
-                shareCount: row.post.shareCount || 0,
-                isLikedByCurrentUser: Boolean(row.post.isLikedByCurrentUser),
-                isRepostedByCurrentUser: Boolean(row.post.isRepostedByCurrentUser),
-              } as DiscoverPostRecord)
-            : null
-        )
+        .map((row) => {
+          if (!row.post) return null;
+
+          const post = row.post as typeof row.post & Partial<DiscoverPostRecord>;
+
+          return {
+            ...post,
+            mediaUrl: resolveDiscoverPostMediaUrl(post.mediaUrl),
+            authorName: '',
+            authorUsername: '',
+            authorAvatar: '',
+            likeCount: post.likeCount || 0,
+            commentCount: post.commentCount || 0,
+            repostCount: post.repostCount || 0,
+            shareCount: post.shareCount || 0,
+            isLikedByCurrentUser: Boolean(post.isLikedByCurrentUser),
+            isRepostedByCurrentUser: Boolean(post.isRepostedByCurrentUser),
+          } as DiscoverPostRecord;
+        })
         .filter(Boolean) as DiscoverPostRecord[];
 
       setGridPosts(nextGrid);

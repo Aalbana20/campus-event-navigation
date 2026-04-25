@@ -45,8 +45,27 @@ const initialSettings: MobileSettingsState = {
 const MobileSettingsContext = createContext<MobileSettingsContextValue | null>(null);
 const SETTINGS_STORAGE_KEY = 'mobileSettings';
 const THEME_MODE_STORAGE_KEY = 'mobileThemeMode';
+const SETTINGS_SUPABASE_TIMEOUT_MS = 5000;
 const isThemeMode = (value: unknown): value is ThemeMode =>
   value === 'light' || value === 'dark' || value === 'device';
+
+const withSettingsTimeout = async <T,>(label: string, promise: PromiseLike<T>) =>
+  new Promise<T>((resolve, reject) => {
+    const timeoutId = setTimeout(
+      () => reject(new Error(`${label} timed out after ${SETTINGS_SUPABASE_TIMEOUT_MS}ms`)),
+      SETTINGS_SUPABASE_TIMEOUT_MS
+    );
+
+    Promise.resolve(promise)
+      .then((value) => {
+        clearTimeout(timeoutId);
+        resolve(value);
+      })
+      .catch((error) => {
+        clearTimeout(timeoutId);
+        reject(error);
+      });
+  });
 
 export function MobileSettingsProvider({ children }: { children: React.ReactNode }) {
   const deviceColorScheme = useColorScheme();
@@ -85,16 +104,22 @@ export function MobileSettingsProvider({ children }: { children: React.ReactNode
 
         // Load from Supabase if signed in — Supabase value wins over local cache
         if (supabase) {
-          const { data: { session } } = await supabase.auth.getSession();
+          const { data: { session } } = await withSettingsTimeout(
+            'settings.auth.getSession',
+            supabase.auth.getSession()
+          );
 
           if (session?.user?.id) {
             supabaseUserIdRef.current = session.user.id;
 
-            const { data: profileRow } = await supabase
-              .from('profiles')
-              .select('settings')
-              .eq('id', session.user.id)
-              .maybeSingle();
+            const { data: profileRow } = await withSettingsTimeout(
+              'settings.profile',
+              supabase
+                .from('profiles')
+                .select('settings')
+                .eq('id', session.user.id)
+                .maybeSingle()
+            );
 
             if (profileRow?.settings && typeof profileRow.settings === 'object' && isMounted) {
               setSettings((currentSettings) => ({
@@ -129,23 +154,30 @@ export function MobileSettingsProvider({ children }: { children: React.ReactNode
     const {
       data: { subscription },
     } = client.auth.onAuthStateChange(async (event, nextSession) => {
-      if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && nextSession?.user?.id) {
-        supabaseUserIdRef.current = nextSession.user.id;
+      try {
+        if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && nextSession?.user?.id) {
+          supabaseUserIdRef.current = nextSession.user.id;
 
-        const { data: profileRow } = await client
-          .from('profiles')
-          .select('settings')
-          .eq('id', nextSession.user.id)
-          .maybeSingle();
+          const { data: profileRow } = await withSettingsTimeout(
+            'settings.authState.profile',
+            client
+              .from('profiles')
+              .select('settings')
+              .eq('id', nextSession.user.id)
+              .maybeSingle()
+          );
 
-        if (profileRow?.settings && typeof profileRow.settings === 'object') {
-          setSettings((currentSettings) => ({
-            ...currentSettings,
-            ...(profileRow.settings as Partial<MobileSettingsState>),
-          }));
+          if (profileRow?.settings && typeof profileRow.settings === 'object') {
+            setSettings((currentSettings) => ({
+              ...currentSettings,
+              ...(profileRow.settings as Partial<MobileSettingsState>),
+            }));
+          }
+        } else if (event === 'SIGNED_OUT') {
+          supabaseUserIdRef.current = null;
         }
-      } else if (event === 'SIGNED_OUT') {
-        supabaseUserIdRef.current = null;
+      } catch (error) {
+        console.warn('Unable to sync mobile settings from Supabase:', error);
       }
     });
 

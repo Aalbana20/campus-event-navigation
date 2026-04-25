@@ -8,7 +8,13 @@ type ExpoExtra = {
   supabaseAnonKey?: string;
 };
 
-const extra = ((Constants.expoConfig?.extra ?? {}) as ExpoExtra) || {};
+const constantsWithLegacyManifest = Constants as typeof Constants & {
+  manifest?: { extra?: ExpoExtra } | null;
+};
+const extra =
+  ((Constants.expoConfig?.extra ??
+    constantsWithLegacyManifest.manifest?.extra ??
+    {}) as ExpoExtra) || {};
 const runtimeEnv =
   typeof process !== 'undefined'
     ? (process.env as Record<string, string | undefined>)
@@ -19,7 +25,18 @@ const supabaseUrl =
 const supabaseAnonKey =
   runtimeEnv.EXPO_PUBLIC_SUPABASE_ANON_KEY || extra.supabaseAnonKey || '';
 
-export const hasSupabaseConfig = Boolean(supabaseUrl && supabaseAnonKey);
+const isPlaceholderValue = (value: string) =>
+  !value ||
+  value.includes('your-anon-key') ||
+  value.includes('YOUR_') ||
+  value.includes('placeholder');
+
+export const hasSupabaseConfig = Boolean(
+  supabaseUrl &&
+    supabaseAnonKey &&
+    !isPlaceholderValue(supabaseUrl) &&
+    !isPlaceholderValue(supabaseAnonKey)
+);
 
 console.info('[mobile:supabase] configuration', {
   hasSupabaseUrl: Boolean(supabaseUrl),

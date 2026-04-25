@@ -28,8 +28,8 @@ const hashToFraction = (value: string, salt: number) => {
 };
 
 type EventCoordinates = {
-  lat?: number;
-  lng?: number;
+  lat: number;
+  lng: number;
 } | null;
 
 const getEventLatLng = (event: EventRecord): EventCoordinates => {
