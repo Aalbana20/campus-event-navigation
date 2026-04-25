@@ -149,15 +149,12 @@ function FilterChevron({ open }) {
 
 function GlobeIcon() {
   return (
-    <svg
-      viewBox="0 0 24 24"
+    <span
       aria-hidden="true"
       className="explore-globe-icon"
     >
-      <circle cx="12" cy="12" r="8.5" />
-      <path d="M3.5 12h17" />
-      <path d="M12 3.5c2.5 2.5 3.7 5.6 3.7 8.5s-1.2 6-3.7 8.5c-2.5-2.5-3.7-5.6-3.7-8.5s1.2-6 3.7-8.5Z" />
-    </svg>
+      🌍
+    </span>
   )
 }
 

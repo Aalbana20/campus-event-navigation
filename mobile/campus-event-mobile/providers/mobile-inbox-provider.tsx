@@ -12,14 +12,26 @@ type MobileInboxTab = 'notifications' | 'dms';
 
 type MobileNotification = {
   id: string;
-  type: 'follow' | 'event_reminder' | 'dm_received';
-  category: 'following' | 'events' | 'messages';
+  type:
+    | 'follow'
+    | 'event_reminder'
+    | 'dm_received'
+    | 'story_like'
+    | 'post_like'
+    | 'comment'
+    | 'mention'
+    | 'system';
+  category: 'following' | 'events' | 'messages' | 'comments' | 'mentions' | 'system';
   text: string;
   time: string;
+  createdAt?: string;
   image: string;
+  previewImage?: string;
   read: boolean;
+  actorId?: string;
   threadId?: string;
   username?: string;
+  eventId?: string;
   eventTab?: 'my-events' | 'calendar' | 'create';
 };
 
@@ -398,46 +410,15 @@ export function MobileInboxProvider({ children }: { children: React.ReactNode })
           category: 'following' as const,
           text: `${follower?.name || follower?.username || 'Someone'} followed you`,
           time: formatRelativeTime(relationship.createdAt),
+          createdAt: relationship.createdAt,
           image: follower?.avatar || currentUser.avatar,
           read: false,
+          actorId: relationship.followerId,
           username: follower?.username,
         };
       });
 
     notifications.push(...followerNotifications);
-
-    const latestIncomingByThread = new Map<string, MessageRow>();
-
-    [...messageRows]
-      .filter((message) => String(message.recipient_id) === String(currentUser.id))
-      .sort((left, right) => {
-        const leftTime = left.created_at ? new Date(left.created_at).getTime() : 0;
-        const rightTime = right.created_at ? new Date(right.created_at).getTime() : 0;
-        return rightTime - leftTime;
-      })
-      .forEach((message) => {
-        const threadId = String(message.sender_id);
-        if (!latestIncomingByThread.has(threadId)) {
-          latestIncomingByThread.set(threadId, message);
-        }
-      });
-
-    latestIncomingByThread.forEach((message, threadId) => {
-      const profile =
-        getProfileById(threadId) ||
-        recentDmPeople.find((person) => person.id === threadId);
-
-      notifications.push({
-        id: `message-${message.id}`,
-        type: 'dm_received',
-        category: 'messages',
-        text: `${profile?.name || profile?.username || 'Someone'} sent you a message`,
-        time: formatRelativeTime(message.created_at),
-        image: profile?.avatar || currentUser.avatar,
-        read: false,
-        threadId,
-      });
-    });
 
     events
       .filter((event) => savedEventIds.includes(event.id))
@@ -453,9 +434,13 @@ export function MobileInboxProvider({ children }: { children: React.ReactNode })
             diffDays === 0
               ? `${event.title} is happening today`
               : `${event.title} is coming up in ${diffDays}d`,
-          time: `${Math.max(diffDays, 0)}d`,
-          image: event.image,
+          time: diffDays === 0 ? 'today' : diffDays === 1 ? 'tomorrow' : `${Math.max(diffDays, 0)}d`,
+          createdAt: event.createdAt || new Date().toISOString(),
+          image: event.creatorAvatar || event.image,
+          previewImage: event.image,
           read: false,
+          actorId: event.createdBy,
+          eventId: event.id,
           eventTab: 'calendar',
         });
       });
@@ -464,21 +449,12 @@ export function MobileInboxProvider({ children }: { children: React.ReactNode })
       .filter((notification) => !deletedNotificationIds.has(notification.id))
       .map((notification) => ({
         ...notification,
-        read: Boolean(
-          readNotificationIds.has(notification.id) ||
-          (notification.type === 'dm_received' &&
-            notification.threadId &&
-            !unreadDmThreadIds.has(notification.threadId))
-        ),
+        read: readNotificationIds.has(notification.id),
       }))
       .sort((left, right) => {
-        const categoryWeight = {
-          messages: 0,
-          following: 1,
-          events: 2,
-        };
-
-        return categoryWeight[left.category] - categoryWeight[right.category];
+        const leftTime = left.createdAt ? new Date(left.createdAt).getTime() : 0;
+        const rightTime = right.createdAt ? new Date(right.createdAt).getTime() : 0;
+        return rightTime - leftTime;
       });
   }, [
     currentUser.avatar,
@@ -487,11 +463,8 @@ export function MobileInboxProvider({ children }: { children: React.ReactNode })
     events,
     followRelationships,
     getProfileById,
-    messageRows,
     readNotificationIds,
-    recentDmPeople,
     savedEventIds,
-    unreadDmThreadIds,
   ]);
 
   const unreadNotificationCount = derivedNotifications.filter(

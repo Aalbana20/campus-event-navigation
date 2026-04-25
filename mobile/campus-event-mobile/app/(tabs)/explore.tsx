@@ -721,7 +721,9 @@ export default function ExploreScreen() {
         style={styles.globeButton}
         onPress={() => router.push('/map')}
         accessibilityLabel="Open event map">
-        <Ionicons name="globe-outline" size={32} color="#ffffff" />
+        <Text style={styles.mapGlobeEmoji} allowFontScaling={false}>
+          🌍
+        </Text>
       </Pressable>
 
       <ExploreEventDetailModal
@@ -1024,6 +1026,12 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     shadowOffset: { width: 0, height: 12 },
     elevation: 18,
+  },
+  mapGlobeEmoji: {
+    fontSize: 52,
+    lineHeight: 58,
+    textAlign: 'center',
+    includeFontPadding: false,
   },
   viewerScreen: {
     flex: 1,
