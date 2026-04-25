@@ -1,6 +1,81 @@
 import React from 'react';
-import { Heart, MessageCircle, Repeat, Share2, Music, Plus } from 'lucide-react';
 import type { EventRecord } from './types/models';
+
+type IconProps = {
+  size?: number;
+  strokeWidth?: number;
+  fill?: string;
+  className?: string;
+};
+
+const IconBase = ({
+  children,
+  size = 24,
+  strokeWidth = 2,
+  fill = 'none',
+  className,
+}: IconProps & { children: React.ReactNode }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill={fill}
+    stroke="currentColor"
+    strokeWidth={strokeWidth}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+    aria-hidden="true"
+  >
+    {children}
+  </svg>
+);
+
+const Heart = (props: IconProps) => (
+  <IconBase {...props}>
+    <path d="M20.8 4.6c-1.6-1.5-4.2-1.4-5.7.2L12 8l-3.1-3.2C7.4 3.2 4.8 3.1 3.2 4.6c-1.8 1.7-1.9 4.6-.2 6.4l9 9 9-9c1.7-1.8 1.6-4.7-.2-6.4Z" />
+  </IconBase>
+);
+
+const MessageCircle = (props: IconProps) => (
+  <IconBase {...props}>
+    <path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.8 8.8 0 0 1-3.8-.9L3 20l1.2-4.8A8.2 8.2 0 0 1 3 11.5 8.5 8.5 0 0 1 12 3a8.5 8.5 0 0 1 9 8.5Z" />
+  </IconBase>
+);
+
+const Repeat = (props: IconProps) => (
+  <IconBase {...props}>
+    <path d="m17 2 4 4-4 4" />
+    <path d="M3 11V9a3 3 0 0 1 3-3h15" />
+    <path d="m7 22-4-4 4-4" />
+    <path d="M21 13v2a3 3 0 0 1-3 3H3" />
+  </IconBase>
+);
+
+const Share2 = (props: IconProps) => (
+  <IconBase {...props}>
+    <circle cx="18" cy="5" r="3" />
+    <circle cx="6" cy="12" r="3" />
+    <circle cx="18" cy="19" r="3" />
+    <path d="m8.6 13.5 6.8 4" />
+    <path d="m15.4 6.5-6.8 4" />
+  </IconBase>
+);
+
+const Music = (props: IconProps) => (
+  <IconBase {...props}>
+    <path d="M9 18V5l12-2v13" />
+    <circle cx="6" cy="18" r="3" />
+    <circle cx="18" cy="16" r="3" />
+  </IconBase>
+);
+
+const Plus = (props: IconProps) => (
+  <IconBase {...props}>
+    <path d="M12 5v14" />
+    <path d="M5 12h14" />
+  </IconBase>
+);
 
 interface DiscoverVideoFeedProps {
   events: EventRecord[];

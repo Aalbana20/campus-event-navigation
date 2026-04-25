@@ -1,8 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import L from "leaflet"
-import { MapContainer, Marker, TileLayer, useMap } from "react-leaflet"
-import "leaflet/dist/leaflet.css"
 
 import ExploreEventModal from "../components/ExploreEventModal"
 import ExploreEventTile from "../components/ExploreEventTile"
@@ -31,8 +28,6 @@ const EVENT_SCOPE_OPTIONS = [
 
 const toId = (value) => (value ? String(value) : "")
 
-const DEFAULT_MAP_CENTER = [38.2104, -75.685]
-
 const escapeHtml = (value) =>
   String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -59,47 +54,43 @@ const getEventCoordinates = (event) => {
   return { latitude, longitude }
 }
 
-const buildEventPinIcon = (event, active) =>
-  L.divIcon({
-    className: `explore-event-pin-icon ${active ? "active" : ""}`,
-    iconSize: [96, 126],
-    iconAnchor: [48, 126],
-    html: `
-      <div class="explore-event-pin ${active ? "active" : ""}">
-        <div class="explore-event-pin-card">
-          <img src="${escapeHtml(getEventImageSrc(event?.image))}" alt="" />
-          <span>${escapeHtml(event?.title || "Campus event")}</span>
-        </div>
-        <div class="explore-event-pin-drop" aria-hidden="true">
-          <span></span>
-        </div>
-        <div class="explore-event-pin-shadow" aria-hidden="true"></div>
-      </div>
-    `,
-  })
-
-function MapAutoFit({ pins }) {
-  const map = useMap()
-
-  useEffect(() => {
-    if (!pins.length) {
-      map.setView(DEFAULT_MAP_CENTER, 14)
-      return
+const getMapBounds = (pins) => {
+  if (!pins.length) {
+    return {
+      minLatitude: 38.185,
+      maxLatitude: 38.235,
+      minLongitude: -75.715,
+      maxLongitude: -75.655,
     }
+  }
 
-    const bounds = L.latLngBounds(
-      pins.map((pin) => [pin.coordinate.latitude, pin.coordinate.longitude])
-    )
+  const latitudes = pins.map((pin) => pin.coordinate.latitude)
+  const longitudes = pins.map((pin) => pin.coordinate.longitude)
+  const minLatitude = Math.min(...latitudes)
+  const maxLatitude = Math.max(...latitudes)
+  const minLongitude = Math.min(...longitudes)
+  const maxLongitude = Math.max(...longitudes)
+  const latitudePad = Math.max(0.01, (maxLatitude - minLatitude) * 0.42)
+  const longitudePad = Math.max(0.01, (maxLongitude - minLongitude) * 0.42)
 
-    if (pins.length === 1) {
-      map.setView(bounds.getCenter(), 15)
-      return
-    }
+  return {
+    minLatitude: minLatitude - latitudePad,
+    maxLatitude: maxLatitude + latitudePad,
+    minLongitude: minLongitude - longitudePad,
+    maxLongitude: maxLongitude + longitudePad,
+  }
+}
 
-    map.fitBounds(bounds, { padding: [70, 70], maxZoom: 16 })
-  }, [map, pins])
+const projectPinToMap = (coordinate, bounds) => {
+  const latitudeRange = bounds.maxLatitude - bounds.minLatitude || 0.01
+  const longitudeRange = bounds.maxLongitude - bounds.minLongitude || 0.01
+  const x = ((coordinate.longitude - bounds.minLongitude) / longitudeRange) * 100
+  const y = (1 - (coordinate.latitude - bounds.minLatitude) / latitudeRange) * 100
 
-  return null
+  return {
+    left: `${Math.min(92, Math.max(8, x))}%`,
+    top: `${Math.min(84, Math.max(18, y))}%`,
+  }
 }
 
 // Pattern of tall/short tiles to produce the IG-Explore staggered look without
@@ -279,6 +270,10 @@ function MapModal({
   const selectedPin =
     visiblePins.find(({ event }) => String(event.id) === String(selectedEvent?.id)) ||
     null
+  const mapBounds = useMemo(
+    () => getMapBounds(visiblePins.length > 0 ? visiblePins : eventPins),
+    [eventPins, visiblePins]
+  )
 
   if (!open) return null
 
@@ -318,29 +313,31 @@ function MapModal({
             />
           </div>
 
-          <MapContainer
-            className="explore-map-canvas"
-            center={DEFAULT_MAP_CENTER}
-            zoom={14}
-            zoomControl={false}
-            attributionControl={false}
-          >
-            <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
-            <MapAutoFit pins={visiblePins.length > 0 ? visiblePins : eventPins} />
+          <div className="explore-map-canvas" aria-label="Campus event locations">
+            <div className="explore-map-grid" aria-hidden="true" />
             {visiblePins.map(({ event, coordinate }) => {
               const isActive = String(event.id) === String(selectedEvent?.id)
               return (
-                <Marker
+                <button
+                  type="button"
                   key={event.id}
-                  position={[coordinate.latitude, coordinate.longitude]}
-                  icon={buildEventPinIcon(event, isActive)}
-                  eventHandlers={{
-                    click: () => onSelectEvent(event),
-                  }}
-                />
+                  className={`explore-event-pin ${isActive ? "active" : ""}`}
+                  style={projectPinToMap(coordinate, mapBounds)}
+                  onClick={() => onSelectEvent(event)}
+                  aria-label={`Select ${event?.title || "event"}`}
+                >
+                  <span className="explore-event-pin-card">
+                    <img src={getEventImageSrc(event?.image)} alt="" onError={applyEventImageFallback} />
+                    <span>{event?.title || "Campus event"}</span>
+                  </span>
+                  <span className="explore-event-pin-drop" aria-hidden="true">
+                    <span></span>
+                  </span>
+                  <span className="explore-event-pin-shadow" aria-hidden="true"></span>
+                </button>
               )
             })}
-          </MapContainer>
+          </div>
 
           {eventPins.length === 0 ? (
             <div className="explore-map-empty">

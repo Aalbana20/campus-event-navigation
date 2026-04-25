@@ -169,7 +169,7 @@ export default function MapScreen() {
               key={String(event.id)}
               coordinate={coordinate}
               anchor={{ x: 0.5, y: 1 }}
-              tracksViewChanges
+              tracksViewChanges={isActive}
               onPress={(pressEvent) => {
                 pressEvent.stopPropagation();
                 setSelectedEventId(String(event.id));
