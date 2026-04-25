@@ -39,7 +39,12 @@ const DEFAULT_REGION: Region = {
 
 const getEventCoordinates = (event: EventRecord): EventCoordinates | null => {
   const raw = (event as unknown as { locationCoordinates?: unknown }).locationCoordinates;
-  if (!raw || typeof raw !== 'object') return null;
+  if (!raw || typeof raw !== 'object') {
+    // TODO: If a shared geocoding service is added, resolve text-only
+    // locations here and cache coordinates with the event. For now, skip
+    // address-only events so the map never crashes or guesses locations.
+    return null;
+  }
 
   const latitude = Number(
     (raw as { latitude?: unknown; lat?: unknown }).latitude ??
@@ -51,6 +56,10 @@ const getEventCoordinates = (event: EventRecord): EventCoordinates | null => {
   );
 
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+    return null;
+  }
+
   return { latitude, longitude };
 };
 
@@ -151,17 +160,33 @@ export default function MapScreen() {
             <Marker
               key={String(event.id)}
               coordinate={coordinate}
-              tracksViewChanges={isActive}
+              anchor={{ x: 0.5, y: 1 }}
+              tracksViewChanges
               onPress={(pressEvent) => {
                 pressEvent.stopPropagation();
                 setSelectedEventId(String(event.id));
               }}>
-              <View style={[styles.marker, isActive && styles.markerActive]}>
-                <Ionicons
-                  name="calendar-clear"
-                  size={16}
-                  color={isActive ? '#000000' : '#ffffff'}
-                />
+              <View style={[styles.eventMarker, isActive && styles.eventMarkerActive]}>
+                <View
+                  style={[
+                    styles.markerPreviewCard,
+                    isActive && styles.markerPreviewCardActive,
+                  ]}>
+                  <Image
+                    source={getEventImageSource(event.image)}
+                    style={styles.markerPreviewImage}
+                  />
+                  <Text style={styles.markerPreviewTitle} numberOfLines={2}>
+                    {event.title || 'Campus event'}
+                  </Text>
+                </View>
+
+                <View style={styles.pinWrap}>
+                  <View style={[styles.pinDrop, isActive && styles.pinDropActive]}>
+                    <View style={styles.pinCenter} />
+                  </View>
+                  <View style={[styles.pinShadow, isActive && styles.pinShadowActive]} />
+                </View>
               </View>
             </Marker>
           );
@@ -191,7 +216,9 @@ export default function MapScreen() {
 
       <View style={styles.mapPill} pointerEvents="none">
         <Ionicons name="location" size={14} color="#ffffff" />
-        <Text style={styles.mapPillText}>{mappedEvents.length} event pins</Text>
+        <Text style={styles.mapPillText}>
+          {mappedEvents.length} event {mappedEvents.length === 1 ? 'pin' : 'pins'}
+        </Text>
       </View>
 
       {!hasMappedEvents ? (
@@ -310,27 +337,96 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       fontWeight: '600',
       paddingVertical: 0,
     },
-    marker: {
-      width: 34,
-      height: 34,
-      borderRadius: 17,
+    eventMarker: {
+      width: 94,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: '#ff375f',
+      transform: [{ scale: 1 }],
+    },
+    eventMarkerActive: {
+      transform: [{ scale: 1.08 }],
+    },
+    markerPreviewCard: {
+      width: 78,
+      minHeight: 76,
+      padding: 5,
+      borderRadius: 13,
+      backgroundColor: 'rgba(11,11,13,0.94)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.16)',
+      alignItems: 'center',
+      gap: 4,
+      shadowColor: '#000000',
+      shadowOpacity: 0.36,
+      shadowRadius: 13,
+      shadowOffset: { width: 0, height: 7 },
+      elevation: 10,
+    },
+    markerPreviewCardActive: {
+      borderColor: 'rgba(255,255,255,0.72)',
+      shadowColor: '#ff375f',
+      shadowOpacity: 0.52,
+      shadowRadius: 16,
+    },
+    markerPreviewImage: {
+      width: 66,
+      height: 42,
+      borderRadius: 9,
+      backgroundColor: theme.surfaceAlt,
+    },
+    markerPreviewTitle: {
+      width: '100%',
+      color: '#ffffff',
+      fontSize: 9,
+      lineHeight: 11,
+      fontWeight: '900',
+      textAlign: 'center',
+    },
+    pinWrap: {
+      height: 33,
+      alignItems: 'center',
+      justifyContent: 'flex-start',
+      marginTop: -1,
+    },
+    pinDrop: {
+      width: 28,
+      height: 28,
+      borderTopLeftRadius: 16,
+      borderTopRightRadius: 16,
+      borderBottomLeftRadius: 16,
+      borderBottomRightRadius: 4,
+      backgroundColor: '#ff2d55',
       borderWidth: 2,
       borderColor: '#ffffff',
-      shadowColor: '#000000',
-      shadowOpacity: 0.34,
-      shadowRadius: 10,
-      shadowOffset: { width: 0, height: 5 },
+      alignItems: 'center',
+      justifyContent: 'center',
+      transform: [{ rotate: '45deg' }],
+      shadowColor: '#ff2d55',
+      shadowOpacity: 0.42,
+      shadowRadius: 8,
+      shadowOffset: { width: 0, height: 4 },
       elevation: 8,
     },
-    markerActive: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
+    pinDropActive: {
       backgroundColor: '#ffffff',
-      borderColor: '#ff375f',
+      borderColor: '#ff2d55',
+    },
+    pinCenter: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: 'rgba(0,0,0,0.34)',
+    },
+    pinShadow: {
+      width: 18,
+      height: 5,
+      borderRadius: 999,
+      backgroundColor: 'rgba(0,0,0,0.32)',
+      marginTop: -2,
+      transform: [{ scaleX: 1.15 }],
+    },
+    pinShadowActive: {
+      backgroundColor: 'rgba(255,45,85,0.38)',
     },
     mapPill: {
       position: 'absolute',
