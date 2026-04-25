@@ -89,38 +89,46 @@ export default function MapScreen() {
   const [searchText, setSearchText] = useState('');
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
 
+  const eventPins = useMemo<MappedEvent[]>(
+    () =>
+      allEvents
+        .map((event) => {
+          const coordinate = getEventCoordinates(event);
+          return coordinate ? { event, coordinate } : null;
+        })
+        .filter(isMappedEvent),
+    [allEvents]
+  );
+
   const mappedEvents = useMemo<MappedEvent[]>(() => {
     const query = searchText.trim().toLowerCase();
 
-    return allEvents
-      .map((event) => {
-        const coordinate = getEventCoordinates(event);
-        return coordinate ? { event, coordinate } : null;
-      })
-      .filter(isMappedEvent)
-      .filter((item) => {
-        if (!query) return true;
-        return [
-          item.event.title,
-          item.event.location,
-          item.event.locationName,
-          item.event.locationAddress,
-          item.event.organizer,
-        ]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase()
-          .includes(query);
-      });
-  }, [allEvents, searchText]);
+    return eventPins.filter((item) => {
+      if (!query) return true;
+      return [
+        item.event.title,
+        item.event.location,
+        item.event.locationName,
+        item.event.locationAddress,
+        item.event.organizer,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+        .includes(query);
+    });
+  }, [eventPins, searchText]);
 
   const selectedMappedEvent = useMemo(
     () => mappedEvents.find((item) => String(item.event.id) === selectedEventId) || null,
     [mappedEvents, selectedEventId]
   );
   const selectedEvent = selectedMappedEvent?.event || null;
-  const initialRegion = useMemo(() => buildInitialRegion(mappedEvents), [mappedEvents]);
-  const hasMappedEvents = mappedEvents.length > 0;
+  const initialRegion = useMemo(
+    () => buildInitialRegion(mappedEvents.length > 0 ? mappedEvents : eventPins),
+    [eventPins, mappedEvents]
+  );
+  const hasEventPins = eventPins.length > 0;
   const selectedEventIsSaved = selectedEvent
     ? savedEventIds.includes(String(selectedEvent.id))
     : false;
@@ -221,7 +229,7 @@ export default function MapScreen() {
         </Text>
       </View>
 
-      {!hasMappedEvents ? (
+      {!hasEventPins ? (
         <View style={styles.emptyState} pointerEvents="none">
           <View style={styles.emptyIcon}>
             <Ionicons name="map-outline" size={30} color="#ffffff" />

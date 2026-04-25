@@ -1,9 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
+import L from "leaflet"
+import { MapContainer, Marker, TileLayer, useMap } from "react-leaflet"
+import "leaflet/dist/leaflet.css"
 
 import ExploreEventModal from "../components/ExploreEventModal"
 import ExploreEventTile from "../components/ExploreEventTile"
 import { useEvents } from "../context/EventContext"
+import { applyEventImageFallback, getEventImageSrc } from "../eventImages"
 import { loadDiscoverPosts } from "../discoverPosts"
 import {
   formatViewCount,
@@ -26,6 +30,77 @@ const EVENT_SCOPE_OPTIONS = [
 ]
 
 const toId = (value) => (value ? String(value) : "")
+
+const DEFAULT_MAP_CENTER = [38.2104, -75.685]
+
+const escapeHtml = (value) =>
+  String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+
+const getEventCoordinates = (event) => {
+  const raw = event?.locationCoordinates
+  if (!raw || typeof raw !== "object") {
+    // TODO: When the web app has shared geocoding support, resolve text-only
+    // locations here and persist coordinates. Until then, skip address-only
+    // events so the map never guesses or crashes.
+    return null
+  }
+
+  const latitude = Number(raw.latitude ?? raw.lat)
+  const longitude = Number(raw.longitude ?? raw.lng)
+
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null
+  if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) return null
+
+  return { latitude, longitude }
+}
+
+const buildEventPinIcon = (event, active) =>
+  L.divIcon({
+    className: `explore-event-pin-icon ${active ? "active" : ""}`,
+    iconSize: [96, 126],
+    iconAnchor: [48, 126],
+    html: `
+      <div class="explore-event-pin ${active ? "active" : ""}">
+        <div class="explore-event-pin-card">
+          <img src="${escapeHtml(getEventImageSrc(event?.image))}" alt="" />
+          <span>${escapeHtml(event?.title || "Campus event")}</span>
+        </div>
+        <div class="explore-event-pin-drop" aria-hidden="true">
+          <span></span>
+        </div>
+        <div class="explore-event-pin-shadow" aria-hidden="true"></div>
+      </div>
+    `,
+  })
+
+function MapAutoFit({ pins }) {
+  const map = useMap()
+
+  useEffect(() => {
+    if (!pins.length) {
+      map.setView(DEFAULT_MAP_CENTER, 14)
+      return
+    }
+
+    const bounds = L.latLngBounds(
+      pins.map((pin) => [pin.coordinate.latitude, pin.coordinate.longitude])
+    )
+
+    if (pins.length === 1) {
+      map.setView(bounds.getCenter(), 15)
+      return
+    }
+
+    map.fitBounds(bounds, { padding: [70, 70], maxZoom: 16 })
+  }, [map, pins])
+
+  return null
+}
 
 // Pattern of tall/short tiles to produce the IG-Explore staggered look without
 // a masonry lib. Every 6th tile is "tall"; everything else is "short".
@@ -159,8 +234,54 @@ function EventTile({ event, onOpen, gridIndex }) {
   )
 }
 
-function MapModal({ open, onClose }) {
+function MapModal({
+  open,
+  onClose,
+  events,
+  selectedEvent,
+  savedEventIds,
+  onSelectEvent,
+  onOpenEvent,
+  onToggleRsvp,
+}) {
+  const [searchText, setSearchText] = useState("")
+
+  const eventPins = useMemo(
+    () =>
+      (events || [])
+        .map((event) => {
+          const coordinate = getEventCoordinates(event)
+          return coordinate ? { event, coordinate } : null
+        })
+        .filter(Boolean),
+    [events]
+  )
+
+  const visiblePins = useMemo(() => {
+    const query = searchText.trim().toLowerCase()
+    if (!query) return eventPins
+
+    return eventPins.filter(({ event }) =>
+      [
+        event?.title,
+        event?.location,
+        event?.locationName,
+        event?.locationAddress,
+        event?.organizer,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(query)
+    )
+  }, [eventPins, searchText])
+
+  const selectedPin =
+    visiblePins.find(({ event }) => String(event.id) === String(selectedEvent?.id)) ||
+    null
+
   if (!open) return null
+
   return (
     <div
       className="explore-map-modal-backdrop"
@@ -173,7 +294,10 @@ function MapModal({ open, onClose }) {
         onClick={(event) => event.stopPropagation()}
       >
         <div className="explore-map-modal-header">
-          <strong>Campus events map</strong>
+          <div>
+            <strong>Campus events map</strong>
+            <span>{visiblePins.length} event {visiblePins.length === 1 ? "pin" : "pins"}</span>
+          </div>
           <button
             type="button"
             className="explore-map-modal-close"
@@ -184,14 +308,85 @@ function MapModal({ open, onClose }) {
           </button>
         </div>
         <div className="explore-map-modal-body">
-          <div className="explore-map-placeholder">
+          <div className="explore-map-search">
             <GlobeIcon />
-            <p>Map view coming soon</p>
-            <small>
-              Pins for every event with hover preview cards land here next. Hook up
-              Mapbox or Google Maps to replace this placeholder.
-            </small>
+            <input
+              value={searchText}
+              onChange={(event) => setSearchText(event.target.value)}
+              placeholder="Search event locations"
+              aria-label="Search event locations"
+            />
           </div>
+
+          <MapContainer
+            className="explore-map-canvas"
+            center={DEFAULT_MAP_CENTER}
+            zoom={14}
+            zoomControl={false}
+            attributionControl={false}
+          >
+            <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
+            <MapAutoFit pins={visiblePins.length > 0 ? visiblePins : eventPins} />
+            {visiblePins.map(({ event, coordinate }) => {
+              const isActive = String(event.id) === String(selectedEvent?.id)
+              return (
+                <Marker
+                  key={event.id}
+                  position={[coordinate.latitude, coordinate.longitude]}
+                  icon={buildEventPinIcon(event, isActive)}
+                  eventHandlers={{
+                    click: () => onSelectEvent(event),
+                  }}
+                />
+              )
+            })}
+          </MapContainer>
+
+          {eventPins.length === 0 ? (
+            <div className="explore-map-empty">
+              <GlobeIcon />
+              <p>No events on the map yet</p>
+              <small>Events with locations will appear here.</small>
+            </div>
+          ) : null}
+
+          {selectedPin ? (
+            <div className="explore-map-preview">
+              <img
+                src={getEventImageSrc(selectedPin.event.image)}
+                alt=""
+                onError={applyEventImageFallback}
+              />
+              <div>
+                <h3>{selectedPin.event.title || "Campus event"}</h3>
+                <p>
+                  {[selectedPin.event.date, selectedPin.event.time].filter(Boolean).join(" • ") ||
+                    "Date TBA"}
+                </p>
+                <span>
+                  {selectedPin.event.locationName ||
+                    selectedPin.event.location ||
+                    selectedPin.event.locationAddress ||
+                    "Campus location"}
+                </span>
+                {selectedPin.event.description ? (
+                  <small>{selectedPin.event.description}</small>
+                ) : null}
+              </div>
+              <div className="explore-map-preview-actions">
+                <button
+                  type="button"
+                  className={savedEventIds.has(String(selectedPin.event.id)) ? "active" : ""}
+                  onClick={() => onToggleRsvp(selectedPin.event)}
+                >
+                  {savedEventIds.has(String(selectedPin.event.id)) ? "Going" : "RSVP"}
+                </button>
+                <button type="button" onClick={() => onOpenEvent(selectedPin.event)}>
+                  View details
+                </button>
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
     </div>
@@ -200,7 +395,14 @@ function MapModal({ open, onClose }) {
 
 export default function Explore() {
   const navigate = useNavigate()
-  const { events: allEvents = [] } = useEvents() || {}
+  const eventsContext = useEvents() || {}
+  const allEvents = eventsContext.events || eventsContext.allEvents || []
+  const {
+    addEvent,
+    cancelRSVP,
+    currentUser,
+    savedEvents = [],
+  } = eventsContext
 
   const [primaryTab, setPrimaryTab] = useState("forYou") // forYou | media | events
   const [openDropdown, setOpenDropdown] = useState(null) // 'media' | 'events' | null
@@ -210,9 +412,28 @@ export default function Explore() {
   const [posts, setPosts] = useState([])
   const [viewCountsByPostId, setViewCountsByPostId] = useState(new Map())
   const [selectedEvent, setSelectedEvent] = useState(null)
+  const [selectedMapEvent, setSelectedMapEvent] = useState(null)
   const [isMapOpen, setIsMapOpen] = useState(false)
 
   const barRef = useRef(null)
+  const savedEventIds = useMemo(
+    () => new Set((savedEvents || []).map((event) => String(event.id))),
+    [savedEvents]
+  )
+
+  const handleToggleMapRsvp = useCallback(
+    (event) => {
+      if (!event?.id) return
+
+      if (savedEventIds.has(String(event.id))) {
+        cancelRSVP?.(event.id)
+        return
+      }
+
+      addEvent?.({ ...event, rsvpDate: new Date().toISOString() }, currentUser)
+    },
+    [addEvent, cancelRSVP, currentUser, savedEventIds]
+  )
 
   useEffect(() => {
     let cancelled = false
@@ -495,7 +716,19 @@ export default function Explore() {
         <GlobeIcon />
       </button>
 
-      <MapModal open={isMapOpen} onClose={() => setIsMapOpen(false)} />
+      <MapModal
+        open={isMapOpen}
+        onClose={() => {
+          setIsMapOpen(false)
+          setSelectedMapEvent(null)
+        }}
+        events={allEvents}
+        selectedEvent={selectedMapEvent}
+        savedEventIds={savedEventIds}
+        onSelectEvent={setSelectedMapEvent}
+        onOpenEvent={setSelectedEvent}
+        onToggleRsvp={handleToggleMapRsvp}
+      />
 
       {selectedEvent && (
         <ExploreEventModal
