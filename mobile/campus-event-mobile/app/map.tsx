@@ -3,319 +3,483 @@ import { useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import {
   Image,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import MapView, { Marker, PROVIDER_DEFAULT, type Region } from 'react-native-maps';
 
+import { useAppTheme } from '@/lib/app-theme';
 import { getEventImageSource } from '@/lib/mobile-media';
 import { useMobileApp } from '@/providers/mobile-app-provider';
 import type { EventRecord } from '@/types/models';
 
-// Lightweight placeholder map. Replace this <View> with react-native-maps when
-// you wire real geo + clustering. The pin layout uses a deterministic hash so
-// pins stay in the same spot across re-renders, even without coordinates.
-const hashToFraction = (value: string, salt: number) => {
-  let hash = 0;
-  const seed = `${value}-${salt}`;
-  for (let i = 0; i < seed.length; i += 1) {
-    hash = (hash << 5) - hash + seed.charCodeAt(i);
-    hash |= 0;
-  }
-  return ((Math.abs(hash) % 1000) / 1000);
+type EventCoordinates = {
+  latitude: number;
+  longitude: number;
 };
 
-type EventCoordinates = {
-  lat: number;
-  lng: number;
-} | null;
+type MappedEvent = {
+  event: EventRecord;
+  coordinate: EventCoordinates;
+};
 
-const getEventLatLng = (event: EventRecord): EventCoordinates => {
+const isMappedEvent = (value: MappedEvent | null): value is MappedEvent =>
+  Boolean(value);
+
+const DEFAULT_REGION: Region = {
+  latitude: 38.2104,
+  longitude: -75.685,
+  latitudeDelta: 0.045,
+  longitudeDelta: 0.045,
+};
+
+const getEventCoordinates = (event: EventRecord): EventCoordinates | null => {
   const raw = (event as unknown as { locationCoordinates?: unknown }).locationCoordinates;
   if (!raw || typeof raw !== 'object') return null;
-  const lat = Number((raw as { lat?: unknown }).lat);
-  const lng = Number((raw as { lng?: unknown }).lng);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-  return { lat, lng };
+
+  const latitude = Number(
+    (raw as { latitude?: unknown; lat?: unknown }).latitude ??
+      (raw as { latitude?: unknown; lat?: unknown }).lat
+  );
+  const longitude = Number(
+    (raw as { longitude?: unknown; lng?: unknown }).longitude ??
+      (raw as { longitude?: unknown; lng?: unknown }).lng
+  );
+
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  return { latitude, longitude };
+};
+
+const buildInitialRegion = (mappedEvents: MappedEvent[]): Region => {
+  if (!mappedEvents.length) return DEFAULT_REGION;
+
+  const latitudes = mappedEvents.map((item) => item.coordinate.latitude);
+  const longitudes = mappedEvents.map((item) => item.coordinate.longitude);
+  const minLatitude = Math.min(...latitudes);
+  const maxLatitude = Math.max(...latitudes);
+  const minLongitude = Math.min(...longitudes);
+  const maxLongitude = Math.max(...longitudes);
+
+  return {
+    latitude: (minLatitude + maxLatitude) / 2,
+    longitude: (minLongitude + maxLongitude) / 2,
+    latitudeDelta: Math.max(0.018, (maxLatitude - minLatitude) * 1.9 || 0.025),
+    longitudeDelta: Math.max(0.018, (maxLongitude - minLongitude) * 1.9 || 0.025),
+  };
 };
 
 export default function MapScreen() {
   const router = useRouter();
-  const { events: allEvents = [] } = useMobileApp();
+  const theme = useAppTheme();
+  const styles = useMemo(() => buildStyles(theme), [theme]);
+  const { events: allEvents = [], savedEventIds, toggleSaveEvent } = useMobileApp();
   const [searchText, setSearchText] = useState('');
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
 
-  const visibleEvents = useMemo(() => {
+  const mappedEvents = useMemo<MappedEvent[]>(() => {
     const query = searchText.trim().toLowerCase();
-    if (!query) return allEvents.slice(0, 12);
+
     return allEvents
-      .filter((event) =>
-        [event.title, event.location, event.locationName, event.organizer]
+      .map((event) => {
+        const coordinate = getEventCoordinates(event);
+        return coordinate ? { event, coordinate } : null;
+      })
+      .filter(isMappedEvent)
+      .filter((item) => {
+        if (!query) return true;
+        return [
+          item.event.title,
+          item.event.location,
+          item.event.locationName,
+          item.event.locationAddress,
+          item.event.organizer,
+        ]
           .filter(Boolean)
           .join(' ')
           .toLowerCase()
-          .includes(query)
-      )
-      .slice(0, 12);
+          .includes(query);
+      });
   }, [allEvents, searchText]);
 
-  const selectedEvent = useMemo(
-    () => visibleEvents.find((event) => String(event.id) === selectedEventId) || null,
-    [selectedEventId, visibleEvents]
+  const selectedMappedEvent = useMemo(
+    () => mappedEvents.find((item) => String(item.event.id) === selectedEventId) || null,
+    [mappedEvents, selectedEventId]
   );
+  const selectedEvent = selectedMappedEvent?.event || null;
+  const initialRegion = useMemo(() => buildInitialRegion(mappedEvents), [mappedEvents]);
+  const hasMappedEvents = mappedEvents.length > 0;
+  const selectedEventIsSaved = selectedEvent
+    ? savedEventIds.includes(String(selectedEvent.id))
+    : false;
+
+  const handleViewEvent = () => {
+    if (!selectedEvent) return;
+    router.push({
+      pathname: '/event/[id]',
+      params: { id: String(selectedEvent.id) },
+    });
+  };
+
+  const handleToggleRsvp = () => {
+    if (!selectedEvent) return;
+    void toggleSaveEvent(String(selectedEvent.id));
+  };
 
   return (
     <View style={styles.screen}>
-      {/* Placeholder "map" surface — gradient + grid texture so it reads as a
-          map without needing the native maps SDK yet. */}
-      <View style={styles.mapBackdrop} pointerEvents="none">
-        <View style={styles.mapGridHorizontal} />
-        <View style={styles.mapGridVertical} />
-      </View>
+      <MapView
+        key={`${mappedEvents.length}-${initialRegion.latitude}-${initialRegion.longitude}`}
+        style={StyleSheet.absoluteFill}
+        provider={PROVIDER_DEFAULT}
+        initialRegion={initialRegion}
+        mapType={Platform.OS === 'ios' ? 'mutedStandard' : 'standard'}
+        userInterfaceStyle="dark"
+        showsUserLocation={false}
+        showsMyLocationButton={false}
+        showsCompass
+        showsScale={false}
+        toolbarEnabled={false}
+        onPress={() => setSelectedEventId(null)}>
+        {mappedEvents.map(({ event, coordinate }) => {
+          const isActive = String(event.id) === selectedEventId;
 
-      {/* Header */}
+          return (
+            <Marker
+              key={String(event.id)}
+              coordinate={coordinate}
+              tracksViewChanges={isActive}
+              onPress={(pressEvent) => {
+                pressEvent.stopPropagation();
+                setSelectedEventId(String(event.id));
+              }}>
+              <View style={[styles.marker, isActive && styles.markerActive]}>
+                <Ionicons
+                  name="calendar-clear"
+                  size={16}
+                  color={isActive ? '#000000' : '#ffffff'}
+                />
+              </View>
+            </Marker>
+          );
+        })}
+      </MapView>
+
       <View style={styles.header}>
         <Pressable
           style={styles.iconButton}
           onPress={() => router.back()}
           accessibilityLabel="Close map">
-          <Ionicons name="chevron-back" size={20} color="#ffffff" />
+          <Ionicons name="chevron-back" size={21} color="#ffffff" />
         </Pressable>
+
         <View style={styles.searchField}>
-          <Ionicons name="search" size={16} color="rgba(255,255,255,0.55)" />
+          <Ionicons name="search" size={16} color="rgba(255,255,255,0.62)" />
           <TextInput
             value={searchText}
             onChangeText={setSearchText}
-            placeholder="Search this map"
-            placeholderTextColor="rgba(255,255,255,0.55)"
+            placeholder="Search event locations"
+            placeholderTextColor="rgba(255,255,255,0.62)"
             style={styles.searchInput}
+            autoCapitalize="none"
           />
         </View>
       </View>
 
-      {/* Pins */}
-      <View style={styles.pinLayer} pointerEvents="box-none">
-        {visibleEvents.map((event) => {
-          const coords = getEventLatLng(event);
-          // Real coords map to (lng, lat) → (x, y) inside the surface; without
-          // coords we fall back to a stable hashed position so pins don't jump.
-          const xFraction = coords ? Math.min(0.92, Math.max(0.08, (coords.lng + 180) / 360)) : hashToFraction(String(event.id), 1);
-          const yFraction = coords ? Math.min(0.85, Math.max(0.18, (90 - coords.lat) / 180)) : hashToFraction(String(event.id), 2);
-
-          return (
-            <Pressable
-              key={String(event.id)}
-              style={[
-                styles.pin,
-                {
-                  left: `${xFraction * 100}%`,
-                  top: `${yFraction * 100}%`,
-                },
-                String(event.id) === selectedEventId && styles.pinActive,
-              ]}
-              onPress={() => setSelectedEventId(String(event.id))}>
-              <Ionicons name="location" size={22} color="#ffffff" />
-            </Pressable>
-          );
-        })}
+      <View style={styles.mapPill} pointerEvents="none">
+        <Ionicons name="location" size={14} color="#ffffff" />
+        <Text style={styles.mapPillText}>{mappedEvents.length} event pins</Text>
       </View>
 
-      {/* Mini event preview card */}
-      {selectedEvent ? (
-        <View style={styles.previewCardWrap} pointerEvents="box-none">
-          <Pressable
-            style={styles.previewCard}
-            onPress={() => {
-              router.push({
-                pathname: '/event/[id]',
-                params: { id: String(selectedEvent.id) },
-              });
-            }}>
-            <Image
-              source={getEventImageSource(selectedEvent.image)}
-              style={styles.previewImage}
-            />
-            <View style={styles.previewCopy}>
-              <Text style={styles.previewTitle} numberOfLines={1}>
-                {selectedEvent.title || 'Campus event'}
-              </Text>
-              <Text style={styles.previewMeta} numberOfLines={1}>
-                {[selectedEvent.date, selectedEvent.time, selectedEvent.locationName]
-                  .filter(Boolean)
-                  .join(' · ') || 'Tap for details'}
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.7)" />
-          </Pressable>
+      {!hasMappedEvents ? (
+        <View style={styles.emptyState} pointerEvents="none">
+          <View style={styles.emptyIcon}>
+            <Ionicons name="map-outline" size={30} color="#ffffff" />
+          </View>
+          <Text style={styles.emptyTitle}>No events on the map yet</Text>
+          <Text style={styles.emptyCopy}>Events with locations will appear here.</Text>
         </View>
       ) : null}
 
-      {/* Empty / placeholder hint */}
-      {visibleEvents.length === 0 ? (
-        <View style={styles.emptyState} pointerEvents="none">
-          <Ionicons name="globe-outline" size={42} color="rgba(255,255,255,0.6)" />
-          <Text style={styles.emptyTitle}>No events to map yet</Text>
-          <Text style={styles.emptyCopy}>
-            Once events have locations they'll appear as pins here.
-          </Text>
+      {selectedEvent ? (
+        <View style={styles.previewWrap} pointerEvents="box-none">
+          <View style={styles.previewSheet}>
+            <View style={styles.sheetHandle} />
+
+            <View style={styles.previewTopRow}>
+              <Image
+                source={getEventImageSource(selectedEvent.image)}
+                style={styles.previewImage}
+              />
+
+              <View style={styles.previewCopy}>
+                <Text style={styles.previewTitle} numberOfLines={2}>
+                  {selectedEvent.title || 'Campus event'}
+                </Text>
+                <Text style={styles.previewMeta} numberOfLines={1}>
+                  {[selectedEvent.date, selectedEvent.time].filter(Boolean).join(' · ') ||
+                    'Date TBA'}
+                </Text>
+                <Text style={styles.previewLocation} numberOfLines={1}>
+                  {selectedEvent.locationName ||
+                    selectedEvent.location ||
+                    selectedEvent.locationAddress ||
+                    'Campus location'}
+                </Text>
+              </View>
+            </View>
+
+            {selectedEvent.description ? (
+              <Text style={styles.previewDescription} numberOfLines={2}>
+                {selectedEvent.description}
+              </Text>
+            ) : null}
+
+            <View style={styles.previewActions}>
+              <Pressable
+                style={[styles.previewButton, styles.secondaryPreviewButton]}
+                onPress={handleToggleRsvp}>
+                <Ionicons
+                  name={selectedEventIsSaved ? 'checkmark-circle' : 'add-circle-outline'}
+                  size={17}
+                  color="#ffffff"
+                />
+                <Text style={styles.secondaryPreviewButtonText}>
+                  {selectedEventIsSaved ? 'Going' : 'RSVP'}
+                </Text>
+              </Pressable>
+
+              <Pressable
+                style={[styles.previewButton, styles.primaryPreviewButton]}
+                onPress={handleViewEvent}>
+                <Text style={styles.primaryPreviewButtonText}>View details</Text>
+                <Ionicons name="chevron-forward" size={17} color="#000000" />
+              </Pressable>
+            </View>
+          </View>
         </View>
       ) : null}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: '#04060a',
-  },
-  mapBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#0a1224',
-    overflow: 'hidden',
-  },
-  mapGridHorizontal: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'transparent',
-    borderTopWidth: 1,
-    borderColor: 'rgba(255,255,255,0.04)',
-    // Layered shadow as a cheap "topology" texture.
-    shadowColor: 'rgba(120,160,255,0.18)',
-    shadowOpacity: 1,
-    shadowRadius: 80,
-  },
-  mapGridVertical: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'transparent',
-    borderLeftWidth: 1,
-    borderColor: 'rgba(255,255,255,0.04)',
-    shadowColor: 'rgba(90,200,180,0.14)',
-    shadowOpacity: 1,
-    shadowRadius: 100,
-  },
-  header: {
-    paddingTop: 56,
-    paddingHorizontal: 14,
-    paddingBottom: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    zIndex: 5,
-  },
-  iconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  searchField: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 12,
-    height: 40,
-    borderRadius: 999,
-    backgroundColor: 'rgba(15,15,18,0.86)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-  },
-  searchInput: {
-    flex: 1,
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '500',
-    paddingVertical: 0,
-  },
-  pinLayer: {
-    ...StyleSheet.absoluteFillObject,
-    marginTop: 110,
-    marginBottom: 160,
-  },
-  pin: {
-    position: 'absolute',
-    width: 34,
-    height: 34,
-    marginLeft: -17,
-    marginTop: -34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#ff5a7a',
-    borderWidth: 2,
-    borderColor: '#ffffff',
-    shadowColor: '#000',
-    shadowOpacity: 0.45,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 8,
-  },
-  pinActive: {
-    backgroundColor: '#ffffff',
-  },
-  previewCardWrap: {
-    position: 'absolute',
-    left: 14,
-    right: 14,
-    bottom: 36,
-    zIndex: 6,
-  },
-  previewCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 10,
-    borderRadius: 18,
-    backgroundColor: '#0b0b0d',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-    shadowColor: '#000',
-    shadowOpacity: 0.45,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 16,
-  },
-  previewImage: {
-    width: 56,
-    height: 56,
-    borderRadius: 12,
-    backgroundColor: '#1c1c20',
-  },
-  previewCopy: {
-    flex: 1,
-    gap: 2,
-  },
-  previewTitle: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  previewMeta: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  emptyState: {
-    position: 'absolute',
-    left: 24,
-    right: 24,
-    top: '40%',
-    alignItems: 'center',
-    gap: 6,
-  },
-  emptyTitle: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '800',
-    marginTop: 8,
-  },
-  emptyCopy: {
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: 13,
-    textAlign: 'center',
-  },
-});
+const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
+  StyleSheet.create({
+    screen: {
+      flex: 1,
+      backgroundColor: '#000000',
+    },
+    header: {
+      paddingTop: 56,
+      paddingHorizontal: 14,
+      paddingBottom: 10,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      zIndex: 5,
+    },
+    iconButton: {
+      width: 42,
+      height: 42,
+      borderRadius: 21,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: 'rgba(0,0,0,0.64)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.14)',
+    },
+    searchField: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      height: 42,
+      paddingHorizontal: 14,
+      borderRadius: 21,
+      backgroundColor: 'rgba(12,12,14,0.82)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.12)',
+    },
+    searchInput: {
+      flex: 1,
+      color: '#ffffff',
+      fontSize: 14,
+      fontWeight: '600',
+      paddingVertical: 0,
+    },
+    marker: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: '#ff375f',
+      borderWidth: 2,
+      borderColor: '#ffffff',
+      shadowColor: '#000000',
+      shadowOpacity: 0.34,
+      shadowRadius: 10,
+      shadowOffset: { width: 0, height: 5 },
+      elevation: 8,
+    },
+    markerActive: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: '#ffffff',
+      borderColor: '#ff375f',
+    },
+    mapPill: {
+      position: 'absolute',
+      top: 112,
+      left: 16,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 12,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: 'rgba(0,0,0,0.58)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.12)',
+    },
+    mapPillText: {
+      color: '#ffffff',
+      fontSize: 12,
+      fontWeight: '800',
+    },
+    emptyState: {
+      position: 'absolute',
+      left: 28,
+      right: 28,
+      top: '38%',
+      alignItems: 'center',
+      gap: 8,
+      padding: 22,
+      borderRadius: 26,
+      backgroundColor: 'rgba(0,0,0,0.68)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.12)',
+    },
+    emptyIcon: {
+      width: 58,
+      height: 58,
+      borderRadius: 29,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: 'rgba(255,255,255,0.12)',
+    },
+    emptyTitle: {
+      color: '#ffffff',
+      fontSize: 18,
+      fontWeight: '900',
+      textAlign: 'center',
+    },
+    emptyCopy: {
+      color: 'rgba(255,255,255,0.68)',
+      fontSize: 14,
+      fontWeight: '600',
+      textAlign: 'center',
+    },
+    previewWrap: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      bottom: 0,
+      paddingHorizontal: 14,
+      paddingBottom: 30,
+      zIndex: 8,
+    },
+    previewSheet: {
+      padding: 14,
+      borderRadius: 28,
+      backgroundColor: 'rgba(12,12,14,0.96)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.12)',
+      shadowColor: '#000000',
+      shadowOpacity: 0.4,
+      shadowRadius: 22,
+      shadowOffset: { width: 0, height: 14 },
+      elevation: 16,
+    },
+    sheetHandle: {
+      alignSelf: 'center',
+      width: 42,
+      height: 5,
+      borderRadius: 999,
+      backgroundColor: 'rgba(255,255,255,0.22)',
+      marginBottom: 13,
+    },
+    previewTopRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    previewImage: {
+      width: 76,
+      height: 76,
+      borderRadius: 18,
+      backgroundColor: theme.surfaceAlt,
+    },
+    previewCopy: {
+      flex: 1,
+      gap: 4,
+    },
+    previewTitle: {
+      color: '#ffffff',
+      fontSize: 17,
+      fontWeight: '900',
+      lineHeight: 21,
+    },
+    previewMeta: {
+      color: 'rgba(255,255,255,0.72)',
+      fontSize: 13,
+      fontWeight: '700',
+    },
+    previewLocation: {
+      color: 'rgba(255,255,255,0.58)',
+      fontSize: 13,
+      fontWeight: '700',
+    },
+    previewDescription: {
+      color: 'rgba(255,255,255,0.72)',
+      fontSize: 13,
+      lineHeight: 18,
+      marginTop: 12,
+    },
+    previewActions: {
+      flexDirection: 'row',
+      gap: 10,
+      marginTop: 14,
+    },
+    previewButton: {
+      flex: 1,
+      minHeight: 44,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexDirection: 'row',
+      gap: 6,
+    },
+    secondaryPreviewButton: {
+      backgroundColor: 'rgba(255,255,255,0.12)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.12)',
+    },
+    secondaryPreviewButtonText: {
+      color: '#ffffff',
+      fontSize: 14,
+      fontWeight: '900',
+    },
+    primaryPreviewButton: {
+      backgroundColor: '#ffffff',
+    },
+    primaryPreviewButtonText: {
+      color: '#000000',
+      fontSize: 14,
+      fontWeight: '900',
+    },
+  });

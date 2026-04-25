@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
@@ -35,8 +35,16 @@ const HOLD_TO_RECORD_DELAY_MS = 220;
 
 const MODES: ComposerMode[] = ['Post', 'Story', 'Event', 'Live'];
 
+const resolveInitialMode = (value?: string | string[] | null): ComposerMode => {
+  const normalizedValue = String(Array.isArray(value) ? value[0] : value || '').toLowerCase();
+  if (normalizedValue === 'post') return 'Post';
+  if (normalizedValue === 'event') return 'Event';
+  return 'Story';
+};
+
 export function StoryComposerScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ mode?: string | string[] }>();
   const theme = useAppTheme();
   const styles = useMemo(() => buildStyles(theme), [theme]);
   const { currentUser } = useMobileApp();
@@ -47,7 +55,9 @@ export function StoryComposerScreen() {
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [microphonePermission, requestMicrophonePermission] = useMicrophonePermissions();
   const [stage, setStage] = useState<ComposerStage>('camera');
-  const [activeMode, setActiveMode] = useState<ComposerMode>('Story');
+  const [activeMode, setActiveMode] = useState<ComposerMode>(() =>
+    resolveInitialMode(params.mode)
+  );
   const [cameraFacing, setCameraFacing] = useState<CameraType>('back');
   const [flashMode, setFlashMode] = useState<FlashMode>('off');
   const [cameraMode, setCameraMode] = useState<'picture' | 'video'>('picture');

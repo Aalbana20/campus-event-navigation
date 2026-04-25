@@ -21,6 +21,7 @@ type CalendarCreateMode = 'event' | 'personal';
 type CalendarCreateSheetProps = {
   visible: boolean;
   selectedDate: string | null;
+  initialMode?: CalendarCreateMode;
   onClose: () => void;
   onAddPersonalItem: (input: CreatePersonalCalendarItemInput) => void;
 };
@@ -35,6 +36,7 @@ const toDateKey = (date: Date) => {
 export function CalendarCreateSheet({
   visible,
   selectedDate,
+  initialMode = 'event',
   onClose,
   onAddPersonalItem,
 }: CalendarCreateSheetProps) {
@@ -49,9 +51,9 @@ export function CalendarCreateSheet({
 
   useEffect(() => {
     if (!visible) return;
-    setMode('event');
+    setMode(initialMode);
     setPersonalDate(defaultDate);
-  }, [defaultDate, visible]);
+  }, [defaultDate, initialMode, visible]);
 
   const resetPersonalForm = () => {
     setPersonalTitle('');

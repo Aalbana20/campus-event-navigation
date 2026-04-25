@@ -16,6 +16,7 @@ import type { CreatePersonalCalendarItemInput } from '@/types/models';
 type EventsTab = 'event' | 'calendar';
 type CalendarFilter = 'all' | 'going' | 'created';
 type CalendarMode = 'month' | 'year';
+type CreateMode = 'event' | 'personal';
 
 const FILTER_LABELS: Record<CalendarFilter, string> = {
   all: 'All',
@@ -32,6 +33,11 @@ const resolveEventsTab = (value?: string | string[] | null): EventsTab => {
 const shouldOpenCreateFromParam = (value?: string | string[] | null) => {
   const normalizedValue = Array.isArray(value) ? value[0] : value;
   return normalizedValue === 'create';
+};
+
+const resolveCreateMode = (value?: string | string[] | null): CreateMode => {
+  const normalizedValue = Array.isArray(value) ? value[0] : value;
+  return normalizedValue === 'personal' ? 'personal' : 'event';
 };
 
 const toDateKey = (date: Date) => {
@@ -62,7 +68,10 @@ const sortAgendaItems = (items: DayAgendaItem[]) =>
   });
 
 export default function EventsScreen() {
-  const params = useLocalSearchParams<{ tab?: string | string[] }>();
+  const params = useLocalSearchParams<{
+    tab?: string | string[];
+    createMode?: string | string[];
+  }>();
   const router = useRouter();
   const theme = useAppTheme();
   const styles = useMemo(() => buildStyles(theme), [theme]);
@@ -85,13 +94,17 @@ export default function EventsScreen() {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [createMode, setCreateMode] = useState<CreateMode>(() =>
+    resolveCreateMode(params.createMode)
+  );
 
   useEffect(() => {
     setActiveTab(resolveEventsTab(params.tab));
     if (shouldOpenCreateFromParam(params.tab)) {
+      setCreateMode(resolveCreateMode(params.createMode));
       setIsCreateOpen(true);
     }
-  }, [params.tab]);
+  }, [params.createMode, params.tab]);
 
   const goingEvents = getGoingEventsForProfile(currentUser.id);
   const createdEvents = getCreatedEventsForProfile(currentUser.id);
@@ -316,6 +329,7 @@ export default function EventsScreen() {
               style={styles.actionControlButton}
               onPress={() => {
                 setIsFilterOpen(false);
+                setCreateMode('event');
                 setIsCreateOpen(true);
               }}>
               <Ionicons name="add" size={22} color={theme.text} />
@@ -343,6 +357,7 @@ export default function EventsScreen() {
       <CalendarCreateSheet
         visible={isCreateOpen}
         selectedDate={selectedDate}
+        initialMode={createMode}
         onClose={() => setIsCreateOpen(false)}
         onAddPersonalItem={handleCreatePersonalItem}
       />

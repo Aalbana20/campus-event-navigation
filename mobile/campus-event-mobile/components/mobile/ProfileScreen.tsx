@@ -65,6 +65,39 @@ type EditEventFormState = {
   privacy: EventPrivacy;
   image: string;
 };
+type CreateOption = {
+  key: 'post' | 'story' | 'event' | 'personal';
+  label: string;
+  subtitle: string;
+  icon: keyof typeof Ionicons.glyphMap;
+};
+
+const CREATE_OPTIONS: CreateOption[] = [
+  {
+    key: 'post',
+    label: 'Post',
+    subtitle: 'Share a photo or video to your profile.',
+    icon: 'grid-outline',
+  },
+  {
+    key: 'story',
+    label: 'Story',
+    subtitle: 'Post a moment that disappears later.',
+    icon: 'radio-button-on-outline',
+  },
+  {
+    key: 'event',
+    label: 'Event',
+    subtitle: 'Create a campus event with RSVP details.',
+    icon: 'calendar-clear-outline',
+  },
+  {
+    key: 'personal',
+    label: 'Personal',
+    subtitle: 'Add a private calendar item.',
+    icon: 'bookmark-outline',
+  },
+];
 
 const toEditEventForm = (event: EventRecord): EditEventFormState => ({
   title: event.title || '',
@@ -157,6 +190,7 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [editEventForm, setEditEventForm] = useState<EditEventFormState | null>(null);
   const [isSavingEvent, setIsSavingEvent] = useState(false);
+  const [isCreateMenuVisible, setIsCreateMenuVisible] = useState(false);
   const [profileContentCounts, setProfileContentCounts] =
     useState<ProfileContentCounts>({ posts: 0 });
   const handleProfileContentCountsChange = useCallback(
@@ -259,6 +293,8 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
   const followers = getFollowersForProfile(profile.id);
   const following = getFollowingForProfile(profile.id);
   const createdEvents = getCreatedEventsForProfile(profile.id);
+  const shouldShowFirstCreatePrompt =
+    isOwnProfile && createdEvents.length === 0 && profileContentCounts.posts === 0;
 
   const handleOpenProfile = (targetUsername: string) => {
     if (targetUsername === currentUser.username) {
@@ -279,6 +315,27 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
     }
 
     followProfile(profile.id);
+  };
+
+  const handleCreateOption = (option: CreateOption['key']) => {
+    setIsCreateMenuVisible(false);
+
+    if (option === 'post') {
+      router.push({ pathname: '/story/create', params: { mode: 'post' } });
+      return;
+    }
+
+    if (option === 'story') {
+      router.push({ pathname: '/story/create', params: { mode: 'story' } });
+      return;
+    }
+
+    if (option === 'event') {
+      router.push({ pathname: '/(tabs)/events', params: { tab: 'create', createMode: 'event' } });
+      return;
+    }
+
+    router.push({ pathname: '/(tabs)/events', params: { tab: 'create', createMode: 'personal' } });
   };
 
   const handleOpenEdit = () => {
@@ -388,13 +445,55 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}>
+        <View style={styles.profileTopBar}>
+          {isOwnProfile ? (
+            <Pressable
+              style={styles.topBarIconButton}
+              onPress={() => setIsCreateMenuVisible(true)}
+              accessibilityLabel="Create">
+              <Ionicons name="add" size={24} color={theme.text} />
+            </Pressable>
+          ) : (
+            <Pressable
+              style={styles.topBarIconButton}
+              onPress={() => router.back()}
+              accessibilityLabel="Back">
+              <Ionicons name="chevron-back" size={22} color={theme.text} />
+            </Pressable>
+          )}
+
+          <Pressable
+            style={styles.usernameMenuButton}
+            onPress={() =>
+              Alert.alert('Account switching', 'Account switching support is coming soon.')
+            }>
+            <Text style={styles.topUsername} numberOfLines={1}>
+              {profile.username}
+            </Text>
+            <Ionicons name="chevron-down" size={15} color={theme.textMuted} />
+          </Pressable>
+
+          {isOwnProfile ? (
+            <Pressable
+              style={styles.topBarIconButton}
+              onPress={() => router.push('/settings')}
+              accessibilityLabel="Open settings">
+              <Ionicons name="settings-outline" size={21} color={theme.text} />
+            </Pressable>
+          ) : (
+            <View style={styles.topBarIconButtonPlaceholder} />
+          )}
+        </View>
+
         <View style={styles.headerCard}>
           <View style={styles.headerTopRow}>
             <Image source={getAvatarImageSource(profile.avatar)} style={styles.avatar} />
 
             <View style={styles.headerCopy}>
               <Text style={styles.name}>{profile.name}</Text>
-              <Text style={styles.username}>@{profile.username}</Text>
+              <Text style={styles.profileRoleText}>
+                {isOwnProfile ? 'Your campus profile' : 'Campus profile'}
+              </Text>
             </View>
           </View>
 
@@ -420,11 +519,6 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
                   onPress={() => Alert.alert('Share Profile', `@${profile.username}`)}>
                   <Text style={styles.secondaryButtonText}>Share Profile</Text>
                 </Pressable>
-                <Pressable
-                  style={styles.secondaryIconButton}
-                  onPress={() => router.push('/settings')}>
-                  <Ionicons name="settings-outline" size={18} color={theme.text} />
-                </Pressable>
               </>
             ) : (
               <>
@@ -446,6 +540,23 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
               </>
             )}
           </View>
+
+          {shouldShowFirstCreatePrompt ? (
+            <Pressable
+              style={styles.firstCreateCard}
+              onPress={() => setIsCreateMenuVisible(true)}>
+              <View style={styles.firstCreateIcon}>
+                <Ionicons name="add" size={22} color="#000000" />
+              </View>
+              <View style={styles.firstCreateCopy}>
+                <Text style={styles.firstCreateTitle}>Create your first post or event</Text>
+                <Text style={styles.firstCreateSubtitle}>
+                  Start your profile with a moment, story, or campus plan.
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={theme.textMuted} />
+            </Pressable>
+          ) : null}
         </View>
 
         <ProfileHighlightsRow
@@ -488,6 +599,41 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
         onShareStory={async () => {}}
         onLoadViewers={async () => []}
       />
+
+      <Modal
+        visible={isCreateMenuVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsCreateMenuVisible(false)}>
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setIsCreateMenuVisible(false)}>
+          <Pressable
+            style={styles.createMenuSheet}
+            onPress={(eventPress) => eventPress.stopPropagation()}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.createMenuTitle}>Create</Text>
+
+            <View style={styles.createMenuList}>
+              {CREATE_OPTIONS.map((option) => (
+                <Pressable
+                  key={option.key}
+                  style={styles.createMenuRow}
+                  onPress={() => handleCreateOption(option.key)}>
+                  <View style={styles.createMenuIcon}>
+                    <Ionicons name={option.icon} size={21} color={theme.text} />
+                  </View>
+                  <View style={styles.createMenuCopy}>
+                    <Text style={styles.createMenuLabel}>{option.label}</Text>
+                    <Text style={styles.createMenuSubtitle}>{option.subtitle}</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={theme.textMuted} />
+                </Pressable>
+              ))}
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       <Modal visible={activeList !== null} transparent animationType="slide" onRequestClose={() => setActiveList(null)}>
         <Pressable style={styles.modalOverlay} onPress={() => setActiveList(null)}>
@@ -856,10 +1002,45 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) => {
       backgroundColor: screenBackground,
     },
     scrollContent: {
-      padding: 18,
+      paddingHorizontal: 18,
+      paddingTop: 12,
       gap: 18,
       paddingBottom: 120,
       backgroundColor: screenBackground,
+    },
+    profileTopBar: {
+      minHeight: 44,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    topBarIconButton: {
+      width: 42,
+      height: 42,
+      borderRadius: 21,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: profileSurface,
+      borderWidth: 1,
+      borderColor: profileBorder,
+    },
+    topBarIconButtonPlaceholder: {
+      width: 42,
+      height: 42,
+    },
+    usernameMenuButton: {
+      maxWidth: '68%',
+      minHeight: 40,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 5,
+      paddingHorizontal: 12,
+    },
+    topUsername: {
+      color: profileText,
+      fontSize: 17,
+      fontWeight: '900',
     },
     headerCard: {
       paddingVertical: 8,
@@ -890,7 +1071,7 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) => {
       fontSize: 24,
       fontWeight: '800',
     },
-    username: {
+    profileRoleText: {
       color: profileMutedText,
       fontSize: 15,
       fontWeight: '700',
@@ -962,14 +1143,38 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) => {
       fontSize: 14,
       fontWeight: '800',
     },
-    secondaryIconButton: {
-      width: 48,
+    firstCreateCard: {
+      minHeight: 78,
+      flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: 12,
-      backgroundColor: profileSurfaceAlt,
+      gap: 12,
+      padding: 14,
+      borderRadius: 20,
+      backgroundColor: profileSurface,
       borderWidth: 1,
       borderColor: profileBorder,
+    },
+    firstCreateIcon: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: '#ffffff',
+    },
+    firstCreateCopy: {
+      flex: 1,
+      gap: 4,
+    },
+    firstCreateTitle: {
+      color: profileText,
+      fontSize: 15,
+      fontWeight: '900',
+    },
+    firstCreateSubtitle: {
+      color: profileMutedText,
+      fontSize: 13,
+      lineHeight: 18,
     },
     tabBar: {
       flexDirection: 'row',
@@ -1084,6 +1289,60 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) => {
       fontSize: 18,
       fontWeight: '800',
       marginBottom: 14,
+    },
+    createMenuSheet: {
+      borderTopLeftRadius: 30,
+      borderTopRightRadius: 30,
+      backgroundColor: profileSurface,
+      paddingHorizontal: 18,
+      paddingTop: 12,
+      paddingBottom: 34,
+      borderWidth: 1,
+      borderColor: profileBorder,
+    },
+    createMenuTitle: {
+      color: profileText,
+      fontSize: 22,
+      fontWeight: '900',
+      marginBottom: 12,
+    },
+    createMenuList: {
+      gap: 8,
+    },
+    createMenuRow: {
+      minHeight: 72,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      borderRadius: 20,
+      backgroundColor: profileSurfaceAlt,
+      borderWidth: 1,
+      borderColor: profileBorder,
+    },
+    createMenuIcon: {
+      width: 42,
+      height: 42,
+      borderRadius: 21,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : theme.surface,
+    },
+    createMenuCopy: {
+      flex: 1,
+      gap: 3,
+    },
+    createMenuLabel: {
+      color: profileText,
+      fontSize: 16,
+      fontWeight: '900',
+    },
+    createMenuSubtitle: {
+      color: profileMutedText,
+      fontSize: 12,
+      lineHeight: 16,
+      fontWeight: '600',
     },
     modalContent: {
       gap: 12,
