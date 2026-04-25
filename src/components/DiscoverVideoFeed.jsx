@@ -4,21 +4,71 @@ import {
   getEventImageSrc,
   isVideoMediaSrc,
 } from "../eventImages"
+import {
+  DEFAULT_AVATAR_URL,
+  getEventCreatorDisplay,
+} from "../profileMedia"
 
 // Only the visible feed item should actually load + play its video. A
 // previous implementation set `autoPlay preload="metadata"` on every <video>
 // in the feed which forced the browser to fetch metadata (and on most
 // platforms, the first segment) for every off-screen item — a major source
 // of Supabase storage egress on the discover video feed.
+//
 // Default to "visible" only when IntersectionObserver isn't available (very
 // old browsers). Modern browsers stay false until the observer fires, so
 // off-screen items don't request the source.
 const SUPPORTS_INTERSECTION_OBSERVER =
   typeof IntersectionObserver !== "undefined"
 
+// Registry of every <video> currently mounted by the feed. Used by the
+// parent feed's lifecycle effects to pause every clip in one shot when the
+// page becomes hidden, the tab loses focus, or the feed unmounts (route
+// change). Without this an audible video can keep playing in the background
+// after the user has navigated away.
+const ACTIVE_FEED_VIDEOS = new Set()
+
+const pauseFeedVideo = (video) => {
+  if (!video) return
+  try {
+    video.pause()
+  } catch {
+    /* paused already / element detaching — fine */
+  }
+  try {
+    video.currentTime = 0
+  } catch {
+    /* metadata may not be loaded yet — fine */
+  }
+}
+
+const pauseAllFeedVideos = () => {
+  ACTIVE_FEED_VIDEOS.forEach(pauseFeedVideo)
+}
+
 function LazyFeedVideo({ src, poster }) {
   const videoRef = useRef(null)
   const [isVisible, setIsVisible] = useState(!SUPPORTS_INTERSECTION_OBSERVER)
+
+  // Register with the global active-video registry so the feed-level
+  // unmount + page-visibility listeners can stop playback in bulk. On
+  // unmount, also drop the src and call load() to cancel any in-flight
+  // network fetch and free decoder resources.
+  useEffect(() => {
+    const node = videoRef.current
+    if (!node) return undefined
+    ACTIVE_FEED_VIDEOS.add(node)
+    return () => {
+      pauseFeedVideo(node)
+      try {
+        node.removeAttribute("src")
+        node.load()
+      } catch {
+        /* element gone — fine */
+      }
+      ACTIVE_FEED_VIDEOS.delete(node)
+    }
+  }, [])
 
   useEffect(() => {
     if (!SUPPORTS_INTERSECTION_OBSERVER) return undefined
@@ -48,12 +98,7 @@ function LazyFeedVideo({ src, poster }) {
         result.catch(() => {})
       }
     } else {
-      video.pause()
-      try {
-        video.currentTime = 0
-      } catch {
-        /* metadata may not be loaded yet — fine */
-      }
+      pauseFeedVideo(video)
     }
   }, [isVisible])
 
@@ -72,10 +117,6 @@ function LazyFeedVideo({ src, poster }) {
     />
   )
 }
-import {
-  DEFAULT_AVATAR_URL,
-  getEventCreatorDisplay,
-} from "../profileMedia"
 
 const iconProps = {
   viewBox: "0 0 24 24",
@@ -106,17 +147,6 @@ function CommentIcon() {
       <circle cx="8.2" cy="12" r="0.9" fill="currentColor" stroke="none" />
       <circle cx="12" cy="12" r="0.9" fill="currentColor" stroke="none" />
       <circle cx="15.8" cy="12" r="0.9" fill="currentColor" stroke="none" />
-    </svg>
-  )
-}
-
-function RepostIcon() {
-  return (
-    <svg {...iconProps}>
-      <polyline points="17 1 21 5 17 9" />
-      <path d="M3 11V9a4 4 0 0 1 4-4h14" />
-      <polyline points="7 23 3 19 7 15" />
-      <path d="M21 13v2a4 4 0 0 1-4 4H3" />
     </svg>
   )
 }
@@ -160,15 +190,47 @@ function PlusIcon() {
 function DiscoverVideoFeed({
   events,
   savedIds,
-  repostedIds,
   followingIdSet,
   onPressHeart,
   onPressComment,
-  onPressRepost,
   onPressShare,
   onPressCreator,
   onPressFollow,
 }) {
+  // Pause every active feed video when the tab is hidden, the window loses
+  // focus, the page is being unloaded, or this component itself unmounts
+  // (e.g. user navigates to another route). Keeps audio from leaking after
+  // the user has left the page.
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") {
+        pauseAllFeedVideos()
+      }
+    }
+
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", handleVisibilityChange)
+    }
+    if (typeof window !== "undefined") {
+      window.addEventListener("pagehide", pauseAllFeedVideos)
+      window.addEventListener("blur", pauseAllFeedVideos)
+    }
+
+    return () => {
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", handleVisibilityChange)
+      }
+      if (typeof window !== "undefined") {
+        window.removeEventListener("pagehide", pauseAllFeedVideos)
+        window.removeEventListener("blur", pauseAllFeedVideos)
+      }
+      // Belt-and-suspenders: even though each LazyFeedVideo cleans itself up
+      // on unmount, force-pause every remaining video so nothing can keep
+      // playing if the cleanup order ever changes.
+      pauseAllFeedVideos()
+    }
+  }, [])
+
   if (!events || events.length === 0) {
     return (
       <div className="discover-video-feed-container">
@@ -185,7 +247,6 @@ function DiscoverVideoFeed({
         const eventId = String(event.id)
         const { creatorAvatar, creatorName } = getEventCreatorDisplay(event)
         const isSaved = savedIds ? savedIds.has(eventId) : false
-        const isReposted = repostedIds ? repostedIds.has(eventId) : false
         const creatorId = String(event?.creatorId || event?.creator_id || "")
         const isFollowing = followingIdSet && creatorId
           ? followingIdSet.has(creatorId)
