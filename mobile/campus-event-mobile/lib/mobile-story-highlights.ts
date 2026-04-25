@@ -72,6 +72,16 @@ type StoryRow = {
 const toTrimmed = (value: unknown) =>
   typeof value === 'string' ? value.trim() : '';
 
+// PostgREST returns PGRST205 when a referenced table is missing from the
+// schema cache. That happens transiently right after a migration, or when a
+// client is run against a DB where this migration hasn't landed yet. In both
+// cases we'd rather render an empty highlights row than spam the console.
+const isMissingTableError = (error: { code?: string | null; message?: string | null }) =>
+  error?.code === 'PGRST205' ||
+  (typeof error?.message === 'string' &&
+    /story_highlights|story_highlight_items/.test(error.message) &&
+    /(could not find the table|schema cache)/i.test(error.message));
+
 const normalizeHighlight = (
   row: HighlightRow,
   itemCount: number
@@ -113,6 +123,7 @@ export const loadStoryHighlightsForUser = async (
     .order('created_at', { ascending: false });
 
   if (highlightsError) {
+    if (isMissingTableError(highlightsError)) return empty;
     console.error('Unable to load story highlights:', highlightsError);
     return empty;
   }
@@ -128,7 +139,7 @@ export const loadStoryHighlightsForUser = async (
     .in('highlight_id', highlightIds)
     .order('position', { ascending: true });
 
-  if (itemsError) {
+  if (itemsError && !isMissingTableError(itemsError)) {
     console.error('Unable to load story highlight items:', itemsError);
   }
 

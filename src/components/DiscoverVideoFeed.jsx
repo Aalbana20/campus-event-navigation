@@ -1,9 +1,77 @@
-import React from "react"
+import React, { useEffect, useRef, useState } from "react"
 import {
   applyEventImageFallback,
   getEventImageSrc,
   isVideoMediaSrc,
 } from "../eventImages"
+
+// Only the visible feed item should actually load + play its video. A
+// previous implementation set `autoPlay preload="metadata"` on every <video>
+// in the feed which forced the browser to fetch metadata (and on most
+// platforms, the first segment) for every off-screen item — a major source
+// of Supabase storage egress on the discover video feed.
+// Default to "visible" only when IntersectionObserver isn't available (very
+// old browsers). Modern browsers stay false until the observer fires, so
+// off-screen items don't request the source.
+const SUPPORTS_INTERSECTION_OBSERVER =
+  typeof IntersectionObserver !== "undefined"
+
+function LazyFeedVideo({ src, poster }) {
+  const videoRef = useRef(null)
+  const [isVisible, setIsVisible] = useState(!SUPPORTS_INTERSECTION_OBSERVER)
+
+  useEffect(() => {
+    if (!SUPPORTS_INTERSECTION_OBSERVER) return undefined
+    const node = videoRef.current
+    if (!node) return undefined
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          setIsVisible(entry.isIntersecting && entry.intersectionRatio > 0.4)
+        }
+      },
+      { threshold: [0, 0.4, 0.75] }
+    )
+
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [])
+
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video) return
+    if (isVisible) {
+      // play() can reject when user gesture is required; ignore silently.
+      const result = video.play()
+      if (result && typeof result.catch === "function") {
+        result.catch(() => {})
+      }
+    } else {
+      video.pause()
+      try {
+        video.currentTime = 0
+      } catch {
+        /* metadata may not be loaded yet — fine */
+      }
+    }
+  }, [isVisible])
+
+  return (
+    <video
+      ref={videoRef}
+      className="video-feed-media"
+      // Only attach the source while in view so off-screen items never
+      // request bytes from storage.
+      src={isVisible ? src : undefined}
+      poster={poster || undefined}
+      muted
+      loop
+      playsInline
+      preload="none"
+    />
+  )
+}
 import {
   DEFAULT_AVATAR_URL,
   getEventCreatorDisplay,
@@ -128,21 +196,15 @@ function DiscoverVideoFeed({
         return (
           <article key={eventId} className="video-feed-item">
             {isVideo ? (
-              <video
-                className="video-feed-media"
-                src={mediaSrc}
-                autoPlay
-                muted
-                loop
-                playsInline
-                preload="metadata"
-              />
+              <LazyFeedVideo src={mediaSrc} poster={event?.thumbnailUrl || event?.image_thumbnail || ""} />
             ) : (
               <img
                 src={mediaSrc}
                 alt={event?.title || "Event"}
                 className="video-feed-media"
                 draggable={false}
+                loading="lazy"
+                decoding="async"
                 onError={applyEventImageFallback}
               />
             )}

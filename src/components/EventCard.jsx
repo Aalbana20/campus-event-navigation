@@ -163,6 +163,8 @@ function EventCard({
               alt={eventTitle}
               className="event-image"
               draggable={false}
+              loading="lazy"
+              decoding="async"
               onError={applyEventImageFallback}
             />
             <div className="event-card-front-gradient" />

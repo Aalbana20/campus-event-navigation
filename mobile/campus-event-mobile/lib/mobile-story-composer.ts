@@ -79,6 +79,11 @@ const readFileAsArrayBuffer = async (fileUri: string) => {
   ) as ArrayBuffer;
 };
 
+// Cache resolved public URLs — story strips re-render frequently and
+// re-resolving public URLs each time wastes CPU and creates new strings
+// that defeat expo-image's cache identity.
+const STORY_MEDIA_URL_CACHE = new Map<string, string>();
+
 export const resolveStoryMediaUrl = (
   value: string | null | undefined,
   fallback = ''
@@ -97,12 +102,17 @@ export const resolveStoryMediaUrl = (
 
   if (!supabase) return fallback;
 
+  const cached = STORY_MEDIA_URL_CACHE.get(trimmed);
+  if (cached) return cached;
+
   const storagePath = normalizeStoragePath(trimmed);
   const { data } = supabase.storage
     .from(STORY_MEDIA_BUCKET)
     .getPublicUrl(storagePath);
 
-  return data.publicUrl || fallback;
+  const resolved = data.publicUrl || fallback;
+  if (resolved) STORY_MEDIA_URL_CACHE.set(trimmed, resolved);
+  return resolved;
 };
 
 export const pickStoryMediaFromLibrary = async (): Promise<SelectedStoryMedia | null> => {

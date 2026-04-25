@@ -60,13 +60,23 @@ export const normalizeAvatarStorageValue = (
   return fallbackValue;
 };
 
+// Avatars appear all over (DM rows, story strip, comments, profile cards).
+// Cache the public URL by storage path so repeated resolves are free and
+// the returned string is referentially stable across renders.
+const PROFILE_IMAGE_URL_CACHE = new Map<string, string>();
+
 const resolveProfileImageUrl = (value: string) => {
   if (!value) return '';
   if (isRemoteUrl(value)) return value;
   if (!supabase) return '';
 
+  const cached = PROFILE_IMAGE_URL_CACHE.get(value);
+  if (cached) return cached;
+
   const { data } = supabase.storage.from(PROFILE_IMAGE_BUCKET).getPublicUrl(value);
-  return data?.publicUrl || '';
+  const resolved = data?.publicUrl || '';
+  if (resolved) PROFILE_IMAGE_URL_CACHE.set(value, resolved);
+  return resolved;
 };
 
 export const resolveAvatarUrl = (

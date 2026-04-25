@@ -103,6 +103,12 @@ export const sanitizeAvatarStorageValue = (value, fallback = null) => {
   return fallbackValue
 }
 
+// Avatars are referenced everywhere — discover feed, story strips, profile
+// rows, comment threads. Caching the public URL by storage path keeps render
+// passes cheap and ensures the same URL string is returned each time so
+// <img> doesn't perceive a src change and re-fetch.
+const PROFILE_IMAGE_URL_CACHE = new Map()
+
 const resolveProfileImageUrl = (value) => {
   if (!value) return ""
 
@@ -110,8 +116,13 @@ const resolveProfileImageUrl = (value) => {
     return value
   }
 
+  const cached = PROFILE_IMAGE_URL_CACHE.get(value)
+  if (cached) return cached
+
   const { data } = supabase.storage.from(PROFILE_IMAGE_BUCKET).getPublicUrl(value)
-  return data?.publicUrl || ""
+  const resolved = data?.publicUrl || ""
+  if (resolved) PROFILE_IMAGE_URL_CACHE.set(value, resolved)
+  return resolved
 }
 
 export const sanitizeAvatarUrl = (value, fallback = DEFAULT_AVATAR_URL) => {

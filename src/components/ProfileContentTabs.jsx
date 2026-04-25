@@ -124,14 +124,54 @@ const getPostThreadTitle = (post) =>
       ? `@${post.authorUsername}'s post`
       : `${post?.authorName || "Campus"} post`
 
-const PostMedia = ({ post, className = "profile-post-media", style }) => {
+// `variant="grid"` is used for high-fanout tile grids — we deliberately skip
+// preloading metadata for videos and prefer the smaller thumbnail when we
+// have one. `variant="detail"` is for the post viewer modal where the user
+// is actively looking at a single piece of media and full quality matters.
+const PostMedia = ({ post, className = "profile-post-media", style, variant = "grid" }) => {
+  const isGrid = variant === "grid"
+  const thumb = post.thumbnailUrl || post.mediaUrl
+
   if (post.mediaType === "video") {
+    if (isGrid) {
+      // Show the still poster for grid tiles — a video element with
+      // preload="none" + no autoplay would keep showing as a blank black
+      // box, and the user is about to click anyway. Egress drops to one
+      // small thumbnail per tile.
+      return (
+        <img
+          className={className}
+          style={style}
+          src={thumb}
+          alt={post.caption || "Profile video"}
+          loading="lazy"
+          decoding="async"
+        />
+      )
+    }
     return (
-      <video className={className} style={style} src={post.mediaUrl} muted playsInline preload="metadata" />
+      <video
+        className={className}
+        style={style}
+        src={post.mediaUrl}
+        poster={post.thumbnailUrl || undefined}
+        muted
+        playsInline
+        preload="metadata"
+      />
     )
   }
 
-  return <img className={className} style={style} src={post.mediaUrl} alt={post.caption || "Profile post"} />
+  return (
+    <img
+      className={className}
+      style={style}
+      src={isGrid ? thumb : post.mediaUrl}
+      alt={post.caption || "Profile post"}
+      loading={isGrid ? "lazy" : undefined}
+      decoding="async"
+    />
+  )
 }
 
 const modalMediaStyle = {
@@ -179,7 +219,13 @@ const ProfileEventTile = ({ event, onOpen }) => (
   <article className="profile-post-tile">
     <button type="button" className="profile-post-open" onClick={() => onOpen(event)}>
       {event.image ? (
-        <img className="profile-post-media" src={event.image} alt={event.title || "Event"} />
+        <img
+          className="profile-post-media"
+          src={event.image}
+          alt={event.title || "Event"}
+          loading="lazy"
+          decoding="async"
+        />
       ) : (
         <div className="profile-post-media" style={{ backgroundImage: "var(--explore-event-fallback)", backgroundSize: "cover", backgroundPosition: "center" }} />
       )}
@@ -197,9 +243,22 @@ const MemoryCard = ({ memory, event }) => (
   <article className="profile-post-tile profile-memory-tile">
     <div className="profile-post-open">
       {memory.mediaType === "video" ? (
-        <video className="profile-post-media" src={memory.mediaUrl} muted playsInline preload="metadata" />
+        // Don't preload metadata for grid videos — show poster only.
+        <img
+          className="profile-post-media"
+          src={memory.thumbnailUrl || memory.mediaUrl}
+          alt={memory.caption || "Event memory"}
+          loading="lazy"
+          decoding="async"
+        />
       ) : (
-        <img className="profile-post-media" src={memory.mediaUrl} alt={memory.caption || "Event memory"} />
+        <img
+          className="profile-post-media"
+          src={memory.thumbnailUrl || memory.mediaUrl}
+          alt={memory.caption || "Event memory"}
+          loading="lazy"
+          decoding="async"
+        />
       )}
       <span className="profile-tab-event-pill">Event Tag</span>
     </div>
@@ -919,6 +978,7 @@ export default function ProfileContentTabs({ profileId, isOwner = false, allEven
                 post={selectedPost}
                 className="profile-post-modal-media"
                 style={modalMediaStyle}
+                variant="detail"
               />
             </div>
 

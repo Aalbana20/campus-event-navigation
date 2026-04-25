@@ -87,6 +87,11 @@ const buildBaseItemLookup = (items = []) => {
   return lookup
 }
 
+// Stable cache for resolved story public URLs — avoids repeating
+// getPublicUrl() work on every story strip render and keeps the URL string
+// reference identical so <img> tags don't appear to change src.
+const STORY_MEDIA_URL_CACHE = new Map()
+
 export const resolveStoryMediaUrl = (value, fallback = "") => {
   const trimmed = toTrimmedString(value)
 
@@ -101,9 +106,14 @@ export const resolveStoryMediaUrl = (value, fallback = "") => {
     return trimmed
   }
 
+  const cached = STORY_MEDIA_URL_CACHE.get(trimmed)
+  if (cached) return cached
+
   const storagePath = normalizeStoryStoragePath(trimmed)
   const { data } = supabase.storage.from(STORY_MEDIA_BUCKET).getPublicUrl(storagePath)
-  return data?.publicUrl || fallback
+  const resolved = data?.publicUrl || fallback
+  if (resolved) STORY_MEDIA_URL_CACHE.set(trimmed, resolved)
+  return resolved
 }
 
 const normalizeStoryRecord = ({ row, profile, currentUser, baseItem }) => ({

@@ -52,6 +52,12 @@ const normalizePostStoragePath = (value) => {
   return trimmed
 }
 
+// Public-URL cache. `getPublicUrl` is pure given a stable bucket+path and
+// callable thousands of times during a single grid render — caching keeps
+// the resolved string reference stable so React's <img> doesn't churn,
+// and skips the per-call object allocation/work.
+const POST_MEDIA_URL_CACHE = new Map()
+
 export const resolveDiscoverPostMediaUrl = (value, fallback = "") => {
   const trimmed = toTrimmedString(value)
   if (!trimmed) return fallback
@@ -65,9 +71,14 @@ export const resolveDiscoverPostMediaUrl = (value, fallback = "") => {
     return trimmed
   }
 
+  const cached = POST_MEDIA_URL_CACHE.get(trimmed)
+  if (cached) return cached
+
   const storagePath = normalizePostStoragePath(trimmed)
   const { data } = supabase.storage.from(POST_MEDIA_BUCKET).getPublicUrl(storagePath)
-  return data?.publicUrl || fallback
+  const resolved = data?.publicUrl || fallback
+  if (resolved) POST_MEDIA_URL_CACHE.set(trimmed, resolved)
+  return resolved
 }
 
 const normalizePostRecord = ({ row, profile, engagement }) => ({

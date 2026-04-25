@@ -127,6 +127,11 @@ const normalizeStoragePath = (value: string) => {
   return trimmed;
 };
 
+// Cache resolved public URLs by storage path. Hit on every grid/feed render
+// — caching avoids repeated work and keeps the URL string stable so
+// expo-image's cache key doesn't churn.
+const POST_MEDIA_URL_CACHE = new Map<string, string>();
+
 export const resolveDiscoverPostMediaUrl = (
   value: string | null | undefined,
   fallback = ''
@@ -145,12 +150,17 @@ export const resolveDiscoverPostMediaUrl = (
 
   if (!supabase) return fallback;
 
+  const cached = POST_MEDIA_URL_CACHE.get(trimmed);
+  if (cached) return cached;
+
   const storagePath = normalizeStoragePath(trimmed);
   const { data } = supabase.storage
     .from(DISCOVER_POST_BUCKET)
     .getPublicUrl(storagePath);
 
-  return data.publicUrl || fallback;
+  const resolved = data.publicUrl || fallback;
+  if (resolved) POST_MEDIA_URL_CACHE.set(trimmed, resolved);
+  return resolved;
 };
 
 const readFileAsArrayBuffer = async (fileUri: string) => {
