@@ -785,6 +785,26 @@ export const togglePostLike = async ({
 
 // ─── Post comments ────────────────────────────────────────────────────────────
 
+// Resolve the authenticated Supabase user id. RLS policies on the engagement
+// tables (likes / comment likes / saves) require user_id == auth.uid(), so any
+// caller that needs to insert/delete on its own behalf MUST use this id. The
+// `currentUser.id` carried in app state can drift (sign-out races, hydration
+// edge cases) and historically caused inserts to be silently dropped by RLS.
+const getAuthenticatedUserId = async (fallbackUserId = ''): Promise<string> => {
+  if (!supabase) return '';
+  try {
+    const { data, error } = await supabase.auth.getUser();
+    if (error) {
+      console.warn('[mobile-discover-posts] auth.getUser failed:', error);
+    }
+    const sessionId = data?.user?.id ? String(data.user.id) : '';
+    if (sessionId) return sessionId;
+  } catch (error) {
+    console.warn('[mobile-discover-posts] auth.getUser threw:', error);
+  }
+  return fallbackUserId && fallbackUserId !== 'current-user' ? fallbackUserId : '';
+};
+
 export type DiscoverPostComment = {
   id: string;
   authorName: string;
@@ -803,6 +823,11 @@ export const loadPostComments = async (
   viewerUserId = ''
 ): Promise<DiscoverPostComment[]> => {
   if (!supabase || !postId) return [];
+
+  // Resolve via auth so likedByMe is computed against the *authenticated*
+  // user id rather than a stale local profile id. Falls back to the caller-
+  // supplied id when no session is available.
+  const resolvedViewerId = await getAuthenticatedUserId(viewerUserId);
 
   const { data: rows, error } = await supabase
     .from('discover_post_comments')
@@ -844,7 +869,9 @@ export const loadPostComments = async (
       .in('comment_id', commentIds);
     ((likeRows || []) as Array<{ comment_id: string; user_id: string }>).forEach((r) => {
       likeCountMap.set(r.comment_id, (likeCountMap.get(r.comment_id) || 0) + 1);
-      if (viewerUserId && r.user_id === viewerUserId) likedByMeSet.add(r.comment_id);
+      if (resolvedViewerId && String(r.user_id) === resolvedViewerId) {
+        likedByMeSet.add(r.comment_id);
+      }
     });
   }
 
@@ -912,6 +939,9 @@ export const deletePostComment = async ({
   if (error) console.error('Unable to delete post comment:', error);
 };
 
+// `isLiked` here is the comment's *current* state — true means "currently
+// liked, so this toggle should remove the like". Returns true on persisted
+// success, false on error so callers can revert optimistic UI.
 export const togglePostCommentLike = async ({
   commentId,
   userId,
@@ -920,22 +950,39 @@ export const togglePostCommentLike = async ({
   commentId: string;
   userId: string;
   isLiked: boolean;
-}): Promise<void> => {
-  if (!supabase || !commentId || !userId || userId === 'current-user') return;
+}): Promise<boolean> => {
+  if (!supabase || !commentId) return false;
+
+  // Use the authenticated session id so RLS (`auth.uid() = user_id`) accepts
+  // the insert/delete. Falling back to the caller's id is only useful when
+  // the session has already been resolved upstream.
+  const authId = await getAuthenticatedUserId(userId);
+  if (!authId) return false;
 
   if (isLiked) {
     const { error } = await supabase
       .from('discover_post_comment_likes')
       .delete()
       .eq('comment_id', commentId)
-      .eq('user_id', userId);
-    if (error) console.error('Unable to unlike post comment:', error);
-  } else {
-    const { error } = await supabase
-      .from('discover_post_comment_likes')
-      .insert({ comment_id: commentId, user_id: userId });
-    if (error && error.code !== '23505') console.error('Unable to like post comment:', error);
+      .eq('user_id', authId);
+    if (error) {
+      console.error('Unable to unlike post comment:', error);
+      return false;
+    }
+    return true;
   }
+
+  const { error } = await supabase
+    .from('discover_post_comment_likes')
+    .insert({ comment_id: commentId, user_id: authId });
+
+  // 23505 = unique violation (already liked) — treat as success so the
+  // optimistic UI flip stays correct after a double-tap.
+  if (error && error.code !== '23505') {
+    console.error('Unable to like post comment:', error);
+    return false;
+  }
+  return true;
 };
 
 // ─── Post saves ───────────────────────────────────────────────────────────────

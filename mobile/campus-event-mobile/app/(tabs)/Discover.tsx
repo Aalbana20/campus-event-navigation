@@ -257,6 +257,10 @@ export default function DiscoverScreen({
 
   const loadComments = useCallback(async (eventId: string) => {
     if (!supabase) return;
+    // Resolve the actual signed-in user so likedByMe is computed against the
+    // same id used for INSERT/DELETE under RLS.
+    const { data: authData } = await supabase.auth.getUser();
+    const viewerAuthId = authData?.user?.id ? String(authData.user.id) : '';
     const { data, error } = await supabase
       .from('event_comments')
       .select('id, body, created_at, user_id, parent_id')
@@ -310,7 +314,7 @@ export default function DiscoverScreen({
         (likeRows || []).forEach((row: any) => {
           const cid = String(row.comment_id);
           likeCountByComment.set(cid, (likeCountByComment.get(cid) || 0) + 1);
-          if (String(row.user_id) === String(currentUser.id)) {
+          if (viewerAuthId && String(row.user_id) === viewerAuthId) {
             likedByMe.add(cid);
           }
         });
@@ -346,8 +350,16 @@ export default function DiscoverScreen({
 
   const handleToggleCommentLike = useCallback(
     async (commentId: string) => {
-      if (!activeCommentEvent || !supabase || !currentUser.id || currentUser.id === 'current-user') return;
+      if (!activeCommentEvent || !supabase) return;
+      if (commentId.startsWith('temp-')) return;
       const eventId = String(activeCommentEvent.id);
+
+      // Always use the authenticated session id for INSERT/DELETE so RLS
+      // (`auth.uid() = user_id`) accepts the row, and so the row we write
+      // matches what loadComments later compares against.
+      const { data: authData } = await supabase.auth.getUser();
+      const authId = authData?.user?.id ? String(authData.user.id) : '';
+      if (!authId) return;
 
       let nextLikedState = false;
 
@@ -368,17 +380,15 @@ export default function DiscoverScreen({
         };
       });
 
-      if (commentId.startsWith('temp-')) return;
-
       const { error } = nextLikedState
         ? await supabase
             .from('event_comment_likes')
-            .insert({ comment_id: commentId, user_id: currentUser.id })
+            .insert({ comment_id: commentId, user_id: authId })
         : await supabase
             .from('event_comment_likes')
             .delete()
             .eq('comment_id', commentId)
-            .eq('user_id', currentUser.id);
+            .eq('user_id', authId);
 
       if (error && error.code !== '23505') {
         console.warn('Unable to persist comment like:', error);
@@ -580,6 +590,7 @@ export default function DiscoverScreen({
 
   const handleTogglePostCommentLike = useCallback(async (commentId: string) => {
     if (!activeCommentPost || !currentUser.id || currentUser.id === 'current-user') return;
+    if (commentId.startsWith('temp-')) return;
     const postId = activeCommentPost.id;
 
     const currentlyLiked = (postCommentsByPostId[postId] || []).find((c) => c.id === commentId)?.likedByMe ?? false;
@@ -596,7 +607,20 @@ export default function DiscoverScreen({
       };
     });
 
-    await togglePostCommentLike({ commentId, userId: currentUser.id, isLiked: currentlyLiked });
+    const ok = await togglePostCommentLike({ commentId, userId: currentUser.id, isLiked: currentlyLiked });
+    if (ok) return;
+
+    // Persist failed — revert.
+    setPostCommentsByPostId((prev) => {
+      const list = prev[postId] || [];
+      return {
+        ...prev,
+        [postId]: list.map((c) => {
+          if (c.id !== commentId) return c;
+          return { ...c, likedByMe: currentlyLiked, likeCount: Math.max(0, c.likeCount + (currentlyLiked ? 1 : -1)) };
+        }),
+      };
+    });
   }, [activeCommentPost, currentUser.id, postCommentsByPostId]);
 
   const handleDeletePostComment = useCallback(async (commentId: string) => {

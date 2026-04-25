@@ -8,7 +8,6 @@ import {
   Image,
   Modal,
   Pressable,
-  Share,
   StyleSheet,
   Text,
   View,
@@ -27,6 +26,7 @@ import type { EventMemoryRecord } from '@/lib/mobile-event-memories';
 import { getAvatarImageSource, getEventImageSource } from '@/lib/mobile-media';
 import { loadRepostsForUser, type RepostRecord } from '@/lib/mobile-profile-reposts';
 import { useMobileApp } from '@/providers/mobile-app-provider';
+import { useShareSheet } from '@/providers/mobile-share-provider';
 import type { EventRecord } from '@/types/models';
 
 type ProfileContentTabsProps = {
@@ -156,6 +156,7 @@ export function ProfileContentTabs({
     loadPostsTaggingUser,
     loadEventMemoriesForUser,
   } = useMobileApp();
+  const { openShareSheet } = useShareSheet();
 
   const [activeTab, setActiveTab] = useState<ProfileTab>('grid');
   const [postMode, setPostMode] = useState<PostMode>('grid');
@@ -390,19 +391,16 @@ export function ProfileContentTabs({
     }
   };
 
-  const handlePostShare = async (post: DiscoverPostRecord) => {
+  const handlePostShare = (post: DiscoverPostRecord) => {
     if (!post) return;
-
-    try {
-      await Share.share({
-        message: [post.caption, post.mediaUrl].filter(Boolean).join('\n'),
-      });
-    } catch (error) {
-      Alert.alert(
-        'Share unavailable',
-        error instanceof Error ? error.message : 'Could not open the share sheet.'
-      );
-    }
+    // Open the in-app share sheet so the rest of the flow (Add to story,
+    // Repost, Send to people, native fallback) is consistent across the app.
+    // Previously this opened the OS native share sheet directly, which on
+    // some devices appeared to do nothing for video posts.
+    openShareSheet({
+      kind: post.mediaType === 'video' ? 'video' : 'post',
+      post,
+    });
   };
 
   const handlePostReport = () => {

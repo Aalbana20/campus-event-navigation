@@ -272,6 +272,12 @@ function Discover({ hideModeSwitch = false, initialMode = "events" } = {}) {
   }, [addEvent, cancelRSVP, currentEvent, currentUser, savedEventIds])
 
   const loadComments = useCallback(async (eventId) => {
+    // Resolve the actual signed-in user so likedByMe is computed against the
+    // same id used by RLS for INSERT/DELETE on event_comment_likes. Falling
+    // back to the locally-stored profile id has caused likes to "vanish"
+    // after a reload when the two drifted out of sync.
+    const { data: authData } = await supabase.auth.getUser()
+    const viewerAuthId = authData?.user?.id ? String(authData.user.id) : null
     const { data, error } = await supabase
       .from("event_comments")
       .select("id, body, created_at, user_id, parent_id")
@@ -289,9 +295,8 @@ function Discover({ hideModeSwitch = false, initialMode = "events" } = {}) {
     const authorIds = [
       ...new Set(rows.map((row) => row.user_id).filter(Boolean).map(String)),
     ]
-    const viewerId = currentUser?.id && currentUser.id !== "current-user"
-      ? currentUser.id
-      : null
+    const viewerId = viewerAuthId
+      || (currentUser?.id && currentUser.id !== "current-user" ? currentUser.id : null)
 
     const profileById = new Map()
     if (authorIds.length > 0) {
@@ -448,10 +453,15 @@ function Discover({ hideModeSwitch = false, initialMode = "events" } = {}) {
   const handleToggleCommentLike = useCallback(
     async (commentId) => {
       if (!activeCommentEvent) return
+      if (String(commentId).startsWith("optimistic-")) return
       const key = String(activeCommentEvent.id)
-      const userId = currentUser?.id && currentUser.id !== "current-user"
-        ? currentUser.id
-        : null
+
+      // Resolve the authenticated user so the row we INSERT (and later compare
+      // against in loadComments) matches RLS. Local `currentUser.id` was the
+      // historical source of "like vanishes after reload" reports.
+      const { data: authData } = await supabase.auth.getUser()
+      const userId = authData?.user?.id ? String(authData.user.id) : null
+      if (!userId) return
 
       let nextLikedState = false
 
@@ -471,8 +481,6 @@ function Discover({ hideModeSwitch = false, initialMode = "events" } = {}) {
           }),
         }
       })
-
-      if (!userId || String(commentId).startsWith("optimistic-")) return
 
       const { error } = nextLikedState
         ? await supabase
@@ -504,7 +512,7 @@ function Discover({ hideModeSwitch = false, initialMode = "events" } = {}) {
         })
       }
     },
-    [activeCommentEvent, currentUser]
+    [activeCommentEvent]
   )
 
   const handleDeleteComment = useCallback(

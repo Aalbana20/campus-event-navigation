@@ -172,8 +172,11 @@ export default function VideoPostsScreen() {
 
   const handleToggleCommentLike = useCallback(async (commentId: string) => {
     if (!activeCommentPost || !currentUser.id || currentUser.id === 'current-user') return;
+    if (commentId.startsWith('temp-')) return;
     const postId = activeCommentPost.id;
     const currentlyLiked = (postCommentsByPostId[postId] || []).find((c) => c.id === commentId)?.likedByMe ?? false;
+
+    // Optimistic flip first.
     setPostCommentsByPostId((prev) => {
       const list = prev[postId] || [];
       return {
@@ -185,7 +188,21 @@ export default function VideoPostsScreen() {
         }),
       };
     });
-    await togglePostCommentLike({ commentId, userId: currentUser.id, isLiked: currentlyLiked });
+
+    const ok = await togglePostCommentLike({ commentId, userId: currentUser.id, isLiked: currentlyLiked });
+    if (ok) return;
+
+    // Persistence failed — revert the optimistic flip so the UI matches DB.
+    setPostCommentsByPostId((prev) => {
+      const list = prev[postId] || [];
+      return {
+        ...prev,
+        [postId]: list.map((c) => {
+          if (c.id !== commentId) return c;
+          return { ...c, likedByMe: currentlyLiked, likeCount: Math.max(0, c.likeCount + (currentlyLiked ? 1 : -1)) };
+        }),
+      };
+    });
   }, [activeCommentPost, currentUser.id, postCommentsByPostId]);
 
   const handleDeleteComment = useCallback(async (commentId: string) => {
