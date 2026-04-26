@@ -277,7 +277,12 @@ const RecapTile = ({ post, event, onOpen }) => {
 
   return (
     <article className="profile-post-tile profile-recap-tile">
-      <button type="button" className="profile-post-open" onClick={() => onOpen({ post, event })}>
+      <button
+        type="button"
+        className="profile-post-open"
+        title={event?.title || "Open recap"}
+        onClick={() => onOpen({ post, event })}
+      >
         {preview.mediaType === "video" ? (
           <video
             className="profile-post-media"

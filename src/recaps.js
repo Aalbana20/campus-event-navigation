@@ -281,27 +281,27 @@ const buildRecapMediaByPostId = async (mediaRows = []) => {
   }, new Map())
 }
 
-const normalizeRecapPostRows = ({ posts = [], profiles = [], mediaRows = [] }) => {
+const normalizeRecapPostRows = async ({ posts = [], profiles = [], mediaRows = [] }) => {
   const profileById = new Map((profiles || []).map((profile) => [String(profile.id), profile]))
-  return buildRecapMediaByPostId(mediaRows).then((mediaByPostId) =>
-    posts.map((post) => {
-      const authorId = String(post.user_id || "")
-      const profile = profileById.get(authorId)
-      return {
-        id: String(post.id),
-        source: "recap",
-        eventId: String(post.event_id),
-        authorId,
-        authorName: toTrimmedString(profile?.name) || toTrimmedString(profile?.username) || "Campus User",
-        authorUsername: toTrimmedString(profile?.username),
-        authorAvatar: sanitizeAvatarUrl(profile?.avatar_url, DEFAULT_AVATAR_URL),
-        caption: toTrimmedString(post.body),
-        createdAt: post.created_at || new Date().toISOString(),
-        updatedAt: post.updated_at || post.created_at || new Date().toISOString(),
-        media: mediaByPostId.get(String(post.id)) || [],
-      }
-    })
-  )
+  const mediaByPostId = await buildRecapMediaByPostId(mediaRows)
+
+  return posts.map((post) => {
+    const authorId = String(post.user_id || "")
+    const profile = profileById.get(authorId)
+    return {
+      id: String(post.id),
+      source: "recap",
+      eventId: String(post.event_id),
+      authorId,
+      authorName: toTrimmedString(profile?.name) || toTrimmedString(profile?.username) || "Campus User",
+      authorUsername: toTrimmedString(profile?.username),
+      authorAvatar: sanitizeAvatarUrl(profile?.avatar_url, DEFAULT_AVATAR_URL),
+      caption: toTrimmedString(post.body),
+      createdAt: post.created_at || new Date().toISOString(),
+      updatedAt: post.updated_at || post.created_at || new Date().toISOString(),
+      media: mediaByPostId.get(String(post.id)) || [],
+    }
+  })
 }
 
 export const loadRecapPostsForEvent = async (eventId) => {

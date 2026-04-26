@@ -377,7 +377,11 @@ export default function RecapDetail() {
               return (
                 <article key={post.id} className="recap-post">
                   <div className="recap-post-header">
-                    <button type="button" className="recap-author-button" onClick={() => navigate(`/profile/${post.authorUsername || post.authorId}`)}>
+                    <button
+                      type="button"
+                      className="recap-author-button"
+                      onClick={() => navigate(`/profile/${post.authorUsername || post.authorId}`)}
+                    >
                       <img
                         className="recap-post-avatar"
                         src={sanitizeAvatarUrl(post.authorAvatar, DEFAULT_AVATAR_URL)}
@@ -386,7 +390,10 @@ export default function RecapDetail() {
                     </button>
                     <div className="recap-post-title-stack">
                       <strong>{post.authorName || post.authorUsername || "Campus User"}</strong>
-                      <button type="button" onClick={() => navigate(`/recaps/${event?.id || post.eventId}`)}>
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/recaps/${event?.id || post.eventId}`)}
+                      >
                         {event?.title || "Event recap"}
                       </button>
                     </div>
