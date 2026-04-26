@@ -1005,13 +1005,15 @@ const buildStyles = (theme: AppTheme) => {
       justifyContent: 'center',
       borderWidth: 1.7,
       borderColor: profileMutedText,
-      transform: [{ rotate: '45deg' }],
+      backfaceVisibility: 'hidden',
+      transform: [{ rotateZ: '45deg' }],
     },
     tagsIconActive: {
       borderColor: theme.accent,
     },
     tagsIconPerson: {
-      transform: [{ rotate: '-45deg' }],
+      backfaceVisibility: 'hidden',
+      transform: [{ rotateZ: '-45deg' }],
     },
     tabDropdown: {
       position: 'absolute',

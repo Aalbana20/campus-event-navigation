@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useIsFocused } from '@react-navigation/native';
 import { Image as ExpoImage } from 'expo-image';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -180,6 +181,7 @@ const MIN_GRID_ITEMS = 30;
 
 export default function ExploreScreen() {
   const router = useRouter();
+  const isScreenFocused = useIsFocused();
   const { events: allEvents = [], currentUser, savedEventIds, toggleSaveEvent } = useMobileApp();
   const { openShareSheet } = useShareSheet();
 
@@ -754,6 +756,7 @@ export default function ExploreScreen() {
             posts={viewerPosts}
             likedPostIds={likedPostIds}
             savedPostIds={savedPostIds}
+            isScreenFocused={isScreenFocused && viewerPosts.length > 0}
             onPressLike={handleViewerLike}
             onPressSave={handleViewerSave}
             onPressComment={() =>

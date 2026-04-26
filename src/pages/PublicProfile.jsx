@@ -76,7 +76,7 @@ function PublicProfile() {
     const isUUID = /^[0-9a-f-]{36}$/i.test(String(viewedUsername))
     const baseQuery = supabase
       .from("profiles")
-      .select("id, name, username, bio, avatar_url")
+      .select("id, name, username, bio, avatar_url, student_verified, verification_status, account_type")
 
     const { data, error } = await (isUUID
       ? baseQuery.eq("id", viewedUsername)
@@ -478,7 +478,17 @@ function PublicProfile() {
             <div className="public-profile-heading-row">
               <div className="public-profile-name-stack">
                 <h1 className="username">@{profile.username || "user"}</h1>
-                <h2 className="real-name">{profile.name || profile.username || "Unknown user"}</h2>
+                <h2 className="real-name">
+                  <span>{profile.name || profile.username || "Unknown user"}</span>
+                  {profile.verification_status === "verified" ||
+                  profile.student_verified ||
+                  profile.account_type === "organization" ? (
+                    <span className="profile-verified-badge" aria-label="Verified">
+                      <span className="profile-verified-burst" aria-hidden="true" />
+                      <span className="profile-verified-check" aria-hidden="true">✓</span>
+                    </span>
+                  ) : null}
+                </h2>
               </div>
 
               <button

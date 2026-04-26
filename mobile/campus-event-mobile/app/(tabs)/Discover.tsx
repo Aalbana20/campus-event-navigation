@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -68,6 +68,7 @@ export default function DiscoverScreen({
   embedded = false,
 }: DiscoverScreenProps = {}) {
   const router = useRouter();
+  const isScreenFocused = useIsFocused();
   const theme = useAppTheme();
   const styles = useMemo(() => buildStyles(theme), [theme]);
   const { width, height } = useWindowDimensions();
@@ -984,6 +985,7 @@ export default function DiscoverScreen({
             posts={discoverPosts}
             likedPostIds={likedPostIds}
             savedPostIds={savedPostIds}
+            isScreenFocused={isScreenFocused && activeTab === 'friends'}
             onPressCreator={handleOpenPostAuthor}
             onPressSave={handleSavePost}
             onPressLike={(post) => {

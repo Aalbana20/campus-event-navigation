@@ -1,3 +1,77 @@
+.profile-page {
+  --profile-accent: var(--accent, #32d74b);
+  --profile-accent-soft: color-mix(in srgb, var(--profile-accent) 16%, transparent);
+  --profile-verified: var(--verified-blue, #0a84ff);
+}
+
+.profile-page .real-name {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  line-height: 1.15;
+}
+
+.profile-verified-badge {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  transform: translateY(2px);
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--profile-verified) 28%, transparent));
+}
+
+.profile-verified-burst {
+  position: absolute;
+  width: 15px;
+  height: 15px;
+  border-radius: 5px;
+  background: var(--profile-verified);
+  transform: rotate(45deg);
+}
+
+.profile-verified-check {
+  position: relative;
+  z-index: 1;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.profile-page .profile-action-btn,
+.profile-page .profile-action-btn.secondary {
+  border: 1px solid var(--profile-accent);
+  background: var(--profile-accent-soft);
+  color: var(--profile-accent);
+  padding: 9px 16px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 800;
+  box-shadow: none;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease, background 0.2s ease;
+}
+
+.profile-page .profile-action-btn:hover,
+.profile-page .profile-action-btn.secondary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px color-mix(in srgb, var(--profile-accent) 16%, transparent);
+}
+
+.profile-page .profile-tab-btn.active {
+  color: var(--profile-accent);
+}
+
+.profile-page .profile-tab-btn.active::after {
+  background: var(--profile-accent);
+}
+
+.profile-page .profile-tab-slot:last-child .profile-tab-btn svg {
+  transform: rotate(0deg) !important;
+}
+
 .profile-created-event-card {
   background: #f8f8fa;
   border: 1px solid rgba(17, 17, 17, 0.04);
@@ -2675,4 +2749,23 @@ body.theme-dark .public-profile-action-row {
   .profile-post-modal-details {
     padding: 14px 12px;
   }
+}
+
+body.theme-dark .profile-page .profile-action-btn,
+body.theme-dark .profile-page .profile-action-btn.secondary {
+  border-color: var(--profile-accent);
+  background: var(--profile-accent-soft);
+  color: var(--profile-accent);
+  box-shadow: none;
+}
+
+body.theme-dark .profile-page .profile-action-btn:hover,
+body.theme-dark .profile-page .profile-action-btn.secondary:hover {
+  background: color-mix(in srgb, var(--profile-accent) 20%, transparent);
+  border-color: var(--profile-accent);
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--profile-accent) 18%, transparent);
+}
+
+body.theme-dark .profile-page .profile-tab-btn.active {
+  color: var(--profile-accent);
 }

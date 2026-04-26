@@ -54,6 +54,8 @@ export type AppTheme = {
   accent: string;
   accentSoft: string;
   accentText: string;
+  verified: string;
+  verifiedText: string;
   success: string;
   successSoft: string;
   danger: string;
@@ -82,6 +84,8 @@ export function useAppTheme(): AppTheme {
         accentOption.key === 'orange'
           ? '#050507'
           : '#ffffff',
+      verified: '#0a84ff',
+      verifiedText: '#ffffff',
     };
   }, [accentColor, resolvedThemeMode]);
 }

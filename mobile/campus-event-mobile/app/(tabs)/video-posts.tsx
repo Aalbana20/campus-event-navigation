@@ -1,3 +1,4 @@
+import { useIsFocused } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
@@ -35,6 +36,7 @@ export default function VideoPostsScreen() {
   const theme = useAppTheme();
   const styles = useMemo(() => buildStyles(theme), [theme]);
   const router = useRouter();
+  const isScreenFocused = useIsFocused();
   const { currentUser, repostPost } = useMobileApp();
   const { openShareSheet } = useShareSheet();
 
@@ -249,6 +251,7 @@ export default function VideoPostsScreen() {
             })
           }
           currentUserId={currentUser.id}
+          isScreenFocused={isScreenFocused}
           onDeletePost={async (post) => {
             try {
               await deleteDiscoverPost(post.id);

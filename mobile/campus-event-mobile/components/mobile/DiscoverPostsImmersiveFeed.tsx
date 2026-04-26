@@ -19,6 +19,7 @@ type DiscoverPostsImmersiveFeedProps = {
   onDeletePost?: (post: DiscoverPostRecord) => void | Promise<void>;
   likedPostIds?: Set<string>;
   savedPostIds?: Set<string>;
+  isScreenFocused?: boolean;
 };
 
 export function DiscoverPostsImmersiveFeed({
@@ -33,6 +34,7 @@ export function DiscoverPostsImmersiveFeed({
   onDeletePost,
   likedPostIds,
   savedPostIds,
+  isScreenFocused = true,
 }: DiscoverPostsImmersiveFeedProps) {
   const theme = useAppTheme();
   const styles = useMemo(() => buildStyles(theme), [theme]);
@@ -79,6 +81,7 @@ export function DiscoverPostsImmersiveFeed({
             onDeletePost={onDeletePost}
             isLiked={likedPostIds?.has(item.id) ?? false}
             isSaved={savedPostIds?.has(item.id) ?? false}
+            isScreenFocused={isScreenFocused}
             styles={styles}
           />
         )}
@@ -101,6 +104,7 @@ function DiscoverPostItem({
   onDeletePost,
   isLiked,
   isSaved,
+  isScreenFocused,
   styles,
 }: {
   post: DiscoverPostRecord;
@@ -116,13 +120,14 @@ function DiscoverPostItem({
   onDeletePost?: (post: DiscoverPostRecord) => void | Promise<void>;
   isLiked: boolean;
   isSaved: boolean;
+  isScreenFocused: boolean;
   styles: any;
 }) {
   const isVideo = post.mediaType === 'video';
   const [isManuallyPaused, setIsManuallyPaused] = useState(false);
   // Only hand a real source to the player when the item is the active one in
   // the feed; this avoids spinning up video decoders for every card on mount.
-  const videoSource = isVideo && isActive ? post.mediaUrl : null;
+  const videoSource = isVideo && isActive && isScreenFocused ? post.mediaUrl : null;
   const player = useVideoPlayer(videoSource, (instance) => {
     instance.loop = true;
     instance.muted = false;
@@ -130,18 +135,18 @@ function DiscoverPostItem({
 
   React.useEffect(() => {
     if (!isVideo || !player) return;
-    if (isActive && !isManuallyPaused) {
+    if (isActive && isScreenFocused && !isManuallyPaused) {
       player.play();
     } else {
       player.pause();
-      if (!isActive) {
+      if (!isActive || !isScreenFocused) {
         player.currentTime = 0;
       }
     }
-  }, [isActive, isManuallyPaused, isVideo, player]);
+  }, [isActive, isManuallyPaused, isScreenFocused, isVideo, player]);
 
   const handleTogglePlayback = () => {
-    if (!isActive) return;
+    if (!isActive || !isScreenFocused) return;
     setIsManuallyPaused((paused) => !paused);
   };
 

@@ -321,13 +321,16 @@ function InboxThreadRow({
               {thread.name}
             </Text>
             <View style={styles.threadMetaRow}>
-              <Text style={styles.threadPreview} numberOfLines={1}>
+              <Text
+                style={[styles.threadPreview, isUnread && styles.threadPreviewUnread]}
+                numberOfLines={1}>
                 {thread.preview}
               </Text>
               <Text style={styles.threadTime}>{thread.time}</Text>
             </View>
           </View>
           <View style={styles.threadAside}>
+            {isUnread ? <View style={styles.threadUnreadDot} /> : null}
             <Ionicons
               name="camera-outline"
               size={25}
@@ -963,12 +966,7 @@ export function InboxScreen({
                 <Ionicons name="chevron-back" size={30} color={theme.text} />
               </Pressable>
             ) : (
-              <Pressable
-                style={styles.dmHeaderAvatarButton}
-                onPress={() => router.push('/(tabs)/profile')}>
-                <Image source={getAvatarImageSource(currentUser.avatar)} style={styles.dmHeaderAvatar} />
-                <View style={styles.dmHeaderActivityDot} />
-              </Pressable>
+              <View style={styles.dmHeaderSide} />
             )}
 
             <Pressable
@@ -2328,6 +2326,10 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       fontSize: 13,
       lineHeight: 17,
     },
+    threadPreviewUnread: {
+      color: theme.text,
+      fontWeight: '900',
+    },
     threadMetaRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -2352,10 +2354,18 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       backgroundColor: theme.surfaceAlt,
     },
     threadAside: {
-      width: 36,
+      width: 48,
+      flexDirection: 'row',
       alignItems: 'flex-end',
       justifyContent: 'center',
-      gap: 9,
+      gap: 8,
+    },
+    threadUnreadDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: theme.accent,
+      alignSelf: 'center',
     },
     chatShell: {
       flex: 1,

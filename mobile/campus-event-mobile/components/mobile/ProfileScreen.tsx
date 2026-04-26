@@ -501,7 +501,7 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
                 {isVerifiedProfile ? (
                   <View style={styles.verifiedBadge}>
                     <View style={styles.verifiedBadgeBurst} />
-                    <Ionicons name="checkmark" size={12} color={theme.accentText} />
+                    <Ionicons name="checkmark" size={12} color={theme.verifiedText} />
                   </View>
                 ) : null}
               </View>
@@ -1061,11 +1061,11 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) => {
       borderRadius: 0,
       backgroundColor: 'transparent',
       borderWidth: 0,
-      gap: 17,
+      gap: 15,
     },
     headerTopRow: {
       flexDirection: 'row',
-      alignItems: 'flex-start',
+      alignItems: 'flex-end',
       gap: 16,
     },
     avatar: {
@@ -1078,10 +1078,11 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) => {
     headerCopy: {
       flex: 1,
       gap: 4,
+      paddingBottom: 2,
     },
     nameRow: {
       flexDirection: 'row',
-      alignItems: 'center',
+      alignItems: 'baseline',
       gap: 7,
     },
     name: {
@@ -1095,17 +1096,18 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) => {
       height: 20,
       alignItems: 'center',
       justifyContent: 'center',
-      shadowColor: theme.accent,
+      shadowColor: theme.verified,
       shadowOpacity: 0.22,
       shadowRadius: 8,
       shadowOffset: { width: 0, height: 0 },
+      marginLeft: 1,
     },
     verifiedBadgeBurst: {
       position: 'absolute',
       width: 17,
       height: 17,
       borderRadius: 5,
-      backgroundColor: theme.accent,
+      backgroundColor: theme.verified,
       transform: [{ rotate: '45deg' }],
     },
     profileRoleText: {
@@ -1151,6 +1153,7 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) => {
     actionRow: {
       flexDirection: 'row',
       gap: 8,
+      justifyContent: 'center',
     },
     primaryButton: {
       flex: 1,
@@ -1166,11 +1169,12 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) => {
       fontWeight: '800',
     },
     secondaryButton: {
-      flex: 1,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
       gap: 6,
+      minWidth: 138,
+      paddingHorizontal: 16,
       paddingVertical: 9,
       borderRadius: 11,
       backgroundColor: theme.accentSoft,

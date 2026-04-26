@@ -90,6 +90,9 @@ function Profile() {
   const [name, setName] = useState("")
   const [username, setUsername] = useState("")
   const [bio, setBio] = useState("")
+  const [verificationStatus, setVerificationStatus] = useState("unverified")
+  const [studentVerified, setStudentVerified] = useState(false)
+  const [accountType, setAccountType] = useState("regular")
 
   const [activePanel, setActivePanel] = useState(null)
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false)
@@ -153,6 +156,8 @@ function Profile() {
   const ownerUsername = storedUser.username || username
   const currentProfileImage =
     sanitizeAvatarUrl(profileImage || storedUserAvatarValue, defaultAvatar)
+  const isVerifiedProfile =
+    verificationStatus === "verified" || studentVerified || accountType === "organization"
 
   useEffect(() => {
     return () => {
@@ -248,7 +253,7 @@ function Profile() {
 
     supabase
       .from("profiles")
-      .select("name, username, bio, avatar_url, settings")
+      .select("name, username, bio, avatar_url, settings, student_verified, verification_status, account_type")
       .eq("id", userId)
       .single()
       .then(({ data, error }) => {
@@ -256,6 +261,9 @@ function Profile() {
         if (data.name) setName(data.name)
         if (data.username) setUsername(data.username)
         if (data.bio) setBio(data.bio)
+        setStudentVerified(Boolean(data.student_verified))
+        setVerificationStatus(data.verification_status || "unverified")
+        setAccountType(data.account_type || "regular")
         const nextAvatarValue = sanitizeAvatarStorageValue(data.avatar_url, null) || ""
         setProfileImage(nextAvatarValue)
         localStorage.setItem("profileImage", nextAvatarValue)
@@ -621,7 +629,15 @@ function Profile() {
 
           <div className="profile-info">
             <h1 className="username">{username}</h1>
-            <h2 className="real-name">{name}</h2>
+            <h2 className="real-name">
+              <span>{name}</span>
+              {isVerifiedProfile ? (
+                <span className="profile-verified-badge" aria-label="Verified">
+                  <span className="profile-verified-burst" aria-hidden="true" />
+                  <span className="profile-verified-check" aria-hidden="true">✓</span>
+                </span>
+              ) : null}
+            </h2>
 
             <div className="profile-stats">
               <button
