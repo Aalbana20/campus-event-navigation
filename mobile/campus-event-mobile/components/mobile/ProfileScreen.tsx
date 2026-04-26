@@ -480,9 +480,14 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
           {isOwnProfile ? (
             <Pressable
               style={styles.topBarIconButton}
-              onPress={() => router.push('/settings')}
-              accessibilityLabel="Open settings">
-              <Ionicons name="settings-outline" size={21} color={theme.text} />
+              onPress={() =>
+                Alert.alert(
+                  'Profile options',
+                  'Share profile, copy link, QR code, and account actions will live here soon.'
+                )
+              }
+              accessibilityLabel="Profile options">
+              <Ionicons name="ellipsis-horizontal" size={22} color={theme.text} />
             </Pressable>
           ) : (
             <View style={styles.topBarIconButtonPlaceholder} />
@@ -528,9 +533,15 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
                 </Pressable>
                 <Pressable
                   style={styles.secondaryButton}
-                  onPress={() => Alert.alert('Share Profile', `@${profile.username}`)}>
-                  <Ionicons name="share-outline" size={14} color={theme.accent} />
-                  <Text style={styles.secondaryButtonText}>Share Profile</Text>
+                  onPress={() => router.push('/recaps')}>
+                  <Ionicons name="chatbubbles-outline" size={14} color={theme.accent} />
+                  <Text style={styles.secondaryButtonText}>Recaps</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.actionSquareButton}
+                  onPress={() => router.push('/settings')}
+                  accessibilityLabel="Open settings">
+                  <Ionicons name="settings-outline" size={17} color={theme.accent} />
                 </Pressable>
               </>
             ) : (
