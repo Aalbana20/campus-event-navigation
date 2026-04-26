@@ -7,9 +7,13 @@ import {
   FlatList,
   Image,
   Modal,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
 
@@ -25,6 +29,11 @@ import {
 import type { EventMemoryRecord } from '@/lib/mobile-event-memories';
 import { getAvatarImageSource, getEventImageSource } from '@/lib/mobile-media';
 import { loadRepostsForUser, type RepostRecord } from '@/lib/mobile-profile-reposts';
+import {
+  loadRecapPostsForUser,
+  type RecapMediaItem,
+  type RecapPostRecord,
+} from '@/lib/mobile-recaps';
 import { useMobileApp } from '@/providers/mobile-app-provider';
 import { useShareSheet } from '@/providers/mobile-share-provider';
 import type { EventRecord } from '@/types/models';
@@ -40,6 +49,15 @@ type PostMode = 'grid' | 'list';
 type TagFilter = 'all' | 'posts' | 'event-tags';
 type CollectionMode = 'reposts' | 'likes' | 'saves';
 type ProfileTabDropdown = 'layout' | 'collection' | 'tags' | null;
+type ProfileViewerItem =
+  | { id: string; type: 'post'; post: DiscoverPostRecord }
+  | { id: string; type: 'memory'; memory: EventMemoryRecord; event: EventRecord | null }
+  | {
+      id: string;
+      type: 'recap';
+      post: RecapPostRecord;
+      event: EventRecord | null;
+    };
 
 const tabs: { id: ProfileTab; label: string }[] = [
   { id: 'grid', label: 'Grid' },
@@ -77,6 +95,28 @@ const formatPostDate = (value?: string | null) => {
     month: 'long',
     day: 'numeric',
   });
+};
+
+type ProfileTagItem =
+  | { id: string; type: 'post'; createdAt: string; post: DiscoverPostRecord }
+  | {
+      id: string;
+      type: 'memory';
+      createdAt: string;
+      memory: EventMemoryRecord;
+      event: EventRecord | undefined;
+    }
+  | {
+      id: string;
+      type: 'recap';
+      createdAt: string;
+      post: RecapPostRecord;
+      event: EventRecord | undefined;
+    };
+
+type RecapViewerSource = {
+  post: RecapPostRecord;
+  event: EventRecord | null;
 };
 
 const getPostMediaAspectRatio = (post: DiscoverPostRecord) => {
@@ -124,9 +164,11 @@ function PostMedia({
 function MemoryMedia({
   memory,
   style,
+  fit = 'cover',
 }: {
   memory: EventMemoryRecord;
   style: object;
+  fit?: 'cover' | 'contain';
 }) {
   if (memory.mediaType === 'video') {
     return (
@@ -136,7 +178,126 @@ function MemoryMedia({
     );
   }
 
-  return <Image source={{ uri: memory.mediaUrl }} style={style} />;
+  return <Image source={{ uri: memory.mediaUrl }} style={style} resizeMode={fit} />;
+}
+
+function RecapMedia({
+  media,
+  style,
+  fit = 'cover',
+}: {
+  media: RecapMediaItem;
+  style: object;
+  fit?: 'cover' | 'contain';
+}) {
+  const isVideo = media.mediaType === 'video';
+  const player = useVideoPlayer(isVideo ? media.url : null, (instance) => {
+    instance.loop = true;
+    instance.muted = true;
+  });
+
+  if (media.mediaType === 'video') {
+    return (
+      <VideoView
+        player={player}
+        style={style}
+        contentFit={fit}
+        nativeControls={false}
+        allowsFullscreen={false}
+        allowsPictureInPicture={false}
+      />
+    );
+  }
+
+  return <Image source={{ uri: media.url }} style={style} resizeMode={fit} />;
+}
+
+function ProfileRecapCarousel({
+  post,
+  styles,
+}: {
+  post: RecapPostRecord;
+  styles: any;
+}) {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const { width: screenWidth } = useWindowDimensions();
+  const visibleMedia = post.media.slice(0, 4);
+
+  if (!visibleMedia.length) return null;
+
+  const handleScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const width = event.nativeEvent.layoutMeasurement.width;
+    if (width <= 0) return;
+    const nextIndex = Math.round(event.nativeEvent.contentOffset.x / width);
+    setActiveIndex(Math.max(0, Math.min(nextIndex, visibleMedia.length - 1)));
+  };
+
+  return (
+    <View style={styles.viewerRecapCarousel}>
+      <ScrollView
+        horizontal
+        pagingEnabled
+        bounces={false}
+        nestedScrollEnabled
+        decelerationRate="fast"
+        showsHorizontalScrollIndicator={false}
+        onMomentumScrollEnd={handleScrollEnd}
+        scrollEventThrottle={16}>
+        {visibleMedia.map((media) => (
+          <View key={`${post.id}-${media.id}`} style={[styles.viewerRecapSlide, { width: screenWidth }]}>
+            <RecapMedia
+              media={media}
+              style={[styles.viewerMedia, styles.viewerMemoryMedia]}
+              fit="contain"
+            />
+          </View>
+        ))}
+      </ScrollView>
+
+      {visibleMedia.length > 1 ? (
+        <>
+          <View style={styles.viewerRecapCountPill}>
+            <Text style={styles.viewerRecapCountText}>
+              {activeIndex + 1}/{visibleMedia.length}
+            </Text>
+          </View>
+          <View style={styles.viewerRecapDots}>
+            {visibleMedia.map((media, index) => (
+              <View
+                key={`${post.id}-${media.id}-dot`}
+                style={[
+                  styles.viewerRecapDot,
+                  index === activeIndex && styles.viewerRecapDotActive,
+                ]}
+              />
+            ))}
+          </View>
+        </>
+      ) : null}
+    </View>
+  );
+}
+
+function EventRecapIndicator({
+  event,
+  styles,
+  onPress,
+}: {
+  event: EventRecord | null;
+  styles: any;
+  onPress: () => void;
+}) {
+  if (!event) return null;
+
+  return (
+    <Pressable
+      style={styles.viewerEventThumbButton}
+      accessibilityRole="button"
+      accessibilityLabel={event.title ? `Open ${event.title} recap` : 'Open event recap'}
+      onPress={onPress}>
+      <Image source={getEventImageSource(event.image)} style={styles.viewerEventThumb} />
+    </Pressable>
+  );
 }
 
 export function ProfileContentTabs({
@@ -172,19 +333,20 @@ export function ProfileContentTabs({
   const [savedPosts, setSavedPosts] = useState<DiscoverPostRecord[]>([]);
   const [taggedPosts, setTaggedPosts] = useState<DiscoverPostRecord[]>([]);
   const [eventMemories, setEventMemories] = useState<EventMemoryRecord[]>([]);
-  const [selectedPost, setSelectedPost] = useState<DiscoverPostRecord | null>(null);
-  const [viewerPosts, setViewerPosts] = useState<DiscoverPostRecord[]>([]);
+  const [recapPosts, setRecapPosts] = useState<RecapPostRecord[]>([]);
+  const [selectedViewerItem, setSelectedViewerItem] = useState<ProfileViewerItem | null>(null);
+  const [viewerItems, setViewerItems] = useState<ProfileViewerItem[]>([]);
   const [isPostMenuOpen, setIsPostMenuOpen] = useState(false);
   const viewerViewabilityConfig = useRef({ itemVisiblePercentThreshold: 55 }).current;
   const handleViewerViewableItemsChanged = useRef(
     ({
       viewableItems,
     }: {
-      viewableItems: { item?: DiscoverPostRecord; index: number | null }[];
+      viewableItems: { item?: ProfileViewerItem; index: number | null }[];
     }) => {
-      const nextVisiblePost = viewableItems.find((entry) => entry.item)?.item;
-      if (nextVisiblePost) {
-        setSelectedPost(nextVisiblePost);
+      const nextVisibleItem = viewableItems.find((entry) => entry.item)?.item;
+      if (nextVisibleItem) {
+        setSelectedViewerItem(nextVisibleItem);
         setIsPostMenuOpen(false);
       }
     }
@@ -201,6 +363,7 @@ export function ProfileContentTabs({
         nextReposts,
         nextTagged,
         nextMemories,
+        nextRecapPosts,
         nextLikedIds,
         nextSavedIds,
       ] = await Promise.all([
@@ -209,6 +372,7 @@ export function ProfileContentTabs({
         loadRepostsForUser(profileId),
         loadPostsTaggingUser(profileId),
         loadEventMemoriesForUser(profileId),
+        loadRecapPostsForUser(profileId),
         loadLikedPostIds(profileId),
         loadSavedPostIds(profileId),
       ]);
@@ -253,6 +417,7 @@ export function ProfileContentTabs({
       setSavedPosts(nextSavedPosts);
       setTaggedPosts(normalizedTaggedPosts);
       setEventMemories(nextMemories);
+      setRecapPosts(nextRecapPosts.filter((post) => post.media.length > 0));
     } finally {
       setIsLoading(false);
     }
@@ -284,11 +449,17 @@ export function ProfileContentTabs({
         ? [nextPost, ...posts.filter((item) => item.id !== post.id)]
         : posts.filter((item) => item.id !== post.id)
     );
-    setViewerPosts((posts) =>
-      posts.map((item) => (item.id === post.id ? { ...item, onGrid } : item))
+    setViewerItems((items) =>
+      items.map((item) =>
+        item.type === 'post' && item.post.id === post.id
+          ? { ...item, post: { ...item.post, onGrid } }
+          : item
+      )
     );
-    setSelectedPost((currentPost) =>
-      currentPost?.id === post.id ? { ...currentPost, onGrid } : currentPost
+    setSelectedViewerItem((currentItem) =>
+      currentItem?.type === 'post' && currentItem.post.id === post.id
+        ? { ...currentItem, post: { ...currentItem.post, onGrid } }
+        : currentItem
     );
   };
 
@@ -361,14 +532,87 @@ export function ProfileContentTabs({
     );
 
     setIsPostMenuOpen(false);
-    setSelectedPost(post);
-    setViewerPosts(uniqueSourcePosts.length ? uniqueSourcePosts.slice(startIndex) : [post]);
+    setSelectedViewerItem({ id: `post-${post.id}`, type: 'post', post });
+    setViewerItems(
+      (uniqueSourcePosts.length ? uniqueSourcePosts.slice(startIndex) : [post]).map((item) => ({
+        id: `post-${item.id}`,
+        type: 'post' as const,
+        post: item,
+      }))
+    );
+  };
+
+  const handleOpenMemory = (
+    memory: EventMemoryRecord,
+    sourceMemories: { memory: EventMemoryRecord; event: EventRecord | null }[]
+  ) => {
+    const uniqueSourceMemories = sourceMemories.filter(
+      (item, index, list) =>
+        list.findIndex((candidate) => candidate.memory.id === item.memory.id) === index
+    );
+    const startIndex = Math.max(
+      0,
+      uniqueSourceMemories.findIndex((item) => item.memory.id === memory.id)
+    );
+    const nextViewerItems = (uniqueSourceMemories.length
+      ? uniqueSourceMemories.slice(startIndex)
+      : [{ memory, event: getEventById(memory.eventId) || null }]
+    ).map((item) => ({
+      id: `memory-${item.memory.id}`,
+      type: 'memory' as const,
+      memory: item.memory,
+      event: item.event,
+    }));
+
+    setIsPostMenuOpen(false);
+    setSelectedViewerItem(nextViewerItems[0] || null);
+    setViewerItems(nextViewerItems);
+  };
+
+  const handleOpenRecap = (
+    post: RecapPostRecord,
+    sourceRecaps: RecapViewerSource[]
+  ) => {
+    const uniqueSourceRecaps = sourceRecaps.filter(
+      (item, index, list) =>
+        list.findIndex(
+          (candidate) => candidate.post.id === item.post.id
+        ) === index
+    );
+    const startIndex = Math.max(
+      0,
+      uniqueSourceRecaps.findIndex(
+        (item) => item.post.id === post.id
+      )
+    );
+    const nextViewerItems = (uniqueSourceRecaps.length
+      ? uniqueSourceRecaps.slice(startIndex)
+      : [{ post, event: getEventById(post.eventId) || null }]
+    ).map((item) => ({
+      id: `recap-${item.post.id}`,
+      type: 'recap' as const,
+      post: item.post,
+      event: item.event,
+    }));
+
+    setIsPostMenuOpen(false);
+    setSelectedViewerItem(nextViewerItems[0] || null);
+    setViewerItems(nextViewerItems);
   };
 
   const handleClosePost = () => {
     setIsPostMenuOpen(false);
-    setSelectedPost(null);
-    setViewerPosts([]);
+    setSelectedViewerItem(null);
+    setViewerItems([]);
+  };
+
+  const handleOpenEventRecap = (eventId?: string | null) => {
+    if (!eventId) return;
+    handleClosePost();
+    router.push({
+      pathname: '/recaps/[eventId]',
+      params: { eventId },
+    });
   };
 
   const handlePostLike = (_post: DiscoverPostRecord) => {
@@ -450,7 +694,7 @@ export function ProfileContentTabs({
       .sort((a, b) => toTime(b?.createdAt) - toTime(a?.createdAt));
   }, [getEventById, repostedPosts, reposts]);
 
-  const tagItems = useMemo(() => {
+  const tagItems = useMemo<ProfileTagItem[]>(() => {
     const postItems = taggedPosts.map((post) => ({
       id: `post-${post.id}`,
       type: 'post' as const,
@@ -464,14 +708,53 @@ export function ProfileContentTabs({
       memory,
       event: getEventById(memory.eventId),
     }));
+    const recapItems = recapPosts
+      .filter((post) => post.media.length > 0)
+      .map((post) => ({
+        id: `recap-${post.id}`,
+        type: 'recap' as const,
+        createdAt: post.createdAt,
+        post,
+        event: getEventById(post.eventId),
+      }));
 
     if (tagFilter === 'posts') return postItems;
-    if (tagFilter === 'event-tags') return memoryItems;
+    if (tagFilter === 'event-tags') {
+      return [...memoryItems, ...recapItems].sort(
+        (a, b) => toTime(b.createdAt) - toTime(a.createdAt)
+      );
+    }
 
-    return [...postItems, ...memoryItems].sort(
+    return [...postItems, ...memoryItems, ...recapItems].sort(
       (a, b) => toTime(b.createdAt) - toTime(a.createdAt)
     );
-  }, [eventMemories, getEventById, tagFilter, taggedPosts]);
+  }, [eventMemories, getEventById, recapPosts, tagFilter, taggedPosts]);
+
+  const memoryViewerSources = useMemo(
+    () =>
+      tagItems
+        .filter((item): item is Extract<(typeof tagItems)[number], { type: 'memory' }> =>
+          item.type === 'memory'
+        )
+        .map((item) => ({
+          memory: item.memory,
+          event: item.event || null,
+        })),
+    [tagItems]
+  );
+
+  const recapViewerSources = useMemo<RecapViewerSource[]>(
+    () =>
+      tagItems
+        .filter((item): item is Extract<ProfileTagItem, { type: 'recap' }> =>
+          item.type === 'recap'
+        )
+        .map((item) => ({
+          post: item.post,
+          event: item.event || null,
+        })),
+    [tagItems]
+  );
 
   const renderPostTile = (post: DiscoverPostRecord, sourcePosts: DiscoverPostRecord[]) => (
     <View key={post.id} style={styles.postTileWrap}>
@@ -612,17 +895,47 @@ export function ProfileContentTabs({
                   .filter((candidate) => candidate.type === 'post')
                   .map((candidate) => candidate.post)
               )
+            ) : item.type === 'memory' ? (
+              <View key={item.id} style={styles.postTileWrap}>
+                <Pressable
+                  style={styles.mediaTile}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    item.event?.title
+                      ? `Open ${item.event.title} recap media`
+                      : 'Open recap media'
+                  }
+                  onPress={() => handleOpenMemory(item.memory, memoryViewerSources)}>
+                  <MemoryMedia memory={item.memory} style={styles.mediaTileImage} />
+                </Pressable>
+              </View>
             ) : (
               <View key={item.id} style={styles.postTileWrap}>
-                <View style={styles.mediaTile}>
-                  <MemoryMedia memory={item.memory} style={styles.mediaTileImage} />
-                  <View style={styles.mediaTilePill}>
-                    <Text style={styles.mediaTilePillText}>Event Tag</Text>
-                  </View>
-                </View>
-                <Text style={styles.memoryTitle} numberOfLines={1}>
-                  {item.event?.title || 'Event memory'}
-                </Text>
+                <Pressable
+                  style={styles.mediaTile}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    item.event?.title
+                      ? `Open ${item.event.title} recap media`
+                      : 'Open recap media'
+                  }
+                  onPress={() => handleOpenRecap(item.post, recapViewerSources)}>
+                  <RecapMedia media={item.post.media[0]!} style={styles.mediaTileImage} />
+                  {item.post.media[0]?.mediaType === 'video' ? (
+                    <View
+                      style={[
+                        styles.mediaTileIcon,
+                        item.post.media.length > 1 && styles.mediaTileIconLeft,
+                      ]}>
+                      <Ionicons name="play" size={13} color="#ffffff" />
+                    </View>
+                  ) : null}
+                  {item.post.media.length > 1 ? (
+                    <View style={styles.mediaTileStackIcon}>
+                      <Ionicons name="albums-outline" size={16} color="#ffffff" />
+                    </View>
+                  ) : null}
+                </Pressable>
               </View>
             )
           )}
@@ -648,61 +961,218 @@ export function ProfileContentTabs({
     return renderTagsTab();
   };
 
+  const selectedPost =
+    selectedViewerItem?.type === 'post' ? selectedViewerItem.post : null;
   const selectedPostIsOwner =
     Boolean(selectedPost && currentUser.id) &&
     String(selectedPost?.authorId) === String(currentUser.id);
 
-  const renderViewerPost = ({ item }: { item: DiscoverPostRecord }) => {
-    const postDate = formatPostDate(item.createdAt);
+  const renderViewerPost = (post: DiscoverPostRecord) => {
+    const postDate = formatPostDate(post.createdAt);
+    const event = post.eventId ? getEventById(post.eventId) || null : null;
 
     return (
       <View style={styles.viewerPost}>
         <View style={styles.viewerAuthorRow}>
           <Image
-            source={getAvatarImageSource(item.authorAvatar)}
+            source={getAvatarImageSource(post.authorAvatar)}
             style={styles.viewerAvatar}
           />
           <View style={styles.viewerAuthorCopy}>
             <Text style={styles.viewerAuthorName} numberOfLines={1}>
-              {item.authorUsername
-                ? `@${item.authorUsername}`
-                : item.authorName || 'Campus User'}
+              {post.authorUsername
+                ? `@${post.authorUsername}`
+                : post.authorName || 'Campus User'}
             </Text>
-            <Text style={styles.viewerAuthorMeta} numberOfLines={1}>
-              {item.mediaType === 'video' ? 'Video post' : 'Post'}
-            </Text>
+            {event ? (
+              <Pressable onPress={() => handleOpenEventRecap(event.id)}>
+                <Text style={styles.viewerEventName} numberOfLines={1}>
+                  {event.title}
+                </Text>
+              </Pressable>
+            ) : (
+              <Text style={styles.viewerAuthorMeta} numberOfLines={1}>
+                {post.mediaType === 'video' ? 'Video post' : 'Post'}
+              </Text>
+            )}
           </View>
+          <EventRecapIndicator
+            event={event}
+            styles={styles}
+            onPress={() => handleOpenEventRecap(event?.id)}
+          />
         </View>
 
         <PostMedia
-          post={item}
-          style={[styles.viewerMedia, { aspectRatio: getPostMediaAspectRatio(item) }]}
+          post={post}
+          style={[styles.viewerMedia, { aspectRatio: getPostMediaAspectRatio(post) }]}
           fit="contain"
         />
 
         <View style={styles.viewerActionsRow}>
           <View style={styles.viewerLeftActions}>
-            <Pressable style={styles.viewerActionButton} onPress={() => handlePostLike(item)}>
+            <Pressable style={styles.viewerActionButton} onPress={() => handlePostLike(post)}>
               <Ionicons name="heart-outline" size={31} color="#ffffff" />
             </Pressable>
-            <Pressable style={styles.viewerActionButton} onPress={() => handlePostComment(item)}>
+            <Pressable style={styles.viewerActionButton} onPress={() => handlePostComment(post)}>
               <Ionicons name="chatbubble-outline" size={29} color="#ffffff" />
             </Pressable>
-            <Pressable style={styles.viewerActionButton} onPress={() => handlePostRepost(item)}>
+            <Pressable style={styles.viewerActionButton} onPress={() => handlePostRepost(post)}>
               <Ionicons name="repeat-outline" size={30} color="#ffffff" />
             </Pressable>
-            <Pressable style={styles.viewerActionButton} onPress={() => handlePostShare(item)}>
+            <Pressable style={styles.viewerActionButton} onPress={() => handlePostShare(post)}>
               <Ionicons name="paper-plane-outline" size={29} color="#ffffff" />
             </Pressable>
           </View>
         </View>
 
-        {item.caption ? (
+        {post.caption ? (
           <Text style={styles.viewerCaption}>
             <Text style={styles.viewerCaptionAuthor}>
-              {item.authorUsername || item.authorName || 'Campus'}{' '}
+              {post.authorUsername || post.authorName || 'Campus'}{' '}
             </Text>
-            {item.caption}
+            {post.caption}
+          </Text>
+        ) : null}
+        {postDate ? (
+          <Text style={styles.viewerDate}>{postDate}</Text>
+        ) : null}
+      </View>
+    );
+  };
+
+  const renderViewerMemory = (memory: EventMemoryRecord, event: EventRecord | null) => {
+    const postDate = formatPostDate(memory.createdAt);
+
+    return (
+      <View style={styles.viewerPost}>
+        <View style={styles.viewerAuthorRow}>
+          <Image
+            source={getAvatarImageSource(memory.authorAvatar)}
+            style={styles.viewerAvatar}
+          />
+          <View style={styles.viewerAuthorCopy}>
+            <Text style={styles.viewerAuthorName} numberOfLines={1}>
+              {memory.authorName || memory.authorUsername || 'Campus User'}
+            </Text>
+            {event ? (
+              <Pressable onPress={() => handleOpenEventRecap(event.id)}>
+                <Text style={styles.viewerEventName} numberOfLines={1}>
+                  {event.title}
+                </Text>
+              </Pressable>
+            ) : (
+              <Text style={styles.viewerAuthorMeta} numberOfLines={1}>
+                Event recap
+              </Text>
+            )}
+          </View>
+          <EventRecapIndicator
+            event={event}
+            styles={styles}
+            onPress={() => handleOpenEventRecap(event?.id)}
+          />
+        </View>
+
+        <MemoryMedia
+          memory={memory}
+          style={[styles.viewerMedia, styles.viewerMemoryMedia]}
+          fit="contain"
+        />
+
+        <View style={styles.viewerActionsRow}>
+          <View style={styles.viewerLeftActions}>
+            <Pressable style={styles.viewerActionButton} onPress={() => Alert.alert('Likes coming soon', 'Recap likes are not wired yet.')}>
+              <Ionicons name="heart-outline" size={31} color="#ffffff" />
+            </Pressable>
+            <Pressable style={styles.viewerActionButton} onPress={() => Alert.alert('Comments coming soon', 'Recap comments are not wired yet.')}>
+              <Ionicons name="chatbubble-outline" size={29} color="#ffffff" />
+            </Pressable>
+            <Pressable style={styles.viewerActionButton} onPress={() => Alert.alert('Repost coming soon', 'Recap reposts are not wired yet.')}>
+              <Ionicons name="repeat-outline" size={30} color="#ffffff" />
+            </Pressable>
+            <Pressable style={styles.viewerActionButton} onPress={() => Alert.alert('Share coming soon', 'Recap sharing is not wired yet.')}>
+              <Ionicons name="paper-plane-outline" size={29} color="#ffffff" />
+            </Pressable>
+          </View>
+        </View>
+
+        {memory.caption ? (
+          <Text style={styles.viewerCaption}>
+            <Text style={styles.viewerCaptionAuthor}>
+              {memory.authorUsername || memory.authorName || 'Campus'}{' '}
+            </Text>
+            {memory.caption}
+          </Text>
+        ) : null}
+        {postDate ? (
+          <Text style={styles.viewerDate}>{postDate}</Text>
+        ) : null}
+      </View>
+    );
+  };
+
+  const renderViewerRecap = (
+    post: RecapPostRecord,
+    event: EventRecord | null
+  ) => {
+    const postDate = formatPostDate(post.createdAt);
+
+    return (
+      <View style={styles.viewerPost}>
+        <View style={styles.viewerAuthorRow}>
+          <Image
+            source={getAvatarImageSource(post.authorAvatar)}
+            style={styles.viewerAvatar}
+          />
+          <View style={styles.viewerAuthorCopy}>
+            <Text style={styles.viewerAuthorName} numberOfLines={1}>
+              {post.authorName || post.authorUsername || 'Campus User'}
+            </Text>
+            {event ? (
+              <Pressable onPress={() => handleOpenEventRecap(event.id)}>
+                <Text style={styles.viewerEventName} numberOfLines={1}>
+                  {event.title}
+                </Text>
+              </Pressable>
+            ) : (
+              <Text style={styles.viewerAuthorMeta} numberOfLines={1}>
+                Event recap
+              </Text>
+            )}
+          </View>
+          <EventRecapIndicator
+            event={event}
+            styles={styles}
+            onPress={() => handleOpenEventRecap(event?.id)}
+          />
+        </View>
+
+        <ProfileRecapCarousel post={post} styles={styles} />
+
+        <View style={styles.viewerActionsRow}>
+          <View style={styles.viewerLeftActions}>
+            <Pressable style={styles.viewerActionButton} onPress={() => Alert.alert('Likes coming soon', 'Recap likes are not wired yet.')}>
+              <Ionicons name="heart-outline" size={31} color="#ffffff" />
+            </Pressable>
+            <Pressable style={styles.viewerActionButton} onPress={() => Alert.alert('Comments coming soon', 'Recap comments are not wired yet.')}>
+              <Ionicons name="chatbubble-outline" size={29} color="#ffffff" />
+            </Pressable>
+            <Pressable style={styles.viewerActionButton} onPress={() => Alert.alert('Repost coming soon', 'Recap reposts are not wired yet.')}>
+              <Ionicons name="repeat-outline" size={30} color="#ffffff" />
+            </Pressable>
+            <Pressable style={styles.viewerActionButton} onPress={() => Alert.alert('Share coming soon', 'Recap sharing is not wired yet.')}>
+              <Ionicons name="paper-plane-outline" size={29} color="#ffffff" />
+            </Pressable>
+          </View>
+        </View>
+
+        {post.caption ? (
+          <Text style={styles.viewerCaption}>
+            <Text style={styles.viewerCaptionAuthor}>
+              {post.authorUsername || post.authorName || 'Campus'}{' '}
+            </Text>
+            {post.caption}
           </Text>
         ) : null}
         {postDate ? (
@@ -877,7 +1347,7 @@ export function ProfileContentTabs({
       {renderContent()}
 
       <Modal
-        visible={viewerPosts.length > 0}
+        visible={viewerItems.length > 0}
         transparent
         animationType="slide"
         onRequestClose={handleClosePost}>
@@ -889,7 +1359,17 @@ export function ProfileContentTabs({
             <View style={styles.viewerTitleStack}>
               <Text style={styles.viewerTitle}>Posts</Text>
               <Text style={styles.viewerSubtitle} numberOfLines={1}>
-                {selectedPost?.authorUsername || selectedPost?.authorName || 'Campus'}
+                {selectedViewerItem?.type === 'post'
+                  ? selectedViewerItem.post.authorUsername ||
+                    selectedViewerItem.post.authorName ||
+                    'Campus'
+                  : selectedViewerItem?.type === 'memory'
+                    ? selectedViewerItem.memory.authorUsername ||
+                      selectedViewerItem.memory.authorName ||
+                      'Campus'
+                    : selectedViewerItem?.post.authorUsername ||
+                      selectedViewerItem?.post.authorName ||
+                      'Campus'}
               </Text>
             </View>
             <Pressable
@@ -926,9 +1406,15 @@ export function ProfileContentTabs({
           ) : null}
 
           <FlatList
-            data={viewerPosts}
+            data={viewerItems}
             keyExtractor={(item) => item.id}
-            renderItem={renderViewerPost}
+            renderItem={({ item }) =>
+              item.type === 'post'
+                ? renderViewerPost(item.post)
+                : item.type === 'memory'
+                  ? renderViewerMemory(item.memory, item.event)
+                  : renderViewerRecap(item.post, item.event)
+            }
             style={styles.viewerList}
             contentContainerStyle={styles.viewerContent}
             showsVerticalScrollIndicator={false}
@@ -1081,6 +1567,21 @@ const buildStyles = (theme: AppTheme) => {
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: 'rgba(0,0,0,0.36)',
+    },
+    mediaTileIconLeft: {
+      right: undefined,
+      left: 8,
+    },
+    mediaTileStackIcon: {
+      position: 'absolute',
+      right: 8,
+      top: 8,
+      width: 26,
+      height: 26,
+      borderRadius: 999,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: 'rgba(0,0,0,0.42)',
     },
     mediaTilePill: {
       position: 'absolute',
@@ -1307,7 +1808,7 @@ const buildStyles = (theme: AppTheme) => {
       borderBottomColor: 'rgba(255,255,255,0.08)',
     },
     viewerAuthorRow: {
-      minHeight: 72,
+      minHeight: 70,
       flexDirection: 'row',
       alignItems: 'center',
       gap: 12,
@@ -1327,6 +1828,7 @@ const buildStyles = (theme: AppTheme) => {
       color: '#ffffff',
       fontSize: 16,
       fontWeight: '900',
+      lineHeight: 20,
     },
     viewerAuthorMeta: {
       color: 'rgba(255,255,255,0.58)',
@@ -1334,9 +1836,75 @@ const buildStyles = (theme: AppTheme) => {
       fontWeight: '600',
       marginTop: 2,
     },
+    viewerEventName: {
+      color: 'rgba(255,255,255,0.68)',
+      fontSize: 12,
+      fontWeight: '500',
+      lineHeight: 17,
+      marginTop: 1,
+    },
+    viewerEventThumbButton: {
+      width: 46,
+      height: 54,
+      borderRadius: 10,
+      overflow: 'hidden',
+      backgroundColor: '#1a1a1c',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.14)',
+    },
+    viewerEventThumb: {
+      width: '100%',
+      height: '100%',
+      resizeMode: 'cover',
+    },
     viewerMedia: {
       width: '100%',
       backgroundColor: '#050505',
+    },
+    viewerRecapCarousel: {
+      position: 'relative',
+      overflow: 'hidden',
+      backgroundColor: '#050505',
+    },
+    viewerRecapSlide: {
+      width: '100%',
+    },
+    viewerMemoryMedia: {
+      aspectRatio: 4 / 5,
+    },
+    viewerRecapCountPill: {
+      position: 'absolute',
+      left: 12,
+      top: 12,
+      paddingHorizontal: 9,
+      paddingVertical: 5,
+      borderRadius: 999,
+      backgroundColor: 'rgba(0,0,0,0.58)',
+    },
+    viewerRecapCountText: {
+      color: '#ffffff',
+      fontSize: 12,
+      fontWeight: '900',
+    },
+    viewerRecapDots: {
+      position: 'absolute',
+      bottom: 9,
+      alignSelf: 'center',
+      flexDirection: 'row',
+      gap: 6,
+      paddingHorizontal: 9,
+      paddingVertical: 5,
+      borderRadius: 999,
+      backgroundColor: 'rgba(0,0,0,0.34)',
+    },
+    viewerRecapDot: {
+      width: 7,
+      height: 7,
+      borderRadius: 3.5,
+      backgroundColor: 'rgba(255,255,255,0.42)',
+    },
+    viewerRecapDotActive: {
+      backgroundColor: theme.accent,
     },
     viewerActionsRow: {
       minHeight: 60,

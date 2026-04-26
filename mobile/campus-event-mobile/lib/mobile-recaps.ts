@@ -190,6 +190,78 @@ export const loadRecapPostsForEvent = async (
   });
 };
 
+export const loadRecapPostsForUser = async (
+  userId: string
+): Promise<RecapPostRecord[]> => {
+  if (!supabase || !userId) return [];
+
+  const { data: postRows, error: postsError } = await supabase
+    .from('recap_posts')
+    .select('id, event_id, user_id, body, created_at, updated_at')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+
+  if (postsError) {
+    console.warn('Unable to load user recap posts:', postsError);
+    return [];
+  }
+
+  const posts = (postRows || []) as RecapPostRow[];
+  const postIds = posts.map((post) => String(post.id));
+  const authorIds = [
+    ...new Set(posts.map((post) => String(post.user_id || '')).filter(Boolean)),
+  ];
+
+  const [profileLookup, mediaResult] = await Promise.all([
+    loadAuthorProfiles(authorIds),
+    postIds.length > 0
+      ? supabase
+          .from('recap_media')
+          .select('id, recap_post_id, media_url, media_type, sort_order, created_at')
+          .in('recap_post_id', postIds)
+          .order('sort_order', { ascending: true })
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  if (mediaResult.error) {
+    console.warn('Unable to load user recap media:', mediaResult.error);
+  }
+
+  const mediaByPostId = new Map<string, RecapMediaItem[]>();
+  await Promise.all(
+    (((mediaResult.data || []) as RecapMediaRow[]).map(async (media) => {
+      const postId = String(media.recap_post_id);
+      const item: RecapMediaItem = {
+        id: String(media.id),
+        url: await resolveEventMemoryMediaUrl(media.media_url),
+        mediaType: media.media_type === 'video' ? 'video' : 'image',
+        sortOrder: Number(media.sort_order || 0),
+      };
+      mediaByPostId.set(postId, [...(mediaByPostId.get(postId) || []), item]);
+    }))
+  );
+
+  return posts.map((post) => {
+    const authorId = String(post.user_id || '');
+    const profile = profileLookup.get(authorId);
+    return {
+      id: String(post.id),
+      eventId: String(post.event_id),
+      authorId,
+      authorName:
+        toTrimmedString(profile?.name) ||
+        toTrimmedString(profile?.username) ||
+        'Campus User',
+      authorUsername: toTrimmedString(profile?.username),
+      authorAvatar: toTrimmedString(profile?.avatar_url),
+      caption: toTrimmedString(post.body),
+      createdAt: post.created_at || new Date().toISOString(),
+      updatedAt: post.updated_at || post.created_at || new Date().toISOString(),
+      media: mediaByPostId.get(String(post.id)) || [],
+    };
+  });
+};
+
 const uploadRecapMedia = async ({
   eventId,
   userId,

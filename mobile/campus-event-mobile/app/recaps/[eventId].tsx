@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -25,7 +25,7 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import { AppScreen } from '@/components/mobile/AppScreen';
 import { useAppTheme } from '@/lib/app-theme';
 import { formatRelativeTime, getEventCreatorLabel } from '@/lib/mobile-backend';
-import { getAvatarImageSource } from '@/lib/mobile-media';
+import { getAvatarImageSource, getEventImageSource } from '@/lib/mobile-media';
 import {
   createRecapPost,
   loadRecapPostsForEvent,
@@ -44,20 +44,43 @@ type FeedTab = 'all' | 'following';
 function RecapMediaSlide({
   item,
   width,
+  onPress,
   styles,
 }: {
   item: RecapMediaItem;
   width: number;
+  onPress: () => void;
   styles: any;
 }) {
   const isVideo = item.mediaType === 'video';
+  const [aspectRatio, setAspectRatio] = useState(4 / 5);
   const player = useVideoPlayer(isVideo ? item.url : null, (instance) => {
     instance.loop = true;
     instance.muted = true;
   });
+  const slideHeight = Math.round(
+    width / Math.min(1.55, Math.max(0.68, aspectRatio))
+  );
+
+  useEffect(() => {
+    if (isVideo || !item.url) {
+      setAspectRatio(4 / 5);
+      return;
+    }
+
+    Image.getSize(
+      item.url,
+      (imageWidth, imageHeight) => {
+        if (imageWidth > 0 && imageHeight > 0) {
+          setAspectRatio(imageWidth / imageHeight);
+        }
+      },
+      () => setAspectRatio(4 / 5)
+    );
+  }, [isVideo, item.url]);
 
   return (
-    <View style={[styles.mediaSlide, { width }]}>
+    <Pressable style={[styles.mediaSlide, { width, height: slideHeight }]} onPress={onPress}>
       {isVideo ? (
         <>
           <VideoView
@@ -80,7 +103,7 @@ function RecapMediaSlide({
           resizeMode="cover"
         />
       )}
-    </View>
+    </Pressable>
   );
 }
 
@@ -88,17 +111,23 @@ function RecapMediaCarousel({
   postId,
   media,
   width,
+  showMenu,
+  onToggleMenu,
+  onOpenOptions,
   styles,
 }: {
   postId: string;
   media: RecapMediaItem[];
   width: number;
+  showMenu: boolean;
+  onToggleMenu: () => void;
+  onOpenOptions: () => void;
   styles: any;
 }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const visibleMedia = media.slice(0, 4);
   if (visibleMedia.length === 0) return null;
-  const mediaWidth = Math.max(280, width - 28);
+  const mediaWidth = Math.max(280, width);
 
   const handleScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const nextIndex = Math.round(event.nativeEvent.contentOffset.x / mediaWidth);
@@ -123,10 +152,17 @@ function RecapMediaCarousel({
             key={`${postId}-${item.id}`}
             item={item}
             width={mediaWidth}
+            onPress={onToggleMenu}
             styles={styles}
           />
         ))}
       </ScrollView>
+
+      {showMenu ? (
+        <Pressable style={styles.mediaOptionsButton} onPress={onOpenOptions}>
+          <Ionicons name="ellipsis-horizontal" size={20} color="#ffffff" />
+        </Pressable>
+      ) : null}
 
       {visibleMedia.length > 1 ? (
         <View style={styles.mediaCountPill}>
@@ -187,6 +223,8 @@ function TextOnlyRecapCard({
 
 function RecapPostCard({
   post,
+  eventImage,
+  eventTitle,
   isLiked,
   isReposted,
   isSaved,
@@ -194,6 +232,7 @@ function RecapPostCard({
   styles,
   theme,
   onPressAuthor,
+  onOpenEvent,
   onLike,
   onComment,
   onRepost,
@@ -201,6 +240,8 @@ function RecapPostCard({
   onSave,
 }: {
   post: RecapPostRecord;
+  eventImage: string;
+  eventTitle: string;
   isLiked: boolean;
   isReposted: boolean;
   isSaved: boolean;
@@ -208,6 +249,7 @@ function RecapPostCard({
   styles: any;
   theme: ReturnType<typeof useAppTheme>;
   onPressAuthor: (post: RecapPostRecord) => void;
+  onOpenEvent: () => void;
   onLike: () => void;
   onComment: () => void;
   onRepost: () => void;
@@ -215,6 +257,7 @@ function RecapPostCard({
   onSave: () => void;
 }) {
   const hasMedia = post.media.length > 0;
+  const [showMediaMenu, setShowMediaMenu] = useState(false);
 
   return (
     <View style={styles.postCard}>
@@ -239,9 +282,11 @@ function RecapPostCard({
           </View>
         </Pressable>
         <Pressable
-          style={styles.moreButton}
-          onPress={() => Alert.alert('Recap options', 'Post options are coming soon.')}>
-          <Ionicons name="ellipsis-horizontal" size={20} color={theme.textMuted} />
+          style={styles.eventThumbButton}
+          accessibilityRole="button"
+          accessibilityLabel={eventTitle ? `Open ${eventTitle} recap` : 'Open event recap'}
+          onPress={onOpenEvent}>
+          <Image source={getEventImageSource(eventImage)} style={styles.eventThumbImage} />
         </Pressable>
       </View>
 
@@ -250,6 +295,9 @@ function RecapPostCard({
           postId={post.id}
           media={post.media}
           width={mediaWidth}
+          showMenu={showMediaMenu}
+          onToggleMenu={() => setShowMediaMenu((visible) => !visible)}
+          onOpenOptions={() => Alert.alert('Recap options', 'Post options are coming soon.')}
           styles={styles}
         />
       ) : (
@@ -329,6 +377,13 @@ export default function EventRecapFeedScreen() {
   const event = eventId ? getEventById(String(eventId)) : undefined;
   const hostProfile = event?.createdBy ? getProfileById(event.createdBy) : undefined;
   const mediaWidth = Math.max(300, screenWidth - 28);
+  const handleOpenCurrentEventRecap = useCallback(() => {
+    if (!event?.id) return;
+    router.push({
+      pathname: '/recaps/[eventId]',
+      params: { eventId: event.id },
+    });
+  }, [event?.id, router]);
 
   const followingAuthorIds = useMemo(
     () =>
@@ -620,6 +675,8 @@ export default function EventRecapFeedScreen() {
             <RecapPostCard
               key={post.id}
               post={post}
+              eventImage={event.image}
+              eventTitle={event.title}
               isLiked={likedIds.has(post.id)}
               isReposted={repostedIds.has(post.id)}
               isSaved={savedIds.has(post.id)}
@@ -627,6 +684,7 @@ export default function EventRecapFeedScreen() {
               styles={styles}
               theme={theme}
               onPressAuthor={handleOpenAuthor}
+              onOpenEvent={handleOpenCurrentEventRecap}
               onLike={() => toggleSetEntry(setLikedIds, post.id)}
               onComment={() => Alert.alert('Comments', 'Recap comments are next.')}
               onRepost={() => toggleSetEntry(setRepostedIds, post.id)}
@@ -857,24 +915,41 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       fontWeight: '700',
       maxWidth: 106,
     },
-    moreButton: {
-      width: 34,
-      height: 34,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: 17,
+    eventThumbButton: {
+      width: 42,
+      height: 50,
+      borderRadius: 9,
+      overflow: 'hidden',
+      backgroundColor: theme.surfaceAlt,
+      borderWidth: 1,
+      borderColor: theme.border,
+    },
+    eventThumbImage: {
+      width: '100%',
+      height: '100%',
+      resizeMode: 'cover',
     },
     mediaCarousel: {
       position: 'relative',
       overflow: 'hidden',
       borderRadius: 22,
-      backgroundColor: theme.surfaceAlt,
+      backgroundColor: 'transparent',
     },
     mediaSlide: {
-      height: 318,
       overflow: 'hidden',
       borderRadius: 22,
-      backgroundColor: theme.surfaceAlt,
+      backgroundColor: 'transparent',
+    },
+    mediaOptionsButton: {
+      position: 'absolute',
+      right: 12,
+      top: 12,
+      width: 42,
+      height: 34,
+      borderRadius: 999,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: 'rgba(0,0,0,0.54)',
     },
     videoBadge: {
       position: 'absolute',
@@ -895,7 +970,7 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     },
     mediaCountPill: {
       position: 'absolute',
-      right: 12,
+      left: 12,
       top: 12,
       paddingHorizontal: 9,
       paddingVertical: 5,
@@ -938,18 +1013,8 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       fontWeight: '900',
     },
     textOnlyCard: {
-      padding: 16,
-      minHeight: 116,
-      justifyContent: 'center',
-      borderRadius: 22,
-      backgroundColor: theme.surface,
-      borderWidth: 1,
-      borderColor: theme.border,
-      shadowColor: theme.shadow,
-      shadowOffset: { width: 0, height: 10 },
-      shadowOpacity: 0.08,
-      shadowRadius: 18,
-      elevation: 2,
+      paddingTop: 2,
+      paddingBottom: 1,
     },
     actionRow: {
       flexDirection: 'row',
