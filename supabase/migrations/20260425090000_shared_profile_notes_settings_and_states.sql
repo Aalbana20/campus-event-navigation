@@ -47,6 +47,8 @@ create index if not exists profile_notes_user_active_idx
 
 alter table public.profile_notes enable row level security;
 
+grant select, insert, update, delete on public.profile_notes to authenticated;
+
 drop policy if exists "profile_notes_select_active_authenticated" on public.profile_notes;
 create policy "profile_notes_select_active_authenticated"
   on public.profile_notes
@@ -58,11 +60,29 @@ create policy "profile_notes_select_active_authenticated"
     and (
       visibility = 'public'
       or user_id = auth.uid()
-      or exists (
-        select 1
-        from public.follows follows_check
-        where follows_check.follower_id = auth.uid()
-          and follows_check.following_id = profile_notes.user_id
+      or (
+        visibility = 'followers'
+        and exists (
+          select 1
+          from public.follows follows_check
+          where follows_check.follower_id = auth.uid()
+            and follows_check.following_id = profile_notes.user_id
+        )
+      )
+      or (
+        visibility = 'mutuals'
+        and exists (
+          select 1
+          from public.follows follows_check
+          where follows_check.follower_id = auth.uid()
+            and follows_check.following_id = profile_notes.user_id
+        )
+        and exists (
+          select 1
+          from public.follows mutual_check
+          where mutual_check.follower_id = profile_notes.user_id
+            and mutual_check.following_id = auth.uid()
+        )
       )
     )
   );
@@ -103,6 +123,8 @@ create index if not exists notification_states_user_updated_idx
   on public.notification_states (user_id, updated_at desc);
 
 alter table public.notification_states enable row level security;
+
+grant select, insert, update, delete on public.notification_states to authenticated;
 
 drop policy if exists "notification_states_select_own" on public.notification_states;
 create policy "notification_states_select_own"
@@ -149,6 +171,8 @@ create index if not exists dm_thread_preferences_user_updated_idx
   on public.dm_thread_preferences (user_id, updated_at desc);
 
 alter table public.dm_thread_preferences enable row level security;
+
+grant select, insert, update, delete on public.dm_thread_preferences to authenticated;
 
 drop policy if exists "dm_thread_preferences_select_own" on public.dm_thread_preferences;
 create policy "dm_thread_preferences_select_own"

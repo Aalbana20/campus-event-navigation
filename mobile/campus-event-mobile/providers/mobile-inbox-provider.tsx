@@ -364,7 +364,7 @@ export function MobileInboxProvider({ children }: { children: React.ReactNode })
       if (!hasInitializedUnreadThreads.current) {
         const nextUnread = new Set<string>();
 
-        nextRows.forEach((message: MessageRow & { read?: boolean }) => {
+        nextRows.forEach((message) => {
           if (message.recipient_id === session.user.id && !message.read) {
             nextUnread.add(message.sender_id);
           }

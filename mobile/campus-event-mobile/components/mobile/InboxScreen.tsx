@@ -2198,7 +2198,7 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       justifyContent: 'center',
       paddingHorizontal: 8,
       paddingVertical: 5,
-      backgroundColor: theme.surfaceElevated,
+      backgroundColor: theme.surfaceAlt,
       borderWidth: 1,
       borderColor: theme.border,
       zIndex: 2,
