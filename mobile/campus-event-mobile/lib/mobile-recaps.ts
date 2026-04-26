@@ -118,6 +118,28 @@ const loadAuthorProfiles = async (authorIds: string[]) => {
   );
 };
 
+const buildMediaByPostId = async (mediaRows: RecapMediaRow[]) => {
+  const resolvedMedia = await Promise.all(
+    mediaRows.map(async (media) => ({
+      postId: String(media.recap_post_id),
+      item: {
+        id: String(media.id),
+        url: await resolveEventMemoryMediaUrl(media.media_url),
+        mediaType: media.media_type === 'video' ? 'video' : 'image',
+        sortOrder: Number(media.sort_order || 0),
+      } as RecapMediaItem,
+    }))
+  );
+
+  return resolvedMedia.reduce((mediaByPostId, { postId, item }) => {
+    const nextMedia = [...(mediaByPostId.get(postId) || []), item].sort(
+      (left, right) => left.sortOrder - right.sortOrder
+    );
+    mediaByPostId.set(postId, nextMedia);
+    return mediaByPostId;
+  }, new Map<string, RecapMediaItem[]>());
+};
+
 export const loadRecapPostsForEvent = async (
   eventId: string
 ): Promise<RecapPostRecord[]> => {
@@ -155,18 +177,8 @@ export const loadRecapPostsForEvent = async (
     console.warn('Unable to load recap media:', mediaResult.error);
   }
 
-  const mediaByPostId = new Map<string, RecapMediaItem[]>();
-  await Promise.all(
-    (((mediaResult.data || []) as RecapMediaRow[]).map(async (media) => {
-      const postId = String(media.recap_post_id);
-      const item: RecapMediaItem = {
-        id: String(media.id),
-        url: await resolveEventMemoryMediaUrl(media.media_url),
-        mediaType: media.media_type === 'video' ? 'video' : 'image',
-        sortOrder: Number(media.sort_order || 0),
-      };
-      mediaByPostId.set(postId, [...(mediaByPostId.get(postId) || []), item]);
-    }))
+  const mediaByPostId = await buildMediaByPostId(
+    (mediaResult.data || []) as RecapMediaRow[]
   );
 
   return posts.map((post) => {
@@ -227,18 +239,8 @@ export const loadRecapPostsForUser = async (
     console.warn('Unable to load user recap media:', mediaResult.error);
   }
 
-  const mediaByPostId = new Map<string, RecapMediaItem[]>();
-  await Promise.all(
-    (((mediaResult.data || []) as RecapMediaRow[]).map(async (media) => {
-      const postId = String(media.recap_post_id);
-      const item: RecapMediaItem = {
-        id: String(media.id),
-        url: await resolveEventMemoryMediaUrl(media.media_url),
-        mediaType: media.media_type === 'video' ? 'video' : 'image',
-        sortOrder: Number(media.sort_order || 0),
-      };
-      mediaByPostId.set(postId, [...(mediaByPostId.get(postId) || []), item]);
-    }))
+  const mediaByPostId = await buildMediaByPostId(
+    (mediaResult.data || []) as RecapMediaRow[]
   );
 
   return posts.map((post) => {

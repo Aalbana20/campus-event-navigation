@@ -24,7 +24,7 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 
 import { AppScreen } from '@/components/mobile/AppScreen';
 import { useAppTheme } from '@/lib/app-theme';
-import { formatRelativeTime, getEventCreatorLabel } from '@/lib/mobile-backend';
+import { getEventCreatorLabel } from '@/lib/mobile-backend';
 import { getAvatarImageSource, getEventImageSource } from '@/lib/mobile-media';
 import {
   createRecapPost,
@@ -268,17 +268,14 @@ function RecapPostCard({
             style={styles.postAvatar}
           />
           <View style={styles.postUserCopy}>
-            <View style={styles.postHeader}>
-              <Text style={styles.postName} numberOfLines={1}>
-                {post.authorName}
+            <Text style={styles.postName} numberOfLines={1}>
+              {post.authorName || post.authorUsername || 'Campus User'}
+            </Text>
+            <Pressable onPress={onOpenEvent}>
+              <Text style={styles.postEventName} numberOfLines={1}>
+                {eventTitle || 'Event recap'}
               </Text>
-              {post.authorUsername ? (
-                <Text style={styles.postMeta} numberOfLines={1}>
-                  @{post.authorUsername}
-                </Text>
-              ) : null}
-              <Text style={styles.postMeta}>· {formatRelativeTime(post.createdAt)}</Text>
-            </View>
+            </Pressable>
           </View>
         </Pressable>
         <Pressable
@@ -897,23 +894,18 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       flex: 1,
       minWidth: 0,
     },
-    postHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 5,
-      minWidth: 0,
-    },
     postName: {
       color: theme.text,
       fontSize: 15,
       fontWeight: '900',
-      maxWidth: 116,
+      lineHeight: 20,
     },
-    postMeta: {
+    postEventName: {
       color: theme.textMuted,
-      fontSize: 14,
-      fontWeight: '700',
-      maxWidth: 106,
+      fontSize: 12,
+      fontWeight: '500',
+      lineHeight: 17,
+      marginTop: 1,
     },
     eventThumbButton: {
       width: 42,
