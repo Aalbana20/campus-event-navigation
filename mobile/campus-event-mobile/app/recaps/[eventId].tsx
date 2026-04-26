@@ -21,8 +21,13 @@ import {
 import { AppScreen } from '@/components/mobile/AppScreen';
 import { useAppTheme } from '@/lib/app-theme';
 import { formatRelativeTime, getEventCreatorLabel } from '@/lib/mobile-backend';
-import type { EventMemoryRecord } from '@/lib/mobile-event-memories';
 import { getAvatarImageSource } from '@/lib/mobile-media';
+import {
+  createRecapPost,
+  loadRecapPostsForEvent,
+  type RecapMediaItem,
+  type RecapPostRecord,
+} from '@/lib/mobile-recaps';
 import {
   pickStoryMediaFromLibrary,
   type SelectedStoryMedia,
@@ -31,188 +36,6 @@ import { supabase } from '@/lib/supabase';
 import { useMobileApp } from '@/providers/mobile-app-provider';
 
 type FeedTab = 'all' | 'following';
-
-type RecapMediaItem = {
-  id: string;
-  url: string;
-};
-
-type RecapPost = {
-  id: string;
-  source: 'comment' | 'memory';
-  authorId: string;
-  authorName: string;
-  authorUsername: string;
-  authorAvatar: string;
-  caption: string;
-  createdAt: string;
-  media: RecapMediaItem[];
-  commentId?: string;
-  likeCount?: number;
-  likedByMe?: boolean;
-};
-
-type EventCommentRow = {
-  id: string;
-  user_id?: string | null;
-  body?: string | null;
-  parent_id?: string | null;
-  created_at?: string | null;
-};
-
-type ProfileRow = {
-  id: string;
-  name?: string | null;
-  username?: string | null;
-  avatar_url?: string | null;
-};
-
-type CommentLikeRow = {
-  comment_id: string;
-  user_id: string;
-};
-
-const getMetadataString = (metadata: Record<string, unknown>, key: string) => {
-  const value = metadata[key];
-  return typeof value === 'string' && value.trim() ? value.trim() : '';
-};
-
-const groupMemoriesIntoPosts = (memories: EventMemoryRecord[]): RecapPost[] => {
-  const postsById = new Map<string, RecapPost>();
-
-  memories.forEach((memory) => {
-    const recapPostId = getMetadataString(memory.metadata, 'recapPostId') || memory.id;
-    const existing = postsById.get(recapPostId);
-    const mediaItem = {
-      id: memory.id,
-      url: memory.mediaUrl,
-    };
-
-    if (existing) {
-      existing.media.push(mediaItem);
-      if (new Date(memory.createdAt).getTime() > new Date(existing.createdAt).getTime()) {
-        existing.createdAt = memory.createdAt;
-      }
-      if (!existing.caption && memory.caption) {
-        existing.caption = memory.caption;
-      }
-      return;
-    }
-
-    postsById.set(recapPostId, {
-      id: recapPostId,
-      source: 'memory',
-      authorId: memory.authorId,
-      authorName: memory.authorName,
-      authorUsername: memory.authorUsername,
-      authorAvatar: memory.authorAvatar,
-      caption: memory.caption,
-      createdAt: memory.createdAt,
-      media: [mediaItem],
-    });
-  });
-
-  return [...postsById.values()].sort(
-    (left, right) =>
-      new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()
-  );
-};
-
-const toTrimmedString = (value: unknown) =>
-  typeof value === 'string' ? value.trim() : '';
-
-const loadRecapCommentPosts = async ({
-  eventId,
-  viewerId,
-}: {
-  eventId: string;
-  viewerId: string;
-}): Promise<RecapPost[]> => {
-  if (!supabase || !eventId) return [];
-
-  const { data: authData } = await supabase.auth.getUser();
-  const resolvedViewerId = authData?.user?.id ? String(authData.user.id) : viewerId;
-  const { data, error } = await supabase
-    .from('event_comments')
-    .select('id, user_id, body, parent_id, created_at')
-    .eq('event_id', eventId)
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    console.warn('Unable to load recap comments:', error);
-    return [];
-  }
-
-  const rows = (data || []) as EventCommentRow[];
-  const commentIds = rows.map((row) => String(row.id)).filter(Boolean);
-  const authorIds = [
-    ...new Set(
-      rows
-        .map((row) => toTrimmedString(row.user_id))
-        .filter(Boolean)
-    ),
-  ];
-
-  const profileById = new Map<string, ProfileRow>();
-  if (authorIds.length > 0) {
-    const { data: profileRows, error: profileError } = await supabase
-      .from('profiles')
-      .select('id, name, username, avatar_url')
-      .in('id', authorIds);
-
-    if (profileError) {
-      console.warn('Unable to load recap comment authors:', profileError);
-    } else {
-      ((profileRows || []) as ProfileRow[]).forEach((profile) => {
-        profileById.set(String(profile.id), profile);
-      });
-    }
-  }
-
-  const likeCountByComment = new Map<string, number>();
-  const likedByMe = new Set<string>();
-  if (commentIds.length > 0) {
-    const { data: likeRows, error: likeError } = await supabase
-      .from('event_comment_likes')
-      .select('comment_id, user_id')
-      .in('comment_id', commentIds);
-
-    if (likeError) {
-      console.warn('Unable to load recap comment likes:', likeError);
-    } else {
-      ((likeRows || []) as CommentLikeRow[]).forEach((row) => {
-        const commentId = String(row.comment_id);
-        likeCountByComment.set(commentId, (likeCountByComment.get(commentId) || 0) + 1);
-        if (resolvedViewerId && String(row.user_id) === resolvedViewerId) {
-          likedByMe.add(commentId);
-        }
-      });
-    }
-  }
-
-  return rows.map((row) => {
-    const commentId = String(row.id);
-    const authorId = toTrimmedString(row.user_id);
-    const profile = authorId ? profileById.get(authorId) : undefined;
-    return {
-      id: `comment-${commentId}`,
-      source: 'comment',
-      commentId,
-      authorId,
-      authorName:
-        toTrimmedString(profile?.name) ||
-        toTrimmedString(profile?.username) ||
-        'Campus User',
-      authorUsername: toTrimmedString(profile?.username),
-      authorAvatar: toTrimmedString(profile?.avatar_url),
-      caption: toTrimmedString(row.body),
-      createdAt: row.created_at || new Date().toISOString(),
-      media: [],
-      likeCount: likeCountByComment.get(commentId) || 0,
-      likedByMe: likedByMe.has(commentId),
-    };
-  });
-};
 
 function RecapMediaGrid({
   media,
@@ -273,12 +96,9 @@ export default function EventRecapFeedScreen() {
     getEventById,
     getProfileById,
     currentUserAttendedEvent,
-    loadEventMemoriesForEvent,
-    postEventMemory,
   } = useMobileApp();
   const [activeTab, setActiveTab] = useState<FeedTab>('all');
-  const [remoteMemories, setRemoteMemories] = useState<EventMemoryRecord[]>([]);
-  const [commentPosts, setCommentPosts] = useState<RecapPost[]>([]);
+  const [recapPosts, setRecapPosts] = useState<RecapPostRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [canPostRecap, setCanPostRecap] = useState(false);
   const [composerVisible, setComposerVisible] = useState(false);
@@ -304,11 +124,11 @@ export default function EventRecapFeedScreen() {
 
   const allPosts = useMemo(
     () =>
-      [...commentPosts, ...groupMemoriesIntoPosts(remoteMemories)].sort(
+      [...recapPosts].sort(
         (left, right) =>
           new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()
       ),
-    [commentPosts, remoteMemories]
+    [recapPosts]
   );
 
   const visiblePosts = useMemo(
@@ -323,16 +143,14 @@ export default function EventRecapFeedScreen() {
     if (!event?.id) return;
 
     setIsLoading(true);
-    const [memories, comments, eligible] = await Promise.all([
-      loadEventMemoriesForEvent(event.id),
-      loadRecapCommentPosts({ eventId: event.id, viewerId: currentUser.id }),
+    const [posts, eligible] = await Promise.all([
+      loadRecapPostsForEvent(event.id),
       currentUserAttendedEvent(event.id),
     ]);
-    setRemoteMemories(memories);
-    setCommentPosts(comments);
-    setCanPostRecap(eligible);
+    setRecapPosts(posts);
+    setCanPostRecap(Boolean(eligible || event.createdBy === currentUser.id));
     setIsLoading(false);
-  }, [currentUser.id, currentUserAttendedEvent, event?.id, loadEventMemoriesForEvent]);
+  }, [currentUser.id, currentUserAttendedEvent, event?.createdBy, event?.id]);
 
   useFocusEffect(
     useCallback(() => {
@@ -345,14 +163,25 @@ export default function EventRecapFeedScreen() {
       const channel =
         event?.id && supabase
           ? supabase
-              .channel(`mobile-recaps-comments-${event.id}`)
+              .channel(`mobile-recaps-${event.id}`)
               .on(
                 'postgres_changes',
                 {
                   event: '*',
                   schema: 'public',
-                  table: 'event_comments',
+                  table: 'recap_posts',
                   filter: `event_id=eq.${event.id}`,
+                },
+                () => {
+                  void refreshRecaps();
+                }
+              )
+              .on(
+                'postgres_changes',
+                {
+                  event: '*',
+                  schema: 'public',
+                  table: 'recap_media',
                 },
                 () => {
                   void refreshRecaps();
@@ -423,40 +252,24 @@ export default function EventRecapFeedScreen() {
 
     try {
       if (selectedImages.length === 0) {
-        if (!supabase) {
-          throw new Error('Recap text posting needs Supabase configuration.');
-        }
-
-        const { error } = await supabase.from('event_comments').insert({
-          event_id: event.id,
-          user_id: currentUser.id,
+        await createRecapPost({
+          eventId: event.id,
+          userId: currentUser.id,
           body: trimmedText,
-          parent_id: null,
+          media: [],
         });
-
-        if (error) throw error;
         await refreshRecaps();
         resetComposer();
         return;
       }
 
-      const recapPostId = `recap-${event.id}-${currentUser.id}-${Date.now()}`;
-      for (let index = 0; index < selectedImages.length; index += 1) {
-        await postEventMemory({
-          eventId: event.id,
-          media: selectedImages[index],
-          caption: trimmedText,
-          metadata: {
-            recapKind: 'recap',
-            recapPostId,
-            recapMediaIndex: index,
-            recapMediaCount: selectedImages.length,
-          },
-        });
-      }
-
-      const refreshed = await loadEventMemoriesForEvent(event.id);
-      setRemoteMemories(refreshed);
+      await createRecapPost({
+        eventId: event.id,
+        userId: currentUser.id,
+        body: trimmedText,
+        media: selectedImages,
+      });
+      await refreshRecaps();
       resetComposer();
     } catch (error) {
       Alert.alert(
@@ -465,57 +278,6 @@ export default function EventRecapFeedScreen() {
       );
     } finally {
       setIsPosting(false);
-    }
-  };
-
-  const handleTogglePostLike = async (post: RecapPost) => {
-    if (post.source !== 'comment') {
-      toggleSetEntry(setLikedIds, post.id);
-      return;
-    }
-
-    if (!supabase || !post.commentId) return;
-    const { data: authData } = await supabase.auth.getUser();
-    const authId = authData?.user?.id ? String(authData.user.id) : currentUser.id;
-    if (!authId) return;
-
-    const nextLikedState = !post.likedByMe;
-
-    setCommentPosts((current) =>
-      current.map((item) =>
-        item.id === post.id
-          ? {
-              ...item,
-              likedByMe: nextLikedState,
-              likeCount: Math.max((item.likeCount || 0) + (nextLikedState ? 1 : -1), 0),
-            }
-          : item
-      )
-    );
-
-    const { error } = nextLikedState
-      ? await supabase
-          .from('event_comment_likes')
-          .insert({ comment_id: post.commentId, user_id: authId })
-      : await supabase
-          .from('event_comment_likes')
-          .delete()
-          .eq('comment_id', post.commentId)
-          .eq('user_id', authId);
-
-    if (error && error.code !== '23505') {
-      console.warn('Unable to persist recap like:', error);
-      setCommentPosts((current) =>
-        current.map((item) =>
-          item.id === post.id
-            ? {
-                ...item,
-                likedByMe: !nextLikedState,
-                likeCount: Math.max((item.likeCount || 0) + (nextLikedState ? -1 : 1), 0),
-              }
-            : item
-        )
-      );
     }
   };
 
@@ -534,7 +296,7 @@ export default function EventRecapFeedScreen() {
     });
   };
 
-  const handleSharePost = async (post: RecapPost) => {
+  const handleSharePost = async (post: RecapPostRecord) => {
     await Share.share({
       message: `${post.authorName} posted a recap from ${event?.title || 'an event'}: ${post.caption}`,
     });
@@ -620,8 +382,7 @@ export default function EventRecapFeedScreen() {
           </View>
         ) : visiblePosts.length > 0 ? (
           visiblePosts.map((post) => {
-            const isLiked =
-              post.source === 'comment' ? Boolean(post.likedByMe) : likedIds.has(post.id);
+            const isLiked = likedIds.has(post.id);
             const isReposted = repostedIds.has(post.id);
             const isSaved = savedIds.has(post.id);
 
@@ -653,17 +414,12 @@ export default function EventRecapFeedScreen() {
                   <View style={styles.actionRow}>
                     <Pressable
                       style={styles.actionCluster}
-                      onPress={() => void handleTogglePostLike(post)}>
+                      onPress={() => toggleSetEntry(setLikedIds, post.id)}>
                       <Ionicons
                         name={isLiked ? 'heart' : 'heart-outline'}
                         size={20}
                         color={isLiked ? theme.accent : theme.textMuted}
                       />
-                      {post.likeCount ? (
-                        <Text style={[styles.actionCount, isLiked && styles.actionCountActive]}>
-                          {post.likeCount}
-                        </Text>
-                      ) : null}
                     </Pressable>
                     <Pressable
                       style={styles.actionButton}

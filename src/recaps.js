@@ -1,4 +1,5 @@
 import { DEFAULT_AVATAR_URL, sanitizeAvatarUrl } from "./profileMedia"
+import { resolveEventMemoryMediaUrl } from "./eventMemories"
 import { supabase } from "./supabaseClient"
 
 export const DAY_MS = 24 * 60 * 60 * 1000
@@ -256,6 +257,145 @@ export const loadRecapCommentPosts = async ({ eventId, viewerId }) => {
       likedByMe: likedByMe.has(commentId),
     }
   })
+}
+
+export const loadRecapPostsForEvent = async (eventId) => {
+  if (!eventId) return []
+
+  const { data: postRows, error: postsError } = await supabase
+    .from("recap_posts")
+    .select("id, event_id, user_id, body, created_at, updated_at")
+    .eq("event_id", eventId)
+    .order("created_at", { ascending: false })
+
+  if (postsError) {
+    console.warn("Unable to load recap posts:", postsError)
+    return []
+  }
+
+  const posts = postRows || []
+  const postIds = posts.map((post) => String(post.id))
+  const authorIds = [...new Set(posts.map((post) => toTrimmedString(post.user_id)).filter(Boolean))]
+
+  const [profileResult, mediaResult] = await Promise.all([
+    authorIds.length
+      ? supabase.from("profiles").select("id, name, username, avatar_url").in("id", authorIds)
+      : Promise.resolve({ data: [], error: null }),
+    postIds.length
+      ? supabase
+          .from("recap_media")
+          .select("id, recap_post_id, media_url, media_type, sort_order, created_at")
+          .in("recap_post_id", postIds)
+          .order("sort_order", { ascending: true })
+      : Promise.resolve({ data: [], error: null }),
+  ])
+
+  if (profileResult.error) console.warn("Unable to load recap authors:", profileResult.error)
+  if (mediaResult.error) console.warn("Unable to load recap media:", mediaResult.error)
+
+  const profileById = new Map((profileResult.data || []).map((profile) => [String(profile.id), profile]))
+  const mediaByPostId = new Map()
+
+  await Promise.all(
+    (mediaResult.data || []).map(async (media) => {
+      const postId = String(media.recap_post_id)
+      const item = {
+        id: String(media.id),
+        url: await resolveEventMemoryMediaUrl(media.media_url),
+        mediaType: media.media_type === "video" ? "video" : "image",
+        sortOrder: Number(media.sort_order || 0),
+      }
+      mediaByPostId.set(postId, [...(mediaByPostId.get(postId) || []), item])
+    })
+  )
+
+  return posts.map((post) => {
+    const authorId = String(post.user_id || "")
+    const profile = profileById.get(authorId)
+    return {
+      id: String(post.id),
+      source: "recap",
+      eventId: String(post.event_id),
+      authorId,
+      authorName: toTrimmedString(profile?.name) || toTrimmedString(profile?.username) || "Campus User",
+      authorUsername: toTrimmedString(profile?.username),
+      authorAvatar: sanitizeAvatarUrl(profile?.avatar_url, DEFAULT_AVATAR_URL),
+      caption: toTrimmedString(post.body),
+      createdAt: post.created_at || new Date().toISOString(),
+      updatedAt: post.updated_at || post.created_at || new Date().toISOString(),
+      media: mediaByPostId.get(String(post.id)) || [],
+    }
+  })
+}
+
+const getFileExtension = (file) => {
+  const nameMatch = String(file?.name || "").toLowerCase().match(/\.([a-z0-9]+)$/)
+  if (nameMatch?.[1]) return nameMatch[1]
+  if (file?.type === "image/png") return "png"
+  if (file?.type === "image/webp") return "webp"
+  if (file?.type === "image/heic") return "heic"
+  if (file?.type === "image/heif") return "heif"
+  return "jpg"
+}
+
+export const createRecapPost = async ({ eventId, userId, body, files = [] }) => {
+  const trimmedBody = toTrimmedString(body)
+  const selectedFiles = files.slice(0, 4)
+  if (!eventId || !userId || (!trimmedBody && selectedFiles.length === 0)) {
+    throw new Error("Write something or add at least one image.")
+  }
+
+  const { data: post, error: postError } = await supabase
+    .from("recap_posts")
+    .insert({
+      event_id: eventId,
+      user_id: userId,
+      body: trimmedBody || null,
+    })
+    .select("id")
+    .single()
+
+  if (postError) throw postError
+
+  const postId = String(post.id)
+  const uploadedPaths = []
+
+  try {
+    const mediaRows = []
+    for (let index = 0; index < selectedFiles.length; index += 1) {
+      const file = selectedFiles[index]
+      const extension = getFileExtension(file)
+      const storagePath = `recaps/${eventId}/${userId}/${postId}-${index}.${extension}`
+      const { error: uploadError } = await supabase.storage
+        .from("event-memories")
+        .upload(storagePath, file, {
+          cacheControl: "3600",
+          contentType: file.type || "image/jpeg",
+          upsert: false,
+        })
+      if (uploadError) throw uploadError
+      uploadedPaths.push(storagePath)
+      mediaRows.push({
+        recap_post_id: postId,
+        media_url: storagePath,
+        media_type: "image",
+        sort_order: index,
+      })
+    }
+
+    if (mediaRows.length > 0) {
+      const { error: mediaError } = await supabase.from("recap_media").insert(mediaRows)
+      if (mediaError) throw mediaError
+    }
+
+    return postId
+  } catch (error) {
+    await supabase.from("recap_posts").delete().eq("id", postId)
+    if (uploadedPaths.length > 0) {
+      await supabase.storage.from("event-memories").remove(uploadedPaths)
+    }
+    throw error
+  }
 }
 
 export const postTextRecap = async ({ eventId, userId, body }) => {

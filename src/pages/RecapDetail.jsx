@@ -4,11 +4,9 @@ import { useEvents } from "../context/EventContext"
 import { DEFAULT_AVATAR_URL, sanitizeAvatarUrl } from "../profileMedia"
 import { supabase } from "../supabaseClient"
 import {
+  createRecapPost,
   formatRelativeTime,
-  groupEventMemoriesIntoRecapPosts,
-  loadRecapCommentPosts,
-  postTextRecap,
-  toggleCommentRecapLike,
+  loadRecapPostsForEvent,
 } from "../recaps"
 import "./Recaps.css"
 
@@ -114,12 +112,9 @@ export default function RecapDetail() {
     currentUser,
     followingList,
     currentUserAttendedEvent,
-    loadEventMemoriesForEvent,
-    postEventMemory,
   } = useEvents()
   const [activeTab, setActiveTab] = useState("all")
-  const [commentPosts, setCommentPosts] = useState([])
-  const [memories, setMemories] = useState([])
+  const [recapPosts, setRecapPosts] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [canPostRecap, setCanPostRecap] = useState(false)
   const [composerOpen, setComposerOpen] = useState(false)
@@ -142,10 +137,10 @@ export default function RecapDetail() {
 
   const posts = useMemo(
     () =>
-      [...commentPosts, ...groupEventMemoriesIntoRecapPosts(memories)].sort(
+      [...recapPosts].sort(
         (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()
       ),
-    [commentPosts, memories]
+    [recapPosts]
   )
 
   const visiblePosts = useMemo(
@@ -159,43 +154,41 @@ export default function RecapDetail() {
     if (!eventId) return
     setIsLoading(true)
 
-    const [nextMemories, nextComments, eligible] = await Promise.all([
-      loadEventMemoriesForEvent(eventId),
-      loadRecapCommentPosts({ eventId, viewerId: currentUser?.id || "" }),
+    const [nextPosts, eligible] = await Promise.all([
+      loadRecapPostsForEvent(eventId),
       currentUserAttendedEvent(eventId),
     ])
 
-    setMemories(nextMemories)
-    setCommentPosts(nextComments)
-    setCanPostRecap(Boolean(eligible))
+    setRecapPosts(nextPosts)
+    setCanPostRecap(Boolean(eligible || event?.createdBy === currentUser?.id))
     setIsLoading(false)
-  }, [currentUser?.id, currentUserAttendedEvent, eventId, loadEventMemoriesForEvent])
+  }, [currentUser?.id, currentUserAttendedEvent, event?.createdBy, eventId])
 
   useEffect(() => {
     refreshRecaps()
 
     if (!eventId) return undefined
-    const commentChannel = supabase
-      .channel(`web-recaps-comments-${eventId}`)
+    const postsChannel = supabase
+      .channel(`web-recaps-posts-${eventId}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "event_comments", filter: `event_id=eq.${eventId}` },
+        { event: "*", schema: "public", table: "recap_posts", filter: `event_id=eq.${eventId}` },
         () => refreshRecaps()
       )
       .subscribe()
 
-    const memoryChannel = supabase
-      .channel(`web-recaps-memories-${eventId}`)
+    const mediaChannel = supabase
+      .channel(`web-recaps-media-${eventId}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "event_memories", filter: `event_id=eq.${eventId}` },
+        { event: "*", schema: "public", table: "recap_media" },
         () => refreshRecaps()
       )
       .subscribe()
 
     return () => {
-      supabase.removeChannel(commentChannel)
-      supabase.removeChannel(memoryChannel)
+      supabase.removeChannel(postsChannel)
+      supabase.removeChannel(mediaChannel)
     }
   }, [eventId, refreshRecaps])
 
@@ -224,27 +217,12 @@ export default function RecapDetail() {
 
     setIsPosting(true)
     try {
-      if (selectedFiles.length === 0) {
-        await postTextRecap({ eventId: event.id, userId, body })
-        await refreshRecaps()
-        resetComposer()
-        return
-      }
-
-      const recapPostId = `recap-${event.id}-${userId}-${Date.now()}`
-      for (let index = 0; index < selectedFiles.length; index += 1) {
-        await postEventMemory({
-          eventId: event.id,
-          file: selectedFiles[index],
-          caption: body,
-          metadata: {
-            recapKind: "recap",
-            recapPostId,
-            recapMediaIndex: index,
-            recapMediaCount: selectedFiles.length,
-          },
-        })
-      }
+      await createRecapPost({
+        eventId: event.id,
+        userId,
+        body,
+        files: selectedFiles,
+      })
       await refreshRecaps()
       resetComposer()
     } catch (error) {
@@ -255,35 +233,12 @@ export default function RecapDetail() {
   }
 
   const handleToggleLike = async (post) => {
-    if (post.source !== "comment") {
-      setLikedMemoryIds((current) => {
-        const next = new Set(current)
-        if (next.has(post.id)) next.delete(post.id)
-        else next.add(post.id)
-        return next
-      })
-      return
-    }
-
-    const nextLiked = !post.likedByMe
-    setCommentPosts((current) =>
-      current.map((item) =>
-        item.id === post.id
-          ? {
-              ...item,
-              likedByMe: nextLiked,
-              likeCount: Math.max(0, (item.likeCount || 0) + (nextLiked ? 1 : -1)),
-            }
-          : item
-      )
-    )
-
-    try {
-      await toggleCommentRecapLike({ commentId: post.commentId, liked: nextLiked })
-    } catch (error) {
-      console.warn("Unable to persist recap like:", error)
-      await refreshRecaps()
-    }
+    setLikedMemoryIds((current) => {
+      const next = new Set(current)
+      if (next.has(post.id)) next.delete(post.id)
+      else next.add(post.id)
+      return next
+    })
   }
 
   const toggleLocalSet = (setter, id) => {
@@ -356,8 +311,7 @@ export default function RecapDetail() {
             <div className="recaps-loading">Loading recaps...</div>
           ) : visiblePosts.length > 0 ? (
             visiblePosts.map((post) => {
-              const isLiked =
-                post.source === "comment" ? Boolean(post.likedByMe) : likedMemoryIds.has(post.id)
+              const isLiked = likedMemoryIds.has(post.id)
               return (
                 <article key={post.id} className="recap-post">
                   <img
@@ -379,7 +333,7 @@ export default function RecapDetail() {
                         className={isLiked ? "active" : ""}
                         onClick={() => handleToggleLike(post)}
                       >
-                        {isLiked ? "♥" : "♡"} {post.likeCount || ""}
+                        {isLiked ? "♥" : "♡"}
                       </button>
                       <button type="button" onClick={() => window.alert("Recap comments are next.")}>
                         ◌
