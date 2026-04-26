@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   Image,
   Pressable,
@@ -17,7 +17,9 @@ import { getEventImageSource } from '@/lib/mobile-media';
 import { useMobileApp } from '@/providers/mobile-app-provider';
 import type { EventRecord } from '@/types/models';
 
-type RecapFilter = 'now' | 'past';
+const DAY_MS = 24 * 60 * 60 * 1000;
+const TIMELINE_WINDOW_DAYS = 14;
+const APPROX_ROW_HEIGHT = 206;
 
 const parseClockTime = (value?: string | null) => {
   const trimmed = value?.trim();
@@ -56,26 +58,30 @@ const getEventStartDate = (event: EventRecord) => {
   return start;
 };
 
-const getEventEndDate = (event: EventRecord, start: Date) => {
-  const end = new Date(start);
-  const endClock = parseClockTime(event.endTime);
+const startOfLocalDay = (date: Date) =>
+  new Date(date.getFullYear(), date.getMonth(), date.getDate());
 
-  if (event.endTime) {
-    end.setHours(endClock.hours, endClock.minutes, 0, 0);
-    if (end <= start) end.setDate(end.getDate() + 1);
-    return end;
-  }
-
-  end.setHours(start.getHours() + 6);
-  return end;
+const toDateKey = (date: Date) => {
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${month}-${day}`;
 };
 
-const getRecapStatus = (event: EventRecord, now: Date) => {
-  const start = getEventStartDate(event);
-  if (!start || start > now) return 'future';
+const dateFromKey = (key: string) => {
+  const [year, month, day] = key.split('-').map(Number);
+  return new Date(year, month - 1, day);
+};
 
-  const end = getEventEndDate(event, start);
-  return end >= now ? 'now' : 'past';
+const formatDayLabel = (date: Date, todayKey: string) => {
+  const dateLabel = date.toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+  });
+
+  if (toDateKey(date) === todayKey) return `Today — ${dateLabel}`;
+
+  const weekday = date.toLocaleDateString('en-US', { weekday: 'long' });
+  return `${weekday} — ${dateLabel}`;
 };
 
 export default function RecapsScreen() {
@@ -83,22 +89,58 @@ export default function RecapsScreen() {
   const theme = useAppTheme();
   const styles = useMemo(() => buildStyles(theme), [theme]);
   const { events } = useMobileApp();
-  const [activeFilter, setActiveFilter] = useState<RecapFilter>('now');
+  const scrollRef = useRef<ScrollView>(null);
+  const didInitialScrollRef = useRef(false);
+  const [viewportHeight, setViewportHeight] = useState(0);
 
-  const recapEvents = useMemo(() => {
-    const now = new Date();
+  const today = useMemo(() => startOfLocalDay(new Date()), []);
+  const todayKey = toDateKey(today);
 
-    return events
-      .map((event) => ({
-        event,
-        status: getRecapStatus(event, now),
-        start: getEventStartDate(event)?.getTime() || 0,
-      }))
-      .filter(({ status }) => status === 'now' || status === 'past')
-      .sort((left, right) => right.start - left.start);
-  }, [events]);
+  const timelineRows = useMemo(() => {
+    const eventsWithDates = events
+      .map((event) => {
+        const start = getEventStartDate(event);
+        return start ? { event, start, dateKey: toDateKey(startOfLocalDay(start)) } : null;
+      })
+      .filter(Boolean) as Array<{ event: EventRecord; start: Date; dateKey: string }>;
 
-  const visibleEvents = recapEvents.filter(({ status }) => status === activeFilter);
+    const dateKeys = new Set<string>();
+    for (let offset = -TIMELINE_WINDOW_DAYS; offset <= TIMELINE_WINDOW_DAYS; offset += 1) {
+      dateKeys.add(toDateKey(new Date(today.getTime() + offset * DAY_MS)));
+    }
+    eventsWithDates.forEach(({ dateKey }) => dateKeys.add(dateKey));
+
+    return [...dateKeys]
+      .sort((left, right) => dateFromKey(right).getTime() - dateFromKey(left).getTime())
+      .map((dateKey) => {
+        const date = dateFromKey(dateKey);
+        const dayEvents = eventsWithDates
+          .filter((item) => item.dateKey === dateKey)
+          .sort((left, right) => left.start.getTime() - right.start.getTime())
+          .map(({ event, start }) => ({ event, start }));
+
+        return {
+          dateKey,
+          date,
+          label: formatDayLabel(date, todayKey),
+          isToday: dateKey === todayKey,
+          events: dayEvents,
+        };
+      });
+  }, [events, today, todayKey]);
+
+  const todayIndex = timelineRows.findIndex((row) => row.isToday);
+
+  const scrollToToday = () => {
+    if (didInitialScrollRef.current || viewportHeight <= 0 || todayIndex < 0) return;
+    didInitialScrollRef.current = true;
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({
+        y: Math.max(0, todayIndex * APPROX_ROW_HEIGHT - viewportHeight / 2 + 86),
+        animated: false,
+      });
+    });
+  };
 
   return (
     <AppScreen>
@@ -110,58 +152,63 @@ export default function RecapsScreen() {
         <View style={styles.headerSpacer} />
       </View>
 
-      <View style={styles.filterRow}>
-        {[
-          { key: 'now' as const, label: 'Happening Now' },
-          { key: 'past' as const, label: 'Past' },
-        ].map((filter) => {
-          const isActive = activeFilter === filter.key;
-          return (
-            <Pressable
-              key={filter.key}
-              style={[styles.filterPill, isActive && styles.filterPillActive]}
-              onPress={() => setActiveFilter(filter.key)}>
-              <Text style={[styles.filterText, isActive && styles.filterTextActive]}>
-                {filter.label}
+      <ScrollView
+        ref={scrollRef}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        onContentSizeChange={scrollToToday}
+        onLayout={(event) => {
+          setViewportHeight(event.nativeEvent.layout.height);
+          scrollToToday();
+        }}
+        showsVerticalScrollIndicator={false}>
+        {timelineRows.map((row) => (
+          <View key={row.dateKey} style={styles.dateRow}>
+            <View style={styles.dateHeader}>
+              <View style={styles.dateLine} />
+              <Text style={[styles.dateLabel, row.isToday && styles.dateLabelToday]}>
+                {row.label}
               </Text>
-            </Pressable>
-          );
-        })}
-      </View>
+              <View style={styles.dateLine} />
+            </View>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {visibleEvents.length > 0 ? (
-          visibleEvents.map(({ event }) => (
-            <Pressable
-              key={event.id}
-              style={styles.eventCard}
-              onPress={() => router.push(`/recaps/${event.id}`)}>
-              <Image source={getEventImageSource(event.image)} style={styles.eventImage} />
-              <View style={styles.eventCopy}>
-                <Text style={styles.eventTitle} numberOfLines={2}>
-                  {event.title}
-                </Text>
-                <Text style={styles.eventMeta} numberOfLines={1}>
-                  {[event.date, event.time].filter(Boolean).join(' • ')}
-                </Text>
-                <Text style={styles.eventHost} numberOfLines={1}>
-                  {getEventCreatorLabel(event)}
-                </Text>
+            {row.events.length > 0 ? (
+              <ScrollView
+                horizontal
+                contentContainerStyle={styles.eventRail}
+                keyboardShouldPersistTaps="handled"
+                showsHorizontalScrollIndicator={false}>
+                {row.events.map(({ event, start }) => (
+                  <Pressable
+                    key={event.id}
+                    style={styles.eventCard}
+                    onPress={() => router.push(`/recaps/${event.id}`)}>
+                    <Image source={getEventImageSource(event.image)} style={styles.eventImage} />
+                    <View style={styles.eventOverlay} />
+                    <View style={styles.eventCopy}>
+                      <Text style={styles.eventTime} numberOfLines={1}>
+                        {start.toLocaleTimeString('en-US', {
+                          hour: 'numeric',
+                          minute: '2-digit',
+                        })}
+                      </Text>
+                      <Text style={styles.eventTitle} numberOfLines={2}>
+                        {event.title}
+                      </Text>
+                      <Text style={styles.eventHost} numberOfLines={1}>
+                        {getEventCreatorLabel(event)}
+                      </Text>
+                    </View>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            ) : (
+              <View style={styles.emptyDatePill}>
+                <Text style={styles.emptyDateText}>No events on this date</Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color={theme.textMuted} />
-            </Pressable>
-          ))
-        ) : (
-          <View style={styles.emptyState}>
-            <Ionicons name="chatbubbles-outline" size={30} color={theme.textMuted} />
-            <Text style={styles.emptyTitle}>
-              {activeFilter === 'now' ? 'No live recaps yet' : 'No past events yet'}
-            </Text>
-            <Text style={styles.emptyCopy}>
-              Events that have started will appear here for recap posts.
-            </Text>
+            )}
           </View>
-        )}
+        ))}
       </ScrollView>
     </AppScreen>
   );
@@ -194,91 +241,107 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     headerSpacer: {
       width: 40,
     },
-    filterRow: {
-      flexDirection: 'row',
-      gap: 10,
-      paddingHorizontal: 18,
+    content: {
       paddingTop: 8,
-      paddingBottom: 14,
+      paddingBottom: 34,
+      gap: 18,
     },
-    filterPill: {
-      paddingHorizontal: 16,
-      paddingVertical: 10,
-      borderRadius: 999,
-      backgroundColor: theme.surface,
-      borderWidth: 1,
-      borderColor: theme.border,
+    dateRow: {
+      minHeight: 188,
+      gap: 12,
     },
-    filterPillActive: {
-      backgroundColor: theme.accent,
-      borderColor: theme.accent,
+    dateHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      paddingHorizontal: 18,
     },
-    filterText: {
+    dateLine: {
+      flex: 1,
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: theme.border,
+    },
+    dateLabel: {
       color: theme.textMuted,
       fontSize: 13,
-      fontWeight: '800',
+      fontWeight: '900',
+      letterSpacing: 0.2,
     },
-    filterTextActive: {
-      color: theme.accentText,
+    dateLabelToday: {
+      color: theme.accent,
     },
-    content: {
+    eventRail: {
       paddingHorizontal: 18,
-      paddingBottom: 28,
       gap: 12,
     },
     eventCard: {
-      flexDirection: 'row',
+      width: 104,
+      height: 154,
+      overflow: 'hidden',
+      borderRadius: 18,
+      backgroundColor: theme.surface,
+      borderWidth: 1,
+      borderColor: theme.border,
+      shadowColor: theme.shadow,
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.18,
+      shadowRadius: 14,
+      elevation: 4,
+    },
+    eventImage: {
+      width: '100%',
+      height: '100%',
+      backgroundColor: theme.surfaceAlt,
+    },
+    eventOverlay: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: 'rgba(0,0,0,0.22)',
+    },
+    eventCopy: {
+      position: 'absolute',
+      left: 8,
+      right: 8,
+      bottom: 8,
+      gap: 3,
+    },
+    eventTime: {
+      alignSelf: 'flex-start',
+      overflow: 'hidden',
+      paddingHorizontal: 6,
+      paddingVertical: 3,
+      borderRadius: 999,
+      color: '#ffffff',
+      fontSize: 9,
+      fontWeight: '900',
+      backgroundColor: 'rgba(0,0,0,0.55)',
+    },
+    eventTitle: {
+      color: '#ffffff',
+      fontSize: 12,
+      lineHeight: 14,
+      fontWeight: '900',
+      textShadowColor: 'rgba(0,0,0,0.55)',
+      textShadowOffset: { width: 0, height: 1 },
+      textShadowRadius: 4,
+    },
+    eventHost: {
+      color: 'rgba(255,255,255,0.82)',
+      fontSize: 10,
+      fontWeight: '800',
+    },
+    emptyDatePill: {
+      marginHorizontal: 18,
+      height: 94,
+      borderRadius: 18,
       alignItems: 'center',
-      gap: 12,
-      padding: 12,
-      borderRadius: 22,
+      justifyContent: 'center',
       backgroundColor: theme.surface,
       borderWidth: 1,
       borderColor: theme.border,
     },
-    eventImage: {
-      width: 72,
-      height: 88,
-      borderRadius: 16,
-      backgroundColor: theme.surfaceAlt,
-    },
-    eventCopy: {
-      flex: 1,
-      gap: 5,
-    },
-    eventTitle: {
-      color: theme.text,
-      fontSize: 16,
-      lineHeight: 20,
-      fontWeight: '900',
-    },
-    eventMeta: {
+    emptyDateText: {
       color: theme.textMuted,
-      fontSize: 12,
-      fontWeight: '700',
-    },
-    eventHost: {
-      color: theme.text,
-      fontSize: 12,
+      fontSize: 13,
       fontWeight: '800',
-    },
-    emptyState: {
-      minHeight: 360,
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 10,
-      paddingHorizontal: 24,
-    },
-    emptyTitle: {
-      color: theme.text,
-      fontSize: 18,
-      fontWeight: '900',
-      textAlign: 'center',
-    },
-    emptyCopy: {
-      color: theme.textMuted,
-      fontSize: 14,
-      lineHeight: 20,
-      textAlign: 'center',
     },
   });

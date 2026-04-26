@@ -6,7 +6,9 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   Share,
@@ -25,6 +27,7 @@ import {
   pickStoryMediaFromLibrary,
   type SelectedStoryMedia,
 } from '@/lib/mobile-story-composer';
+import { supabase } from '@/lib/supabase';
 import { useMobileApp } from '@/providers/mobile-app-provider';
 
 type FeedTab = 'all' | 'following';
@@ -36,6 +39,7 @@ type RecapMediaItem = {
 
 type RecapPost = {
   id: string;
+  source: 'comment' | 'memory';
   authorId: string;
   authorName: string;
   authorUsername: string;
@@ -43,7 +47,29 @@ type RecapPost = {
   caption: string;
   createdAt: string;
   media: RecapMediaItem[];
-  isLocal?: boolean;
+  commentId?: string;
+  likeCount?: number;
+  likedByMe?: boolean;
+};
+
+type EventCommentRow = {
+  id: string;
+  user_id?: string | null;
+  body?: string | null;
+  parent_id?: string | null;
+  created_at?: string | null;
+};
+
+type ProfileRow = {
+  id: string;
+  name?: string | null;
+  username?: string | null;
+  avatar_url?: string | null;
+};
+
+type CommentLikeRow = {
+  comment_id: string;
+  user_id: string;
 };
 
 const getMetadataString = (metadata: Record<string, unknown>, key: string) => {
@@ -75,6 +101,7 @@ const groupMemoriesIntoPosts = (memories: EventMemoryRecord[]): RecapPost[] => {
 
     postsById.set(recapPostId, {
       id: recapPostId,
+      source: 'memory',
       authorId: memory.authorId,
       authorName: memory.authorName,
       authorUsername: memory.authorUsername,
@@ -89,6 +116,102 @@ const groupMemoriesIntoPosts = (memories: EventMemoryRecord[]): RecapPost[] => {
     (left, right) =>
       new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()
   );
+};
+
+const toTrimmedString = (value: unknown) =>
+  typeof value === 'string' ? value.trim() : '';
+
+const loadRecapCommentPosts = async ({
+  eventId,
+  viewerId,
+}: {
+  eventId: string;
+  viewerId: string;
+}): Promise<RecapPost[]> => {
+  if (!supabase || !eventId) return [];
+
+  const { data: authData } = await supabase.auth.getUser();
+  const resolvedViewerId = authData?.user?.id ? String(authData.user.id) : viewerId;
+  const { data, error } = await supabase
+    .from('event_comments')
+    .select('id, user_id, body, parent_id, created_at')
+    .eq('event_id', eventId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.warn('Unable to load recap comments:', error);
+    return [];
+  }
+
+  const rows = (data || []) as EventCommentRow[];
+  const commentIds = rows.map((row) => String(row.id)).filter(Boolean);
+  const authorIds = [
+    ...new Set(
+      rows
+        .map((row) => toTrimmedString(row.user_id))
+        .filter(Boolean)
+    ),
+  ];
+
+  const profileById = new Map<string, ProfileRow>();
+  if (authorIds.length > 0) {
+    const { data: profileRows, error: profileError } = await supabase
+      .from('profiles')
+      .select('id, name, username, avatar_url')
+      .in('id', authorIds);
+
+    if (profileError) {
+      console.warn('Unable to load recap comment authors:', profileError);
+    } else {
+      ((profileRows || []) as ProfileRow[]).forEach((profile) => {
+        profileById.set(String(profile.id), profile);
+      });
+    }
+  }
+
+  const likeCountByComment = new Map<string, number>();
+  const likedByMe = new Set<string>();
+  if (commentIds.length > 0) {
+    const { data: likeRows, error: likeError } = await supabase
+      .from('event_comment_likes')
+      .select('comment_id, user_id')
+      .in('comment_id', commentIds);
+
+    if (likeError) {
+      console.warn('Unable to load recap comment likes:', likeError);
+    } else {
+      ((likeRows || []) as CommentLikeRow[]).forEach((row) => {
+        const commentId = String(row.comment_id);
+        likeCountByComment.set(commentId, (likeCountByComment.get(commentId) || 0) + 1);
+        if (resolvedViewerId && String(row.user_id) === resolvedViewerId) {
+          likedByMe.add(commentId);
+        }
+      });
+    }
+  }
+
+  return rows.map((row) => {
+    const commentId = String(row.id);
+    const authorId = toTrimmedString(row.user_id);
+    const profile = authorId ? profileById.get(authorId) : undefined;
+    return {
+      id: `comment-${commentId}`,
+      source: 'comment',
+      commentId,
+      authorId,
+      authorName:
+        toTrimmedString(profile?.name) ||
+        toTrimmedString(profile?.username) ||
+        'Campus User',
+      authorUsername: toTrimmedString(profile?.username),
+      authorAvatar: toTrimmedString(profile?.avatar_url),
+      caption: toTrimmedString(row.body),
+      createdAt: row.created_at || new Date().toISOString(),
+      media: [],
+      likeCount: likeCountByComment.get(commentId) || 0,
+      likedByMe: likedByMe.has(commentId),
+    };
+  });
 };
 
 function RecapMediaGrid({
@@ -155,7 +278,7 @@ export default function EventRecapFeedScreen() {
   } = useMobileApp();
   const [activeTab, setActiveTab] = useState<FeedTab>('all');
   const [remoteMemories, setRemoteMemories] = useState<EventMemoryRecord[]>([]);
-  const [localTextPosts, setLocalTextPosts] = useState<RecapPost[]>([]);
+  const [commentPosts, setCommentPosts] = useState<RecapPost[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [canPostRecap, setCanPostRecap] = useState(false);
   const [composerVisible, setComposerVisible] = useState(false);
@@ -181,11 +304,11 @@ export default function EventRecapFeedScreen() {
 
   const allPosts = useMemo(
     () =>
-      [...localTextPosts, ...groupMemoriesIntoPosts(remoteMemories)].sort(
+      [...commentPosts, ...groupMemoriesIntoPosts(remoteMemories)].sort(
         (left, right) =>
           new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()
       ),
-    [localTextPosts, remoteMemories]
+    [commentPosts, remoteMemories]
   );
 
   const visiblePosts = useMemo(
@@ -200,14 +323,16 @@ export default function EventRecapFeedScreen() {
     if (!event?.id) return;
 
     setIsLoading(true);
-    const [memories, eligible] = await Promise.all([
+    const [memories, comments, eligible] = await Promise.all([
       loadEventMemoriesForEvent(event.id),
+      loadRecapCommentPosts({ eventId: event.id, viewerId: currentUser.id }),
       currentUserAttendedEvent(event.id),
     ]);
     setRemoteMemories(memories);
+    setCommentPosts(comments);
     setCanPostRecap(eligible);
     setIsLoading(false);
-  }, [currentUserAttendedEvent, event?.id, loadEventMemoriesForEvent]);
+  }, [currentUser.id, currentUserAttendedEvent, event?.id, loadEventMemoriesForEvent]);
 
   useFocusEffect(
     useCallback(() => {
@@ -217,10 +342,32 @@ export default function EventRecapFeedScreen() {
         if (!isActive) return;
       });
 
+      const channel =
+        event?.id && supabase
+          ? supabase
+              .channel(`mobile-recaps-comments-${event.id}`)
+              .on(
+                'postgres_changes',
+                {
+                  event: '*',
+                  schema: 'public',
+                  table: 'event_comments',
+                  filter: `event_id=eq.${event.id}`,
+                },
+                () => {
+                  void refreshRecaps();
+                }
+              )
+              .subscribe()
+          : null;
+
       return () => {
         isActive = false;
+        if (channel && supabase) {
+          void supabase.removeChannel(channel);
+        }
       };
-    }, [refreshRecaps])
+    }, [event?.id, refreshRecaps])
   );
 
   const resetComposer = () => {
@@ -276,20 +423,19 @@ export default function EventRecapFeedScreen() {
 
     try {
       if (selectedImages.length === 0) {
-        setLocalTextPosts((current) => [
-          {
-            id: `local-${Date.now()}`,
-            authorId: currentUser.id,
-            authorName: currentUser.name || currentUser.username || 'You',
-            authorUsername: currentUser.username || '',
-            authorAvatar: currentUser.avatar || '',
-            caption: trimmedText,
-            createdAt: new Date().toISOString(),
-            media: [],
-            isLocal: true,
-          },
-          ...current,
-        ]);
+        if (!supabase) {
+          throw new Error('Recap text posting needs Supabase configuration.');
+        }
+
+        const { error } = await supabase.from('event_comments').insert({
+          event_id: event.id,
+          user_id: currentUser.id,
+          body: trimmedText,
+          parent_id: null,
+        });
+
+        if (error) throw error;
+        await refreshRecaps();
         resetComposer();
         return;
       }
@@ -319,6 +465,57 @@ export default function EventRecapFeedScreen() {
       );
     } finally {
       setIsPosting(false);
+    }
+  };
+
+  const handleTogglePostLike = async (post: RecapPost) => {
+    if (post.source !== 'comment') {
+      toggleSetEntry(setLikedIds, post.id);
+      return;
+    }
+
+    if (!supabase || !post.commentId) return;
+    const { data: authData } = await supabase.auth.getUser();
+    const authId = authData?.user?.id ? String(authData.user.id) : currentUser.id;
+    if (!authId) return;
+
+    const nextLikedState = !post.likedByMe;
+
+    setCommentPosts((current) =>
+      current.map((item) =>
+        item.id === post.id
+          ? {
+              ...item,
+              likedByMe: nextLikedState,
+              likeCount: Math.max((item.likeCount || 0) + (nextLikedState ? 1 : -1), 0),
+            }
+          : item
+      )
+    );
+
+    const { error } = nextLikedState
+      ? await supabase
+          .from('event_comment_likes')
+          .insert({ comment_id: post.commentId, user_id: authId })
+      : await supabase
+          .from('event_comment_likes')
+          .delete()
+          .eq('comment_id', post.commentId)
+          .eq('user_id', authId);
+
+    if (error && error.code !== '23505') {
+      console.warn('Unable to persist recap like:', error);
+      setCommentPosts((current) =>
+        current.map((item) =>
+          item.id === post.id
+            ? {
+                ...item,
+                likedByMe: !nextLikedState,
+                likeCount: Math.max((item.likeCount || 0) + (nextLikedState ? -1 : 1), 0),
+              }
+            : item
+        )
+      );
     }
   };
 
@@ -358,37 +555,43 @@ export default function EventRecapFeedScreen() {
 
   return (
     <AppScreen>
-      <View style={styles.header}>
-        <Pressable style={styles.headerButton} onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={22} color={theme.text} />
-        </Pressable>
-        <Text style={styles.headerTitle} numberOfLines={1}>
-          {event.title}
-        </Text>
-        <View style={styles.headerButtonPlaceholder} />
-      </View>
+      <KeyboardAvoidingView
+        style={styles.screen}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={styles.header}>
+          <Pressable style={styles.headerButton} onPress={() => router.back()}>
+            <Ionicons name="chevron-back" size={22} color={theme.text} />
+          </Pressable>
+          <Text style={styles.headerTitle} numberOfLines={1}>
+            {event.title}
+          </Text>
+          <View style={styles.headerButtonPlaceholder} />
+        </View>
 
-      <View style={styles.tabsRow}>
-        {[
-          { key: 'all' as const, label: 'All' },
-          { key: 'following' as const, label: 'Following' },
-        ].map((tab) => {
-          const isActive = activeTab === tab.key;
-          return (
-            <Pressable
-              key={tab.key}
-              style={styles.tabButton}
-              onPress={() => setActiveTab(tab.key)}>
-              <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
-                {tab.label}
-              </Text>
-              {isActive ? <View style={styles.tabIndicator} /> : null}
-            </Pressable>
-          );
-        })}
-      </View>
+        <View style={styles.tabsRow}>
+          {[
+            { key: 'all' as const, label: 'All' },
+            { key: 'following' as const, label: 'Following' },
+          ].map((tab) => {
+            const isActive = activeTab === tab.key;
+            return (
+              <Pressable
+                key={tab.key}
+                style={styles.tabButton}
+                onPress={() => setActiveTab(tab.key)}>
+                <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
+                  {tab.label}
+                </Text>
+                {isActive ? <View style={styles.tabIndicator} /> : null}
+              </Pressable>
+            );
+          })}
+        </View>
 
-      <ScrollView contentContainerStyle={styles.feedContent} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={styles.feedContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}>
         <Pressable
           style={styles.hostCard}
           onPress={() =>
@@ -417,7 +620,8 @@ export default function EventRecapFeedScreen() {
           </View>
         ) : visiblePosts.length > 0 ? (
           visiblePosts.map((post) => {
-            const isLiked = likedIds.has(post.id);
+            const isLiked =
+              post.source === 'comment' ? Boolean(post.likedByMe) : likedIds.has(post.id);
             const isReposted = repostedIds.has(post.id);
             const isSaved = savedIds.has(post.id);
 
@@ -446,21 +650,20 @@ export default function EventRecapFeedScreen() {
 
                   <RecapMediaGrid media={post.media} styles={styles} />
 
-                  {post.isLocal ? (
-                    <Text style={styles.localPostNote}>
-                      Text-only recap is saved on this device for now.
-                    </Text>
-                  ) : null}
-
                   <View style={styles.actionRow}>
                     <Pressable
-                      style={styles.actionButton}
-                      onPress={() => toggleSetEntry(setLikedIds, post.id)}>
+                      style={styles.actionCluster}
+                      onPress={() => void handleTogglePostLike(post)}>
                       <Ionicons
                         name={isLiked ? 'heart' : 'heart-outline'}
                         size={20}
                         color={isLiked ? theme.accent : theme.textMuted}
                       />
+                      {post.likeCount ? (
+                        <Text style={[styles.actionCount, isLiked && styles.actionCountActive]}>
+                          {post.likeCount}
+                        </Text>
+                      ) : null}
                     </Pressable>
                     <Pressable
                       style={styles.actionButton}
@@ -503,64 +706,74 @@ export default function EventRecapFeedScreen() {
             </Text>
           </View>
         )}
-      </ScrollView>
+        </ScrollView>
 
-      <Pressable style={styles.addRecapButton} onPress={handleOpenComposer}>
-        <Ionicons name="add" size={18} color={theme.accentText} />
-        <Text style={styles.addRecapText}>Add Recap</Text>
-      </Pressable>
+        <Pressable style={styles.addRecapButton} onPress={handleOpenComposer}>
+          <Ionicons name="add" size={18} color={theme.accentText} />
+          <Text style={styles.addRecapText}>Add Recap</Text>
+        </Pressable>
+      </KeyboardAvoidingView>
 
       <Modal visible={composerVisible} transparent animationType="slide" onRequestClose={resetComposer}>
-        <View style={styles.modalScrim}>
-          <View style={styles.composerCard}>
-            <View style={styles.composerHeader}>
-              <Pressable onPress={resetComposer}>
-                <Text style={styles.composerCancel}>Cancel</Text>
-              </Pressable>
-              <Text style={styles.composerTitle}>Add Recap</Text>
-              <Pressable disabled={isPosting} onPress={() => void handlePostRecap()}>
-                <Text style={[styles.composerPost, isPosting && styles.composerPostDisabled]}>
-                  {isPosting ? 'Posting' : 'Post'}
-                </Text>
-              </Pressable>
-            </View>
+        <KeyboardAvoidingView
+          style={styles.modalKeyboardAvoider}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <View style={styles.modalScrim}>
+            <ScrollView
+              contentContainerStyle={styles.modalScrollContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}>
+              <View style={styles.composerCard}>
+                <View style={styles.composerHeader}>
+                  <Pressable onPress={resetComposer}>
+                    <Text style={styles.composerCancel}>Cancel</Text>
+                  </Pressable>
+                  <Text style={styles.composerTitle}>Add Recap</Text>
+                  <Pressable disabled={isPosting} onPress={() => void handlePostRecap()}>
+                    <Text style={[styles.composerPost, isPosting && styles.composerPostDisabled]}>
+                      {isPosting ? 'Posting' : 'Post'}
+                    </Text>
+                  </Pressable>
+                </View>
 
-            <TextInput
-              value={draftText}
-              onChangeText={setDraftText}
-              placeholder="What happened at the event?"
-              placeholderTextColor={theme.textMuted}
-              style={styles.composerInput}
-              multiline
-              textAlignVertical="top"
-            />
+                <TextInput
+                  value={draftText}
+                  onChangeText={setDraftText}
+                  placeholder="What happened at the event?"
+                  placeholderTextColor={theme.textMuted}
+                  style={styles.composerInput}
+                  multiline
+                  textAlignVertical="top"
+                />
 
-            {selectedImages.length > 0 ? (
-              <View style={styles.selectedImagesRow}>
-                {selectedImages.map((image, index) => (
-                  <View key={`${image.uri}-${index}`} style={styles.selectedImageWrap}>
-                    <Image source={{ uri: image.uri }} style={styles.selectedImage} />
-                    <Pressable
-                      style={styles.removeImageButton}
-                      onPress={() =>
-                        setSelectedImages((current) =>
-                          current.filter((_, imageIndex) => imageIndex !== index)
-                        )
-                      }>
-                      <Ionicons name="close" size={13} color="#ffffff" />
-                    </Pressable>
+                {selectedImages.length > 0 ? (
+                  <View style={styles.selectedImagesRow}>
+                    {selectedImages.map((image, index) => (
+                      <View key={`${image.uri}-${index}`} style={styles.selectedImageWrap}>
+                        <Image source={{ uri: image.uri }} style={styles.selectedImage} />
+                        <Pressable
+                          style={styles.removeImageButton}
+                          onPress={() =>
+                            setSelectedImages((current) =>
+                              current.filter((_, imageIndex) => imageIndex !== index)
+                            )
+                          }>
+                          <Ionicons name="close" size={13} color="#ffffff" />
+                        </Pressable>
+                      </View>
+                    ))}
                   </View>
-                ))}
-              </View>
-            ) : null}
+                ) : null}
 
-            <Pressable style={styles.addImageButton} onPress={() => void handleAddImage()}>
-              <Ionicons name="images-outline" size={18} color={theme.accent} />
-              <Text style={styles.addImageText}>Add images</Text>
-              <Text style={styles.addImageCount}>{selectedImages.length}/4</Text>
-            </Pressable>
+                <Pressable style={styles.addImageButton} onPress={() => void handleAddImage()}>
+                  <Ionicons name="images-outline" size={18} color={theme.accent} />
+                  <Text style={styles.addImageText}>Add images</Text>
+                  <Text style={styles.addImageCount}>{selectedImages.length}/4</Text>
+                </Pressable>
+              </View>
+            </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </AppScreen>
   );
@@ -568,6 +781,9 @@ export default function EventRecapFeedScreen() {
 
 const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
   StyleSheet.create({
+    screen: {
+      flex: 1,
+    },
     header: {
       minHeight: 54,
       flexDirection: 'row',
@@ -754,6 +970,21 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       justifyContent: 'space-between',
       paddingTop: 2,
     },
+    actionCluster: {
+      minWidth: 38,
+      height: 32,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+    },
+    actionCount: {
+      color: theme.textMuted,
+      fontSize: 12,
+      fontWeight: '800',
+    },
+    actionCountActive: {
+      color: theme.accent,
+    },
     actionButton: {
       width: 38,
       height: 32,
@@ -834,6 +1065,13 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       flex: 1,
       justifyContent: 'flex-end',
       backgroundColor: theme.overlay,
+    },
+    modalKeyboardAvoider: {
+      flex: 1,
+    },
+    modalScrollContent: {
+      flexGrow: 1,
+      justifyContent: 'flex-end',
     },
     composerCard: {
       borderTopLeftRadius: 26,

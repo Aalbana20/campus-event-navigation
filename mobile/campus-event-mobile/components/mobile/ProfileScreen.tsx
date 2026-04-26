@@ -1164,7 +1164,8 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) => {
     actionRow: {
       flexDirection: 'row',
       gap: 8,
-      justifyContent: 'center',
+      justifyContent: 'flex-start',
+      alignItems: 'center',
     },
     primaryButton: {
       flex: 1,
@@ -1188,6 +1189,16 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) => {
       paddingHorizontal: 16,
       paddingVertical: 9,
       borderRadius: 11,
+      backgroundColor: theme.accentSoft,
+      borderWidth: 1,
+      borderColor: theme.accent,
+    },
+    actionSquareButton: {
+      width: 42,
+      height: 38,
+      borderRadius: 11,
+      alignItems: 'center',
+      justifyContent: 'center',
       backgroundColor: theme.accentSoft,
       borderWidth: 1,
       borderColor: theme.accent,
