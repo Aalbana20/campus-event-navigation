@@ -481,6 +481,7 @@ export default function ProfileContentTabs({ profileId, isOwner = false, allEven
 
   const closeSelectedPost = () => {
     setSelectedPost(null)
+    setSelectedRecap(null)
     setSelectedPostMenuOpen(false)
     setSharePost(null)
     setActiveCommentPostId(null)
@@ -769,11 +770,20 @@ export default function ProfileContentTabs({ profileId, isOwner = false, allEven
       memory,
       event: eventLookup.get(String(memory.eventId)),
     }))
+    const recapItems = recapPosts.map((post) => ({
+      id: `recap-${post.id}`,
+      type: "recap",
+      createdAt: post.createdAt,
+      post,
+      event: eventLookup.get(String(post.eventId)),
+    }))
 
     if (tagFilter === "posts") return postItems
-    if (tagFilter === "event-tags") return memoryItems
-    return [...postItems, ...memoryItems].sort((a, b) => toTime(b.createdAt) - toTime(a.createdAt))
-  }, [eventLookup, eventMemories, tagFilter, taggedPosts])
+    if (tagFilter === "event-tags") {
+      return [...memoryItems, ...recapItems].sort((a, b) => toTime(b.createdAt) - toTime(a.createdAt))
+    }
+    return [...postItems, ...memoryItems, ...recapItems].sort((a, b) => toTime(b.createdAt) - toTime(a.createdAt))
+  }, [eventLookup, eventMemories, recapPosts, tagFilter, taggedPosts])
 
   const activeCommentPost = useMemo(() => {
     if (!activeCommentPostId) return null
@@ -900,7 +910,16 @@ export default function ProfileContentTabs({ profileId, isOwner = false, allEven
                 onOpen={setSelectedPost}
               />
             ) : (
-              <MemoryCard key={item.id} memory={item.memory} event={item.event} />
+              item.type === "memory" ? (
+                <MemoryCard key={item.id} memory={item.memory} event={item.event} />
+              ) : (
+                <RecapTile
+                  key={item.id}
+                  post={item.post}
+                  event={item.event}
+                  onOpen={setSelectedRecap}
+                />
+              )
             )
           )}
         </div>
@@ -1192,6 +1211,100 @@ export default function ProfileContentTabs({ profileId, isOwner = false, allEven
                 </div>
                 <span className="profile-post-modal-date">
                   {new Date(selectedPost.createdAt).toLocaleDateString()}
+                </span>
+              </div>
+            </aside>
+          </div>
+        </div>
+      )}
+
+      {selectedRecap && (
+        <div className="profile-post-modal" role="dialog" aria-modal="true">
+          <button
+            type="button"
+            className="profile-post-modal-backdrop"
+            aria-label="Close recap preview"
+            onClick={closeSelectedPost}
+          />
+          <div className="profile-post-modal-card profile-recap-modal-card">
+            <div className="profile-post-modal-media-frame">
+              <RecapDetailCarousel post={selectedRecap.post} />
+            </div>
+
+            <aside className="profile-post-modal-side">
+              <div className="profile-post-modal-topbar">
+                <div className="profile-post-modal-author profile-recap-modal-author">
+                  <img
+                    src={selectedRecap.post.authorAvatar || "/default-avatar.png"}
+                    alt=""
+                    onError={(event) => {
+                      event.currentTarget.src = "/default-avatar.png"
+                    }}
+                  />
+                  <div>
+                    <strong>{selectedRecap.post.authorName || selectedRecap.post.authorUsername || "Campus User"}</strong>
+                    <button type="button" onClick={() => navigate(`/recaps/${selectedRecap.post.eventId}`)}>
+                      {selectedRecap.event?.title || "Event recap"}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="profile-post-modal-actions">
+                  <button
+                    type="button"
+                    className="profile-recap-event-thumb"
+                    aria-label={`Open ${selectedRecap.event?.title || "event"} recap`}
+                    onClick={() => navigate(`/recaps/${selectedRecap.post.eventId}`)}
+                  >
+                    {selectedRecap.event?.image ? <img src={selectedRecap.event.image} alt="" /> : null}
+                  </button>
+                  <button type="button" className="profile-post-modal-close" onClick={closeSelectedPost} aria-label="Close recap preview">
+                    ×
+                  </button>
+                </div>
+              </div>
+
+              <div className="profile-post-modal-details">
+                {selectedRecap.post.caption ? (
+                  <div className="profile-post-caption-row">
+                    <img
+                      src={selectedRecap.post.authorAvatar || "/default-avatar.png"}
+                      alt=""
+                      onError={(event) => {
+                        event.currentTarget.src = "/default-avatar.png"
+                      }}
+                    />
+                    <p>
+                      <strong>{selectedRecap.post.authorName || selectedRecap.post.authorUsername || "Campus"}: </strong>
+                      {selectedRecap.post.caption}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="profile-post-comment-preview">No caption.</div>
+                )}
+              </div>
+
+              <div className="profile-post-engagement">
+                <div className="profile-post-action-row" aria-label="Recap engagement">
+                  <button type="button" className="profile-post-action-icon" onClick={() => showToast("Recap likes are coming soon.", "info")} aria-label="Like recap">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 1 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78Z" />
+                    </svg>
+                  </button>
+                  <button type="button" className="profile-post-action-icon" onClick={() => showToast("Recap comments are coming soon.", "info")} aria-label="Comment on recap">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M21 11.5a8.5 8.5 0 0 1-12.3 7.6L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5Z" />
+                    </svg>
+                  </button>
+                  <button type="button" className="profile-post-action-icon" onClick={() => navigator.clipboard?.writeText(`${window.location.origin}/recaps/${selectedRecap.post.eventId}`)} aria-label="Share recap">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="m22 2-7 20-4-9-9-4 20-7Z" />
+                      <path d="M22 2 11 13" />
+                    </svg>
+                  </button>
+                </div>
+                <span className="profile-post-modal-date">
+                  {new Date(selectedRecap.post.createdAt).toLocaleDateString()}
                 </span>
               </div>
             </aside>
