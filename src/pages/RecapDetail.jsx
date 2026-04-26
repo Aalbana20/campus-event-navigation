@@ -5,22 +5,84 @@ import { DEFAULT_AVATAR_URL, sanitizeAvatarUrl } from "../profileMedia"
 import { supabase } from "../supabaseClient"
 import {
   createRecapPost,
-  formatRelativeTime,
   loadRecapPostsForEvent,
 } from "../recaps"
 import "./Recaps.css"
 
 const MAX_RECAP_IMAGES = 4
 
-function MediaGrid({ media }) {
+function RecapMediaItem({ item }) {
+  if (item.mediaType === "video") {
+    return (
+      <video
+        className="recap-carousel-media"
+        src={item.url}
+        controls
+        playsInline
+        preload="metadata"
+      />
+    )
+  }
+
+  return <img className="recap-carousel-media" src={item.url} alt="" loading="lazy" decoding="async" />
+}
+
+function RecapMediaCarousel({ media }) {
+  const [activeIndex, setActiveIndex] = useState(0)
   const visibleMedia = media.slice(0, MAX_RECAP_IMAGES)
   if (visibleMedia.length === 0) return null
 
+  const goToIndex = (index) => {
+    setActiveIndex(Math.max(0, Math.min(index, visibleMedia.length - 1)))
+  }
+
   return (
-    <div className={`recap-media-grid count-${visibleMedia.length}`}>
-      {visibleMedia.map((item) => (
-        <img key={item.id} src={item.url} alt="" />
-      ))}
+    <div className="recap-carousel" aria-label="Recap media carousel">
+      <div
+        className="recap-carousel-track"
+        style={{ transform: `translateX(-${activeIndex * 100}%)` }}
+      >
+        {visibleMedia.map((item) => (
+          <div className="recap-carousel-slide" key={item.id}>
+            <RecapMediaItem item={item} />
+          </div>
+        ))}
+      </div>
+
+      {visibleMedia.length > 1 ? (
+        <>
+          <div className="recap-media-count">{activeIndex + 1}/{visibleMedia.length}</div>
+          <button
+            type="button"
+            className="recap-carousel-nav prev"
+            aria-label="Previous media"
+            onClick={() => goToIndex(activeIndex - 1)}
+            disabled={activeIndex === 0}
+          >
+            ‹
+          </button>
+          <button
+            type="button"
+            className="recap-carousel-nav next"
+            aria-label="Next media"
+            onClick={() => goToIndex(activeIndex + 1)}
+            disabled={activeIndex === visibleMedia.length - 1}
+          >
+            ›
+          </button>
+          <div className="recap-carousel-dots" aria-hidden="true">
+            {visibleMedia.map((item, index) => (
+              <button
+                key={`${item.id}-dot`}
+                type="button"
+                className={index === activeIndex ? "active" : ""}
+                onClick={() => goToIndex(index)}
+                aria-label={`Show media ${index + 1}`}
+              />
+            ))}
+          </div>
+        </>
+      ) : null}
     </div>
   )
 }
@@ -314,19 +376,38 @@ export default function RecapDetail() {
               const isLiked = likedMemoryIds.has(post.id)
               return (
                 <article key={post.id} className="recap-post">
-                  <img
-                    className="recap-post-avatar"
-                    src={sanitizeAvatarUrl(post.authorAvatar, DEFAULT_AVATAR_URL)}
-                    alt=""
-                  />
-                  <div className="recap-post-body">
-                    <div className="recap-post-meta">
-                      <strong>{post.authorName}</strong>
-                      {post.authorUsername ? <span>@{post.authorUsername}</span> : null}
-                      <span>· {formatRelativeTime(post.createdAt)}</span>
+                  <div className="recap-post-header">
+                    <button type="button" className="recap-author-button" onClick={() => navigate(`/profile/${post.authorUsername || post.authorId}`)}>
+                      <img
+                        className="recap-post-avatar"
+                        src={sanitizeAvatarUrl(post.authorAvatar, DEFAULT_AVATAR_URL)}
+                        alt=""
+                      />
+                    </button>
+                    <div className="recap-post-title-stack">
+                      <strong>{post.authorName || post.authorUsername || "Campus User"}</strong>
+                      <button type="button" onClick={() => navigate(`/recaps/${event?.id || post.eventId}`)}>
+                        {event?.title || "Event recap"}
+                      </button>
                     </div>
-                    {post.caption ? <p>{post.caption}</p> : null}
-                    <MediaGrid media={post.media} />
+                    <button
+                      type="button"
+                      className="recap-event-thumb"
+                      aria-label={`Open ${event?.title || "event"} recap`}
+                      onClick={() => navigate(`/recaps/${event?.id || post.eventId}`)}
+                    >
+                      <img src={event?.image || ""} alt="" />
+                    </button>
+                  </div>
+
+                  <div className="recap-post-body">
+                    <RecapMediaCarousel media={post.media} />
+                    {post.caption ? (
+                      <p className="recap-post-caption">
+                        <strong>{post.authorName || post.authorUsername || "Campus"}: </strong>
+                        {post.caption}
+                      </p>
+                    ) : null}
                     <div className="recap-action-row">
                       <button
                         type="button"

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useNavigate } from "react-router-dom"
 import {
   loadDiscoverPostsByIds,
   loadDiscoverPostsForAuthor,
@@ -22,6 +23,7 @@ import {
 } from "../postEngagement"
 import { loadPostsTaggingUser } from "../contentTags"
 import { loadEventMemoriesForUser } from "../eventMemories"
+import { loadRecapPostsForUser } from "../recaps"
 import { useEvents } from "../context/EventContext"
 import { useToast } from "../context/ToastContext"
 import ExploreEventModal from "./ExploreEventModal"
@@ -269,7 +271,89 @@ const MemoryCard = ({ memory, event }) => (
   </article>
 )
 
+const RecapTile = ({ post, event, onOpen }) => {
+  const preview = post.media?.[0]
+  if (!preview) return null
+
+  return (
+    <article className="profile-post-tile profile-recap-tile">
+      <button type="button" className="profile-post-open" onClick={() => onOpen({ post, event })}>
+        {preview.mediaType === "video" ? (
+          <video
+            className="profile-post-media"
+            src={preview.url}
+            muted
+            playsInline
+            preload="metadata"
+          />
+        ) : (
+          <img
+            className="profile-post-media"
+            src={preview.url}
+            alt={post.caption || event?.title || "Recap media"}
+            loading="lazy"
+            decoding="async"
+          />
+        )}
+        {post.media.length > 1 ? (
+          <span className="profile-recap-multi-indicator" aria-label={`${post.media.length} media items`}>
+            ▣
+          </span>
+        ) : null}
+      </button>
+    </article>
+  )
+}
+
+const RecapDetailCarousel = ({ post }) => {
+  const [activeIndex, setActiveIndex] = useState(0)
+  const media = (post?.media || []).slice(0, 4)
+  if (media.length === 0) return null
+
+  const goToIndex = (index) => {
+    setActiveIndex(Math.max(0, Math.min(index, media.length - 1)))
+  }
+
+  return (
+    <div className="profile-recap-carousel">
+      <div
+        className="profile-recap-carousel-track"
+        style={{ transform: `translateX(-${activeIndex * 100}%)` }}
+      >
+        {media.map((item) => (
+          <div className="profile-recap-carousel-slide" key={`${post.id}-${item.id}`}>
+            {item.mediaType === "video" ? (
+              <video className="profile-post-modal-media" src={item.url} controls playsInline preload="metadata" />
+            ) : (
+              <img className="profile-post-modal-media" src={item.url} alt="" />
+            )}
+          </div>
+        ))}
+      </div>
+      {media.length > 1 ? (
+        <>
+          <div className="profile-recap-count">{activeIndex + 1}/{media.length}</div>
+          <button type="button" className="profile-recap-nav prev" onClick={() => goToIndex(activeIndex - 1)} disabled={activeIndex === 0} aria-label="Previous media">‹</button>
+          <button type="button" className="profile-recap-nav next" onClick={() => goToIndex(activeIndex + 1)} disabled={activeIndex === media.length - 1} aria-label="Next media">›</button>
+          <div className="profile-recap-dots" aria-hidden="true">
+            {media.map((item, index) => (
+              <button
+                key={`${post.id}-${item.id}-dot`}
+                type="button"
+                className={index === activeIndex ? "active" : ""}
+                onClick={() => goToIndex(index)}
+                aria-label={`Show media ${index + 1}`}
+              />
+            ))}
+          </div>
+        </>
+      ) : null}
+    </div>
+  )
+}
+
 export default function ProfileContentTabs({ profileId, isOwner = false, allEvents = [] }) {
+  const navigate = useNavigate()
   const {
     savedEvents,
     addEvent,
@@ -293,8 +377,10 @@ export default function ProfileContentTabs({ profileId, isOwner = false, allEven
   const [savedPosts, setSavedPosts] = useState([])
   const [taggedPostRows, setTaggedPostRows] = useState([])
   const [eventMemories, setEventMemories] = useState([])
+  const [recapPosts, setRecapPosts] = useState([])
   const [selectedEvent, setSelectedEvent] = useState(null)
   const [selectedPost, setSelectedPost] = useState(null)
+  const [selectedRecap, setSelectedRecap] = useState(null)
   const [selectedPostMenuOpen, setSelectedPostMenuOpen] = useState(false)
   const [sharePost, setSharePost] = useState(null)
   const [activeCommentPostId, setActiveCommentPostId] = useState(null)
@@ -321,6 +407,7 @@ export default function ProfileContentTabs({ profileId, isOwner = false, allEven
         nextReposts,
         nextTaggedPosts,
         nextMemories,
+        nextRecapPosts,
         nextLikedIdSet,
         nextSavedIdSet,
       ] = await Promise.all([
@@ -329,6 +416,7 @@ export default function ProfileContentTabs({ profileId, isOwner = false, allEven
         loadRepostsForUser(profileId),
         loadPostsTaggingUser(profileId),
         loadEventMemoriesForUser(profileId),
+        loadRecapPostsForUser(profileId),
         loadLikedPostIds({ userId: profileId }),
         loadSavedPostIds({ userId: profileId }),
       ])
@@ -348,6 +436,7 @@ export default function ProfileContentTabs({ profileId, isOwner = false, allEven
       setReposts(nextReposts)
       setTaggedPostRows(nextTaggedPosts)
       setEventMemories(nextMemories)
+      setRecapPosts(nextRecapPosts.filter((post) => post.media.length > 0))
       setRepostedPosts(nextRepostedPosts)
       setLikedPosts(nextLikedPosts)
       setSavedPosts(nextSavedPosts)

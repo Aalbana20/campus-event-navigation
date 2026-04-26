@@ -259,6 +259,51 @@ export const loadRecapCommentPosts = async ({ eventId, viewerId }) => {
   })
 }
 
+const buildRecapMediaByPostId = async (mediaRows = []) => {
+  const resolvedMedia = await Promise.all(
+    mediaRows.map(async (media) => ({
+      postId: String(media.recap_post_id),
+      item: {
+        id: String(media.id),
+        url: await resolveEventMemoryMediaUrl(media.media_url),
+        mediaType: media.media_type === "video" ? "video" : "image",
+        sortOrder: Number(media.sort_order || 0),
+      },
+    }))
+  )
+
+  return resolvedMedia.reduce((mediaByPostId, { postId, item }) => {
+    const nextMedia = [...(mediaByPostId.get(postId) || []), item].sort(
+      (left, right) => left.sortOrder - right.sortOrder
+    )
+    mediaByPostId.set(postId, nextMedia)
+    return mediaByPostId
+  }, new Map())
+}
+
+const normalizeRecapPostRows = ({ posts = [], profiles = [], mediaRows = [] }) => {
+  const profileById = new Map((profiles || []).map((profile) => [String(profile.id), profile]))
+  return buildRecapMediaByPostId(mediaRows).then((mediaByPostId) =>
+    posts.map((post) => {
+      const authorId = String(post.user_id || "")
+      const profile = profileById.get(authorId)
+      return {
+        id: String(post.id),
+        source: "recap",
+        eventId: String(post.event_id),
+        authorId,
+        authorName: toTrimmedString(profile?.name) || toTrimmedString(profile?.username) || "Campus User",
+        authorUsername: toTrimmedString(profile?.username),
+        authorAvatar: sanitizeAvatarUrl(profile?.avatar_url, DEFAULT_AVATAR_URL),
+        caption: toTrimmedString(post.body),
+        createdAt: post.created_at || new Date().toISOString(),
+        updatedAt: post.updated_at || post.created_at || new Date().toISOString(),
+        media: mediaByPostId.get(String(post.id)) || [],
+      }
+    })
+  )
+}
+
 export const loadRecapPostsForEvent = async (eventId) => {
   if (!eventId) return []
 
@@ -293,38 +338,51 @@ export const loadRecapPostsForEvent = async (eventId) => {
   if (profileResult.error) console.warn("Unable to load recap authors:", profileResult.error)
   if (mediaResult.error) console.warn("Unable to load recap media:", mediaResult.error)
 
-  const profileById = new Map((profileResult.data || []).map((profile) => [String(profile.id), profile]))
-  const mediaByPostId = new Map()
+  return normalizeRecapPostRows({
+    posts,
+    profiles: profileResult.data || [],
+    mediaRows: mediaResult.data || [],
+  })
+}
 
-  await Promise.all(
-    (mediaResult.data || []).map(async (media) => {
-      const postId = String(media.recap_post_id)
-      const item = {
-        id: String(media.id),
-        url: await resolveEventMemoryMediaUrl(media.media_url),
-        mediaType: media.media_type === "video" ? "video" : "image",
-        sortOrder: Number(media.sort_order || 0),
-      }
-      mediaByPostId.set(postId, [...(mediaByPostId.get(postId) || []), item])
-    })
-  )
+export const loadRecapPostsForUser = async (userId) => {
+  if (!userId) return []
 
-  return posts.map((post) => {
-    const authorId = String(post.user_id || "")
-    const profile = profileById.get(authorId)
-    return {
-      id: String(post.id),
-      source: "recap",
-      eventId: String(post.event_id),
-      authorId,
-      authorName: toTrimmedString(profile?.name) || toTrimmedString(profile?.username) || "Campus User",
-      authorUsername: toTrimmedString(profile?.username),
-      authorAvatar: sanitizeAvatarUrl(profile?.avatar_url, DEFAULT_AVATAR_URL),
-      caption: toTrimmedString(post.body),
-      createdAt: post.created_at || new Date().toISOString(),
-      updatedAt: post.updated_at || post.created_at || new Date().toISOString(),
-      media: mediaByPostId.get(String(post.id)) || [],
-    }
+  const { data: postRows, error: postsError } = await supabase
+    .from("recap_posts")
+    .select("id, event_id, user_id, body, created_at, updated_at")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+
+  if (postsError) {
+    console.warn("Unable to load user recap posts:", postsError)
+    return []
+  }
+
+  const posts = postRows || []
+  const postIds = posts.map((post) => String(post.id))
+  const authorIds = [...new Set(posts.map((post) => toTrimmedString(post.user_id)).filter(Boolean))]
+
+  const [profileResult, mediaResult] = await Promise.all([
+    authorIds.length
+      ? supabase.from("profiles").select("id, name, username, avatar_url").in("id", authorIds)
+      : Promise.resolve({ data: [], error: null }),
+    postIds.length
+      ? supabase
+          .from("recap_media")
+          .select("id, recap_post_id, media_url, media_type, sort_order, created_at")
+          .in("recap_post_id", postIds)
+          .order("sort_order", { ascending: true })
+      : Promise.resolve({ data: [], error: null }),
+  ])
+
+  if (profileResult.error) console.warn("Unable to load user recap authors:", profileResult.error)
+  if (mediaResult.error) console.warn("Unable to load user recap media:", mediaResult.error)
+
+  return normalizeRecapPostRows({
+    posts,
+    profiles: profileResult.data || [],
+    mediaRows: mediaResult.data || [],
   })
 }
 
