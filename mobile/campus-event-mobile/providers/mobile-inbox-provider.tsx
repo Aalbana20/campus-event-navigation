@@ -147,7 +147,6 @@ export function MobileInboxProvider({ children }: { children: React.ReactNode })
     currentUser,
     events,
     savedEventIds,
-    recentDmPeople,
     followRelationships,
     getProfileById,
   } = useMobileApp();
@@ -340,22 +339,6 @@ export function MobileInboxProvider({ children }: { children: React.ReactNode })
         });
       });
 
-    if (threadsById.size === 0) {
-      recentDmPeople.forEach((profile) => {
-        if (threadsById.has(profile.id)) return;
-        threadsById.set(profile.id, {
-          id: profile.id,
-          name: profile.name,
-          username: profile.username,
-          image: profile.avatar,
-          preview: 'Start a conversation',
-          time: 'new',
-          isMuted: mutedIds.has(profile.id),
-          isPinned: pinnedIds.has(profile.id),
-        });
-      });
-    }
-
     return [...threadsById.values()]
       .filter((thread) => !deletedIds.has(String(thread.id)))
       .sort((left, right) => {
@@ -365,7 +348,7 @@ export function MobileInboxProvider({ children }: { children: React.ReactNode })
 
         return 0;
       });
-  }, [currentUser.avatar, currentUser.id, dmThreadPreferences.deleted, dmThreadPreferences.muted, dmThreadPreferences.pinned, getProfileById, messageRows, recentDmPeople]);
+  }, [currentUser.id, dmThreadPreferences.deleted, dmThreadPreferences.muted, dmThreadPreferences.pinned, getProfileById, messageRows]);
 
   const messagesByThread = useMemo(
     () =>

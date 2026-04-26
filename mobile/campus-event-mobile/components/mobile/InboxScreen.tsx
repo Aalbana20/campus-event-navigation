@@ -49,13 +49,6 @@ const NOTIFICATION_FILTERS = [
   { key: 'verified', label: 'Verified' },
 ] as const;
 const DM_FILTERS = ['Primary', 'General', 'Requests'] as const;
-const NOTE_PLACEHOLDERS = [
-  'Study later?',
-  'Event tonight',
-  'Free after 6',
-  'Campus run',
-  'Send flyers',
-] as const;
 
 type InboxScreenProps = {
   initialTab?: MobileInboxTab;
@@ -561,45 +554,56 @@ function SuggestedProfileRow({
   );
 }
 
-function DmNoteCircle({
-  label,
-  image,
-  note,
-  isMap,
-  isCurrentUser,
+function DmExploreEventsCard({
   styles,
+  theme,
   onPress,
 }: {
-  label: string;
-  image?: string;
-  note?: string;
-  isMap?: boolean;
-  isCurrentUser?: boolean;
   styles: ReturnType<typeof buildStyles>;
+  theme: ReturnType<typeof useAppTheme>;
   onPress: () => void;
 }) {
   return (
-    <Pressable style={styles.dmNoteItem} onPress={onPress}>
-      {note ? (
-        <View style={[styles.dmNoteBubble, isCurrentUser && styles.dmNoteBubbleOwn]}>
-          <Text style={styles.dmNoteBubbleText} numberOfLines={2}>
-            {note}
-          </Text>
-        </View>
-      ) : null}
+    <Pressable style={styles.dmExploreCard} onPress={onPress}>
+      <View style={styles.dmMiniMapGrid} />
+      <View style={[styles.dmMapGridLine, styles.dmMapGridLineVerticalOne]} />
+      <View style={[styles.dmMapGridLine, styles.dmMapGridLineVerticalTwo]} />
+      <View style={[styles.dmMapGridLine, styles.dmMapGridLineHorizontalOne]} />
+      <View style={[styles.dmMapGridLine, styles.dmMapGridLineHorizontalTwo]} />
+      <View style={styles.dmRadarOuter} />
+      <View style={styles.dmRadarMiddle} />
+      <View style={styles.dmRadarDot}>
+        <Ionicons name="location" size={25} color={theme.accentText} />
+      </View>
+      <Text style={styles.dmExploreTitle}>Explore Events</Text>
+      <Text style={styles.dmExploreSubtitle}>Map</Text>
+    </Pressable>
+  );
+}
 
-      <View style={[styles.dmNoteAvatarShell, isMap && styles.dmMapCircle]}>
-        {isMap ? (
-          <Text style={styles.dmMapEmoji} allowFontScaling={false}>
-            🌍
-          </Text>
-        ) : (
-          <Image source={getAvatarImageSource(image)} style={styles.dmNoteAvatar} />
-        )}
+function DmYourNoteCard({
+  image,
+  styles,
+  theme,
+  onPress,
+}: {
+  image?: string;
+  styles: ReturnType<typeof buildStyles>;
+  theme: ReturnType<typeof useAppTheme>;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable style={styles.dmYourNoteCard} onPress={onPress}>
+      <View style={styles.dmYourNoteAvatarShell}>
+        <Image source={getAvatarImageSource(image)} style={styles.dmYourNoteAvatar} />
+        <View style={styles.dmNotePlusButton}>
+          <Ionicons name="add" size={15} color={theme.accentText} />
+        </View>
       </View>
 
-      <Text style={styles.dmNoteLabel} numberOfLines={1}>
-        {label}
+      <Text style={styles.dmYourNoteTitle}>Your note</Text>
+      <Text style={styles.dmYourNoteSubtitle} numberOfLines={1}>
+        Share a thought...
       </Text>
     </Pressable>
   );
@@ -700,16 +704,6 @@ export function InboxScreen({
       },
     ],
     [centralUnreadNotificationCount, currentUser]
-  );
-  const dmNoteItems = useMemo(
-    () =>
-      dmThreads.slice(0, 8).map((thread, index) => ({
-        id: thread.id,
-        label: thread.name || thread.username || 'Campus',
-        image: thread.image,
-        note: NOTE_PLACEHOLDERS[index % NOTE_PLACEHOLDERS.length],
-      })),
-    [dmThreads]
   );
   const filteredDmThreads = useMemo(() => {
     const normalizedQuery = dmSearchQuery.trim().toLowerCase();
@@ -972,7 +966,12 @@ export function InboxScreen({
                 <Ionicons name="chevron-back" size={30} color={theme.text} />
               </Pressable>
             ) : (
-              <View style={styles.dmHeaderSide} />
+              <Pressable
+                style={styles.dmHeaderAvatarButton}
+                onPress={() => router.push('/(tabs)/profile')}>
+                <Image source={getAvatarImageSource(currentUser.avatar)} style={styles.dmHeaderAvatar} />
+                <View style={styles.dmHeaderActivityDot} />
+              </Pressable>
             )}
 
             <Pressable
@@ -1031,7 +1030,7 @@ export function InboxScreen({
               <TextInput
                 value={dmSearchQuery}
                 onChangeText={setDmSearchQuery}
-                placeholder="Search"
+                placeholder="Search people, events"
                 placeholderTextColor={theme.textMuted}
                 style={styles.dmSearchInput}
               />
@@ -1041,30 +1040,17 @@ export function InboxScreen({
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.dmNotesRow}>
-              <DmNoteCircle
-                label="Map"
-                isMap
+              <DmExploreEventsCard
                 styles={styles}
+                theme={theme}
                 onPress={() => router.push('/map')}
               />
-              <DmNoteCircle
-                label="Your note"
+              <DmYourNoteCard
                 image={currentUser.avatar}
-                note="Add a note"
-                isCurrentUser
                 styles={styles}
+                theme={theme}
                 onPress={handleCreateNotePlaceholder}
               />
-              {dmNoteItems.map((item) => (
-                <DmNoteCircle
-                  key={item.id}
-                  label={item.label}
-                  image={item.image}
-                  note={item.note}
-                  styles={styles}
-                  onPress={() => handleOpenThread(item.id)}
-                />
-              ))}
             </ScrollView>
 
             <View style={styles.dmFilterRow}>
@@ -1409,7 +1395,7 @@ export function InboxScreen({
                     </View>
                     {active ? (
                       <View style={styles.accountModalCheck}>
-                        <Ionicons name="checkmark" size={18} color="#050507" />
+                        <Ionicons name="checkmark" size={18} color={theme.accentText} />
                       </View>
                     ) : null}
                   </Pressable>
@@ -1626,21 +1612,21 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       justifyContent: 'center',
       borderRadius: 999,
       paddingHorizontal: 14,
-      backgroundColor: 'rgba(255, 255, 255, 0.1)',
+      backgroundColor: theme.surface,
       borderWidth: 1,
-      borderColor: 'rgba(255, 255, 255, 0.07)',
+      borderColor: theme.border,
     },
     notificationFilterPillActive: {
-      backgroundColor: '#ffffff',
-      borderColor: '#ffffff',
+      backgroundColor: theme.accent,
+      borderColor: theme.accent,
     },
     notificationFilterText: {
-      color: 'rgba(255, 255, 255, 0.86)',
+      color: theme.text,
       fontSize: 13,
       fontWeight: '800',
     },
     notificationFilterTextActive: {
-      color: '#07080a',
+      color: theme.accentText,
     },
     notificationSection: {
       gap: 14,
@@ -1836,7 +1822,7 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       justifyContent: 'center',
       borderRadius: 12,
       paddingHorizontal: 16,
-      backgroundColor: '#22c55e',
+      backgroundColor: theme.accent,
     },
     followButtonText: {
       color: '#ffffff',
@@ -1928,7 +1914,7 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       borderRadius: 15,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: '#0a84ff',
+      backgroundColor: theme.accent,
     },
     accountAddIcon: {
       width: 48,
@@ -1955,6 +1941,30 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       width: 44,
       height: 44,
     },
+    dmHeaderAvatarButton: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    dmHeaderAvatar: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      backgroundColor: theme.surfaceAlt,
+    },
+    dmHeaderActivityDot: {
+      position: 'absolute',
+      right: 3,
+      bottom: 5,
+      width: 12,
+      height: 12,
+      borderRadius: 6,
+      backgroundColor: theme.accent,
+      borderWidth: 2,
+      borderColor: theme.background,
+    },
     dmAccountButton: {
       flex: 1,
       maxWidth: '72%',
@@ -1970,16 +1980,18 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       letterSpacing: 0,
     },
     dmListChrome: {
-      gap: 14,
+      gap: 12,
     },
     dmSearchBar: {
-      minHeight: 48,
+      minHeight: 52,
       flexDirection: 'row',
       alignItems: 'center',
       gap: 10,
-      borderRadius: 24,
-      paddingHorizontal: 16,
-      backgroundColor: '#23272e',
+      borderRadius: 26,
+      paddingHorizontal: 17,
+      backgroundColor: theme.surfaceAlt,
+      borderWidth: 1,
+      borderColor: theme.border,
     },
     dmSearchInput: {
       flex: 1,
@@ -1989,98 +2001,202 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       paddingVertical: 0,
     },
     dmNotesRow: {
-      gap: 18,
+      gap: 12,
       paddingHorizontal: 2,
-      paddingTop: 22,
-      paddingBottom: 2,
+      paddingTop: 4,
+      paddingBottom: 3,
     },
-    dmNoteItem: {
-      width: 88,
-      alignItems: 'center',
-      gap: 7,
-    },
-    dmNoteBubble: {
-      position: 'absolute',
-      top: -19,
-      left: 4,
-      right: 4,
-      minHeight: 38,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: 14,
-      paddingHorizontal: 8,
-      paddingVertical: 5,
-      backgroundColor: '#2a3037',
-      borderWidth: 1,
-      borderColor: 'rgba(255, 255, 255, 0.12)',
-      zIndex: 2,
-    },
-    dmNoteBubbleOwn: {
-      backgroundColor: '#242a31',
-    },
-    dmNoteBubbleText: {
-      color: 'rgba(255, 255, 255, 0.78)',
-      fontSize: 11,
-      lineHeight: 13,
-      fontWeight: '800',
-      textAlign: 'center',
-    },
-    dmNoteAvatarShell: {
-      width: 72,
-      height: 72,
-      borderRadius: 36,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: theme.surfaceAlt,
+    dmExploreCard: {
+      width: 92,
+      height: 132,
+      borderRadius: 16,
       overflow: 'hidden',
+      padding: 10,
+      justifyContent: 'flex-end',
+      backgroundColor: theme.surface,
+      borderWidth: 1,
+      borderColor: theme.accent,
+      shadowColor: theme.accent,
+      shadowOpacity: 0.28,
+      shadowRadius: 11,
+      shadowOffset: { width: 0, height: 0 },
+      elevation: 10,
     },
-    dmNoteAvatar: {
-      width: 72,
-      height: 72,
-      borderRadius: 36,
+    dmMiniMapGrid: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: theme.surfaceAlt,
+      opacity: 0.7,
+    },
+    dmMapGridLine: {
+      position: 'absolute',
+      backgroundColor: theme.accent,
+      opacity: 0.11,
+    },
+    dmMapGridLineVerticalOne: {
+      top: -16,
+      bottom: -16,
+      left: 27,
+      width: 1,
+      transform: [{ rotate: '24deg' }],
+    },
+    dmMapGridLineVerticalTwo: {
+      top: -16,
+      bottom: -16,
+      right: 21,
+      width: 1,
+      transform: [{ rotate: '-18deg' }],
+    },
+    dmMapGridLineHorizontalOne: {
+      left: -14,
+      right: -14,
+      top: 35,
+      height: 1,
+      transform: [{ rotate: '-10deg' }],
+    },
+    dmMapGridLineHorizontalTwo: {
+      left: -14,
+      right: -14,
+      top: 71,
+      height: 1,
+      transform: [{ rotate: '12deg' }],
+    },
+    dmRadarOuter: {
+      position: 'absolute',
+      top: 32,
+      alignSelf: 'center',
+      width: 70,
+      height: 70,
+      borderRadius: 35,
+      borderWidth: 1,
+      borderColor: theme.accent,
+      opacity: 0.32,
+    },
+    dmRadarMiddle: {
+      position: 'absolute',
+      top: 47,
+      alignSelf: 'center',
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: theme.accent,
+      opacity: 0.56,
+    },
+    dmRadarDot: {
+      position: 'absolute',
+      top: 36,
+      alignSelf: 'center',
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: theme.accent,
+      shadowColor: theme.accent,
+      shadowOpacity: 0.46,
+      shadowRadius: 13,
+      shadowOffset: { width: 0, height: 0 },
+      elevation: 12,
+    },
+    dmExploreTitle: {
+      color: theme.text,
+      fontSize: 12,
+      fontWeight: '900',
+      lineHeight: 14,
+    },
+    dmExploreSubtitle: {
+      color: theme.accent,
+      fontSize: 12,
+      fontWeight: '900',
+      marginTop: 3,
+    },
+    dmYourNoteCard: {
+      width: 78,
+      height: 132,
+      borderRadius: 0,
+      alignItems: 'center',
+      justifyContent: 'flex-end',
+      paddingBottom: 8,
+      backgroundColor: 'transparent',
+      borderWidth: 0,
+    },
+    dmYourNoteAvatarShell: {
+      position: 'absolute',
+      top: 18,
+      width: 66,
+      height: 66,
+      borderRadius: 33,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 2,
+      borderColor: theme.accent,
       backgroundColor: theme.surfaceAlt,
     },
-    dmMapCircle: {
-      backgroundColor: 'rgba(16, 28, 44, 0.92)',
-      borderWidth: 1,
-      borderColor: 'rgba(255, 255, 255, 0.08)',
+    dmYourNoteAvatar: {
+      width: 60,
+      height: 60,
+      borderRadius: 30,
+      backgroundColor: theme.surfaceAlt,
     },
-    dmMapEmoji: {
-      fontSize: 56,
-      lineHeight: 64,
+    dmNotePlusButton: {
+      position: 'absolute',
+      right: -2,
+      bottom: 1,
+      width: 23,
+      height: 23,
+      borderRadius: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: theme.accent,
+      borderWidth: 2,
+      borderColor: theme.background,
     },
-    dmNoteLabel: {
-      maxWidth: 86,
+    dmYourNoteTitle: {
       color: theme.text,
       fontSize: 13,
+      fontWeight: '900',
+    },
+    dmYourNoteSubtitle: {
+      color: theme.textMuted,
+      fontSize: 10,
       fontWeight: '700',
-      textAlign: 'center',
+      marginTop: 3,
     },
     dmFilterRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 9,
+      gap: 3,
+      padding: 3,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: theme.border,
+      backgroundColor: theme.surface,
     },
     dmFilterPill: {
-      minHeight: 36,
+      flex: 1,
+      minHeight: 34,
+      alignItems: 'center',
       justifyContent: 'center',
       borderRadius: 999,
-      paddingHorizontal: 18,
+      paddingHorizontal: 8,
       backgroundColor: 'transparent',
-      borderWidth: 1,
-      borderColor: 'rgba(255, 255, 255, 0.13)',
     },
     dmFilterPillActive: {
-      backgroundColor: '#272d34',
-      borderColor: 'rgba(255, 255, 255, 0.08)',
+      backgroundColor: theme.accentSoft,
+      borderWidth: 1,
+      borderColor: theme.accent,
+      shadowColor: theme.accent,
+      shadowOpacity: 0.18,
+      shadowRadius: 8,
+      shadowOffset: { width: 0, height: 0 },
     },
     dmFilterText: {
       color: theme.text,
-      fontSize: 15,
+      fontSize: 13,
       fontWeight: '900',
     },
     dmFilterTextActive: {
-      color: '#ffffff',
+      color: theme.text,
     },
     dmThreadListContent: {
       gap: 6,
@@ -2207,7 +2323,7 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       justifyContent: 'flex-end',
       gap: 10,
       paddingHorizontal: 12,
-      paddingVertical: 10,
+      paddingVertical: 8,
     },
     threadQuickActionButton: {
       width: 72,
@@ -2234,36 +2350,36 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       flexDirection: 'row',
       alignItems: 'center',
       gap: 12,
-      minHeight: 72,
+      minHeight: 66,
       paddingHorizontal: 0,
-      paddingVertical: 7,
+      paddingVertical: 6,
       borderRadius: 18,
       backgroundColor: 'transparent',
     },
     threadCardOpen: {
-      backgroundColor: 'rgba(255, 255, 255, 0.04)',
+      backgroundColor: theme.surface,
     },
     threadAvatarImage: {
-      width: 58,
-      height: 58,
-      borderRadius: 29,
+      width: 52,
+      height: 52,
+      borderRadius: 26,
       backgroundColor: theme.surfaceAlt,
     },
     threadCopy: {
       flex: 1,
       minWidth: 0,
-      gap: 5,
+      gap: 3,
     },
     threadName: {
       color: theme.text,
-      fontSize: 16,
+      fontSize: 15,
       fontWeight: '800',
     },
     threadPreview: {
       flexShrink: 1,
       color: theme.textMuted,
-      fontSize: 14,
-      lineHeight: 18,
+      fontSize: 13,
+      lineHeight: 17,
     },
     threadMetaRow: {
       flexDirection: 'row',
@@ -2272,7 +2388,7 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     },
     threadTime: {
       color: theme.textMuted,
-      fontSize: 13,
+      fontSize: 12,
       fontWeight: '700',
     },
     threadStateRow: {
@@ -2289,7 +2405,7 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       backgroundColor: theme.surfaceAlt,
     },
     threadAside: {
-      width: 42,
+      width: 36,
       alignItems: 'flex-end',
       justifyContent: 'center',
       gap: 9,

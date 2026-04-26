@@ -743,6 +743,7 @@ export function ProfileContentTabs({
             : 'Reposts';
           const accessibilityLabel =
             tab.id === 'collection' ? collectionLabel : tab.label;
+          const tabColor = isActive ? theme.accent : theme.textMuted;
 
           return (
             <View key={tab.id} style={styles.tabSlot}>
@@ -762,7 +763,7 @@ export function ProfileContentTabs({
                       <Ionicons
                         name="person-outline"
                         size={14}
-                        color={isActive ? theme.text : theme.textMuted}
+                        color={tabColor}
                         style={styles.tagsIconPerson}
                       />
                     </View>
@@ -776,14 +777,14 @@ export function ProfileContentTabs({
                             : (activeCollection?.icon ?? 'repeat-outline')
                       }
                       size={22}
-                      color={isActive ? theme.text : theme.textMuted}
+                      color={tabColor}
                     />
                   )}
                   {hasDropdown ? (
                     <Ionicons
                       name={isDropdownOpen ? 'chevron-down' : 'chevron-forward'}
                       size={10}
-                      color={isActive ? theme.text : theme.textMuted}
+                      color={tabColor}
                       style={styles.tabChevron}
                     />
                   ) : null}
@@ -806,7 +807,7 @@ export function ProfileContentTabs({
                         {mode === 'grid' ? 'Grid' : 'List'}
                       </Text>
                       {postMode === mode ? (
-                        <Ionicons name="checkmark" size={16} color="#ffffff" />
+                        <Ionicons name="checkmark" size={16} color={theme.accent} />
                       ) : null}
                     </Pressable>
                   ))}
@@ -840,7 +841,7 @@ export function ProfileContentTabs({
                         </Text>
                       </View>
                       {collectionMode === option.id ? (
-                        <Ionicons name="checkmark" size={16} color="#ffffff" />
+                        <Ionicons name="checkmark" size={16} color={theme.accent} />
                       ) : null}
                     </Pressable>
                   ))}
@@ -862,7 +863,7 @@ export function ProfileContentTabs({
                         {filter.label}
                       </Text>
                       {tagFilter === filter.id ? (
-                        <Ionicons name="checkmark" size={16} color="#ffffff" />
+                        <Ionicons name="checkmark" size={16} color={theme.accent} />
                       ) : null}
                     </Pressable>
                   ))}
@@ -995,7 +996,7 @@ const buildStyles = (theme: AppTheme) => {
       width: 36,
       height: 2,
       borderRadius: 999,
-      backgroundColor: profileText,
+      backgroundColor: theme.accent,
     },
     tagsIcon: {
       width: 22,
@@ -1007,7 +1008,7 @@ const buildStyles = (theme: AppTheme) => {
       transform: [{ rotate: '45deg' }],
     },
     tagsIconActive: {
-      borderColor: profileText,
+      borderColor: theme.accent,
     },
     tagsIconPerson: {
       transform: [{ rotate: '-45deg' }],

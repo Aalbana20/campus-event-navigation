@@ -1,13 +1,17 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import React from 'react';
+import { Image, StyleSheet, View } from 'react-native';
 
 import { useAppTheme } from '@/lib/app-theme';
+import { getAvatarImageSource } from '@/lib/mobile-media';
+import { useMobileApp } from '@/providers/mobile-app-provider';
 import { useMobileInbox } from '@/providers/mobile-inbox-provider';
 
 export default function TabLayout() {
   const theme = useAppTheme();
   const { unreadDmCount } = useMobileInbox();
+  const { currentUser } = useMobileApp();
 
   return (
     <Tabs
@@ -17,7 +21,7 @@ export default function TabLayout() {
           backgroundColor: theme.background,
         },
         tabBarShowLabel: false,
-        tabBarActiveTintColor: theme.text,
+        tabBarActiveTintColor: theme.accent,
         tabBarInactiveTintColor: theme.textMuted,
         tabBarStyle: {
           backgroundColor: theme.tabBar,
@@ -51,8 +55,8 @@ export default function TabLayout() {
           tabBarIcon: ({ color, size }) => <Ionicons name="paper-plane-outline" size={size} color={color} />,
           tabBarBadge: unreadDmCount > 0 ? unreadDmCount : undefined,
           tabBarBadgeStyle: {
-            backgroundColor: theme.text,
-            color: theme.background,
+            backgroundColor: theme.accent,
+            color: theme.accentText,
             fontSize: 10,
             fontWeight: '800',
           },
@@ -69,7 +73,34 @@ export default function TabLayout() {
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color, size }) => <Ionicons name="person-circle-outline" size={size} color={color} />,
+          tabBarIcon: ({ focused, color, size }) => (
+            currentUser.avatar ? (
+              <View
+                style={[
+                  styles.profileTabAvatarShell,
+                  {
+                    width: size + 4,
+                    height: size + 4,
+                    borderRadius: (size + 4) / 2,
+                    borderColor: focused ? theme.accent : 'transparent',
+                  },
+                ]}>
+                <Image
+                  source={getAvatarImageSource(currentUser.avatar)}
+                  style={[
+                    styles.profileTabAvatar,
+                    {
+                      width: size,
+                      height: size,
+                      borderRadius: size / 2,
+                    },
+                  ]}
+                />
+              </View>
+            ) : (
+              <Ionicons name="person-circle-outline" size={size} color={color} />
+            )
+          ),
         }}
       />
       <Tabs.Screen name="Discover" options={{ href: null }} />
@@ -78,3 +109,14 @@ export default function TabLayout() {
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  profileTabAvatarShell: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+  },
+  profileTabAvatar: {
+    backgroundColor: 'rgba(128,128,128,0.22)',
+  },
+});

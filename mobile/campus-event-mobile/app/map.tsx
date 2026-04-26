@@ -371,8 +371,8 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       elevation: 10,
     },
     markerPreviewCardActive: {
-      borderColor: 'rgba(255,255,255,0.72)',
-      shadowColor: '#ff375f',
+      borderColor: theme.accent,
+      shadowColor: theme.accent,
       shadowOpacity: 0.52,
       shadowRadius: 16,
     },
@@ -416,8 +416,8 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       elevation: 8,
     },
     pinDropActive: {
-      backgroundColor: '#ffffff',
-      borderColor: '#ff2d55',
+      backgroundColor: theme.accent,
+      borderColor: '#ffffff',
     },
     pinCenter: {
       width: 8,
@@ -434,7 +434,7 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       transform: [{ scaleX: 1.15 }],
     },
     pinShadowActive: {
-      backgroundColor: 'rgba(255,45,85,0.38)',
+      backgroundColor: theme.accentSoft,
     },
     mapPill: {
       position: 'absolute',
@@ -579,7 +579,7 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       fontWeight: '900',
     },
     primaryPreviewButton: {
-      backgroundColor: '#ffffff',
+      backgroundColor: theme.accent,
     },
     primaryPreviewButtonText: {
       color: '#000000',

@@ -295,6 +295,10 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
   const createdEvents = getCreatedEventsForProfile(profile.id);
   const shouldShowFirstCreatePrompt =
     isOwnProfile && createdEvents.length === 0 && profileContentCounts.posts === 0;
+  const isVerifiedProfile =
+    profile.verificationStatus === 'verified' ||
+    Boolean(profile.studentVerified) ||
+    profile.accountType === 'organization';
 
   const handleOpenProfile = (targetUsername: string) => {
     if (targetUsername === currentUser.username) {
@@ -490,7 +494,16 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
             <Image source={getAvatarImageSource(profile.avatar)} style={styles.avatar} />
 
             <View style={styles.headerCopy}>
-              <Text style={styles.name}>{profile.name}</Text>
+              <View style={styles.nameRow}>
+                <Text style={styles.name} numberOfLines={1}>
+                  {profile.name}
+                </Text>
+                {isVerifiedProfile ? (
+                  <View style={styles.verifiedBadge}>
+                    <Ionicons name="checkmark" size={12} color={theme.accentText} />
+                  </View>
+                ) : null}
+              </View>
               <Text style={styles.profileRoleText}>
                 {isOwnProfile ? 'Your campus profile' : 'Campus profile'}
               </Text>
@@ -512,11 +525,13 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
                 <Pressable
                   style={styles.secondaryButton}
                   onPress={handleOpenEdit}>
+                  <Ionicons name="pencil-outline" size={16} color={theme.accent} />
                   <Text style={styles.secondaryButtonText}>Edit Profile</Text>
                 </Pressable>
                 <Pressable
                   style={styles.secondaryButton}
                   onPress={() => Alert.alert('Share Profile', `@${profile.username}`)}>
+                  <Ionicons name="share-outline" size={16} color={theme.accent} />
                   <Text style={styles.secondaryButtonText}>Share Profile</Text>
                 </Pressable>
               </>
@@ -1066,10 +1081,28 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) => {
       flex: 1,
       gap: 4,
     },
+    nameRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 7,
+    },
     name: {
+      flexShrink: 1,
       color: profileText,
       fontSize: 24,
       fontWeight: '800',
+    },
+    verifiedBadge: {
+      width: 18,
+      height: 18,
+      borderRadius: 9,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: theme.accent,
+      shadowColor: theme.accent,
+      shadowOpacity: 0.22,
+      shadowRadius: 8,
+      shadowOffset: { width: 0, height: 0 },
     },
     profileRoleText: {
       color: profileMutedText,
@@ -1124,22 +1157,24 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) => {
       backgroundColor: isDark ? '#ffffff' : theme.accent,
     },
     primaryButtonText: {
-      color: isDark ? '#000000' : theme.background,
+      color: isDark ? '#000000' : theme.accentText,
       fontSize: 14,
       fontWeight: '800',
     },
     secondaryButton: {
       flex: 1,
+      flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
+      gap: 7,
       paddingVertical: 13,
       borderRadius: 12,
-      backgroundColor: profileSurfaceAlt,
+      backgroundColor: theme.accentSoft,
       borderWidth: 1,
-      borderColor: profileBorder,
+      borderColor: theme.accent,
     },
     secondaryButtonText: {
-      color: profileText,
+      color: theme.accent,
       fontSize: 14,
       fontWeight: '800',
     },

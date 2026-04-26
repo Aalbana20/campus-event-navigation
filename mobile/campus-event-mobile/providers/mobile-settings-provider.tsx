@@ -5,6 +5,22 @@ import { mobileSettingsStorage } from '@/lib/mobile-file-storage';
 import { supabase } from '@/lib/supabase';
 
 export type ThemeMode = 'light' | 'dark' | 'device';
+export type AccentColorKey = 'green' | 'blue' | 'purple' | 'pink' | 'orange' | 'red' | 'white';
+
+export const ACCENT_COLOR_OPTIONS: {
+  key: AccentColorKey;
+  label: string;
+  color: string;
+  softColor: string;
+}[] = [
+  { key: 'green', label: 'Green', color: '#32d74b', softColor: 'rgba(50, 215, 75, 0.16)' },
+  { key: 'blue', label: 'Blue', color: '#0a84ff', softColor: 'rgba(10, 132, 255, 0.16)' },
+  { key: 'purple', label: 'Purple', color: '#bf5af2', softColor: 'rgba(191, 90, 242, 0.16)' },
+  { key: 'pink', label: 'Pink', color: '#ff2d92', softColor: 'rgba(255, 45, 146, 0.16)' },
+  { key: 'orange', label: 'Orange', color: '#ff9f0a', softColor: 'rgba(255, 159, 10, 0.16)' },
+  { key: 'red', label: 'Red', color: '#ff453a', softColor: 'rgba(255, 69, 58, 0.16)' },
+  { key: 'white', label: 'White', color: '#ffffff', softColor: 'rgba(255, 255, 255, 0.16)' },
+];
 
 export type MobileSettingsState = {
   pushNotifications: boolean;
@@ -24,9 +40,11 @@ export type MobileSettingsKey = keyof MobileSettingsState;
 type MobileSettingsContextValue = {
   settings: MobileSettingsState;
   themeMode: ThemeMode;
+  accentColor: AccentColorKey;
   resolvedThemeMode: 'light' | 'dark';
   updateSetting: (key: MobileSettingsKey, value: boolean) => void;
   setThemeMode: (mode: ThemeMode) => void;
+  setAccentColor: (color: AccentColorKey) => void;
 };
 
 const initialSettings: MobileSettingsState = {
@@ -45,9 +63,12 @@ const initialSettings: MobileSettingsState = {
 const MobileSettingsContext = createContext<MobileSettingsContextValue | null>(null);
 const SETTINGS_STORAGE_KEY = 'mobileSettings';
 const THEME_MODE_STORAGE_KEY = 'mobileThemeMode';
+const ACCENT_COLOR_STORAGE_KEY = 'mobileAccentColor';
 const SETTINGS_SUPABASE_TIMEOUT_MS = 5000;
 const isThemeMode = (value: unknown): value is ThemeMode =>
   value === 'light' || value === 'dark' || value === 'device';
+const isAccentColor = (value: unknown): value is AccentColorKey =>
+  ACCENT_COLOR_OPTIONS.some((option) => option.key === value);
 
 const withSettingsTimeout = async <T,>(label: string, promise: PromiseLike<T>) =>
   new Promise<T>((resolve, reject) => {
@@ -71,6 +92,7 @@ export function MobileSettingsProvider({ children }: { children: React.ReactNode
   const deviceColorScheme = useColorScheme();
   const [settings, setSettings] = useState<MobileSettingsState>(initialSettings);
   const [themeMode, setThemeMode] = useState<ThemeMode>('device');
+  const [accentColor, setAccentColor] = useState<AccentColorKey>('green');
   const hasLoadedPersistedState = useRef(false);
   const supabaseUserIdRef = useRef<string | null>(null);
 
@@ -82,9 +104,10 @@ export function MobileSettingsProvider({ children }: { children: React.ReactNode
 
     const hydrateSettings = async () => {
       try {
-        const [storedSettings, storedThemeMode] = await Promise.all([
+        const [storedSettings, storedThemeMode, storedAccentColor] = await Promise.all([
           mobileSettingsStorage.getItem(SETTINGS_STORAGE_KEY),
           mobileSettingsStorage.getItem(THEME_MODE_STORAGE_KEY),
+          mobileSettingsStorage.getItem(ACCENT_COLOR_STORAGE_KEY),
         ]);
 
         if (!isMounted) return;
@@ -100,6 +123,10 @@ export function MobileSettingsProvider({ children }: { children: React.ReactNode
 
         if (isThemeMode(storedThemeMode)) {
           setThemeMode(storedThemeMode);
+        }
+
+        if (isAccentColor(storedAccentColor)) {
+          setAccentColor(storedAccentColor);
         }
 
         // Load from Supabase if signed in — Supabase value wins over local cache
@@ -122,10 +149,19 @@ export function MobileSettingsProvider({ children }: { children: React.ReactNode
             );
 
             if (profileRow?.settings && typeof profileRow.settings === 'object' && isMounted) {
+              const {
+                accentColor: remoteAccentColor,
+                ...remoteSettings
+              } = profileRow.settings as Partial<MobileSettingsState> & {
+                accentColor?: unknown;
+              };
               setSettings((currentSettings) => ({
                 ...currentSettings,
-                ...(profileRow.settings as Partial<MobileSettingsState>),
+                ...remoteSettings,
               }));
+              if (isAccentColor(remoteAccentColor)) {
+                setAccentColor(remoteAccentColor);
+              }
             }
           }
         }
@@ -168,10 +204,19 @@ export function MobileSettingsProvider({ children }: { children: React.ReactNode
           );
 
           if (profileRow?.settings && typeof profileRow.settings === 'object') {
+            const {
+              accentColor: remoteAccentColor,
+              ...remoteSettings
+            } = profileRow.settings as Partial<MobileSettingsState> & {
+              accentColor?: unknown;
+            };
             setSettings((currentSettings) => ({
               ...currentSettings,
-              ...(profileRow.settings as Partial<MobileSettingsState>),
+              ...remoteSettings,
             }));
+            if (isAccentColor(remoteAccentColor)) {
+              setAccentColor(remoteAccentColor);
+            }
           }
         } else if (event === 'SIGNED_OUT') {
           supabaseUserIdRef.current = null;
@@ -194,13 +239,13 @@ export function MobileSettingsProvider({ children }: { children: React.ReactNode
     if (supabase && supabaseUserIdRef.current) {
       void supabase
         .from('profiles')
-        .update({ settings })
+        .update({ settings: { ...settings, accentColor } })
         .eq('id', supabaseUserIdRef.current)
         .then(({ error }) => {
           if (error) console.error('Unable to sync settings to Supabase:', error);
         });
     }
-  }, [settings]);
+  }, [accentColor, settings]);
 
   useEffect(() => {
     if (!hasLoadedPersistedState.current) return;
@@ -209,6 +254,14 @@ export function MobileSettingsProvider({ children }: { children: React.ReactNode
       console.error('Unable to persist mobile theme mode:', error);
     });
   }, [themeMode]);
+
+  useEffect(() => {
+    if (!hasLoadedPersistedState.current) return;
+
+    void mobileSettingsStorage.setItem(ACCENT_COLOR_STORAGE_KEY, accentColor).catch((error) => {
+      console.error('Unable to persist mobile accent color:', error);
+    });
+  }, [accentColor]);
 
   const updateSetting = (key: MobileSettingsKey, value: boolean) => {
     setSettings((currentSettings) => ({
@@ -221,11 +274,13 @@ export function MobileSettingsProvider({ children }: { children: React.ReactNode
     () => ({
       settings,
       themeMode,
+      accentColor,
       resolvedThemeMode,
       updateSetting,
       setThemeMode,
+      setAccentColor,
     }),
-    [resolvedThemeMode, settings, themeMode]
+    [accentColor, resolvedThemeMode, settings, themeMode]
   );
 
   return (

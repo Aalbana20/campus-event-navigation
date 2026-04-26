@@ -15,6 +15,7 @@ import {
 import { useAppTheme } from '@/lib/app-theme';
 import { useMobileApp } from '@/providers/mobile-app-provider';
 import {
+  ACCENT_COLOR_OPTIONS,
   type MobileSettingsKey,
   type ThemeMode,
   useMobileSettings,
@@ -161,7 +162,15 @@ export function SettingsScreen() {
   const styles = useMemo(() => buildStyles(theme), [theme]);
   const sections = useMemo(() => buildSettingsSections(), []);
   const { signOut } = useMobileApp();
-  const { settings, themeMode, resolvedThemeMode, updateSetting, setThemeMode } =
+  const {
+    accentColor,
+    settings,
+    themeMode,
+    resolvedThemeMode,
+    updateSetting,
+    setAccentColor,
+    setThemeMode,
+  } =
     useMobileSettings();
   const [activeView, setActiveView] = useState<SettingsView>('main');
   const [searchText, setSearchText] = useState('');
@@ -271,7 +280,7 @@ export function SettingsScreen() {
       <Switch
         value={settings[item.key]}
         onValueChange={(value) => updateSetting(item.key, value)}
-        trackColor={{ false: 'rgba(255,255,255,0.16)', true: '#30d158' }}
+        trackColor={{ false: 'rgba(255,255,255,0.16)', true: theme.accent }}
         thumbColor="#ffffff"
         ios_backgroundColor="rgba(255,255,255,0.16)"
       />
@@ -350,7 +359,7 @@ export function SettingsScreen() {
                         <Ionicons
                           name={isActive ? 'checkmark-circle' : 'ellipse-outline'}
                           size={21}
-                          color={isActive ? '#30d158' : theme.textMuted}
+                          color={isActive ? theme.accent : theme.textMuted}
                         />
                       </View>
                       <View style={styles.rowCopy}>
@@ -366,6 +375,47 @@ export function SettingsScreen() {
               <Text style={styles.infoText}>
                 Device follows your system appearance automatically. Current:{' '}
                 {resolvedThemeMode === 'dark' ? 'Dark' : 'Light'}.
+              </Text>
+            </View>
+
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Accent Color</Text>
+              <View style={styles.sectionRows}>
+                {ACCENT_COLOR_OPTIONS.map((option) => {
+                  const isActive = accentColor === option.key;
+
+                  return (
+                    <Pressable
+                      key={option.key}
+                      style={styles.row}
+                      onPress={() => setAccentColor(option.key)}>
+                      <View
+                        style={[
+                          styles.accentSwatch,
+                          { backgroundColor: option.color },
+                          isActive && styles.accentSwatchActive,
+                        ]}>
+                        {isActive ? (
+                          <Ionicons
+                            name="checkmark"
+                            size={15}
+                            color={option.key === 'white' ? '#050507' : '#ffffff'}
+                          />
+                        ) : null}
+                      </View>
+                      <View style={styles.rowCopy}>
+                        <Text style={styles.rowLabel}>{option.label}</Text>
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            <View style={styles.infoCard}>
+              <Text style={styles.infoText}>
+                Accent presets update highlights immediately. TODO: add a gradient color picker when
+                the design system needs custom colors.
               </Text>
             </View>
           </>
@@ -483,6 +533,19 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       color: theme.textMuted,
       fontSize: 13,
       fontWeight: '700',
+    },
+    accentSwatch: {
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.18)',
+    },
+    accentSwatchActive: {
+      borderWidth: 2,
+      borderColor: theme.text,
     },
     infoCard: {
       padding: 16,

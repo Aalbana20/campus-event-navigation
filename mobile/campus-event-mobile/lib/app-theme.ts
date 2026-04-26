@@ -1,6 +1,9 @@
 import { useMemo } from 'react';
 
-import { useMobileSettings } from '@/providers/mobile-settings-provider';
+import {
+  ACCENT_COLOR_OPTIONS,
+  useMobileSettings,
+} from '@/providers/mobile-settings-provider';
 
 const palettes = {
   light: {
@@ -50,6 +53,7 @@ export type AppTheme = {
   border: string;
   accent: string;
   accentSoft: string;
+  accentText: string;
   success: string;
   successSoft: string;
   danger: string;
@@ -61,7 +65,23 @@ export type AppTheme = {
 };
 
 export function useAppTheme(): AppTheme {
-  const { resolvedThemeMode } = useMobileSettings();
+  const { accentColor, resolvedThemeMode } = useMobileSettings();
 
-  return useMemo(() => palettes[resolvedThemeMode], [resolvedThemeMode]);
+  return useMemo(() => {
+    const accentOption =
+      ACCENT_COLOR_OPTIONS.find((option) => option.key === accentColor) ||
+      ACCENT_COLOR_OPTIONS[0];
+
+    return {
+      ...palettes[resolvedThemeMode],
+      accent: accentOption.color,
+      accentSoft: accentOption.softColor,
+      accentText:
+        accentOption.key === 'white' ||
+        accentOption.key === 'green' ||
+        accentOption.key === 'orange'
+          ? '#050507'
+          : '#ffffff',
+    };
+  }, [accentColor, resolvedThemeMode]);
 }
