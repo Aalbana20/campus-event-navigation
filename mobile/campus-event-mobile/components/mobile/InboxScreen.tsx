@@ -21,6 +21,7 @@ import {
 import { useAppTheme } from '@/lib/app-theme';
 import { parseDmMessageForEventShare } from '@/lib/mobile-dm-content';
 import { getAvatarImageSource, getEventImageSource } from '@/lib/mobile-media';
+import { loadActiveProfileNotes, type ProfileNoteRecord } from '@/lib/mobile-profile-notes';
 import { loadActiveStoryRecords } from '@/lib/mobile-stories';
 import {
   MobileDmThread,
@@ -609,6 +610,32 @@ function DmYourNoteCard({
   );
 }
 
+function DmProfileNoteCircle({
+  note,
+  profile,
+  styles,
+  onPress,
+}: {
+  note: ProfileNoteRecord;
+  profile?: ProfileRecord;
+  styles: ReturnType<typeof buildStyles>;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable style={styles.dmProfileNoteCard} onPress={onPress}>
+      <View style={styles.dmProfileNoteBubble}>
+        <Text style={styles.dmProfileNoteText} numberOfLines={2}>
+          {note.body}
+        </Text>
+      </View>
+      <Image source={getAvatarImageSource(profile?.avatar)} style={styles.dmProfileNoteAvatar} />
+      <Text style={styles.dmProfileNoteName} numberOfLines={1}>
+        {profile?.name || profile?.username || 'Campus User'}
+      </Text>
+    </Pressable>
+  );
+}
+
 export function InboxScreen({
   initialTab = 'notifications',
   lockedTab,
@@ -659,6 +686,7 @@ export function InboxScreen({
   const [selectedNotificationEvent, setSelectedNotificationEvent] = useState<EventRecord | null>(null);
   const [dismissedSuggestionIds, setDismissedSuggestionIds] = useState<Set<string>>(new Set());
   const [activeStoryAuthorIds, setActiveStoryAuthorIds] = useState<Set<string>>(new Set());
+  const [activeProfileNotes, setActiveProfileNotes] = useState<ProfileNoteRecord[]>([]);
   const [openSwipeThreadId, setOpenSwipeThreadId] = useState<string | null>(null);
   const [messageReactions, setMessageReactions] = useState<Record<string, string>>({});
   const [messageStickers, setMessageStickers] = useState<Record<string, string>>({});
@@ -720,6 +748,16 @@ export function InboxScreen({
     );
   }, [activeDmFilter, dmSearchQuery, dmThreads]);
 
+  const visibleProfileNotes = useMemo(
+    () =>
+      activeProfileNotes
+        .filter((note) => String(note.userId) !== String(currentUser.id))
+        .map((note) => ({ note, profile: getProfileById(note.userId) }))
+        .filter(({ profile }) => Boolean(profile))
+        .slice(0, 8),
+    [activeProfileNotes, currentUser.id, getProfileById]
+  );
+
   useFocusEffect(
     useCallback(() => {
       let isActive = true;
@@ -743,6 +781,30 @@ export function InboxScreen({
         isActive = false;
       };
     }, [currentUser, getProfileById])
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
+
+      const loadNotes = async () => {
+        const noteUserIds = [
+          currentUser.id,
+          ...dmThreads.map((thread) => String(thread.id)),
+        ].filter(Boolean);
+        const nextNotes = await loadActiveProfileNotes(noteUserIds);
+
+        if (isActive) {
+          setActiveProfileNotes(nextNotes);
+        }
+      };
+
+      void loadNotes();
+
+      return () => {
+        isActive = false;
+      };
+    }, [currentUser.id, dmThreads])
   );
 
   useEffect(() => {
@@ -1046,6 +1108,15 @@ export function InboxScreen({
                 theme={theme}
                 onPress={() => router.push('/map')}
               />
+              {visibleProfileNotes.map(({ note, profile }) => (
+                <DmProfileNoteCircle
+                  key={note.id}
+                  note={note}
+                  profile={profile}
+                  styles={styles}
+                  onPress={() => handleOpenThread(note.userId)}
+                />
+              ))}
             </ScrollView>
 
             <View style={styles.dmFilterRow}>
@@ -2108,6 +2179,50 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       color: theme.text,
       fontSize: 13,
       fontWeight: '900',
+    },
+    dmProfileNoteCard: {
+      width: 78,
+      height: 104,
+      alignItems: 'center',
+      justifyContent: 'flex-end',
+      paddingBottom: 8,
+    },
+    dmProfileNoteBubble: {
+      position: 'absolute',
+      top: 0,
+      minWidth: 68,
+      maxWidth: 82,
+      minHeight: 34,
+      borderRadius: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 8,
+      paddingVertical: 5,
+      backgroundColor: theme.surfaceElevated,
+      borderWidth: 1,
+      borderColor: theme.border,
+      zIndex: 2,
+    },
+    dmProfileNoteText: {
+      color: theme.text,
+      fontSize: 10,
+      fontWeight: '800',
+      textAlign: 'center',
+      lineHeight: 12,
+    },
+    dmProfileNoteAvatar: {
+      position: 'absolute',
+      top: 30,
+      width: 58,
+      height: 58,
+      borderRadius: 29,
+      backgroundColor: theme.surfaceAlt,
+    },
+    dmProfileNoteName: {
+      color: theme.text,
+      fontSize: 12,
+      fontWeight: '800',
+      maxWidth: 76,
     },
     dmFilterRow: {
       flexDirection: 'row',

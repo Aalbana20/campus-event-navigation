@@ -1,4 +1,18 @@
 export const THEME_MODE_KEY = "themeMode"
+export const ACCENT_COLOR_KEY = "accentColor"
+
+export const ACCENT_COLOR_OPTIONS = [
+  { key: "green", label: "Green", color: "#32d74b" },
+  { key: "blue", label: "Blue", color: "#0a84ff" },
+  { key: "purple", label: "Purple", color: "#bf5af2" },
+  { key: "pink", label: "Pink", color: "#ff2d92" },
+  { key: "orange", label: "Orange", color: "#ff9f0a" },
+  { key: "red", label: "Red", color: "#ff453a" },
+  { key: "white", label: "White", color: "#ffffff" },
+]
+
+export const getAccentOption = (key) =>
+  ACCENT_COLOR_OPTIONS.find((option) => option.key === key) || ACCENT_COLOR_OPTIONS[0]
 
 export const getStoredThemeMode = () => {
   if (typeof window === "undefined") return "device"
@@ -32,6 +46,24 @@ export const applyThemeMode = (themeMode) => {
   return resolvedTheme
 }
 
+export const getStoredAccentColor = () => {
+  if (typeof window === "undefined") return "green"
+  return getAccentOption(window.localStorage.getItem(ACCENT_COLOR_KEY)).key
+}
+
+export const applyAccentColor = (accentColor) => {
+  const option = getAccentOption(accentColor)
+  if (typeof document !== "undefined") {
+    document.documentElement.style.setProperty("--accent", option.color)
+  }
+  return option.key
+}
+
+export const persistAccentColor = (accentColor) => {
+  if (typeof window === "undefined") return
+  window.localStorage.setItem(ACCENT_COLOR_KEY, getAccentOption(accentColor).key)
+}
+
 export const persistThemeMode = (themeMode) => {
   if (typeof window === "undefined") return
   window.localStorage.setItem(THEME_MODE_KEY, themeMode)
@@ -39,5 +71,6 @@ export const persistThemeMode = (themeMode) => {
 
 export const initializeTheme = () => {
   const storedThemeMode = getStoredThemeMode()
+  applyAccentColor(getStoredAccentColor())
   return applyThemeMode(storedThemeMode)
 }

@@ -87,6 +87,20 @@ type MessageRow = {
   recipient_id: string;
   content: string;
   created_at?: string | null;
+  read?: boolean | null;
+};
+
+type NotificationStateRow = {
+  notification_id: string;
+  read_at?: string | null;
+  deleted_at?: string | null;
+};
+
+type DmThreadPreferenceRow = {
+  thread_user_id: string;
+  muted_at?: string | null;
+  pinned_at?: string | null;
+  deleted_at?: string | null;
 };
 
 const createEmptyDmThreadPreferences = (): MobileDmThreadPreferences => ({
@@ -139,6 +153,14 @@ const removeDmThreadPreferenceEntry = (
 ): MobileDmThreadPreferences => ({
   ...preferences,
   [key]: preferences[key].filter((id) => String(id) !== String(threadId)),
+});
+
+const normalizeDmThreadPreferencesFromRows = (
+  rows: DmThreadPreferenceRow[]
+): MobileDmThreadPreferences => ({
+  muted: rows.filter((row) => row.muted_at).map((row) => String(row.thread_user_id)),
+  pinned: rows.filter((row) => row.pinned_at).map((row) => String(row.thread_user_id)),
+  deleted: rows.filter((row) => row.deleted_at).map((row) => String(row.thread_user_id)),
 });
 
 export function MobileInboxProvider({ children }: { children: React.ReactNode }) {
@@ -206,11 +228,107 @@ export function MobileInboxProvider({ children }: { children: React.ReactNode })
     });
   }, [dmThreadPreferences, dmThreadPreferencesStorageKey]);
 
+  const persistDmThreadPreferencesToSupabase = (
+    previousPreferences: MobileDmThreadPreferences,
+    nextPreferences: MobileDmThreadPreferences
+  ) => {
+    if (!supabase || !session?.user?.id) return;
+
+    const affectedThreadIds = [
+      ...new Set([
+        ...previousPreferences.muted,
+        ...previousPreferences.pinned,
+        ...previousPreferences.deleted,
+        ...nextPreferences.muted,
+        ...nextPreferences.pinned,
+        ...nextPreferences.deleted,
+      ]),
+    ];
+
+    if (affectedThreadIds.length === 0) return;
+
+    const now = new Date().toISOString();
+    const rows = affectedThreadIds
+      .filter((threadId) => threadId && threadId !== session.user.id)
+      .map((threadId) => ({
+        user_id: session.user.id,
+        thread_user_id: threadId,
+        muted_at: nextPreferences.muted.includes(threadId) ? now : null,
+        pinned_at: nextPreferences.pinned.includes(threadId) ? now : null,
+        deleted_at: nextPreferences.deleted.includes(threadId) ? now : null,
+        updated_at: now,
+      }));
+
+    if (rows.length === 0) return;
+
+    void supabase
+      .from('dm_thread_preferences')
+      .upsert(rows, { onConflict: 'user_id,thread_user_id' })
+      .then(({ error }) => {
+        if (error) console.error('Unable to sync mobile DM thread preferences:', error);
+      });
+  };
+
   const updateDmThreadPreferences = (
     updater: (currentPreferences: MobileDmThreadPreferences) => MobileDmThreadPreferences
   ) => {
-    setDmThreadPreferences((currentPreferences) => updater(currentPreferences));
+    setDmThreadPreferences((currentPreferences) => {
+      const nextPreferences = updater(currentPreferences);
+      persistDmThreadPreferencesToSupabase(currentPreferences, nextPreferences);
+      return nextPreferences;
+    });
   };
+
+  useEffect(() => {
+    const client = supabase;
+
+    if (!client || !session?.user?.id) return;
+
+    let isActive = true;
+
+    const loadRemoteInboxState = async () => {
+      const [notificationResult, threadPreferenceResult] = await Promise.all([
+        client
+          .from('notification_states')
+          .select('notification_id, read_at, deleted_at')
+          .eq('user_id', session.user.id),
+        client
+          .from('dm_thread_preferences')
+          .select('thread_user_id, muted_at, pinned_at, deleted_at')
+          .eq('user_id', session.user.id),
+      ]);
+
+      if (!isActive) return;
+
+      if (notificationResult.error) {
+        console.error('Unable to load mobile notification states:', notificationResult.error);
+      } else {
+        const rows = (notificationResult.data || []) as NotificationStateRow[];
+        setReadNotificationIds(
+          new Set(rows.filter((row) => row.read_at).map((row) => String(row.notification_id)))
+        );
+        setDeletedNotificationIds(
+          new Set(rows.filter((row) => row.deleted_at).map((row) => String(row.notification_id)))
+        );
+      }
+
+      if (threadPreferenceResult.error) {
+        console.error('Unable to load mobile DM thread states:', threadPreferenceResult.error);
+      } else {
+        setDmThreadPreferences(
+          normalizeDmThreadPreferencesFromRows(
+            (threadPreferenceResult.data || []) as DmThreadPreferenceRow[]
+          )
+        );
+      }
+    };
+
+    void loadRemoteInboxState();
+
+    return () => {
+      isActive = false;
+    };
+  }, [session?.user?.id]);
 
   useEffect(() => {
     const client = supabase;
@@ -455,20 +573,58 @@ export function MobileInboxProvider({ children }: { children: React.ReactNode })
   ).length;
   const unreadDmCount = unreadDmThreadIds.size;
 
+  const persistNotificationState = (
+    notificationId: string,
+    state: { readAt?: string | null; deletedAt?: string | null }
+  ) => {
+    if (!supabase || !session?.user?.id || !notificationId) return;
+
+    const now = new Date().toISOString();
+
+    void supabase
+      .from('notification_states')
+      .upsert(
+        {
+          user_id: session.user.id,
+          notification_id: notificationId,
+          read_at: state.readAt,
+          deleted_at: state.deletedAt,
+          updated_at: now,
+        },
+        { onConflict: 'user_id,notification_id' }
+      )
+      .then(({ error }) => {
+        if (error) console.error('Unable to sync mobile notification state:', error);
+      });
+  };
+
   const markNotificationRead = (notificationId: string) => {
+    const now = new Date().toISOString();
+
     setReadNotificationIds((currentIds) => {
       const nextIds = new Set(currentIds);
       nextIds.add(notificationId);
       return nextIds;
     });
+
+    persistNotificationState(notificationId, {
+      readAt: now,
+      deletedAt: deletedNotificationIds.has(notificationId) ? now : null,
+    });
   };
 
   const clearNotifications = () => {
+    const now = new Date().toISOString();
+
     setReadNotificationIds((currentIds) => {
       const nextIds = new Set(currentIds);
 
       derivedNotifications.forEach((notification) => {
         nextIds.add(notification.id);
+        persistNotificationState(notification.id, {
+          readAt: now,
+          deletedAt: deletedNotificationIds.has(notification.id) ? now : null,
+        });
       });
 
       return nextIds;
@@ -476,10 +632,17 @@ export function MobileInboxProvider({ children }: { children: React.ReactNode })
   };
 
   const deleteNotification = (notificationId: string) => {
+    const now = new Date().toISOString();
+
     setDeletedNotificationIds((currentIds) => {
       const nextIds = new Set(currentIds);
       nextIds.add(notificationId);
       return nextIds;
+    });
+
+    persistNotificationState(notificationId, {
+      readAt: readNotificationIds.has(notificationId) ? now : null,
+      deletedAt: now,
     });
   };
 

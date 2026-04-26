@@ -28,7 +28,7 @@ const Logout = lazy(() => import("./pages/Logout"))
 import { useEvents } from "./context/EventContext"
 import { DEFAULT_AVATAR_URL, sanitizeAvatarUrl, syncStoredUserFromSession } from "./profileMedia"
 import { supabase } from "./supabaseClient"
-import { applyThemeMode, getStoredThemeMode } from "./theme"
+import { applyAccentColor, applyThemeMode, getStoredAccentColor, getStoredThemeMode } from "./theme"
 import GlobalSearch from "./components/GlobalSearch"
 
 class AppErrorBoundary extends Component {
@@ -131,6 +131,12 @@ const toggleDmThreadPreferenceEntry = (preferences, key, threadId) => {
 const removeDmThreadPreferenceEntry = (preferences, key, threadId) => ({
   ...preferences,
   [key]: (preferences[key] || []).filter((id) => String(id) !== String(threadId)),
+})
+
+const normalizeDmThreadPreferencesFromRows = (rows = []) => ({
+  muted: rows.filter((row) => row.muted_at).map((row) => String(row.thread_user_id)),
+  pinned: rows.filter((row) => row.pinned_at).map((row) => String(row.thread_user_id)),
+  deleted: rows.filter((row) => row.deleted_at).map((row) => String(row.thread_user_id)),
 })
 
 const parseEventDate = (event) => {
@@ -288,23 +294,68 @@ function MainLayout() {
         setDmThreadPreferences(
           stored ? normalizeDmThreadPreferences(JSON.parse(stored)) : createEmptyDmThreadPreferences()
         )
+
+        const { data, error } = await supabase
+          .from("dm_thread_preferences")
+          .select("thread_user_id, muted_at, pinned_at, deleted_at")
+          .eq("user_id", currentUserId)
+
+        if (!error && data) {
+          setDmThreadPreferences(normalizeDmThreadPreferencesFromRows(data))
+        } else if (error && error.code !== "42P01") {
+          console.error("Failed to load DM thread preferences:", error)
+        }
       } catch {
         setDmThreadPreferences(createEmptyDmThreadPreferences())
       }
     }
 
     void loadPreferences()
-  }, [dmThreadPreferencesStorageKey])
+  }, [currentUserId, dmThreadPreferencesStorageKey])
 
-  const persistDmThreadPreferences = useCallback((nextPreferences) => {
+  const persistDmThreadPreferences = useCallback((nextPreferences, previousPreferences = createEmptyDmThreadPreferences()) => {
     if (!dmThreadPreferencesStorageKey) return
     localStorage.setItem(dmThreadPreferencesStorageKey, JSON.stringify(nextPreferences))
-  }, [dmThreadPreferencesStorageKey])
+
+    if (!currentUserId) return
+
+    const affectedThreadIds = [
+      ...new Set([
+        ...previousPreferences.muted,
+        ...previousPreferences.pinned,
+        ...previousPreferences.deleted,
+        ...nextPreferences.muted,
+        ...nextPreferences.pinned,
+        ...nextPreferences.deleted,
+      ]),
+    ].filter((threadId) => threadId && threadId !== currentUserId)
+
+    if (affectedThreadIds.length === 0) return
+
+    const now = new Date().toISOString()
+    const rows = affectedThreadIds.map((threadId) => ({
+      user_id: currentUserId,
+      thread_user_id: threadId,
+      muted_at: nextPreferences.muted.includes(threadId) ? now : null,
+      pinned_at: nextPreferences.pinned.includes(threadId) ? now : null,
+      deleted_at: nextPreferences.deleted.includes(threadId) ? now : null,
+      updated_at: now,
+    }))
+
+    void supabase
+      .from("dm_thread_preferences")
+      .upsert(rows, { onConflict: "user_id,thread_user_id" })
+      .then(({ error }) => {
+        if (error && error.code !== "42P01") {
+          console.error("Failed to save DM thread preferences:", error)
+        }
+      })
+  }, [currentUserId, dmThreadPreferencesStorageKey])
 
   const updateDmThreadPreferences = useCallback((updater) => {
     setDmThreadPreferences((currentPreferences) => {
       const nextPreferences = updater(currentPreferences)
-      persistDmThreadPreferences(nextPreferences)
+      persistDmThreadPreferences(nextPreferences, currentPreferences)
       return nextPreferences
     })
   }, [persistDmThreadPreferences])
@@ -671,6 +722,67 @@ function MainLayout() {
     if (notifDeletedKey) localStorage.setItem(notifDeletedKey, JSON.stringify([...next]))
   }
 
+  useEffect(() => {
+    if (!currentUserId) {
+      setReadIds(new Set())
+      setDeletedIds(new Set())
+      return
+    }
+
+    try {
+      const storedRead = notifStorageKey && localStorage.getItem(notifStorageKey)
+      const storedDeleted = notifDeletedKey && localStorage.getItem(notifDeletedKey)
+      setReadIds(storedRead ? new Set(JSON.parse(storedRead)) : new Set())
+      setDeletedIds(storedDeleted ? new Set(JSON.parse(storedDeleted)) : new Set())
+    } catch {
+      setReadIds(new Set())
+      setDeletedIds(new Set())
+    }
+
+    let isActive = true
+
+    supabase
+      .from("notification_states")
+      .select("notification_id, read_at, deleted_at")
+      .eq("user_id", currentUserId)
+      .then(({ data, error }) => {
+        if (!isActive) return
+        if (error) {
+          if (error.code !== "42P01") console.error("Failed to load notification states:", error)
+          return
+        }
+
+        setReadIds(new Set((data || []).filter((row) => row.read_at).map((row) => row.notification_id)))
+        setDeletedIds(new Set((data || []).filter((row) => row.deleted_at).map((row) => row.notification_id)))
+      })
+
+    return () => {
+      isActive = false
+    }
+  }, [currentUserId, notifDeletedKey, notifStorageKey])
+
+  const persistNotificationState = useCallback((notificationId, state) => {
+    if (!currentUserId || !notificationId) return
+
+    const now = new Date().toISOString()
+
+    void supabase
+      .from("notification_states")
+      .upsert(
+        {
+          user_id: currentUserId,
+          notification_id: notificationId,
+          read_at: state.readAt,
+          deleted_at: state.deletedAt,
+          updated_at: now,
+        },
+        { onConflict: "user_id,notification_id" }
+      )
+      .then(({ error }) => {
+        if (error && error.code !== "42P01") console.error("Failed to save notification state:", error)
+      })
+  }, [currentUserId])
+
   const notifications = useMemo(
     () =>
       notificationSeed
@@ -680,26 +792,43 @@ function MainLayout() {
   )
 
   const clearAllNotifications = () => {
+    const now = new Date().toISOString()
     const next = new Set(notificationSeed.map((item) => item.id))
     setReadIds(next)
     persistReadIds(next)
+    notificationSeed.forEach((item) => {
+      persistNotificationState(item.id, {
+        readAt: now,
+        deletedAt: deletedIds.has(item.id) ? now : null,
+      })
+    })
   }
 
   const markNotificationRead = (id) => {
+    const now = new Date().toISOString()
     setReadIds((prev) => {
       const next = new Set([...prev, id])
       persistReadIds(next)
       return next
+    })
+    persistNotificationState(id, {
+      readAt: now,
+      deletedAt: deletedIds.has(id) ? now : null,
     })
   }
 
   const unreadNotificationCount = notifications.filter((item) => !item.read).length
 
   const deleteNotification = (id) => {
+    const now = new Date().toISOString()
     setDeletedIds((prev) => {
       const next = new Set([...prev, id])
       persistDeletedIds(next)
       return next
+    })
+    persistNotificationState(id, {
+      readAt: readIds.has(id) ? now : null,
+      deletedAt: now,
     })
     setOpenNotificationMenuId((prev) => (prev === id ? null : prev))
   }
@@ -1272,6 +1401,7 @@ function App() {
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)")
     const syncTheme = () => {
       applyThemeMode(getStoredThemeMode())
+      applyAccentColor(getStoredAccentColor())
     }
 
     syncTheme()
@@ -1283,7 +1413,7 @@ function App() {
     }
 
     const handleStorageChange = (event) => {
-      if (event.key === "themeMode") {
+      if (event.key === "themeMode" || event.key === "accentColor") {
         syncTheme()
       }
     }
@@ -1352,6 +1482,30 @@ function App() {
       subscription.unsubscribe()
     }
   }, [])
+
+  useEffect(() => {
+    if (!session?.user?.id) return
+
+    let isActive = true
+
+    supabase
+      .from("profiles")
+      .select("settings, accent_color")
+      .eq("id", session.user.id)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (!isActive || error || !data) return
+        const remoteAccent = data.accent_color || data.settings?.accentColor
+        if (remoteAccent) {
+          const appliedAccent = applyAccentColor(remoteAccent)
+          localStorage.setItem("accentColor", appliedAccent)
+        }
+      })
+
+    return () => {
+      isActive = false
+    }
+  }, [session?.user?.id])
 
   if (isInitializing) {
     return <div className="loading-screen">Loading...</div>

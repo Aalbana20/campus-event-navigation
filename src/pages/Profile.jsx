@@ -11,8 +11,13 @@ import {
 } from "../profileMedia"
 import { supabase } from "../supabaseClient"
 import {
+  ACCENT_COLOR_OPTIONS,
+  applyAccentColor,
   applyThemeMode,
+  getAccentOption,
+  getStoredAccentColor,
   getStoredThemeMode,
+  persistAccentColor,
   persistThemeMode,
   resolveThemeMode,
 } from "../theme"
@@ -102,6 +107,7 @@ function Profile() {
   const [profileContentCounts, setProfileContentCounts] = useState({ posts: 0 })
   const [activeSettingsView, setActiveSettingsView] = useState("main")
   const [themeMode, setThemeMode] = useState(getStoredThemeMode)
+  const [accentColor, setAccentColor] = useState(getStoredAccentColor)
   const [pushNotifications, setPushNotifications] = useState(true)
   const [eventReminders, setEventReminders] = useState(true)
   const [followerAlerts, setFollowerAlerts] = useState(true)
@@ -219,6 +225,7 @@ function Profile() {
       privateProfile,
       showActivityStatus,
       followersOnlyDms,
+      accentColor,
       [key]: next,
     }
     supabase
@@ -248,12 +255,18 @@ function Profile() {
   }, [themeMode])
 
   useEffect(() => {
+    const option = getAccentOption(accentColor)
+    persistAccentColor(option.key)
+    applyAccentColor(option.key)
+  }, [accentColor])
+
+  useEffect(() => {
     const userId = JSON.parse(localStorage.getItem("user") || "{}").id
     if (!userId) return
 
     supabase
       .from("profiles")
-      .select("name, username, bio, avatar_url, settings, student_verified, verification_status, account_type")
+      .select("name, username, bio, avatar_url, settings, accent_color, student_verified, verification_status, account_type")
       .eq("id", userId)
       .single()
       .then(({ data, error }) => {
@@ -264,6 +277,7 @@ function Profile() {
         setStudentVerified(Boolean(data.student_verified))
         setVerificationStatus(data.verification_status || "unverified")
         setAccountType(data.account_type || "regular")
+        if (data.accent_color) setAccentColor(getAccentOption(data.accent_color).key)
         const nextAvatarValue = sanitizeAvatarStorageValue(data.avatar_url, null) || ""
         setProfileImage(nextAvatarValue)
         localStorage.setItem("profileImage", nextAvatarValue)
@@ -280,9 +294,42 @@ function Profile() {
           if (typeof s.privateProfile === "boolean") setPrivateProfile(s.privateProfile)
           if (typeof s.showActivityStatus === "boolean") setShowActivityStatus(s.showActivityStatus)
           if (typeof s.followersOnlyDms === "boolean") setFollowersOnlyDms(s.followersOnlyDms)
+          if (!data.accent_color && typeof s.accentColor === "string") {
+            setAccentColor(getAccentOption(s.accentColor).key)
+          }
         }
       })
   }, [defaultAvatar])
+
+  const handleAccentColorChange = (nextAccentColor) => {
+    const option = getAccentOption(nextAccentColor)
+    setAccentColor(option.key)
+
+    const userId = JSON.parse(localStorage.getItem("user") || "{}").id
+    if (!userId) return
+
+    const updatedSettings = {
+      pushNotifications,
+      eventReminders,
+      followerAlerts,
+      dmAlerts,
+      messageRequests,
+      readReceipts,
+      showOnlineStatus,
+      privateProfile,
+      showActivityStatus,
+      followersOnlyDms,
+      accentColor: option.key,
+    }
+
+    supabase
+      .from("profiles")
+      .update({ settings: updatedSettings, accent_color: option.key })
+      .eq("id", userId)
+      .then(({ error }) => {
+        if (error) console.error("Failed to save accent color:", error)
+      })
+  }
 
   const handleSaveProfile = async () => {
     const nextProfileImageValue =
@@ -1289,6 +1336,24 @@ function Profile() {
                     Device follows your system appearance automatically. Current:{" "}
                     {resolvedTheme === "dark" ? "Dark" : "Light"}
                   </p>
+
+                  <div className="settings-accent-section">
+                    <h5>Accent Color</h5>
+                    <div className="settings-accent-grid">
+                      {ACCENT_COLOR_OPTIONS.map((option) => (
+                        <button
+                          key={option.key}
+                          type="button"
+                          className={`settings-accent-swatch ${accentColor === option.key ? "active" : ""}`}
+                          style={{ "--swatch-color": option.color }}
+                          onClick={() => handleAccentColorChange(option.key)}
+                          aria-label={`Use ${option.label} accent`}
+                        >
+                          <span />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>

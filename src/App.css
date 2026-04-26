@@ -4896,6 +4896,49 @@ body.theme-dark .discover-stories-panel {
   line-height: 1.4;
 }
 
+.settings-accent-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settings-accent-section h5 {
+  margin: 0;
+  font-size: 0.92rem;
+  color: inherit;
+}
+
+.settings-accent-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.settings-accent-swatch {
+  width: 38px;
+  height: 38px;
+  border: 1px solid rgba(17, 17, 17, 0.16);
+  border-radius: 999px;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.settings-accent-swatch span {
+  width: 26px;
+  height: 26px;
+  border-radius: inherit;
+  background: var(--swatch-color);
+  box-shadow: 0 0 0 1px rgba(17, 17, 17, 0.12);
+}
+
+.settings-accent-swatch.active {
+  border-color: var(--accent, #32d74b);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent, #32d74b) 20%, transparent);
+}
+
 body.theme-light {
   background: #f6f7fb;
   color: #111318;
@@ -5023,6 +5066,14 @@ body.theme-dark select {
 body.theme-dark input::placeholder,
 body.theme-dark textarea::placeholder {
   color: #98a2b3;
+}
+
+body.theme-dark .settings-accent-swatch {
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+body.theme-dark .settings-accent-swatch span {
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14);
 }
 
 body.theme-dark input:focus,

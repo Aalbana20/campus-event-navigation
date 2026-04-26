@@ -143,24 +143,30 @@ export function MobileSettingsProvider({ children }: { children: React.ReactNode
               'settings.profile',
               supabase
                 .from('profiles')
-                .select('settings')
+                .select('settings, accent_color')
                 .eq('id', session.user.id)
                 .maybeSingle()
             );
 
-            if (profileRow?.settings && typeof profileRow.settings === 'object' && isMounted) {
-              const {
-                accentColor: remoteAccentColor,
-                ...remoteSettings
-              } = profileRow.settings as Partial<MobileSettingsState> & {
-                accentColor?: unknown;
-              };
-              setSettings((currentSettings) => ({
-                ...currentSettings,
-                ...remoteSettings,
-              }));
-              if (isAccentColor(remoteAccentColor)) {
-                setAccentColor(remoteAccentColor);
+            if (profileRow && isMounted) {
+              if (profileRow.settings && typeof profileRow.settings === 'object') {
+                const {
+                  accentColor: remoteAccentColor,
+                  ...remoteSettings
+                } = profileRow.settings as Partial<MobileSettingsState> & {
+                  accentColor?: unknown;
+                };
+                setSettings((currentSettings) => ({
+                  ...currentSettings,
+                  ...remoteSettings,
+                }));
+                if (isAccentColor(remoteAccentColor)) {
+                  setAccentColor(remoteAccentColor);
+                }
+              }
+
+              if (isAccentColor(profileRow.accent_color)) {
+                setAccentColor(profileRow.accent_color);
               }
             }
           }
@@ -195,27 +201,33 @@ export function MobileSettingsProvider({ children }: { children: React.ReactNode
           supabaseUserIdRef.current = nextSession.user.id;
 
           const { data: profileRow } = await withSettingsTimeout(
-            'settings.authState.profile',
-            client
-              .from('profiles')
-              .select('settings')
-              .eq('id', nextSession.user.id)
-              .maybeSingle()
+              'settings.authState.profile',
+              client
+                .from('profiles')
+                .select('settings, accent_color')
+                .eq('id', nextSession.user.id)
+                .maybeSingle()
           );
 
-          if (profileRow?.settings && typeof profileRow.settings === 'object') {
-            const {
-              accentColor: remoteAccentColor,
-              ...remoteSettings
-            } = profileRow.settings as Partial<MobileSettingsState> & {
-              accentColor?: unknown;
-            };
-            setSettings((currentSettings) => ({
-              ...currentSettings,
-              ...remoteSettings,
-            }));
-            if (isAccentColor(remoteAccentColor)) {
-              setAccentColor(remoteAccentColor);
+          if (profileRow) {
+            if (profileRow.settings && typeof profileRow.settings === 'object') {
+              const {
+                accentColor: remoteAccentColor,
+                ...remoteSettings
+              } = profileRow.settings as Partial<MobileSettingsState> & {
+                accentColor?: unknown;
+              };
+              setSettings((currentSettings) => ({
+                ...currentSettings,
+                ...remoteSettings,
+              }));
+              if (isAccentColor(remoteAccentColor)) {
+                setAccentColor(remoteAccentColor);
+              }
+            }
+
+            if (isAccentColor(profileRow.accent_color)) {
+              setAccentColor(profileRow.accent_color);
             }
           }
         } else if (event === 'SIGNED_OUT') {
@@ -239,7 +251,7 @@ export function MobileSettingsProvider({ children }: { children: React.ReactNode
     if (supabase && supabaseUserIdRef.current) {
       void supabase
         .from('profiles')
-        .update({ settings: { ...settings, accentColor } })
+        .update({ settings: { ...settings, accentColor }, accent_color: accentColor })
         .eq('id', supabaseUserIdRef.current)
         .then(({ error }) => {
           if (error) console.error('Unable to sync settings to Supabase:', error);
