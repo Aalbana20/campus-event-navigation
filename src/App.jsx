@@ -20,6 +20,8 @@ const Messages = lazy(() => import("./pages/Messages"))
 const MyEvents = lazy(() => import("./pages/MyEvents"))
 const Profile = lazy(() => import("./pages/Profile"))
 const PublicProfile = lazy(() => import("./pages/PublicProfile"))
+const Recaps = lazy(() => import("./pages/Recaps"))
+const RecapDetail = lazy(() => import("./pages/RecapDetail"))
 const Settings = lazy(() => import("./pages/Settings"))
 const EditProfile = lazy(() => import("./pages/EditProfile"))
 const SignUp = lazy(() => import("./pages/SignUp"))
@@ -1533,6 +1535,8 @@ function App() {
           <Route path="/events" element={<MyEvents />} />
           <Route path="/events/:eventId" element={<MyEvents />} />
           <Route path="/messages" element={<Messages />} />
+          <Route path="/recaps" element={<Recaps />} />
+          <Route path="/recaps/:eventId" element={<RecapDetail />} />
           <Route path="/create" element={<Navigate to="/events?create=event" replace />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/profile/:username" element={<PublicProfile />} />

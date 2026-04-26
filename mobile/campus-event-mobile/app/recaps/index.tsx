@@ -19,7 +19,6 @@ import type { EventRecord } from '@/types/models';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const TIMELINE_WINDOW_DAYS = 14;
-const APPROX_ROW_HEIGHT = 206;
 
 const parseClockTime = (value?: string | null) => {
   const trimmed = value?.trim();
@@ -91,6 +90,7 @@ export default function RecapsScreen() {
   const { events } = useMobileApp();
   const scrollRef = useRef<ScrollView>(null);
   const didInitialScrollRef = useRef(false);
+  const todayOffsetRef = useRef(0);
   const [viewportHeight, setViewportHeight] = useState(0);
 
   const today = useMemo(() => startOfLocalDay(new Date()), []);
@@ -136,7 +136,7 @@ export default function RecapsScreen() {
     didInitialScrollRef.current = true;
     requestAnimationFrame(() => {
       scrollRef.current?.scrollTo({
-        y: Math.max(0, todayIndex * APPROX_ROW_HEIGHT - viewportHeight / 2 + 86),
+        y: Math.max(0, todayOffsetRef.current - viewportHeight / 2 + 34),
         animated: false,
       });
     });
@@ -163,7 +163,15 @@ export default function RecapsScreen() {
         }}
         showsVerticalScrollIndicator={false}>
         {timelineRows.map((row) => (
-          <View key={row.dateKey} style={styles.dateRow}>
+          <View
+            key={row.dateKey}
+            style={[styles.dateRow, row.events.length === 0 && styles.dateRowCompact]}
+            onLayout={(event) => {
+              if (row.isToday) {
+                todayOffsetRef.current = event.nativeEvent.layout.y;
+                scrollToToday();
+              }
+            }}>
             <View style={styles.dateHeader}>
               <View style={styles.dateLine} />
               <Text style={[styles.dateLabel, row.isToday && styles.dateLabelToday]}>
@@ -202,11 +210,7 @@ export default function RecapsScreen() {
                   </Pressable>
                 ))}
               </ScrollView>
-            ) : (
-              <View style={styles.emptyDatePill}>
-                <Text style={styles.emptyDateText}>No events on this date</Text>
-              </View>
-            )}
+            ) : null}
           </View>
         ))}
       </ScrollView>
@@ -244,11 +248,15 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     content: {
       paddingTop: 8,
       paddingBottom: 34,
-      gap: 18,
+      gap: 8,
     },
     dateRow: {
       minHeight: 188,
       gap: 12,
+    },
+    dateRowCompact: {
+      minHeight: 28,
+      gap: 0,
     },
     dateHeader: {
       flexDirection: 'row',
@@ -327,21 +335,6 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     eventHost: {
       color: 'rgba(255,255,255,0.82)',
       fontSize: 10,
-      fontWeight: '800',
-    },
-    emptyDatePill: {
-      marginHorizontal: 18,
-      height: 94,
-      borderRadius: 18,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: theme.surface,
-      borderWidth: 1,
-      borderColor: theme.border,
-    },
-    emptyDateText: {
-      color: theme.textMuted,
-      fontSize: 13,
       fontWeight: '800',
     },
   });

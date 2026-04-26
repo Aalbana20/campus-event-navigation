@@ -103,7 +103,6 @@ function Profile() {
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false)
   const [isCropModalOpen, setIsCropModalOpen] = useState(false)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
-  const [shareMessage, setShareMessage] = useState("")
   const [profileContentCounts, setProfileContentCounts] = useState({ posts: 0 })
   const [activeSettingsView, setActiveSettingsView] = useState("main")
   const [themeMode, setThemeMode] = useState(getStoredThemeMode)
@@ -458,19 +457,6 @@ function Profile() {
     setCroppedAreaPixels(null)
   }
 
-  const handleShareProfile = async () => {
-    const baseUrl = window.location.origin
-    const profileLink = `${baseUrl}/#/profile/${draftUsername || username || "profile"}`
-
-    try {
-      await navigator.clipboard.writeText(profileLink)
-      setShareMessage("Profile link copied!")
-      setTimeout(() => setShareMessage(""), 2500)
-    } catch {
-      showToast("Could not copy profile link.", "error")
-    }
-  }
-
   const handleLogout = () => {
     closeSettings()
     navigate("/auth/logout")
@@ -733,9 +719,9 @@ function Profile() {
               <button
                 type="button"
                 className="profile-action-btn secondary"
-                onClick={handleShareProfile}
+                onClick={() => navigate("/recaps")}
               >
-                Share Profile
+                Recaps
               </button>
               <button
                 type="button"
@@ -745,7 +731,6 @@ function Profile() {
                 Settings
               </button>
             </div>
-            {shareMessage && <p className="profile-share-message">{shareMessage}</p>}
           </div>
         </div>
 
