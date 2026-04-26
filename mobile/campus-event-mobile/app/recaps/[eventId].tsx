@@ -8,6 +8,8 @@ import {
   Image,
   KeyboardAvoidingView,
   Modal,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   Platform,
   Pressable,
   ScrollView,
@@ -15,8 +17,10 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
+import { useVideoPlayer, VideoView } from 'expo-video';
 
 import { AppScreen } from '@/components/mobile/AppScreen';
 import { useAppTheme } from '@/lib/app-theme';
@@ -37,50 +41,262 @@ import { useMobileApp } from '@/providers/mobile-app-provider';
 
 type FeedTab = 'all' | 'following';
 
-function RecapMediaGrid({
-  media,
+function RecapMediaSlide({
+  item,
+  width,
   styles,
 }: {
-  media: RecapMediaItem[];
-  styles: ReturnType<typeof buildStyles>;
+  item: RecapMediaItem;
+  width: number;
+  styles: any;
 }) {
-  const visibleMedia = media.slice(0, 4);
-  if (visibleMedia.length === 0) return null;
-
-  if (visibleMedia.length === 1) {
-    return (
-      <Image source={{ uri: visibleMedia[0].url }} style={styles.singleMediaImage} />
-    );
-  }
-
-  if (visibleMedia.length === 2) {
-    return (
-      <View style={styles.mediaGridTwo}>
-        {visibleMedia.map((item) => (
-          <Image key={item.id} source={{ uri: item.url }} style={styles.mediaGridImage} />
-        ))}
-      </View>
-    );
-  }
-
-  if (visibleMedia.length === 3) {
-    return (
-      <View style={styles.mediaGridThree}>
-        <Image source={{ uri: visibleMedia[0].url }} style={styles.mediaGridLargeImage} />
-        <View style={styles.mediaGridStack}>
-          {visibleMedia.slice(1).map((item) => (
-            <Image key={item.id} source={{ uri: item.url }} style={styles.mediaGridImage} />
-          ))}
-        </View>
-      </View>
-    );
-  }
+  const isVideo = item.mediaType === 'video';
+  const player = useVideoPlayer(isVideo ? item.url : null, (instance) => {
+    instance.loop = true;
+    instance.muted = true;
+  });
 
   return (
-    <View style={styles.mediaGridFour}>
-      {visibleMedia.map((item) => (
-        <Image key={item.id} source={{ uri: item.url }} style={styles.mediaGridFourImage} />
-      ))}
+    <View style={[styles.mediaSlide, { width }]}>
+      {isVideo ? (
+        <>
+          <VideoView
+            player={player}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+            nativeControls
+            allowsFullscreen
+            allowsPictureInPicture={false}
+          />
+          <View style={styles.videoBadge}>
+            <Ionicons name="play" size={12} color="#ffffff" />
+            <Text style={styles.videoBadgeText}>Video</Text>
+          </View>
+        </>
+      ) : (
+        <Image
+          source={{ uri: item.url }}
+          style={StyleSheet.absoluteFill}
+          resizeMode="cover"
+        />
+      )}
+    </View>
+  );
+}
+
+function RecapMediaCarousel({
+  postId,
+  media,
+  width,
+  styles,
+}: {
+  postId: string;
+  media: RecapMediaItem[];
+  width: number;
+  styles: any;
+}) {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const visibleMedia = media.slice(0, 4);
+  if (visibleMedia.length === 0) return null;
+  const mediaWidth = Math.max(280, width - 28);
+
+  const handleScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const nextIndex = Math.round(event.nativeEvent.contentOffset.x / mediaWidth);
+    setActiveIndex(Math.max(0, Math.min(nextIndex, visibleMedia.length - 1)));
+  };
+
+  return (
+    <View style={styles.mediaCarousel}>
+      <ScrollView
+        horizontal
+        pagingEnabled
+        nestedScrollEnabled
+        bounces={false}
+        decelerationRate="fast"
+        snapToInterval={mediaWidth}
+        snapToAlignment="start"
+        showsHorizontalScrollIndicator={false}
+        onMomentumScrollEnd={handleScrollEnd}
+        scrollEventThrottle={16}>
+        {visibleMedia.map((item) => (
+          <RecapMediaSlide
+            key={`${postId}-${item.id}`}
+            item={item}
+            width={mediaWidth}
+            styles={styles}
+          />
+        ))}
+      </ScrollView>
+
+      {visibleMedia.length > 1 ? (
+        <View style={styles.mediaCountPill}>
+          <Text style={styles.mediaCountText}>
+            {activeIndex + 1}/{visibleMedia.length}
+          </Text>
+        </View>
+      ) : null}
+
+      {visibleMedia.length > 1 ? (
+        <View style={styles.paginationDots}>
+          {visibleMedia.map((item, index) => (
+            <View
+              key={`${postId}-${item.id}-dot`}
+              style={[styles.paginationDot, index === activeIndex && styles.paginationDotActive]}
+            />
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function RecapCaption({
+  name,
+  caption,
+  styles,
+}: {
+  name: string;
+  caption: string;
+  styles: any;
+}) {
+  if (!caption) return null;
+  return (
+    <Text style={styles.captionText}>
+      <Text style={styles.captionAuthor}>{name}: </Text>
+      {caption}
+    </Text>
+  );
+}
+
+function TextOnlyRecapCard({
+  name,
+  caption,
+  styles,
+}: {
+  name: string;
+  caption: string;
+  styles: any;
+}) {
+  if (!caption) return null;
+  return (
+    <View style={styles.textOnlyCard}>
+      <RecapCaption name={name} caption={caption} styles={styles} />
+    </View>
+  );
+}
+
+function RecapPostCard({
+  post,
+  isLiked,
+  isReposted,
+  isSaved,
+  mediaWidth,
+  styles,
+  theme,
+  onPressAuthor,
+  onLike,
+  onComment,
+  onRepost,
+  onShare,
+  onSave,
+}: {
+  post: RecapPostRecord;
+  isLiked: boolean;
+  isReposted: boolean;
+  isSaved: boolean;
+  mediaWidth: number;
+  styles: any;
+  theme: ReturnType<typeof useAppTheme>;
+  onPressAuthor: (post: RecapPostRecord) => void;
+  onLike: () => void;
+  onComment: () => void;
+  onRepost: () => void;
+  onShare: () => void;
+  onSave: () => void;
+}) {
+  const hasMedia = post.media.length > 0;
+
+  return (
+    <View style={styles.postCard}>
+      <View style={styles.postUserRow}>
+        <Pressable style={styles.postAuthorTapArea} onPress={() => onPressAuthor(post)}>
+          <Image
+            source={getAvatarImageSource(post.authorAvatar)}
+            style={styles.postAvatar}
+          />
+          <View style={styles.postUserCopy}>
+            <View style={styles.postHeader}>
+              <Text style={styles.postName} numberOfLines={1}>
+                {post.authorName}
+              </Text>
+              {post.authorUsername ? (
+                <Text style={styles.postMeta} numberOfLines={1}>
+                  @{post.authorUsername}
+                </Text>
+              ) : null}
+              <Text style={styles.postMeta}>· {formatRelativeTime(post.createdAt)}</Text>
+            </View>
+          </View>
+        </Pressable>
+        <Pressable
+          style={styles.moreButton}
+          onPress={() => Alert.alert('Recap options', 'Post options are coming soon.')}>
+          <Ionicons name="ellipsis-horizontal" size={20} color={theme.textMuted} />
+        </Pressable>
+      </View>
+
+      {hasMedia ? (
+        <RecapMediaCarousel
+          postId={post.id}
+          media={post.media}
+          width={mediaWidth}
+          styles={styles}
+        />
+      ) : (
+        <TextOnlyRecapCard
+          name={post.authorUsername || post.authorName}
+          caption={post.caption}
+          styles={styles}
+        />
+      )}
+
+      {hasMedia ? (
+        <RecapCaption
+          name={post.authorUsername || post.authorName}
+          caption={post.caption}
+          styles={styles}
+        />
+      ) : null}
+
+      <View style={styles.actionRow}>
+        <Pressable style={styles.actionButton} onPress={onLike}>
+          <Ionicons
+            name={isLiked ? 'heart' : 'heart-outline'}
+            size={25}
+            color={isLiked ? theme.accent : theme.text}
+          />
+        </Pressable>
+        <Pressable style={styles.actionButton} onPress={onComment}>
+          <Ionicons name="chatbubble-outline" size={24} color={theme.text} />
+        </Pressable>
+        <Pressable style={styles.actionButton} onPress={onRepost}>
+          <Ionicons
+            name="repeat-outline"
+            size={25}
+            color={isReposted ? theme.accent : theme.text}
+          />
+        </Pressable>
+        <Pressable style={styles.actionButton} onPress={onShare}>
+          <Ionicons name="paper-plane-outline" size={24} color={theme.text} />
+        </Pressable>
+        <Pressable style={[styles.actionButton, styles.saveActionButton]} onPress={onSave}>
+          <Ionicons
+            name={isSaved ? 'bookmark' : 'bookmark-outline'}
+            size={25}
+            color={isSaved ? theme.accent : theme.text}
+          />
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -88,6 +304,7 @@ function RecapMediaGrid({
 export default function EventRecapFeedScreen() {
   const { eventId } = useLocalSearchParams<{ eventId: string }>();
   const router = useRouter();
+  const { width: screenWidth } = useWindowDimensions();
   const theme = useAppTheme();
   const styles = useMemo(() => buildStyles(theme), [theme]);
   const {
@@ -111,6 +328,7 @@ export default function EventRecapFeedScreen() {
 
   const event = eventId ? getEventById(String(eventId)) : undefined;
   const hostProfile = event?.createdBy ? getProfileById(event.createdBy) : undefined;
+  const mediaWidth = Math.max(300, screenWidth - 28);
 
   const followingAuthorIds = useMemo(
     () =>
@@ -302,6 +520,23 @@ export default function EventRecapFeedScreen() {
     });
   };
 
+  const handleOpenAuthor = (post: RecapPostRecord) => {
+    if (post.authorId === currentUser.id) {
+      router.push('/(tabs)/profile');
+      return;
+    }
+
+    if (post.authorUsername) {
+      router.push({
+        pathname: '/profile/[username]',
+        params: { username: post.authorUsername },
+      });
+      return;
+    }
+
+    Alert.alert('Profile', 'This profile is not available yet.');
+  };
+
   if (!event) {
     return (
       <AppScreen>
@@ -381,79 +616,24 @@ export default function EventRecapFeedScreen() {
             <Text style={styles.loadingText}>Loading recaps...</Text>
           </View>
         ) : visiblePosts.length > 0 ? (
-          visiblePosts.map((post) => {
-            const isLiked = likedIds.has(post.id);
-            const isReposted = repostedIds.has(post.id);
-            const isSaved = savedIds.has(post.id);
-
-            return (
-              <View key={post.id} style={styles.postRow}>
-                <Image
-                  source={getAvatarImageSource(post.authorAvatar)}
-                  style={styles.postAvatar}
-                />
-                <View style={styles.postBody}>
-                  <View style={styles.postHeader}>
-                    <Text style={styles.postName} numberOfLines={1}>
-                      {post.authorName}
-                    </Text>
-                    {post.authorUsername ? (
-                      <Text style={styles.postMeta} numberOfLines={1}>
-                        @{post.authorUsername}
-                      </Text>
-                    ) : null}
-                    <Text style={styles.postMeta}>· {formatRelativeTime(post.createdAt)}</Text>
-                  </View>
-
-                  {post.caption ? (
-                    <Text style={styles.postText}>{post.caption}</Text>
-                  ) : null}
-
-                  <RecapMediaGrid media={post.media} styles={styles} />
-
-                  <View style={styles.actionRow}>
-                    <Pressable
-                      style={styles.actionCluster}
-                      onPress={() => toggleSetEntry(setLikedIds, post.id)}>
-                      <Ionicons
-                        name={isLiked ? 'heart' : 'heart-outline'}
-                        size={20}
-                        color={isLiked ? theme.accent : theme.textMuted}
-                      />
-                    </Pressable>
-                    <Pressable
-                      style={styles.actionButton}
-                      onPress={() => Alert.alert('Comments', 'Recap comments are next.')}>
-                      <Ionicons name="chatbubble-outline" size={19} color={theme.textMuted} />
-                    </Pressable>
-                    <Pressable
-                      style={styles.actionButton}
-                      onPress={() => toggleSetEntry(setRepostedIds, post.id)}>
-                      <Ionicons
-                        name="repeat-outline"
-                        size={21}
-                        color={isReposted ? theme.accent : theme.textMuted}
-                      />
-                    </Pressable>
-                    <Pressable
-                      style={styles.actionButton}
-                      onPress={() => void handleSharePost(post)}>
-                      <Ionicons name="share-outline" size={20} color={theme.textMuted} />
-                    </Pressable>
-                    <Pressable
-                      style={styles.actionButton}
-                      onPress={() => toggleSetEntry(setSavedIds, post.id)}>
-                      <Ionicons
-                        name={isSaved ? 'bookmark' : 'bookmark-outline'}
-                        size={20}
-                        color={isSaved ? theme.accent : theme.textMuted}
-                      />
-                    </Pressable>
-                  </View>
-                </View>
-              </View>
-            );
-          })
+          visiblePosts.map((post) => (
+            <RecapPostCard
+              key={post.id}
+              post={post}
+              isLiked={likedIds.has(post.id)}
+              isReposted={repostedIds.has(post.id)}
+              isSaved={savedIds.has(post.id)}
+              mediaWidth={mediaWidth}
+              styles={styles}
+              theme={theme}
+              onPressAuthor={handleOpenAuthor}
+              onLike={() => toggleSetEntry(setLikedIds, post.id)}
+              onComment={() => Alert.alert('Comments', 'Recap comments are next.')}
+              onRepost={() => toggleSetEntry(setRepostedIds, post.id)}
+              onShare={() => void handleSharePost(post)}
+              onSave={() => toggleSetEntry(setSavedIds, post.id)}
+            />
+          ))
         ) : (
           <View style={styles.emptyState}>
             <Text style={styles.emptyTitle}>No recaps yet</Text>
@@ -628,124 +808,163 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       fontSize: 16,
       fontWeight: '900',
     },
-    postRow: {
-      flexDirection: 'row',
-      gap: 12,
+    postCard: {
       paddingHorizontal: 14,
-      paddingVertical: 14,
+      paddingTop: 16,
+      paddingBottom: 15,
       borderBottomWidth: 1,
       borderBottomColor: theme.border,
+      backgroundColor: theme.background,
+      gap: 11,
+    },
+    postUserRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    postAuthorTapArea: {
+      flex: 1,
+      minWidth: 0,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
     },
     postAvatar: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
+      width: 42,
+      height: 42,
+      borderRadius: 21,
       backgroundColor: theme.surfaceAlt,
     },
-    postBody: {
+    postUserCopy: {
       flex: 1,
-      gap: 8,
+      minWidth: 0,
     },
     postHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 5,
-      flexWrap: 'wrap',
+      minWidth: 0,
     },
     postName: {
       color: theme.text,
       fontSize: 15,
       fontWeight: '900',
-      maxWidth: 140,
+      maxWidth: 116,
     },
     postMeta: {
       color: theme.textMuted,
       fontSize: 14,
       fontWeight: '700',
+      maxWidth: 106,
     },
-    postText: {
-      color: theme.text,
-      fontSize: 16,
-      lineHeight: 22,
-      fontWeight: '500',
+    moreButton: {
+      width: 34,
+      height: 34,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: 17,
     },
-    singleMediaImage: {
-      width: '100%',
-      height: 260,
-      borderRadius: 18,
-      backgroundColor: theme.surfaceAlt,
-    },
-    mediaGridTwo: {
-      flexDirection: 'row',
-      height: 230,
-      gap: 2,
+    mediaCarousel: {
+      position: 'relative',
       overflow: 'hidden',
-      borderRadius: 18,
+      borderRadius: 22,
+      backgroundColor: theme.surfaceAlt,
     },
-    mediaGridThree: {
-      flexDirection: 'row',
-      height: 240,
-      gap: 2,
+    mediaSlide: {
+      height: 318,
       overflow: 'hidden',
-      borderRadius: 18,
-    },
-    mediaGridFour: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      height: 240,
-      gap: 2,
-      overflow: 'hidden',
-      borderRadius: 18,
-    },
-    mediaGridLargeImage: {
-      flex: 1.4,
-      height: '100%',
+      borderRadius: 22,
       backgroundColor: theme.surfaceAlt,
     },
-    mediaGridStack: {
-      flex: 1,
-      gap: 2,
-    },
-    mediaGridImage: {
-      flex: 1,
-      minWidth: '49%',
-      backgroundColor: theme.surfaceAlt,
-    },
-    mediaGridFourImage: {
-      width: '49.7%',
-      height: '49.7%',
-      backgroundColor: theme.surfaceAlt,
-    },
-    localPostNote: {
-      color: theme.textMuted,
-      fontSize: 12,
-      fontWeight: '700',
-    },
-    actionRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      paddingTop: 2,
-    },
-    actionCluster: {
-      minWidth: 38,
-      height: 32,
+    videoBadge: {
+      position: 'absolute',
+      left: 12,
+      top: 12,
       flexDirection: 'row',
       alignItems: 'center',
       gap: 5,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 999,
+      backgroundColor: 'rgba(0,0,0,0.58)',
     },
-    actionCount: {
-      color: theme.textMuted,
+    videoBadgeText: {
+      color: '#ffffff',
+      fontSize: 11,
+      fontWeight: '900',
+    },
+    mediaCountPill: {
+      position: 'absolute',
+      right: 12,
+      top: 12,
+      paddingHorizontal: 9,
+      paddingVertical: 5,
+      borderRadius: 999,
+      backgroundColor: 'rgba(0,0,0,0.58)',
+    },
+    mediaCountText: {
+      color: '#ffffff',
       fontSize: 12,
-      fontWeight: '800',
+      fontWeight: '900',
     },
-    actionCountActive: {
-      color: theme.accent,
+    paginationDots: {
+      position: 'absolute',
+      bottom: 9,
+      alignSelf: 'center',
+      flexDirection: 'row',
+      gap: 6,
+      paddingHorizontal: 9,
+      paddingVertical: 5,
+      borderRadius: 999,
+      backgroundColor: 'rgba(0,0,0,0.34)',
+    },
+    paginationDot: {
+      width: 7,
+      height: 7,
+      borderRadius: 3.5,
+      backgroundColor: 'rgba(255,255,255,0.42)',
+    },
+    paginationDotActive: {
+      backgroundColor: theme.accent,
+    },
+    captionText: {
+      color: theme.text,
+      fontSize: 16,
+      lineHeight: 21,
+      fontWeight: '700',
+    },
+    captionAuthor: {
+      color: theme.text,
+      fontWeight: '900',
+    },
+    textOnlyCard: {
+      padding: 16,
+      minHeight: 116,
+      justifyContent: 'center',
+      borderRadius: 22,
+      backgroundColor: theme.surface,
+      borderWidth: 1,
+      borderColor: theme.border,
+      shadowColor: theme.shadow,
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.08,
+      shadowRadius: 18,
+      elevation: 2,
+    },
+    actionRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 19,
+      paddingTop: 2,
     },
     actionButton: {
-      width: 38,
+      width: 30,
       height: 32,
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    saveActionButton: {
+      marginLeft: 'auto',
     },
     loadingState: {
       minHeight: 280,
