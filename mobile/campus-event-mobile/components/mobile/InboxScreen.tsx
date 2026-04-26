@@ -554,7 +554,7 @@ function SuggestedProfileRow({
   );
 }
 
-function DmExploreEventsCard({
+function DmMapCircle({
   styles,
   theme,
   onPress,
@@ -564,19 +564,16 @@ function DmExploreEventsCard({
   onPress: () => void;
 }) {
   return (
-    <Pressable style={styles.dmExploreCard} onPress={onPress}>
-      <View style={styles.dmMiniMapGrid} />
-      <View style={[styles.dmMapGridLine, styles.dmMapGridLineVerticalOne]} />
-      <View style={[styles.dmMapGridLine, styles.dmMapGridLineVerticalTwo]} />
-      <View style={[styles.dmMapGridLine, styles.dmMapGridLineHorizontalOne]} />
-      <View style={[styles.dmMapGridLine, styles.dmMapGridLineHorizontalTwo]} />
-      <View style={styles.dmRadarOuter} />
-      <View style={styles.dmRadarMiddle} />
-      <View style={styles.dmRadarDot}>
-        <Ionicons name="location" size={25} color={theme.accentText} />
+    <Pressable style={styles.dmMapCircleCard} onPress={onPress}>
+      <View style={styles.dmMapAvatarShell}>
+        <View style={styles.dmMapCircleGrid} />
+        <View style={styles.dmMapPulseOuter} />
+        <View style={styles.dmMapPulseInner} />
+        <View style={styles.dmMapPinDot}>
+          <Ionicons name="location" size={20} color={theme.accentText} />
+        </View>
       </View>
-      <Text style={styles.dmExploreTitle}>Explore Events</Text>
-      <Text style={styles.dmExploreSubtitle}>Map</Text>
+      <Text style={styles.dmMapLabel}>Map</Text>
     </Pressable>
   );
 }
@@ -1030,7 +1027,7 @@ export function InboxScreen({
               <TextInput
                 value={dmSearchQuery}
                 onChangeText={setDmSearchQuery}
-                placeholder="Search people, events"
+                placeholder="Search"
                 placeholderTextColor={theme.textMuted}
                 style={styles.dmSearchInput}
               />
@@ -1040,16 +1037,16 @@ export function InboxScreen({
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.dmNotesRow}>
-              <DmExploreEventsCard
-                styles={styles}
-                theme={theme}
-                onPress={() => router.push('/map')}
-              />
               <DmYourNoteCard
                 image={currentUser.avatar}
                 styles={styles}
                 theme={theme}
                 onPress={handleCreateNotePlaceholder}
+              />
+              <DmMapCircle
+                styles={styles}
+                theme={theme}
+                onPress={() => router.push('/map')}
               />
             </ScrollView>
 
@@ -1980,15 +1977,15 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       letterSpacing: 0,
     },
     dmListChrome: {
-      gap: 12,
+      gap: 11,
     },
     dmSearchBar: {
-      minHeight: 52,
+      minHeight: 46,
       flexDirection: 'row',
       alignItems: 'center',
       gap: 10,
-      borderRadius: 26,
-      paddingHorizontal: 17,
+      borderRadius: 23,
+      paddingHorizontal: 16,
       backgroundColor: theme.surfaceAlt,
       borderWidth: 1,
       borderColor: theme.border,
@@ -1996,123 +1993,19 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     dmSearchInput: {
       flex: 1,
       color: theme.text,
-      fontSize: 17,
+      fontSize: 16,
       fontWeight: '600',
       paddingVertical: 0,
     },
     dmNotesRow: {
-      gap: 12,
+      gap: 18,
       paddingHorizontal: 2,
       paddingTop: 4,
       paddingBottom: 3,
     },
-    dmExploreCard: {
-      width: 92,
-      height: 132,
-      borderRadius: 16,
-      overflow: 'hidden',
-      padding: 10,
-      justifyContent: 'flex-end',
-      backgroundColor: theme.surface,
-      borderWidth: 1,
-      borderColor: theme.accent,
-      shadowColor: theme.accent,
-      shadowOpacity: 0.28,
-      shadowRadius: 11,
-      shadowOffset: { width: 0, height: 0 },
-      elevation: 10,
-    },
-    dmMiniMapGrid: {
-      ...StyleSheet.absoluteFillObject,
-      backgroundColor: theme.surfaceAlt,
-      opacity: 0.7,
-    },
-    dmMapGridLine: {
-      position: 'absolute',
-      backgroundColor: theme.accent,
-      opacity: 0.11,
-    },
-    dmMapGridLineVerticalOne: {
-      top: -16,
-      bottom: -16,
-      left: 27,
-      width: 1,
-      transform: [{ rotate: '24deg' }],
-    },
-    dmMapGridLineVerticalTwo: {
-      top: -16,
-      bottom: -16,
-      right: 21,
-      width: 1,
-      transform: [{ rotate: '-18deg' }],
-    },
-    dmMapGridLineHorizontalOne: {
-      left: -14,
-      right: -14,
-      top: 35,
-      height: 1,
-      transform: [{ rotate: '-10deg' }],
-    },
-    dmMapGridLineHorizontalTwo: {
-      left: -14,
-      right: -14,
-      top: 71,
-      height: 1,
-      transform: [{ rotate: '12deg' }],
-    },
-    dmRadarOuter: {
-      position: 'absolute',
-      top: 32,
-      alignSelf: 'center',
-      width: 70,
-      height: 70,
-      borderRadius: 35,
-      borderWidth: 1,
-      borderColor: theme.accent,
-      opacity: 0.32,
-    },
-    dmRadarMiddle: {
-      position: 'absolute',
-      top: 47,
-      alignSelf: 'center',
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      borderWidth: 1,
-      borderColor: theme.accent,
-      opacity: 0.56,
-    },
-    dmRadarDot: {
-      position: 'absolute',
-      top: 36,
-      alignSelf: 'center',
-      width: 48,
-      height: 48,
-      borderRadius: 24,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: theme.accent,
-      shadowColor: theme.accent,
-      shadowOpacity: 0.46,
-      shadowRadius: 13,
-      shadowOffset: { width: 0, height: 0 },
-      elevation: 12,
-    },
-    dmExploreTitle: {
-      color: theme.text,
-      fontSize: 12,
-      fontWeight: '900',
-      lineHeight: 14,
-    },
-    dmExploreSubtitle: {
-      color: theme.accent,
-      fontSize: 12,
-      fontWeight: '900',
-      marginTop: 3,
-    },
     dmYourNoteCard: {
       width: 78,
-      height: 132,
+      height: 104,
       borderRadius: 0,
       alignItems: 'center',
       justifyContent: 'flex-end',
@@ -2122,7 +2015,7 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     },
     dmYourNoteAvatarShell: {
       position: 'absolute',
-      top: 18,
+      top: 6,
       width: 66,
       height: 66,
       borderRadius: 33,
@@ -2162,28 +2055,82 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       fontWeight: '700',
       marginTop: 3,
     },
+    dmMapCircleCard: {
+      width: 78,
+      height: 104,
+      alignItems: 'center',
+      justifyContent: 'flex-end',
+      paddingBottom: 8,
+    },
+    dmMapAvatarShell: {
+      position: 'absolute',
+      top: 6,
+      width: 66,
+      height: 66,
+      borderRadius: 33,
+      alignItems: 'center',
+      justifyContent: 'center',
+      overflow: 'hidden',
+      backgroundColor: theme.surfaceAlt,
+      borderWidth: 1,
+      borderColor: theme.border,
+    },
+    dmMapCircleGrid: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: theme.surface,
+      opacity: 0.88,
+    },
+    dmMapPulseOuter: {
+      position: 'absolute',
+      width: 52,
+      height: 52,
+      borderRadius: 26,
+      borderWidth: 1,
+      borderColor: theme.accent,
+      opacity: 0.26,
+    },
+    dmMapPulseInner: {
+      position: 'absolute',
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: theme.accent,
+      opacity: 0.46,
+    },
+    dmMapPinDot: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: theme.accent,
+    },
+    dmMapLabel: {
+      color: theme.text,
+      fontSize: 13,
+      fontWeight: '900',
+    },
     dmFilterRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 3,
-      padding: 3,
-      borderRadius: 20,
-      borderWidth: 1,
-      borderColor: theme.border,
-      backgroundColor: theme.surface,
+      gap: 9,
+      paddingTop: 1,
+      paddingBottom: 2,
+      backgroundColor: 'transparent',
     },
     dmFilterPill: {
-      flex: 1,
-      minHeight: 34,
+      minHeight: 36,
       alignItems: 'center',
       justifyContent: 'center',
       borderRadius: 999,
-      paddingHorizontal: 8,
-      backgroundColor: 'transparent',
+      paddingHorizontal: 18,
+      backgroundColor: theme.surfaceAlt,
+      borderWidth: 1,
+      borderColor: theme.border,
     },
     dmFilterPillActive: {
-      backgroundColor: theme.accentSoft,
-      borderWidth: 1,
+      backgroundColor: theme.accent,
       borderColor: theme.accent,
       shadowColor: theme.accent,
       shadowOpacity: 0.18,
@@ -2196,7 +2143,7 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       fontWeight: '900',
     },
     dmFilterTextActive: {
-      color: theme.text,
+      color: theme.accentText,
     },
     dmThreadListContent: {
       gap: 6,

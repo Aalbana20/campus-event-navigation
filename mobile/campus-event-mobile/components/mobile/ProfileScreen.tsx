@@ -500,13 +500,11 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
                 </Text>
                 {isVerifiedProfile ? (
                   <View style={styles.verifiedBadge}>
+                    <View style={styles.verifiedBadgeBurst} />
                     <Ionicons name="checkmark" size={12} color={theme.accentText} />
                   </View>
                 ) : null}
               </View>
-              <Text style={styles.profileRoleText}>
-                {isOwnProfile ? 'Your campus profile' : 'Campus profile'}
-              </Text>
             </View>
           </View>
 
@@ -525,13 +523,13 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
                 <Pressable
                   style={styles.secondaryButton}
                   onPress={handleOpenEdit}>
-                  <Ionicons name="pencil-outline" size={16} color={theme.accent} />
+                  <Ionicons name="pencil-outline" size={14} color={theme.accent} />
                   <Text style={styles.secondaryButtonText}>Edit Profile</Text>
                 </Pressable>
                 <Pressable
                   style={styles.secondaryButton}
                   onPress={() => Alert.alert('Share Profile', `@${profile.username}`)}>
-                  <Ionicons name="share-outline" size={16} color={theme.accent} />
+                  <Ionicons name="share-outline" size={14} color={theme.accent} />
                   <Text style={styles.secondaryButtonText}>Share Profile</Text>
                 </Pressable>
               </>
@@ -1063,7 +1061,7 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) => {
       borderRadius: 0,
       backgroundColor: 'transparent',
       borderWidth: 0,
-      gap: 20,
+      gap: 17,
     },
     headerTopRow: {
       flexDirection: 'row',
@@ -1093,16 +1091,22 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) => {
       fontWeight: '800',
     },
     verifiedBadge: {
-      width: 18,
-      height: 18,
-      borderRadius: 9,
+      width: 20,
+      height: 20,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: theme.accent,
       shadowColor: theme.accent,
       shadowOpacity: 0.22,
       shadowRadius: 8,
       shadowOffset: { width: 0, height: 0 },
+    },
+    verifiedBadgeBurst: {
+      position: 'absolute',
+      width: 17,
+      height: 17,
+      borderRadius: 5,
+      backgroundColor: theme.accent,
+      transform: [{ rotate: '45deg' }],
     },
     profileRoleText: {
       color: profileMutedText,
@@ -1146,7 +1150,7 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) => {
     },
     actionRow: {
       flexDirection: 'row',
-      gap: 10,
+      gap: 8,
     },
     primaryButton: {
       flex: 1,
@@ -1166,16 +1170,16 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) => {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      gap: 7,
-      paddingVertical: 13,
-      borderRadius: 12,
+      gap: 6,
+      paddingVertical: 9,
+      borderRadius: 11,
       backgroundColor: theme.accentSoft,
       borderWidth: 1,
       borderColor: theme.accent,
     },
     secondaryButtonText: {
       color: theme.accent,
-      fontSize: 14,
+      fontSize: 13,
       fontWeight: '800',
     },
     firstCreateCard: {
