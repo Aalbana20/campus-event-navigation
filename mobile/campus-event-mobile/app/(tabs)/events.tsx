@@ -599,11 +599,11 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       flexDirection: 'row',
       alignItems: 'center',
       gap: 7,
-      justifyContent: 'center',
+      justifyContent: 'flex-start',
     },
     dateHeaderText: {
       color: theme.text,
-      fontSize: 18,
+      fontSize: 26,
       fontWeight: '900',
     },
     headerFilterButton: {

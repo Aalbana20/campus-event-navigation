@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   KeyboardAvoidingView,
+  Image,
   Modal,
   Platform,
   Pressable,
@@ -13,10 +14,14 @@ import {
 } from 'react-native';
 
 import { useAppTheme } from '@/lib/app-theme';
+import { getAvatarImageSource } from '@/lib/mobile-media';
 import type { CreatePersonalCalendarItemInput } from '@/types/models';
 import { CreateEventComposer } from '@/components/mobile/CreateEventComposer';
+import { useMobileApp } from '@/providers/mobile-app-provider';
 
 type CalendarCreateMode = 'event' | 'personal';
+type CreateFlowStep = 'type' | 'privateInvite' | 'event' | 'personal';
+type EventCreateKind = 'public' | 'private';
 
 type CalendarCreateSheetProps = {
   visible: boolean;
@@ -42,8 +47,12 @@ export function CalendarCreateSheet({
 }: CalendarCreateSheetProps) {
   const theme = useAppTheme();
   const styles = useMemo(() => buildStyles(theme), [theme]);
+  const { followingProfiles } = useMobileApp();
   const defaultDate = selectedDate || toDateKey(new Date());
-  const [mode, setMode] = useState<CalendarCreateMode>('event');
+  const [flowStep, setFlowStep] = useState<CreateFlowStep>('type');
+  const [eventKind, setEventKind] = useState<EventCreateKind>('public');
+  const [friendQuery, setFriendQuery] = useState('');
+  const [selectedFriendIds, setSelectedFriendIds] = useState<Set<string>>(new Set());
   const [personalTitle, setPersonalTitle] = useState('');
   const [personalDate, setPersonalDate] = useState(defaultDate);
   const [personalTime, setPersonalTime] = useState('');
@@ -51,9 +60,20 @@ export function CalendarCreateSheet({
 
   useEffect(() => {
     if (!visible) return;
-    setMode(initialMode);
+    setFlowStep(initialMode === 'personal' ? 'personal' : 'type');
+    setEventKind('public');
+    setFriendQuery('');
+    setSelectedFriendIds(new Set());
     setPersonalDate(defaultDate);
   }, [defaultDate, initialMode, visible]);
+
+  const filteredFriends = useMemo(() => {
+    const query = friendQuery.trim().toLowerCase();
+    if (!query) return followingProfiles;
+    return followingProfiles.filter((profile) =>
+      [profile.name, profile.username].join(' ').toLowerCase().includes(query)
+    );
+  }, [followingProfiles, friendQuery]);
 
   const resetPersonalForm = () => {
     setPersonalTitle('');
@@ -76,69 +96,169 @@ export function CalendarCreateSheet({
     onClose();
   };
 
+  const handleBack = () => {
+    if (flowStep === 'privateInvite') {
+      setFlowStep('type');
+      return;
+    }
+    if (flowStep === 'event' && eventKind === 'private') {
+      setFlowStep('privateInvite');
+      return;
+    }
+    if (flowStep === 'event' || flowStep === 'personal') {
+      setFlowStep('type');
+      return;
+    }
+    onClose();
+  };
+
+  const renderHeader = (title: string) => (
+    <View style={styles.header}>
+      <Pressable style={styles.iconButton} onPress={flowStep === 'type' ? onClose : handleBack}>
+        <Ionicons name={flowStep === 'type' ? 'close' : 'chevron-back'} size={25} color={theme.text} />
+      </Pressable>
+
+      <Text style={styles.headerTitle}>{title}</Text>
+
+      <View style={styles.headerSpacer} />
+    </View>
+  );
+
+  const renderTypeSelection = () => (
+    <View style={styles.typeContent}>
+      {renderHeader('New')}
+      <View style={styles.centerCopy}>
+        <Text style={styles.heroTitle}>What are you creating?</Text>
+        <Text style={styles.heroSubtitle}>Choose the type of event you want to create.</Text>
+      </View>
+
+      <View style={styles.optionList}>
+        <Pressable
+          style={styles.createOption}
+          onPress={() => {
+            setEventKind('public');
+            setFlowStep('event');
+          }}>
+          <View style={styles.optionIcon}>
+            <Ionicons name="globe-outline" size={28} color={theme.accent} />
+          </View>
+          <View style={styles.optionCopy}>
+            <Text style={styles.optionTitle}>Public Event</Text>
+            <Text style={styles.optionSubtitle}>Anyone can discover and join</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={22} color={theme.textMuted} />
+        </Pressable>
+
+        <Pressable
+          style={styles.createOption}
+          onPress={() => {
+            setEventKind('private');
+            setFlowStep('privateInvite');
+          }}>
+          <View style={styles.optionIcon}>
+            <Ionicons name="lock-closed-outline" size={28} color={theme.accent} />
+          </View>
+          <View style={styles.optionCopy}>
+            <Text style={styles.optionTitle}>Private Event</Text>
+            <Text style={styles.optionSubtitle}>Only selected people can see it</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={22} color={theme.textMuted} />
+        </Pressable>
+
+        <Pressable style={styles.createOption} onPress={() => setFlowStep('personal')}>
+          <View style={styles.optionIcon}>
+            <Ionicons name="person-outline" size={28} color={theme.accent} />
+          </View>
+          <View style={styles.optionCopy}>
+            <Text style={styles.optionTitle}>Personal Plan</Text>
+            <Text style={styles.optionSubtitle}>Just for you (not shared)</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={22} color={theme.textMuted} />
+        </Pressable>
+      </View>
+    </View>
+  );
+
+  const renderPrivateInvite = () => (
+    <View style={styles.typeContent}>
+      {renderHeader('Private Event')}
+      <View style={styles.centerCopy}>
+        <Text style={styles.heroTitle}>Who can see this?</Text>
+        <Text style={styles.heroSubtitle}>Select the people you want to invite.</Text>
+      </View>
+
+      <View style={styles.searchBox}>
+        <Ionicons name="search-outline" size={18} color={theme.textMuted} />
+        <TextInput
+          value={friendQuery}
+          onChangeText={setFriendQuery}
+          placeholder="Search friends..."
+          placeholderTextColor={theme.textMuted}
+          style={styles.searchInput}
+        />
+      </View>
+
+      <ScrollView contentContainerStyle={styles.friendList} showsVerticalScrollIndicator={false}>
+        {filteredFriends.map((friend) => {
+          const isSelected = selectedFriendIds.has(friend.id);
+          return (
+            <Pressable
+              key={friend.id}
+              style={styles.friendRow}
+              onPress={() =>
+                setSelectedFriendIds((currentIds) => {
+                  const nextIds = new Set(currentIds);
+                  if (nextIds.has(friend.id)) nextIds.delete(friend.id);
+                  else nextIds.add(friend.id);
+                  return nextIds;
+                })
+              }>
+              <Image source={getAvatarImageSource(friend.avatar)} style={styles.friendAvatar} />
+              <Text style={styles.friendName}>{friend.name || friend.username}</Text>
+              <View style={[styles.checkCircle, isSelected && styles.checkCircleActive]}>
+                {isSelected ? <Ionicons name="checkmark" size={16} color={theme.background} /> : null}
+              </View>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+
+      <Pressable style={styles.bottomPrimaryButton} onPress={() => setFlowStep('event')}>
+        <Text style={styles.bottomPrimaryText}>Continue</Text>
+      </Pressable>
+    </View>
+  );
+
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.overlay}>
         <View style={styles.sheet}>
-          <View style={styles.header}>
-            <Pressable style={styles.iconButton} onPress={onClose}>
-              <Ionicons name="close" size={25} color={theme.text} />
-            </Pressable>
+          {flowStep === 'type' ? renderTypeSelection() : null}
+          {flowStep === 'privateInvite' ? renderPrivateInvite() : null}
 
-            <Text style={styles.headerTitle}>New</Text>
-
-            <Pressable
-              style={[styles.iconButton, mode === 'personal' && styles.confirmButton]}
-              onPress={mode === 'personal' ? handleCreatePersonal : undefined}
-              disabled={mode === 'event'}>
-              <Ionicons
-                name="checkmark"
-                size={25}
-                color={mode === 'personal' ? theme.text : theme.textMuted}
-              />
-            </Pressable>
-          </View>
-
-          <View style={styles.segmentedControl}>
-            <Pressable
-              style={[styles.segmentedButton, mode === 'event' && styles.segmentedButtonActive]}
-              onPress={() => setMode('event')}>
-              <Text
-                style={[styles.segmentedText, mode === 'event' && styles.segmentedTextActive]}>
-                Event
-              </Text>
-            </Pressable>
-            <Pressable
-              style={[
-                styles.segmentedButton,
-                mode === 'personal' && styles.segmentedButtonActive,
-              ]}
-              onPress={() => setMode('personal')}>
-              <Text
-                style={[styles.segmentedText, mode === 'personal' && styles.segmentedTextActive]}>
-                Personal
-              </Text>
-            </Pressable>
-          </View>
-
-          {mode === 'event' ? (
+          {flowStep === 'event' ? (
             <ScrollView
               contentContainerStyle={styles.content}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}>
+              {renderHeader(eventKind === 'private' ? 'Private Event' : 'New Event')}
               <CreateEventComposer
                 key={`event-${visible ? defaultDate : 'closed'}`}
                 initialDate={defaultDate}
+                initialPrivacy={eventKind}
                 onPublished={onClose}
               />
             </ScrollView>
-          ) : (
+          ) : null}
+
+          {flowStep === 'personal' ? (
             <ScrollView
               contentContainerStyle={styles.content}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}>
+              {renderHeader('Personal Plan')}
               <View style={styles.formGroup}>
                 <TextInput
                   value={personalTitle}
@@ -192,7 +312,7 @@ export function CalendarCreateSheet({
                 <Text style={styles.personalCreateButtonText}>Add Personal Item</Text>
               </Pressable>
             </ScrollView>
-          )}
+          ) : null}
         </View>
       </KeyboardAvoidingView>
     </Modal>
