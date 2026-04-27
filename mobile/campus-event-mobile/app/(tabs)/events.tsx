@@ -247,7 +247,7 @@ export default function EventsScreen({ searchSignal = 0, createSignal = 0 }: Eve
   };
 
   const handleCreatePersonalItem = (input: CreatePersonalCalendarItemInput) => {
-    addPersonalCalendarItem(input);
+    void addPersonalCalendarItem(input);
   };
 
   const handleFeedScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
