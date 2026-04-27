@@ -1,21 +1,41 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useMemo } from 'react';
-import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import {
+  Alert,
+  Image,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import { AppScreen } from '@/components/mobile/AppScreen';
 import { useAppTheme } from '@/lib/app-theme';
-import { getEventImageSource } from '@/lib/mobile-media';
+import { getAvatarImageSource, getEventImageSource } from '@/lib/mobile-media';
 import { useMobileApp } from '@/providers/mobile-app-provider';
-import type { CreateEventInput } from '@/types/models';
+import type { CreateEventInput, ProfileRecord } from '@/types/models';
 
 export default function ManageEventScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const theme = useAppTheme();
   const styles = useMemo(() => buildStyles(theme), [theme]);
-  const { currentUser, getEventById, createEvent, deleteEvent } = useMobileApp();
+  const {
+    currentUser,
+    getEventById,
+    createEvent,
+    deleteEvent,
+    loadEventRegistrations,
+    loadEventInvitees,
+  } = useMobileApp();
   const event = id ? getEventById(String(id)) : undefined;
+  const [registrations, setRegistrations] = useState<ProfileRecord[] | null>(null);
+  const [invitees, setInvitees] = useState<ProfileRecord[] | null>(null);
+  const [isRegistrationsVisible, setIsRegistrationsVisible] = useState(false);
+  const [isLoadingRegistrations, setIsLoadingRegistrations] = useState(false);
 
   if (!event || event.createdBy !== currentUser.id) {
     return (
@@ -60,6 +80,22 @@ export default function ManageEventScreen() {
     Alert.alert('Event duplicated', `"${created.title}" is ready to edit.`);
   };
 
+  const openRegistrations = async () => {
+    if (!event) return;
+    setIsRegistrationsVisible(true);
+    setIsLoadingRegistrations(true);
+    try {
+      const [attendees, invited] = await Promise.all([
+        loadEventRegistrations(event.id),
+        event.privacy === 'private' ? loadEventInvitees(event.id) : Promise.resolve([]),
+      ]);
+      setRegistrations(attendees);
+      setInvitees(invited);
+    } finally {
+      setIsLoadingRegistrations(false);
+    }
+  };
+
   const confirmDelete = () => {
     Alert.alert('Delete Event', `Delete "${event.title}"?`, [
       { text: 'Cancel', style: 'cancel' },
@@ -89,7 +125,7 @@ export default function ManageEventScreen() {
       label: 'View Registrations',
       subtitle: "See who's going",
       icon: 'people-outline' as const,
-      onPress: () => Alert.alert('Registrations', `${event.goingCount} people are going.`),
+      onPress: () => void openRegistrations(),
     },
     {
       label: 'Analytics',
@@ -159,6 +195,72 @@ export default function ManageEventScreen() {
           <Text style={styles.tipText}>You can always edit your event details, flyer, date, time, and more.</Text>
         </View>
       </ScrollView>
+
+      <Modal
+        visible={isRegistrationsVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setIsRegistrationsVisible(false)}>
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={() => setIsRegistrationsVisible(false)}>
+          <Pressable
+            style={styles.modalSheet}
+            onPress={(eventPress) => eventPress.stopPropagation()}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>Registrations</Text>
+            <Text style={styles.modalSubtitle}>
+              {event.goingCount} {event.goingCount === 1 ? 'person is' : 'people are'} going
+              {event.capacity ? ` · ${event.capacity} cap` : ''}
+            </Text>
+
+            <ScrollView contentContainerStyle={styles.modalList} showsVerticalScrollIndicator={false}>
+              {isLoadingRegistrations ? (
+                <Text style={styles.modalEmpty}>Loading...</Text>
+              ) : registrations && registrations.length > 0 ? (
+                registrations.map((profile) => (
+                  <View key={profile.id} style={styles.attendeeRow}>
+                    <Image source={getAvatarImageSource(profile.avatar)} style={styles.attendeeAvatar} />
+                    <View style={styles.attendeeText}>
+                      <Text style={styles.attendeeName} numberOfLines={1}>
+                        {profile.name || profile.username}
+                      </Text>
+                      {profile.username ? (
+                        <Text style={styles.attendeeMeta} numberOfLines={1}>
+                          @{profile.username}
+                        </Text>
+                      ) : null}
+                    </View>
+                  </View>
+                ))
+              ) : (
+                <Text style={styles.modalEmpty}>No registrations yet.</Text>
+              )}
+
+              {event.privacy === 'private' && invitees && invitees.length > 0 ? (
+                <View style={styles.inviteesGroup}>
+                  <Text style={styles.inviteesHeader}>Invited ({invitees.length})</Text>
+                  {invitees.map((profile) => (
+                    <View key={profile.id} style={styles.attendeeRow}>
+                      <Image source={getAvatarImageSource(profile.avatar)} style={styles.attendeeAvatar} />
+                      <View style={styles.attendeeText}>
+                        <Text style={styles.attendeeName} numberOfLines={1}>
+                          {profile.name || profile.username}
+                        </Text>
+                        {profile.username ? (
+                          <Text style={styles.attendeeMeta} numberOfLines={1}>
+                            @{profile.username}
+                          </Text>
+                        ) : null}
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </AppScreen>
   );
 }
@@ -312,5 +414,90 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       color: theme.background,
       fontSize: 14,
       fontWeight: '900',
+    },
+    modalBackdrop: {
+      flex: 1,
+      justifyContent: 'flex-end',
+      backgroundColor: 'rgba(0,0,0,0.55)',
+    },
+    modalSheet: {
+      maxHeight: '80%',
+      borderTopLeftRadius: 28,
+      borderTopRightRadius: 28,
+      paddingHorizontal: 18,
+      paddingTop: 12,
+      paddingBottom: 28,
+      backgroundColor: 'rgba(18,19,24,0.99)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.08)',
+    },
+    modalHandle: {
+      alignSelf: 'center',
+      width: 42,
+      height: 5,
+      borderRadius: 999,
+      backgroundColor: 'rgba(255,255,255,0.22)',
+      marginBottom: 14,
+    },
+    modalTitle: {
+      color: theme.text,
+      fontSize: 20,
+      fontWeight: '900',
+    },
+    modalSubtitle: {
+      color: theme.textMuted,
+      fontSize: 13,
+      marginTop: 4,
+      marginBottom: 12,
+    },
+    modalList: {
+      paddingBottom: 8,
+      gap: 10,
+    },
+    modalEmpty: {
+      color: theme.textMuted,
+      fontSize: 14,
+      paddingVertical: 16,
+      textAlign: 'center',
+    },
+    attendeeRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      paddingVertical: 8,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.border,
+    },
+    attendeeAvatar: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+    },
+    attendeeText: {
+      flex: 1,
+      gap: 2,
+    },
+    attendeeName: {
+      color: theme.text,
+      fontSize: 15,
+      fontWeight: '800',
+    },
+    attendeeMeta: {
+      color: theme.textMuted,
+      fontSize: 12,
+    },
+    inviteesGroup: {
+      marginTop: 12,
+      paddingTop: 12,
+      borderTopWidth: 1,
+      borderTopColor: theme.border,
+    },
+    inviteesHeader: {
+      color: theme.textMuted,
+      fontSize: 12,
+      fontWeight: '900',
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      marginBottom: 8,
     },
   });

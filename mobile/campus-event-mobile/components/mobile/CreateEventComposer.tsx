@@ -122,10 +122,12 @@ function FieldShell({
 export function CreateEventComposer({
   initialDate = '',
   initialPrivacy = 'public',
+  inviteeIds = [],
   onPublished,
 }: {
   initialDate?: string;
   initialPrivacy?: EventPrivacy;
+  inviteeIds?: string[];
   onPublished?: () => void;
 }) {
   const theme = useAppTheme();
@@ -323,6 +325,7 @@ export function CreateEventComposer({
       capacity,
       image: uploadedImageUrls[0],
       imageUrls: uploadedImageUrls,
+      inviteeIds: privacy === 'private' ? inviteeIds : [],
     };
 
     const createdEvent = await createEvent(payload);

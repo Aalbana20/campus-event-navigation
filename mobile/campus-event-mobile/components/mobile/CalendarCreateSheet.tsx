@@ -248,6 +248,9 @@ export function CalendarCreateSheet({
                 key={`event-${visible ? defaultDate : 'closed'}`}
                 initialDate={defaultDate}
                 initialPrivacy={eventKind}
+                inviteeIds={
+                  eventKind === 'private' ? Array.from(selectedFriendIds) : []
+                }
                 onPublished={onClose}
               />
             </ScrollView>

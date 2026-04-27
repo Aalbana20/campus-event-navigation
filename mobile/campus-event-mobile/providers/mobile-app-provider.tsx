@@ -105,8 +105,11 @@ type MobileAppContextValue = {
   ) => Promise<EventRecord | null>;
   addPersonalCalendarItem: (
     input: CreatePersonalCalendarItemInput
-  ) => PersonalCalendarItem;
+  ) => Promise<PersonalCalendarItem | null>;
+  deletePersonalCalendarItem: (itemId: string) => Promise<void>;
   deleteEvent: (eventId: string) => Promise<void>;
+  loadEventRegistrations: (eventId: string) => Promise<ProfileRecord[]>;
+  loadEventInvitees: (eventId: string) => Promise<ProfileRecord[]>;
   toggleSaveEvent: (eventId: string) => Promise<void>;
   acceptDiscoverEvent: (eventId: string) => void;
   rejectDiscoverEvent: (eventId: string) => void;
@@ -883,6 +886,43 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
         });
       };
 
+      const loadPersonalItems = async () => {
+        const result = await runStartupQuery(
+          'refreshData.personalItems',
+          client
+            .from('personal_calendar_items')
+            .select('*')
+            .eq('owner_id', userId)
+            .order('item_date', { ascending: true })
+        );
+
+        if (result.error) {
+          markTask('personalItems', false);
+          return;
+        }
+
+        const rows = (result.data || []) as Array<{
+          id: string;
+          owner_id: string;
+          title: string;
+          note: string | null;
+          item_date: string;
+          item_time: string | null;
+        }>;
+
+        const items: PersonalCalendarItem[] = rows.map((row) => ({
+          id: String(row.id),
+          ownerId: String(row.owner_id),
+          title: String(row.title),
+          note: row.note ? String(row.note) : undefined,
+          date: String(row.item_date),
+          time: row.item_time ? String(row.item_time) : undefined,
+        }));
+
+        setPersonalCalendarItems(items);
+        markTask('personalItems', true);
+      };
+
       const taskSettledResults = await Promise.allSettled([
         loadProfiles(),
         loadEvents(),
@@ -890,6 +930,7 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
         loadMessages(),
         loadFollows(),
         loadReposts(),
+        loadPersonalItems(),
       ]);
 
       taskSettledResults.forEach((result, index) => {
@@ -1318,6 +1359,26 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
       rawEvent.image = getEventImageUri(rawEvent.image);
       const createdEvent = enrichEventWithCreator(rawEvent, profiles);
 
+      const inviteeIds = (input.inviteeIds || [])
+        .map((id) => String(id).trim())
+        .filter((id) => id && id !== currentUser.id);
+
+      if (input.privacy === 'private' && inviteeIds.length > 0) {
+        const inviteeRows = inviteeIds.map((userId) => ({
+          event_id: String(createdEvent.id),
+          user_id: userId,
+          invited_by: currentUser.id,
+        }));
+
+        const { error: inviteError } = await supabase
+          .from('event_invitees')
+          .insert(inviteeRows);
+
+        if (inviteError) {
+          console.error('Unable to save event invitees:', inviteError);
+        }
+      }
+
       setEventsState((currentEvents) => [createdEvent, ...currentEvents]);
 
       return createdEvent;
@@ -1409,14 +1470,68 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
         );
       }
 
+      if (Array.isArray(input.inviteeIds)) {
+        const desiredInvitees = new Set(
+          input.inviteeIds
+            .map((id) => String(id).trim())
+            .filter((id) => id && id !== currentUser.id)
+        );
+
+        const { data: existingInviteeRows } = await supabase
+          .from('event_invitees')
+          .select('user_id')
+          .eq('event_id', eventId);
+
+        const existingInvitees = new Set(
+          ((existingInviteeRows || []) as Array<{ user_id: string }>).map(
+            (row) => String(row.user_id)
+          )
+        );
+
+        const toAdd = [...desiredInvitees].filter(
+          (id) => !existingInvitees.has(id)
+        );
+        const toRemove = [...existingInvitees].filter(
+          (id) => !desiredInvitees.has(id)
+        );
+
+        if (toAdd.length > 0) {
+          const { error: addError } = await supabase
+            .from('event_invitees')
+            .insert(
+              toAdd.map((userId) => ({
+                event_id: eventId,
+                user_id: userId,
+                invited_by: currentUser.id,
+              }))
+            );
+          if (addError) {
+            console.error('Unable to add event invitees:', addError);
+          }
+        }
+
+        if (toRemove.length > 0) {
+          const { error: removeError } = await supabase
+            .from('event_invitees')
+            .delete()
+            .eq('event_id', eventId)
+            .in('user_id', toRemove);
+          if (removeError) {
+            console.error('Unable to remove event invitees:', removeError);
+          }
+        }
+      }
+
       return updatedEvent;
     },
     [currentUser.id, currentUser.name, eventsState, profiles]
   );
 
   const addPersonalCalendarItem = useCallback(
-    (input: CreatePersonalCalendarItemInput) => {
-      const nextItem: PersonalCalendarItem = {
+    async (input: CreatePersonalCalendarItemInput) => {
+      if (!currentUser.id) return null;
+
+      const optimisticItem: PersonalCalendarItem = {
         id: `personal-${Date.now()}`,
         ownerId: currentUser.id,
         date: input.date,
@@ -1425,10 +1540,71 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
         time: input.time?.trim(),
       };
 
-      setPersonalCalendarItems((currentItems) => [nextItem, ...currentItems]);
-      return nextItem;
+      setPersonalCalendarItems((currentItems) => [optimisticItem, ...currentItems]);
+
+      if (!supabase) return optimisticItem;
+
+      const { data, error } = await supabase
+        .from('personal_calendar_items')
+        .insert({
+          owner_id: currentUser.id,
+          title: optimisticItem.title,
+          note: optimisticItem.note || null,
+          item_date: optimisticItem.date,
+          item_time: optimisticItem.time || null,
+        })
+        .select('*')
+        .single();
+
+      if (error || !data) {
+        console.error('Unable to save personal item:', error);
+        setPersonalCalendarItems((currentItems) =>
+          currentItems.filter((item) => item.id !== optimisticItem.id)
+        );
+        return null;
+      }
+
+      const persistedItem: PersonalCalendarItem = {
+        id: String(data.id),
+        ownerId: String(data.owner_id),
+        date: String(data.item_date),
+        title: String(data.title),
+        note: data.note ? String(data.note) : undefined,
+        time: data.item_time ? String(data.item_time) : undefined,
+      };
+
+      setPersonalCalendarItems((currentItems) =>
+        currentItems.map((item) =>
+          item.id === optimisticItem.id ? persistedItem : item
+        )
+      );
+
+      return persistedItem;
     },
     [currentUser.id]
+  );
+
+  const deletePersonalCalendarItem = useCallback(
+    async (itemId: string) => {
+      const previousItems = personalCalendarItems;
+      setPersonalCalendarItems((currentItems) =>
+        currentItems.filter((item) => item.id !== itemId)
+      );
+
+      if (!supabase || !currentUser.id) return;
+
+      const { error } = await supabase
+        .from('personal_calendar_items')
+        .delete()
+        .eq('id', itemId)
+        .eq('owner_id', currentUser.id);
+
+      if (error) {
+        console.error('Unable to delete personal item:', error);
+        setPersonalCalendarItems(previousItems);
+      }
+    },
+    [currentUser.id, personalCalendarItems]
   );
 
   const deleteEvent = useCallback(
@@ -1713,6 +1889,101 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
       });
     },
     [currentUser.id]
+  );
+
+  const loadEventRegistrations = useCallback(
+    async (eventId: string) => {
+      if (!supabase || !eventId) return [];
+
+      const { data, error } = await supabase
+        .from('rsvps')
+        .select('user_id, rsvp_date')
+        .eq('event_id', eventId)
+        .order('rsvp_date', { ascending: false });
+
+      if (error) {
+        console.error('Unable to load event registrations:', error);
+        return [];
+      }
+
+      const userIds = ((data || []) as Array<{ user_id: string | null }>)
+        .map((row) => row.user_id)
+        .filter((id): id is string => Boolean(id));
+
+      if (userIds.length === 0) return [];
+
+      const fromCache = userIds
+        .map((id) => profiles.find((profile) => profile.id === id))
+        .filter((profile): profile is ProfileRecord => Boolean(profile));
+
+      if (fromCache.length === userIds.length) return fromCache;
+
+      const missingIds = userIds.filter(
+        (id) => !profiles.some((profile) => profile.id === id)
+      );
+
+      const { data: missingProfiles } = await supabase
+        .from('profiles')
+        .select('*')
+        .in('id', missingIds);
+
+      const fetched = normalizeProfiles((missingProfiles || []) as never);
+      const orderedIds = userIds;
+
+      return orderedIds
+        .map((id) =>
+          profiles.find((profile) => profile.id === id) ||
+          fetched.find((profile) => profile.id === id)
+        )
+        .filter((profile): profile is ProfileRecord => Boolean(profile));
+    },
+    [profiles]
+  );
+
+  const loadEventInvitees = useCallback(
+    async (eventId: string) => {
+      if (!supabase || !eventId) return [];
+
+      const { data, error } = await supabase
+        .from('event_invitees')
+        .select('user_id')
+        .eq('event_id', eventId);
+
+      if (error) {
+        console.error('Unable to load event invitees:', error);
+        return [];
+      }
+
+      const userIds = ((data || []) as Array<{ user_id: string }>).map((row) =>
+        String(row.user_id)
+      );
+      if (userIds.length === 0) return [];
+
+      const fromCache = userIds
+        .map((id) => profiles.find((profile) => profile.id === id))
+        .filter((profile): profile is ProfileRecord => Boolean(profile));
+
+      if (fromCache.length === userIds.length) return fromCache;
+
+      const missingIds = userIds.filter(
+        (id) => !profiles.some((profile) => profile.id === id)
+      );
+
+      const { data: missingProfiles } = await supabase
+        .from('profiles')
+        .select('*')
+        .in('id', missingIds);
+
+      const fetched = normalizeProfiles((missingProfiles || []) as never);
+
+      return userIds
+        .map((id) =>
+          profiles.find((profile) => profile.id === id) ||
+          fetched.find((profile) => profile.id === id)
+        )
+        .filter((profile): profile is ProfileRecord => Boolean(profile));
+    },
+    [profiles]
   );
 
   const postEventMemory = useCallback(
@@ -2146,7 +2417,10 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
       createEvent,
       updateEvent,
       addPersonalCalendarItem,
+      deletePersonalCalendarItem,
       deleteEvent,
+      loadEventRegistrations,
+      loadEventInvitees,
       toggleSaveEvent,
       acceptDiscoverEvent,
       rejectDiscoverEvent,
@@ -2202,6 +2476,9 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
       loadEventMemoriesForUserBound,
       currentUserAttendedEvent,
       addPersonalCalendarItem,
+      deletePersonalCalendarItem,
+      loadEventRegistrations,
+      loadEventInvitees,
       authError,
       createEvent,
       updateEvent,

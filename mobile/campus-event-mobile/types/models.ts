@@ -164,6 +164,7 @@ export type CreateEventInput = {
   capacity?: string;
   image?: string;
   imageUrls?: string[];
+  inviteeIds?: string[];
 };
 
 export type CreatePersonalCalendarItemInput = {
