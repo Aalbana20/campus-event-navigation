@@ -75,6 +75,7 @@ function AppBootstrap() {
       <Stack.Screen name="recaps/[eventId]" options={{ headerShown: false }} />
       <Stack.Screen name="profile/[username]" options={{ headerShown: false }} />
       <Stack.Screen name="event/[id]" options={{ headerShown: false }} />
+      <Stack.Screen name="event/manage/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="auth/sign-in" options={{ headerShown: false }} />
       <Stack.Screen name="auth/sign-up" options={{ headerShown: false }} />
       <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />

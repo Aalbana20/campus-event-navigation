@@ -52,14 +52,13 @@ const toEditEventForm = (event: EventRecord): EditEventForm => ({
 });
 
 export default function EventDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, edit } = useLocalSearchParams<{ id: string; edit?: string }>();
   const router = useRouter();
   const theme = useAppTheme();
   const styles = useMemo(() => buildStyles(theme), [theme]);
   const {
     getEventById,
     currentUser,
-    savedEventIds,
     toggleSaveEvent,
     updateEvent,
     currentUserAttendedEvent,
@@ -153,6 +152,12 @@ export default function EventDetailScreen() {
     };
   }, [event?.id, event?.locationCoordinates]);
 
+  useEffect(() => {
+    if (edit === '1' && event && event.createdBy === currentUser.id && !editForm) {
+      setEditForm(toEditEventForm(event));
+    }
+  }, [edit, editForm, event, currentUser.id]);
+
   if (!event) {
     return (
       <AppScreen>
@@ -166,7 +171,6 @@ export default function EventDetailScreen() {
     );
   }
 
-  const isSaved = savedEventIds.includes(String(event.id));
   const isHostedByCurrentUser = event.createdBy === currentUser.id;
 
   const handleOpenEdit = () => {
@@ -342,7 +346,7 @@ export default function EventDetailScreen() {
               style={styles.primaryButton}
               onPress={isHostedByCurrentUser ? handleOpenEdit : () => toggleSaveEvent(event.id)}>
               <Text style={styles.primaryButtonText}>
-                {isHostedByCurrentUser ? 'Edit' : isSaved ? 'Going' : 'RSVP'}
+                {isHostedByCurrentUser ? 'Edit' : 'Going'}
               </Text>
             </Pressable>
             {(event.locationAddress || event.locationName) ? (

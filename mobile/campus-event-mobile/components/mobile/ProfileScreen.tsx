@@ -159,7 +159,6 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
     isFollowingProfile,
     followProfile,
     unfollowProfile,
-    deleteEvent,
     updateEvent,
     updateProfile,
   } = useMobileApp();
@@ -699,15 +698,20 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
                   <EventListCard
                     key={event.id}
                     event={event}
-                    actionLabel={isOwnProfile ? 'Delete' : 'Open'}
-                    actionTone={isOwnProfile ? 'danger' : 'muted'}
+                    actionLabel={isOwnProfile ? 'Manage' : 'Open'}
+                    actionTone="muted"
                     secondaryActionLabel={isOwnProfile ? 'Edit' : undefined}
                     secondaryActionTone="muted"
                     onPress={() =>
-                      router.push({
-                        pathname: '/event/[id]',
-                        params: { id: event.id },
-                      })
+                      isOwnProfile
+                        ? router.push({
+                            pathname: '/event/manage/[id]',
+                            params: { id: event.id },
+                          })
+                        : router.push({
+                            pathname: '/event/[id]',
+                            params: { id: event.id },
+                          })
                     }
                     onSecondaryActionPress={
                       isOwnProfile ? () => handleOpenEditEvent(event) : undefined
@@ -721,14 +725,10 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
                         return;
                       }
 
-                      Alert.alert('Delete Event', `Delete "${event.title}"?`, [
-                        { text: 'Cancel', style: 'cancel' },
-                        {
-                          text: 'Delete',
-                          style: 'destructive',
-                          onPress: () => deleteEvent(event.id),
-                        },
-                      ]);
+                      router.push({
+                        pathname: '/event/manage/[id]',
+                        params: { id: event.id },
+                      });
                     }}
                   />
                 ))}
