@@ -119,6 +119,16 @@
   transform: scale(0.99);
 }
 
+.settings-nav-row.is-danger,
+.settings-nav-row.is-danger strong {
+  color: #ff453a;
+}
+.settings-nav-row.is-danger:hover,
+.settings-nav-row.is-danger:focus-visible {
+  background: rgba(255, 69, 58, 0.1);
+  border-color: rgba(255, 69, 58, 0.25);
+}
+
 .settings-nav-icon {
   width: 30px;
   height: 30px;

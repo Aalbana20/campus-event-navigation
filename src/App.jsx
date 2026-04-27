@@ -25,7 +25,7 @@ const Recaps = lazy(() => import("./pages/Recaps"))
 const RecapDetail = lazy(() => import("./pages/RecapDetail"))
 const Settings = lazy(() => import("./pages/Settings"))
 const EditProfile = lazy(() => import("./pages/EditProfile"))
-const SignUp = lazy(() => import("./pages/SignUp"))
+const SignUp = lazy(() => import("./pages/Onboarding/Onboarding"))
 const Login = lazy(() => import("./pages/Login"))
 const Logout = lazy(() => import("./pages/Logout"))
 import { useEvents } from "./context/EventContext"

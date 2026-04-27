@@ -81,6 +81,19 @@ const SETTINGS_GROUPS = [
       { id: "account-status", label: "Account Status", icon: "status" },
     ],
   },
+  {
+    title: "Login",
+    items: [
+      {
+        id: "logout",
+        label: "Log out",
+        description: "Sign out of this device.",
+        icon: "logout",
+        route: "/auth/logout",
+        danger: true,
+      },
+    ],
+  },
 ]
 
 const PANEL_COPY = {
@@ -251,6 +264,11 @@ function SettingsIcon({ name }) {
           <path d="M12 4v10m0 0 4-4m-4 4-4-4M5 20h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
         ) : name === "tag" ? (
           <path d="M4 5h8l8 8-7 7-8-8V5Zm5 4h.01" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        ) : name === "logout" ? (
+          <>
+            <path d="M9 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="m16 17 5-5-5-5M21 12H10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+          </>
         ) : isCircle ? (
           <circle cx="12" cy="12" r="7" stroke="currentColor" strokeWidth="1.8" />
         ) : (
@@ -318,7 +336,7 @@ function Settings() {
                 <button
                   type="button"
                   key={item.id}
-                  className={`settings-nav-row ${activeSection === item.id ? "active" : ""}`}
+                  className={`settings-nav-row ${activeSection === item.id ? "active" : ""} ${item.danger ? "is-danger" : ""}`}
                   onClick={() => handleNavItem(item)}
                 >
                   <SettingsIcon name={item.icon} />

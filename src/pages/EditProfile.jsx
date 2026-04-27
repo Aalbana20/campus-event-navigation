@@ -14,6 +14,8 @@ import "./Settings.css"
 
 const trimHandle = (value) => String(value || "").trim().replace(/^@+/, "")
 
+const GENDER_OPTIONS = ["Male", "Female"]
+
 function EditProfile() {
   const navigate = useNavigate()
   const { currentUser } = useEvents()
@@ -25,8 +27,7 @@ function EditProfile() {
     name: currentUser?.name || "",
     username: trimHandle(currentUser?.username),
     bio: "",
-    website: "",
-    school: currentUser?.school || "",
+    gender: "",
     avatarValue: currentUser?.avatarStorageValue || currentUser?.avatar_url || "",
   })
   const [selectedPhoto, setSelectedPhoto] = useState(null)
@@ -53,7 +54,7 @@ function EditProfile() {
       setIsLoading(true)
       const { data, error } = await supabase
         .from("profiles")
-        .select("name, username, bio, avatar_url, school, organization_website")
+        .select("name, username, bio, gender, avatar_url")
         .eq("id", userId)
         .maybeSingle()
 
@@ -67,8 +68,7 @@ function EditProfile() {
           name: data.name || currentUser?.name || "",
           username: trimHandle(data.username || currentUser?.username),
           bio: data.bio || "",
-          website: data.organization_website || "",
-          school: data.school || currentUser?.school || "",
+          gender: GENDER_OPTIONS.includes(data.gender) ? data.gender : "",
           avatarValue: sanitizeAvatarStorageValue(data.avatar_url, null) || "",
         })
       }
@@ -81,7 +81,7 @@ function EditProfile() {
     return () => {
       isMounted = false
     }
-  }, [currentUser?.name, currentUser?.school, currentUser?.username, showToast, userId])
+  }, [currentUser?.name, currentUser?.username, showToast, userId])
 
   useEffect(
     () => () => {
@@ -118,8 +118,7 @@ function EditProfile() {
     const nextName = form.name.trim()
     const nextUsername = trimHandle(form.username)
     const nextBio = form.bio.trim()
-    const nextWebsite = form.website.trim()
-    const nextSchool = form.school.trim()
+    const nextGender = GENDER_OPTIONS.includes(form.gender) ? form.gender : null
 
     if (!nextName || !nextUsername) {
       showToast("Name and username are required.", "warning")
@@ -147,9 +146,8 @@ function EditProfile() {
         name: nextName,
         username: nextUsername,
         bio: nextBio,
+        gender: nextGender,
         avatar_url: nextAvatarValue || null,
-        school: nextSchool || null,
-        organization_website: nextWebsite || null,
       }
       const { error: authError } = await supabase.auth.updateUser({
         data: authPayload,
@@ -167,9 +165,8 @@ function EditProfile() {
             name: nextName,
             username: nextUsername,
             bio: nextBio,
+            gender: nextGender,
             avatar_url: nextAvatarValue || null,
-            organization_website: nextWebsite || null,
-            school: nextSchool || null,
             updated_at: new Date().toISOString(),
           },
           { onConflict: "id" }
@@ -189,8 +186,7 @@ function EditProfile() {
         name: nextName,
         username: nextUsername,
         bio: nextBio,
-        website: nextWebsite,
-        school: nextSchool,
+        gender: nextGender || "",
         avatarValue: nextAvatarValue || "",
       }))
       setSelectedPhoto(null)
@@ -218,7 +214,7 @@ function EditProfile() {
               <span className="settings-nav-icon settings-nav-dot" aria-hidden="true" />
               <span>
                 <strong>Edit profile</strong>
-                <em>Name, photo, bio, and campus details.</em>
+                <em>Name, username, bio, gender.</em>
               </span>
             </Link>
             <Link className="settings-nav-row" to="/settings?section=notifications">
@@ -258,7 +254,7 @@ function EditProfile() {
           </div>
 
           <label className="edit-profile-field">
-            <span>Display name</span>
+            <span>Name</span>
             <input
               value={form.name}
               onChange={(event) => updateField("name", event.target.value)}
@@ -290,23 +286,19 @@ function EditProfile() {
           </label>
 
           <label className="edit-profile-field">
-            <span>Website or link</span>
-            <input
-              value={form.website}
-              onChange={(event) => updateField("website", event.target.value)}
-              placeholder="https://"
+            <span>Gender</span>
+            <select
+              value={form.gender}
+              onChange={(event) => updateField("gender", event.target.value)}
               disabled={isLoading || isSaving}
-            />
-          </label>
-
-          <label className="edit-profile-field">
-            <span>School or campus</span>
-            <input
-              value={form.school}
-              onChange={(event) => updateField("school", event.target.value)}
-              placeholder="Campus"
-              disabled={isLoading || isSaving}
-            />
+            >
+              <option value="">Prefer not to say</option>
+              {GENDER_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
           </label>
 
           <div className="edit-profile-submit-row">

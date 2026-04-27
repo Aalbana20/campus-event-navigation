@@ -525,7 +525,7 @@ body.theme-dark .profile-confirm-delete-btn:hover {
 .public-profile-action-row {
   align-items: center;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 54px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
   gap: 12px;
   width: min(100%, 720px);
   margin-top: 18px;

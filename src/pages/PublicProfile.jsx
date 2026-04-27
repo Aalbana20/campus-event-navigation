@@ -574,16 +574,15 @@ function PublicProfile() {
 
               <button
                 type="button"
-                className="public-profile-suggest-btn"
-                onClick={handleSuggestedProfiles}
-                aria-label="Suggested profiles"
-                title="Suggested profiles"
+                className="profile-action-btn secondary public-profile-btn"
+                onClick={() => {
+                  console.log("Recap coming soon.")
+                  if (typeof window !== "undefined" && window.alert) {
+                    window.alert("Recap coming soon.")
+                  }
+                }}
               >
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <circle cx="10" cy="8.5" r="3" stroke="currentColor" strokeWidth="1.8" />
-                  <path d="M4.5 19a5.8 5.8 0 0 1 11 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                  <path d="M18.5 8v5M16 10.5h5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                </svg>
+                Recap
               </button>
             </div>
 

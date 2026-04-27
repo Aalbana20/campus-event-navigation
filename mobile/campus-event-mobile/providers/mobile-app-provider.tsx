@@ -2157,6 +2157,9 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
       const cleanInterests = Array.isArray(input.interests)
         ? input.interests.map((interest) => String(interest).trim()).filter(Boolean)
         : [];
+      const cleanCategories = Array.isArray(input.categories)
+        ? input.categories.map((category) => String(category).trim()).filter(Boolean)
+        : [];
       const avatarUrl = normalizeAvatarStorageValue(input.avatar, null) || '';
       const birthMonth = input.birthMonth ? Number(input.birthMonth) : null;
       const birthYear = input.birthYear ? Number(input.birthYear) : null;
@@ -2206,17 +2209,25 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
             name: cleanFullName,
             username: cleanUsername,
             email: cleanEmail,
+            phone: cleanPhoneNumber,
             phone_number: cleanPhoneNumber,
             interests: cleanInterests,
+            categories: cleanCategories,
             bio: profileBio,
             account_type: accountType,
+            college_status:
+              accountType === 'organization'
+                ? null
+                : input.collegeStatus || (accountType === 'student' ? 'in_college' : null),
             first_name: accountType === 'organization' ? null : cleanFirstName,
             last_name: accountType === 'organization' ? null : cleanLastName,
             birth_month: birthMonth,
             birth_year: birthYear,
             gender: input.gender || null,
             school: input.school || null,
+            school_name: input.school || null,
             school_id: input.schoolId || null,
+            school_email: input.schoolEmail || null,
             student_verified: false,
             verification_status: 'unverified',
             organization_name: cleanOrganizationName || null,

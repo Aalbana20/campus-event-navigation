@@ -545,13 +545,15 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
               </>
             ) : (
               <>
-                <Pressable style={styles.primaryButton} onPress={handleToggleFollow}>
+                <Pressable
+                  style={[styles.primaryButton, styles.publicActionButton]}
+                  onPress={handleToggleFollow}>
                   <Text style={styles.primaryButtonText}>
                     {isFollowingProfile(profile.id) ? 'Following' : 'Follow'}
                   </Text>
                 </Pressable>
                 <Pressable
-                  style={styles.secondaryButton}
+                  style={[styles.secondaryButton, styles.publicActionButton]}
                   onPress={() =>
                     router.push({
                       pathname: '/(tabs)/messages',
@@ -559,6 +561,13 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
                     })
                   }>
                   <Text style={styles.secondaryButtonText}>Message</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.secondaryButton, styles.publicActionButton]}
+                  onPress={() => {
+                    console.log('Recap coming soon.');
+                  }}>
+                  <Text style={styles.secondaryButtonText}>Recap</Text>
                 </Pressable>
               </>
             )}
@@ -1192,6 +1201,15 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) => {
       backgroundColor: theme.accentSoft,
       borderWidth: 1,
       borderColor: theme.accent,
+    },
+    // Override min-width / fixed sizing so the three public-profile action
+    // buttons (Following, Message, Recap) split the row evenly.
+    publicActionButton: {
+      flex: 1,
+      minWidth: 0,
+      paddingHorizontal: 8,
+      paddingVertical: 11,
+      borderRadius: 12,
     },
     actionSquareButton: {
       width: 42,

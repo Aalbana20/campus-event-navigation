@@ -193,6 +193,8 @@ export type SignUpInput = {
   gender?: 'Male' | 'Female' | '';
   school?: string;
   schoolId?: string;
+  schoolEmail?: string;
+  collegeStatus?: 'in_college' | 'not_in_college' | null;
   organizationName?: string;
   organizationType?: string;
   organizationDescription?: string;
@@ -200,6 +202,7 @@ export type SignUpInput = {
   parentOrganizationName?: string;
   avatar?: string;
   interests?: string[];
+  categories?: string[];
 };
 
 export type AuthActionResult = {
