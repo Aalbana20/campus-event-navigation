@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react"
 import { useOutletContext } from "react-router-dom"
+import { supabase } from "../supabaseClient"
 
 const QUICK_REACTIONS = ["❤️", "😂", "😮", "😢", "😡", "👍", "＋"]
 const LONG_PRESS_MS = 420
@@ -63,6 +64,7 @@ function ActionIcon({ type, size = 20, stroke = 1.9 }) {
 function Messages() {
   const {
     defaultAvatar,
+    currentUserId,
     displayDmThreads,
     unreadDmThreadIds,
     selectedDmThread,
@@ -92,6 +94,27 @@ function Messages() {
   const selectedMessages = selectedDmThread
     ? dmMessagesByThread[selectedDmThread.id] || []
     : []
+
+  // Load persisted reactions for the current thread
+  useEffect(() => {
+    if (!selectedDmThread?.id || !currentUserId) return
+    const messageIds = (dmMessagesByThread[selectedDmThread.id] || [])
+      .map((m) => m.id)
+      .filter((id) => !String(id).startsWith("temp-"))
+    if (messageIds.length === 0) return
+
+    supabase
+      .from("message_reactions")
+      .select("message_id, emoji")
+      .in("message_id", messageIds)
+      .eq("user_id", currentUserId)
+      .then(({ data }) => {
+        if (!data) return
+        const next = {}
+        data.forEach((row) => { next[row.message_id] = row.emoji })
+        setMessageReactions((prev) => ({ ...prev, ...next }))
+      })
+  }, [selectedDmThread?.id, currentUserId, dmMessagesByThread])
 
   useEffect(() => {
     if (!activeMessageMenu && !activeThreadMenu) return undefined
@@ -196,10 +219,25 @@ function Messages() {
   }
 
   const handleReaction = (emoji) => {
-    if (!activeMessageMenu?.message) return
+    if (!activeMessageMenu?.message || !currentUserId) return
     const messageId = activeMessageMenu.message.id
-    setMessageReactions((prev) => ({ ...prev, [messageId]: emoji }))
+    const existing = messageReactions[messageId]
+    const isToggleOff = existing === emoji
+
+    setMessageReactions((prev) => {
+      const next = { ...prev }
+      if (isToggleOff) { delete next[messageId] } else { next[messageId] = emoji }
+      return next
+    })
     setActiveMessageMenu(null)
+
+    if (isToggleOff) {
+      void supabase.from("message_reactions").delete()
+        .eq("message_id", messageId).eq("user_id", currentUserId)
+    } else {
+      void supabase.from("message_reactions")
+        .upsert({ message_id: messageId, user_id: currentUserId, emoji }, { onConflict: "message_id,user_id" })
+    }
   }
 
   const handleReply = () => {

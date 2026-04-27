@@ -1,5 +1,6 @@
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, Component } from "react"
 import "./App.css"
+import { registerPushNotifications } from "./pushNotifications"
 import {
   Routes,
   Route,
@@ -965,6 +966,17 @@ function MainLayout() {
           m.id === tempId ? { ...m, id: data.id } : m
         ),
       }))
+
+      // Push notification to recipient
+      void supabase.functions.invoke("send-push", {
+        body: {
+          user_ids: [selectedDmThread.id],
+          title: currentUser?.name || currentUser?.username || "New message",
+          body: trimmedMessage.length > 80 ? `${trimmedMessage.slice(0, 80)}…` : trimmedMessage,
+          url: "/#/messages",
+          tag: "dm",
+        },
+      })
     }
   }
 
@@ -1065,6 +1077,7 @@ function MainLayout() {
 
   const outletContext = {
     defaultAvatar,
+    currentUserId,
     displayDmThreads,
     unreadDmThreadIds,
     selectedDmThread,
@@ -1484,6 +1497,11 @@ function App() {
       subscription.unsubscribe()
     }
   }, [])
+
+  useEffect(() => {
+    if (!session?.user?.id) return
+    void registerPushNotifications(session.user.id)
+  }, [session?.user?.id])
 
   useEffect(() => {
     if (!session?.user?.id) return
