@@ -19,6 +19,7 @@ import {
 
 import { useAppTheme, type AppTheme } from '@/lib/app-theme';
 import {
+  deleteDiscoverPost,
   loadDiscoverPostsByIds,
   loadDiscoverPostsForAuthor,
   loadLikedPostIds,
@@ -660,6 +661,53 @@ export function ProfileContentTabs({
     const nextOnGrid = !selectedPost.onGrid;
     setIsPostMenuOpen(false);
     void handleToggleGrid(selectedPost, nextOnGrid);
+  };
+
+  const handleOwnerDeletePostAction = () => {
+    if (!selectedPost) return;
+    if (String(selectedPost.authorId) !== String(currentUser.id)) return;
+
+    setIsPostMenuOpen(false);
+    Alert.alert(
+      'Delete post?',
+      "This can't be undone.",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            const postId = String(selectedPost.id);
+            try {
+              await deleteDiscoverPost(postId);
+              setGridPosts((posts) => posts.filter((p) => String(p.id) !== postId));
+              setAuthorPosts((posts) => posts.filter((p) => String(p.id) !== postId));
+              setRepostedPosts((posts) => posts.filter((p) => String(p.id) !== postId));
+              setLikedPosts((posts) => posts.filter((p) => String(p.id) !== postId));
+              setSavedPosts((posts) => posts.filter((p) => String(p.id) !== postId));
+              setTaggedPosts((posts) => posts.filter((p) => String(p.id) !== postId));
+              setViewerItems((items) =>
+                items.filter(
+                  (item) => !(item.type === 'post' && String(item.post.id) === postId)
+                )
+              );
+              setSelectedViewerItem((current) =>
+                current && current.type === 'post' && String(current.post.id) === postId
+                  ? null
+                  : current
+              );
+              handleClosePost();
+            } catch (error) {
+              Alert.alert(
+                'Could not delete',
+                error instanceof Error ? error.message : 'Please try again in a moment.'
+              );
+            }
+          },
+        },
+      ],
+      { cancelable: true }
+    );
   };
 
   const repostItems = useMemo(() => {
@@ -1383,16 +1431,24 @@ export function ProfileContentTabs({
             <Pressable style={styles.viewerMenuScrim} onPress={() => setIsPostMenuOpen(false)}>
               <Pressable style={styles.viewerMenu} onPress={(event) => event.stopPropagation()}>
                 {selectedPostIsOwner ? (
-                  <Pressable style={styles.viewerMenuItem} onPress={handleOwnerGridMenuAction}>
-                    <Ionicons
-                      name={selectedPost.onGrid ? 'grid-outline' : 'add-circle-outline'}
-                      size={18}
-                      color="#ffffff"
-                    />
-                    <Text style={styles.viewerMenuItemText}>
-                      {selectedPost.onGrid ? 'Remove from Grid' : 'Post to Grid'}
-                    </Text>
-                  </Pressable>
+                  <>
+                    <Pressable style={styles.viewerMenuItem} onPress={handleOwnerGridMenuAction}>
+                      <Ionicons
+                        name={selectedPost.onGrid ? 'grid-outline' : 'add-circle-outline'}
+                        size={18}
+                        color="#ffffff"
+                      />
+                      <Text style={styles.viewerMenuItemText}>
+                        {selectedPost.onGrid ? 'Remove from Grid' : 'Post to Grid'}
+                      </Text>
+                    </Pressable>
+                    <Pressable style={styles.viewerMenuItem} onPress={handleOwnerDeletePostAction}>
+                      <Ionicons name="trash-outline" size={18} color="#ff7a7a" />
+                      <Text style={[styles.viewerMenuItemText, styles.viewerMenuItemDanger]}>
+                        Delete
+                      </Text>
+                    </Pressable>
+                  </>
                 ) : (
                   <Pressable style={styles.viewerMenuItem} onPress={handlePostReport}>
                     <Ionicons name="flag-outline" size={18} color="#ff7a7a" />

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import {
+  deleteDiscoverPost,
   loadDiscoverPostsByIds,
   loadDiscoverPostsForAuthor,
   invalidateDiscoverFeedCache,
@@ -499,6 +500,31 @@ export default function ProfileContentTabs({ profileId, isOwner = false, allEven
     await handleToggleGrid(selectedPost, nextOnGrid)
     setSelectedPost((post) => (post ? { ...post, onGrid: nextOnGrid } : post))
     setSelectedPostMenuOpen(false)
+  }
+
+  const handleSelectedPostDelete = async () => {
+    if (!selectedPost) return
+    const isPostOwner =
+      currentUserId && String(selectedPost.authorId) === currentUserId
+    if (!isPostOwner) return
+
+    setSelectedPostMenuOpen(false)
+    const confirmed = window.confirm("Delete post?\n\nThis can't be undone.")
+    if (!confirmed) return
+
+    const postId = String(selectedPost.id)
+    try {
+      await deleteDiscoverPost(postId)
+      setGridPosts((posts) => posts.filter((p) => String(p.id) !== postId))
+      setAuthorPosts((posts) => posts.filter((p) => String(p.id) !== postId))
+      setRepostedPosts((posts) => posts.filter((p) => String(p.id) !== postId))
+      setLikedPosts((posts) => posts.filter((p) => String(p.id) !== postId))
+      setSavedPosts((posts) => posts.filter((p) => String(p.id) !== postId))
+      setSelectedPost(null)
+      showToast("Post deleted.", "success")
+    } catch (error) {
+      showToast(error?.message || "Could not delete this post.", "error")
+    }
   }
 
   const handleToggleLike = async (post) => {
@@ -1127,13 +1153,22 @@ export default function ProfileContentTabs({ profileId, isOwner = false, allEven
                     {selectedPostMenuOpen ? (
                       <div className="profile-overflow-menu">
                         {isOwner ? (
-                          <button
-                            type="button"
-                            className="profile-overflow-menu-item"
-                            onClick={handleSelectedPostGridToggle}
-                          >
-                            {selectedPost.onGrid ? "Remove from Grid" : "Post to Grid"}
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              className="profile-overflow-menu-item"
+                              onClick={handleSelectedPostGridToggle}
+                            >
+                              {selectedPost.onGrid ? "Remove from Grid" : "Post to Grid"}
+                            </button>
+                            <button
+                              type="button"
+                              className="profile-overflow-menu-item danger"
+                              onClick={handleSelectedPostDelete}
+                            >
+                              Delete
+                            </button>
+                          </>
                         ) : (
                           <button
                             type="button"

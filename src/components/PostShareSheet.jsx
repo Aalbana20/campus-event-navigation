@@ -194,7 +194,7 @@ function PostShareSheet({
   const handleDeleteClick = async (eventClick) => {
     eventClick?.stopPropagation()
     if (!isOwner || !onDelete || isDeleting) return
-    const confirmed = window.confirm("Delete this post?\nThis cannot be undone.")
+    const confirmed = window.confirm("Delete post?\n\nThis can't be undone.")
     if (!confirmed) return
 
     setIsDeleting(true)

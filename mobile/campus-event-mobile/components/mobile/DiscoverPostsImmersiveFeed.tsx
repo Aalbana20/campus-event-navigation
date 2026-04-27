@@ -242,19 +242,20 @@ function DiscoverPostItemOverlay({
 }) {
   const isOwner =
     Boolean(currentUserId) && String(currentUserId) === String(post.authorId);
+  const canShowMenu = isOwner && Boolean(onDeletePost);
 
   const handleOpenPostMenu = () => {
-    if (!onDeletePost) return;
+    if (!canShowMenu) return;
     Alert.alert(
-      'Delete this post?',
-      'This cannot be undone.',
+      'Delete post?',
+      "This can't be undone.",
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
           style: 'destructive',
           onPress: () => {
-            void onDeletePost(post);
+            void onDeletePost!(post);
           },
         },
       ],
@@ -291,6 +292,15 @@ function DiscoverPostItemOverlay({
           <Ionicons name="paper-plane-outline" size={30} color="#ffffff" />
           <Text style={styles.actionText}>Share</Text>
         </Pressable>
+
+        {canShowMenu ? (
+          <Pressable
+            style={styles.actionButton}
+            onPress={handleOpenPostMenu}
+            accessibilityLabel="Post options">
+            <Ionicons name="ellipsis-horizontal" size={30} color="#ffffff" />
+          </Pressable>
+        ) : null}
       </View>
 
       {/* Bottom Content/Meta Zone */}
