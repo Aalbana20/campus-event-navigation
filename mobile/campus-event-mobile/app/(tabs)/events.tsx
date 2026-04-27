@@ -1,28 +1,65 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  FlatList,
+  Image,
+  Modal,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 
 import { AppScreen } from '@/components/mobile/AppScreen';
 import { CalendarCreateSheet } from '@/components/mobile/CalendarCreateSheet';
 import { CalendarSearchSheet } from '@/components/mobile/CalendarSearchSheet';
-import { DayAgendaItem, DayAgendaSheet } from '@/components/mobile/DayAgendaSheet';
 import { EventListCard } from '@/components/mobile/EventListCard';
 import { MonthlyCalendar } from '@/components/mobile/MonthlyCalendar';
 import { useAppTheme } from '@/lib/app-theme';
+import { getEventImageSource } from '@/lib/mobile-media';
 import { useMobileApp } from '@/providers/mobile-app-provider';
-import type { CreatePersonalCalendarItemInput } from '@/types/models';
+import type { CreatePersonalCalendarItemInput, EventRecord, PersonalCalendarItem } from '@/types/models';
 
 type EventsTab = 'event' | 'calendar';
-type CalendarFilter = 'all' | 'going' | 'created';
-type CalendarMode = 'month' | 'year';
+type CalendarFilter = 'all' | 'going' | 'hosting';
 type CreateMode = 'event' | 'personal';
+type DatePickerMode = 'month' | 'day' | 'year';
+type CalendarDayFeedItem = {
+  dateKey: string;
+  events: EventRecord[];
+  personalItems: PersonalCalendarItem[];
+};
+
+type EventsScreenProps = {
+  searchSignal?: number;
+  createSignal?: number;
+};
 
 const FILTER_LABELS: Record<CalendarFilter, string> = {
   all: 'All',
   going: 'Going',
-  created: 'Created',
+  hosting: 'Hosting',
 };
+
+const MONTH_NAMES = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
 
 const resolveEventsTab = (value?: string | string[] | null): EventsTab => {
   const normalizedValue = Array.isArray(value) ? value[0] : value;
@@ -59,22 +96,30 @@ const formatDateLabel = (dateKey: string) =>
     day: 'numeric',
   });
 
-const sortAgendaItems = (items: DayAgendaItem[]) =>
-  [...items].sort((left, right) => {
-    if (left.time && right.time) return left.time.localeCompare(right.time);
-    if (left.time) return -1;
-    if (right.time) return 1;
-    return left.title.localeCompare(right.title);
-  });
+const addDays = (date: Date, days: number) => {
+  const nextDate = new Date(date);
+  nextDate.setDate(nextDate.getDate() + days);
+  return nextDate;
+};
 
-export default function EventsScreen() {
+const getDaysInMonth = (year: number, monthIndex: number) =>
+  new Date(year, monthIndex + 1, 0).getDate();
+
+const buildDateKey = (year: number, monthIndex: number, day: number) => {
+  const clampedDay = Math.min(day, getDaysInMonth(year, monthIndex));
+  return toDateKey(new Date(year, monthIndex, clampedDay));
+};
+
+export default function EventsScreen({ searchSignal = 0, createSignal = 0 }: EventsScreenProps) {
   const params = useLocalSearchParams<{
     tab?: string | string[];
     createMode?: string | string[];
   }>();
   const router = useRouter();
   const theme = useAppTheme();
+  const { width: screenWidth } = useWindowDimensions();
   const styles = useMemo(() => buildStyles(theme), [theme]);
+  const feedListRef = useRef<FlatList<CalendarDayFeedItem>>(null);
   const {
     currentUser,
     getCreatedEventsForProfile,
@@ -87,11 +132,11 @@ export default function EventsScreen() {
 
   const [activeTab, setActiveTab] = useState<EventsTab>(() => resolveEventsTab(params.tab));
   const [visibleMonth, setVisibleMonth] = useState(() => new Date());
-  const [calendarMode, setCalendarMode] = useState<CalendarMode>('month');
   const [calendarFilter, setCalendarFilter] = useState<CalendarFilter>('all');
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [isAgendaOpen, setIsAgendaOpen] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<string>(() => toDateKey(new Date()));
+  const [feedStartDate, setFeedStartDate] = useState<string>(() => toDateKey(new Date()));
   const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [datePickerMode, setDatePickerMode] = useState<DatePickerMode | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [createMode, setCreateMode] = useState<CreateMode>(() =>
@@ -106,6 +151,17 @@ export default function EventsScreen() {
     }
   }, [params.createMode, params.tab]);
 
+  useEffect(() => {
+    if (searchSignal > 0) setIsSearchOpen(true);
+  }, [searchSignal]);
+
+  useEffect(() => {
+    if (createSignal > 0) {
+      setCreateMode('event');
+      setIsCreateOpen(true);
+    }
+  }, [createSignal]);
+
   const goingEvents = getGoingEventsForProfile(currentUser.id);
   const createdEvents = getCreatedEventsForProfile(currentUser.id);
   const calendarEvents = getCalendarEventsForProfile(currentUser.id);
@@ -113,7 +169,7 @@ export default function EventsScreen() {
 
   const visibleCalendarEvents = useMemo(() => {
     if (calendarFilter === 'going') return goingEvents;
-    if (calendarFilter === 'created') return createdEvents;
+    if (calendarFilter === 'hosting') return createdEvents;
     return calendarEvents;
   }, [calendarEvents, calendarFilter, createdEvents, goingEvents]);
 
@@ -136,51 +192,48 @@ export default function EventsScreen() {
     return nextDates;
   }, [visibleCalendarEvents, visiblePersonalItems]);
 
-  const selectedAgendaItems = useMemo(() => {
-    if (!selectedDate) return [];
+  const selectedDateObject = parseDateKey(selectedDate);
+  const selectedMonthName = MONTH_NAMES[selectedDateObject.getMonth()];
+  const selectedDayNumber = selectedDateObject.getDate();
+  const selectedYear = selectedDateObject.getFullYear();
+  const feedPageWidth = Math.max(280, screenWidth - 36);
+  const pickerYears = useMemo(
+    () => Array.from({ length: 9 }, (_, index) => selectedYear - 4 + index),
+    [selectedYear]
+  );
+  const pickerDays = useMemo(
+    () =>
+      Array.from(
+        { length: getDaysInMonth(selectedYear, selectedDateObject.getMonth()) },
+        (_, index) => index + 1
+      ),
+    [selectedDateObject, selectedYear]
+  );
 
-    const eventItems: DayAgendaItem[] = visibleCalendarEvents
-      .filter((event) => event.eventDate === selectedDate)
-      .map((event) => ({
-        id: event.id,
-        type: 'event',
-        title: event.title,
-        time: event.startTime || undefined,
-        subtitle: [event.locationName, event.organizer].filter(Boolean).join(' • '),
-      }));
-
-    const personalItems: DayAgendaItem[] = visiblePersonalItems
-      .filter((item) => item.date === selectedDate)
-      .map((item) => ({
-        id: item.id,
-        type: 'personal',
-        title: item.title,
-        time: item.time,
-        note: item.note,
-      }));
-
-    return sortAgendaItems([...eventItems, ...personalItems]);
-  }, [selectedDate, visibleCalendarEvents, visiblePersonalItems]);
-
-  const selectedDateLabel = selectedDate ? formatDateLabel(selectedDate) : '';
+  const feedDays = useMemo(
+    () =>
+      Array.from({ length: 45 }, (_, index) => {
+        const dateKey = toDateKey(addDays(parseDateKey(feedStartDate), index));
+        return {
+          dateKey,
+          events: visibleCalendarEvents.filter((event) => event.eventDate === dateKey),
+          personalItems: visiblePersonalItems.filter((item) => item.date === dateKey),
+        };
+      }),
+    [feedStartDate, visibleCalendarEvents, visiblePersonalItems]
+  );
 
   const handleSelectDate = (dateKey: string) => {
     setSelectedDate(dateKey);
+    setFeedStartDate(dateKey);
     setVisibleMonth(parseDateKey(dateKey));
-    setCalendarMode('month');
-    setIsAgendaOpen(true);
+    requestAnimationFrame(() => {
+      feedListRef.current?.scrollToIndex({ index: 0, animated: false });
+    });
   };
 
   const handleSelectMonth = (month: Date) => {
     setVisibleMonth(month);
-    setCalendarMode('month');
-  };
-
-  const handleTodayPress = () => {
-    const today = new Date();
-    setVisibleMonth(today);
-    setSelectedDate(toDateKey(today));
-    setCalendarMode('month');
   };
 
   const handleFilterChange = (nextFilter: CalendarFilter) => {
@@ -188,39 +241,259 @@ export default function EventsScreen() {
     setIsFilterOpen(false);
   };
 
-  const handleAddPersonalItemForSelectedDate = (input: { title: string; note?: string; time?: string }) => {
-    if (!selectedDate) return;
-
-    addPersonalCalendarItem({
-      date: selectedDate,
-      title: input.title,
-      note: input.note,
-      time: input.time,
-    });
+  const handleSelectDatePart = (nextDateKey: string) => {
+    setDatePickerMode(null);
+    handleSelectDate(nextDateKey);
   };
 
   const handleCreatePersonalItem = (input: CreatePersonalCalendarItemInput) => {
     addPersonalCalendarItem(input);
   };
 
+  const handleFeedScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const nextIndex = Math.round(event.nativeEvent.contentOffset.x / feedPageWidth);
+    const nextDay = feedDays[Math.max(0, Math.min(nextIndex, feedDays.length - 1))];
+    if (!nextDay || nextDay.dateKey === selectedDate) return;
+    setSelectedDate(nextDay.dateKey);
+    setVisibleMonth(parseDateKey(nextDay.dateKey));
+  };
+
+  const renderCompactEventCard = (event: EventRecord) => (
+    <Pressable
+      key={event.id}
+      style={styles.feedEventCard}
+      onPress={() =>
+        router.push({
+          pathname: '/event/[id]',
+          params: { id: event.id },
+        })
+      }>
+      <Image source={getEventImageSource(event.image)} style={styles.feedEventImage} />
+    </Pressable>
+  );
+
+  const renderPersonalCard = (item: PersonalCalendarItem) => (
+    <View key={item.id} style={[styles.feedEventCard, styles.personalFeedCard]}>
+      <View style={styles.personalIcon}>
+        <Ionicons name="person-outline" size={20} color={theme.text} />
+      </View>
+    </View>
+  );
+
+  const renderFeedDay = ({ item }: { item: CalendarDayFeedItem }) => {
+    const hasItems = item.events.length > 0 || item.personalItems.length > 0;
+    const isPastDay = item.dateKey < toDateKey(new Date());
+
+    return (
+      <View style={[styles.feedDayPage, { width: feedPageWidth }]}>
+        <Text style={styles.feedDayLabel}>
+          {formatDateLabel(item.dateKey)}
+        </Text>
+        {hasItems ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.feedCardsRow}>
+            {item.events.map(renderCompactEventCard)}
+            {item.personalItems.map(renderPersonalCard)}
+          </ScrollView>
+        ) : (
+          <View style={styles.feedEmptyState}>
+            <Text style={styles.feedEmptyTitle}>
+              {isPastDay ? 'No plans that day' : 'No plans yet'}
+            </Text>
+            <Text style={styles.feedEmptyCopy}>
+              {isPastDay
+                ? "You didn't have anything scheduled here."
+                : 'Swipe to keep browsing upcoming days.'}
+            </Text>
+          </View>
+        )}
+      </View>
+    );
+  };
+
+  const renderDatePicker = () => {
+    if (!datePickerMode) return null;
+
+    const pickerTitle =
+      datePickerMode === 'month'
+        ? 'Select Month'
+        : datePickerMode === 'day'
+          ? 'Select Day'
+          : 'Select Year';
+
+    return (
+      <Modal
+        visible
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDatePickerMode(null)}>
+        <Pressable style={styles.pickerOverlay} onPress={() => setDatePickerMode(null)}>
+          <Pressable style={styles.pickerSheet} onPress={(event) => event.stopPropagation()}>
+            <View style={styles.pickerHandle} />
+            <Text style={styles.pickerTitle}>{pickerTitle}</Text>
+            <ScrollView
+              style={styles.pickerScroll}
+              contentContainerStyle={styles.pickerOptions}
+              showsVerticalScrollIndicator={false}>
+              {datePickerMode === 'month'
+                ? MONTH_NAMES.map((monthName, monthIndex) => {
+                    const isSelected = monthIndex === selectedDateObject.getMonth();
+                    return (
+                      <Pressable
+                        key={monthName}
+                        style={[styles.pickerOption, isSelected && styles.pickerOptionActive]}
+                        onPress={() =>
+                          handleSelectDatePart(
+                            buildDateKey(selectedYear, monthIndex, selectedDayNumber)
+                          )
+                        }>
+                        <Text
+                          style={[
+                            styles.pickerOptionText,
+                            isSelected && styles.pickerOptionTextActive,
+                          ]}>
+                          {monthName}
+                        </Text>
+                      </Pressable>
+                    );
+                  })
+                : null}
+
+              {datePickerMode === 'day'
+                ? pickerDays.map((dayNumber) => {
+                    const isSelected = dayNumber === selectedDayNumber;
+                    return (
+                      <Pressable
+                        key={dayNumber}
+                        style={[styles.pickerOption, isSelected && styles.pickerOptionActive]}
+                        onPress={() =>
+                          handleSelectDatePart(
+                            buildDateKey(selectedYear, selectedDateObject.getMonth(), dayNumber)
+                          )
+                        }>
+                        <Text
+                          style={[
+                            styles.pickerOptionText,
+                            isSelected && styles.pickerOptionTextActive,
+                          ]}>
+                          {dayNumber}
+                        </Text>
+                      </Pressable>
+                    );
+                  })
+                : null}
+
+              {datePickerMode === 'year'
+                ? pickerYears.map((year) => {
+                    const isSelected = year === selectedYear;
+                    return (
+                      <Pressable
+                        key={year}
+                        style={[styles.pickerOption, isSelected && styles.pickerOptionActive]}
+                        onPress={() =>
+                          handleSelectDatePart(
+                            buildDateKey(year, selectedDateObject.getMonth(), selectedDayNumber)
+                          )
+                        }>
+                        <Text
+                          style={[
+                            styles.pickerOptionText,
+                            isSelected && styles.pickerOptionTextActive,
+                          ]}>
+                          {year}
+                        </Text>
+                      </Pressable>
+                    );
+                  })
+                : null}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    );
+  };
+
   const renderCalendar = () => (
     <>
-      <View style={styles.calendarTopBar}>
-        <Pressable
-          style={styles.yearButton}
-          onPress={() => setCalendarMode((currentMode) => (currentMode === 'year' ? 'month' : 'year'))}>
-          <Ionicons name="chevron-back" size={20} color={theme.text} />
-          <Text style={styles.yearButtonText}>{visibleMonth.getFullYear()}</Text>
-        </Pressable>
+      <View style={styles.dateHeaderRow}>
+        <View style={styles.dateHeaderButton}>
+          <Pressable onPress={() => setDatePickerMode('month')}>
+            <Text style={styles.dateHeaderText}>{selectedMonthName}</Text>
+          </Pressable>
+          <Pressable onPress={() => setDatePickerMode('day')}>
+            <Text style={styles.dateHeaderText}>{selectedDayNumber},</Text>
+          </Pressable>
+          <Pressable onPress={() => setDatePickerMode('year')}>
+            <Text style={styles.dateHeaderText}>{selectedYear}</Text>
+          </Pressable>
+        </View>
+
+        <View>
+          <Pressable
+            style={styles.headerFilterButton}
+            onPress={() => setIsFilterOpen((currentValue) => !currentValue)}>
+            <Text style={styles.headerFilterText}>{FILTER_LABELS[calendarFilter]}</Text>
+            <Ionicons
+              name="chevron-down"
+              size={14}
+              color={theme.text}
+              style={[styles.headerFilterChevron, isFilterOpen && styles.headerFilterChevronOpen]}
+            />
+          </Pressable>
+
+          {isFilterOpen ? (
+            <View style={styles.headerFilterMenu}>
+              {(['all', 'going', 'hosting'] as CalendarFilter[]).map((filter) => (
+                <Pressable
+                  key={filter}
+                  style={[
+                    styles.filterMenuItem,
+                    calendarFilter === filter && styles.filterMenuItemActive,
+                  ]}
+                  onPress={() => handleFilterChange(filter)}>
+                  <Text
+                    style={[
+                      styles.filterMenuText,
+                      calendarFilter === filter && styles.filterMenuTextActive,
+                    ]}>
+                    {FILTER_LABELS[filter]}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
+        </View>
       </View>
 
       <MonthlyCalendar
         month={visibleMonth}
-        mode={calendarMode}
+        mode="month"
         selectedDate={selectedDate}
         scheduledDates={scheduledDates}
         onSelectDate={handleSelectDate}
         onSelectMonth={handleSelectMonth}
+      />
+      <View style={styles.calendarDivider} />
+      <FlatList
+        ref={feedListRef}
+        data={feedDays}
+        keyExtractor={(item) => item.dateKey}
+        horizontal
+        pagingEnabled
+        snapToInterval={feedPageWidth}
+        decelerationRate="fast"
+        nestedScrollEnabled
+        showsHorizontalScrollIndicator={false}
+        renderItem={renderFeedDay}
+        onMomentumScrollEnd={handleFeedScrollEnd}
+        onScrollToIndexFailed={() => undefined}
+        getItemLayout={(_, index) => ({
+          length: feedPageWidth,
+          offset: feedPageWidth * index,
+          index,
+        })}
       />
     </>
   );
@@ -272,7 +545,7 @@ export default function EventsScreen() {
                 <View style={styles.emptyState}>
                   <Text style={styles.emptyTitle}>No events for this filter.</Text>
                   <Text style={styles.emptyCopy}>
-                    Try All, Going, or Created from the bottom control.
+                    Try All, Going, or Hosting from the calendar filter.
                   </Text>
                 </View>
               )}
@@ -280,71 +553,7 @@ export default function EventsScreen() {
           ) : null}
         </ScrollView>
 
-        <>
-          {activeTab === 'calendar' ? (
-            <Pressable style={styles.todayButton} onPress={handleTodayPress}>
-              <Text style={styles.todayButtonText}>Today</Text>
-            </Pressable>
-          ) : null}
-
-          {isFilterOpen ? (
-            <View style={styles.filterMenu}>
-              {(['all', 'going', 'created'] as CalendarFilter[]).map((filter) => (
-                <Pressable
-                  key={filter}
-                  style={[
-                    styles.filterMenuItem,
-                    calendarFilter === filter && styles.filterMenuItemActive,
-                  ]}
-                  onPress={() => handleFilterChange(filter)}>
-                  <Text
-                    style={[
-                      styles.filterMenuText,
-                      calendarFilter === filter && styles.filterMenuTextActive,
-                    ]}>
-                    {FILTER_LABELS[filter]}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          ) : null}
-
-          <View style={styles.calendarActionControl}>
-            <Pressable
-              style={styles.actionControlButton}
-              onPress={() => setIsFilterOpen((currentValue) => !currentValue)}>
-              <Text style={styles.actionControlLabel}>{FILTER_LABELS[calendarFilter]}</Text>
-            </Pressable>
-            <View style={styles.actionDivider} />
-            <Pressable
-              style={styles.actionControlButton}
-              onPress={() => {
-                setIsFilterOpen(false);
-                setIsSearchOpen(true);
-              }}>
-              <Ionicons name="search-outline" size={20} color={theme.text} />
-            </Pressable>
-            <View style={styles.actionDivider} />
-            <Pressable
-              style={styles.actionControlButton}
-              onPress={() => {
-                setIsFilterOpen(false);
-                setCreateMode('event');
-                setIsCreateOpen(true);
-              }}>
-              <Ionicons name="add" size={22} color={theme.text} />
-            </Pressable>
-          </View>
-        </>
       </View>
-
-      <DayAgendaSheet
-        visible={isAgendaOpen && Boolean(selectedDate)}
-        dateLabel={selectedDateLabel}
-        items={selectedAgendaItems}
-        onClose={() => setIsAgendaOpen(false)}
-        onAddPersonalItem={handleAddPersonalItemForSelectedDate}
-      />
 
       <CalendarSearchSheet
         visible={isSearchOpen}
@@ -361,6 +570,7 @@ export default function EventsScreen() {
         onClose={() => setIsCreateOpen(false)}
         onAddPersonalItem={handleCreatePersonalItem}
       />
+      {renderDatePicker()}
     </AppScreen>
   );
 }
@@ -373,96 +583,55 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     scrollContent: {
       paddingHorizontal: 18,
       paddingTop: 0,
-      paddingBottom: 140,
-      gap: 10,
+      paddingBottom: 44,
+      gap: 8,
     },
-    calendarTopBar: {
+    dateHeaderRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
+      gap: 12,
+      zIndex: 3,
     },
-    yearButton: {
+    dateHeaderButton: {
+      flex: 1,
       minHeight: 44,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 7,
+      justifyContent: 'center',
+    },
+    dateHeaderText: {
+      color: theme.text,
+      fontSize: 18,
+      fontWeight: '900',
+    },
+    headerFilterButton: {
+      height: 42,
+      borderRadius: 21,
       flexDirection: 'row',
       alignItems: 'center',
       gap: 6,
       paddingHorizontal: 14,
-      paddingVertical: 6,
-      borderRadius: 22,
       backgroundColor: theme.surface,
       borderWidth: 1,
       borderColor: theme.border,
     },
-    yearButtonText: {
-      color: theme.text,
-      fontSize: 20,
-      fontWeight: '800',
-    },
-    todayButton: {
-      position: 'absolute',
-      left: 20,
-      bottom: 96,
-      minWidth: 84,
-      height: 42,
-      borderRadius: 21,
-      paddingHorizontal: 16,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: theme.surface,
-      borderWidth: 1,
-      borderColor: theme.border,
-      shadowColor: '#000',
-      shadowOpacity: 0.22,
-      shadowRadius: 16,
-      shadowOffset: { width: 0, height: 6 },
-      elevation: 6,
-    },
-    todayButtonText: {
-      color: theme.text,
-      fontSize: 14,
-      fontWeight: '700',
-    },
-    calendarActionControl: {
-      position: 'absolute',
-      right: 20,
-      bottom: 96,
-      height: 42,
-      borderRadius: 21,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: 4,
-      backgroundColor: theme.surface,
-      borderWidth: 1,
-      borderColor: theme.border,
-      shadowColor: '#000',
-      shadowOpacity: 0.22,
-      shadowRadius: 16,
-      shadowOffset: { width: 0, height: 6 },
-      elevation: 6,
-    },
-    actionControlButton: {
-      minWidth: 44,
-      height: 34,
-      borderRadius: 17,
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingHorizontal: 10,
-    },
-    actionControlLabel: {
+    headerFilterText: {
       color: theme.text,
       fontSize: 12,
-      fontWeight: '700',
+      fontWeight: '800',
     },
-    actionDivider: {
-      width: 1,
-      height: 20,
-      backgroundColor: theme.border,
+    headerFilterChevron: {
+      transform: [{ rotate: '0deg' }, { translateY: 0 }],
     },
-    filterMenu: {
+    headerFilterChevronOpen: {
+      transform: [{ rotate: '180deg' }, { translateY: 1 }],
+    },
+    headerFilterMenu: {
       position: 'absolute',
-      right: 120,
-      bottom: 148,
+      right: 0,
+      top: 48,
       width: 116,
       borderRadius: 16,
       padding: 6,
@@ -475,6 +644,131 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       shadowOffset: { width: 0, height: 6 },
       elevation: 9,
       gap: 4,
+    },
+    calendarDivider: {
+      height: 1,
+      backgroundColor: theme.border,
+      marginTop: -2,
+      marginBottom: -2,
+    },
+    feedDayPage: {
+      gap: 8,
+      paddingRight: 10,
+      minHeight: 152,
+    },
+    feedDayLabel: {
+      color: theme.textMuted,
+      fontSize: 13,
+      fontWeight: '800',
+    },
+    feedCardsRow: {
+      gap: 14,
+      paddingRight: 10,
+    },
+    feedEventCard: {
+      width: 92,
+      height: 126,
+      borderRadius: 18,
+      overflow: 'hidden',
+      backgroundColor: theme.surfaceAlt,
+      borderWidth: 1,
+      borderColor: theme.border,
+    },
+    feedEventImage: {
+      width: '100%',
+      height: '100%',
+      backgroundColor: theme.surfaceAlt,
+    },
+    personalFeedCard: {
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    personalIcon: {
+      width: '100%',
+      height: '100%',
+      borderRadius: 0,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: theme.surfaceAlt,
+    },
+    feedEmptyState: {
+      minHeight: 118,
+      borderRadius: 22,
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 18,
+      backgroundColor: theme.surface,
+      borderWidth: 1,
+      borderColor: theme.border,
+      gap: 6,
+    },
+    feedEmptyTitle: {
+      color: theme.text,
+      fontSize: 16,
+      fontWeight: '900',
+    },
+    feedEmptyCopy: {
+      color: theme.textMuted,
+      fontSize: 13,
+      textAlign: 'center',
+    },
+    pickerOverlay: {
+      flex: 1,
+      justifyContent: 'flex-end',
+      backgroundColor: 'rgba(0,0,0,0.52)',
+    },
+    pickerSheet: {
+      maxHeight: '58%',
+      borderTopLeftRadius: 30,
+      borderTopRightRadius: 30,
+      paddingHorizontal: 18,
+      paddingTop: 10,
+      paddingBottom: 28,
+      backgroundColor: 'rgba(18,19,24,0.98)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.08)',
+    },
+    pickerHandle: {
+      alignSelf: 'center',
+      width: 42,
+      height: 5,
+      borderRadius: 999,
+      backgroundColor: 'rgba(255,255,255,0.22)',
+      marginBottom: 14,
+    },
+    pickerTitle: {
+      color: theme.text,
+      fontSize: 18,
+      fontWeight: '900',
+      marginBottom: 12,
+    },
+    pickerScroll: {
+      flexGrow: 0,
+    },
+    pickerOptions: {
+      gap: 8,
+      paddingBottom: 8,
+    },
+    pickerOption: {
+      minHeight: 46,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: theme.surface,
+      borderWidth: 1,
+      borderColor: theme.border,
+    },
+    pickerOptionActive: {
+      backgroundColor: theme.accent,
+      borderColor: theme.accent,
+    },
+    pickerOptionText: {
+      color: theme.text,
+      fontSize: 15,
+      fontWeight: '800',
+    },
+    pickerOptionTextActive: {
+      color: theme.background,
     },
     filterMenuItem: {
       minHeight: 38,

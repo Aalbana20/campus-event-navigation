@@ -5,11 +5,15 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Image,
+  KeyboardAvoidingView,
   Linking,
+  Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 
@@ -23,6 +27,29 @@ import type { EventMemoryRecord } from '@/lib/mobile-event-memories';
 import { getAvatarImageSource, getEventGalleryUris, getEventImageSource } from '@/lib/mobile-media';
 import { pickStoryMediaFromLibrary } from '@/lib/mobile-story-composer';
 import { useMobileApp } from '@/providers/mobile-app-provider';
+import type { CreateEventInput, EventRecord } from '@/types/models';
+
+type EditEventForm = {
+  title: string;
+  description: string;
+  eventDate: string;
+  startTime: string;
+  endTime: string;
+  locationName: string;
+  locationAddress: string;
+  image: string;
+};
+
+const toEditEventForm = (event: EventRecord): EditEventForm => ({
+  title: event.title,
+  description: event.description,
+  eventDate: event.eventDate,
+  startTime: event.startTime,
+  endTime: event.endTime,
+  locationName: event.locationName,
+  locationAddress: event.locationAddress,
+  image: event.image,
+});
 
 export default function EventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -31,8 +58,10 @@ export default function EventDetailScreen() {
   const styles = useMemo(() => buildStyles(theme), [theme]);
   const {
     getEventById,
+    currentUser,
     savedEventIds,
     toggleSaveEvent,
+    updateEvent,
     currentUserAttendedEvent,
     postEventMemory,
     loadEventMemoriesForEvent,
@@ -41,6 +70,8 @@ export default function EventDetailScreen() {
   const [eventMemories, setEventMemories] = useState<EventMemoryRecord[]>([]);
   const [isMemoryBusy, setIsMemoryBusy] = useState(false);
   const [isGalleryVisible, setIsGalleryVisible] = useState(false);
+  const [editForm, setEditForm] = useState<EditEventForm | null>(null);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [mapButtonLabel, setMapButtonLabel] = useState('Open in Maps');
 
   const event = id ? getEventById(String(id)) : undefined;
@@ -136,6 +167,48 @@ export default function EventDetailScreen() {
   }
 
   const isSaved = savedEventIds.includes(String(event.id));
+  const isHostedByCurrentUser = event.createdBy === currentUser.id;
+
+  const handleOpenEdit = () => {
+    setEditForm(toEditEventForm(event));
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editForm || isSavingEdit) return;
+
+    const input: CreateEventInput = {
+      title: editForm.title,
+      description: editForm.description,
+      date: '',
+      eventDate: editForm.eventDate,
+      startTime: editForm.startTime,
+      endTime: editForm.endTime,
+      locationName: editForm.locationName,
+      locationAddress: editForm.locationAddress,
+      locationCoordinates: event.locationCoordinates || null,
+      host: event.host,
+      organizer: event.organizer,
+      dressCode: event.dressCode,
+      tags: event.tags,
+      privacy: event.privacy,
+      eventType: event.price && event.price !== 'Free' ? 'Paid' : 'Free',
+      capacity: event.capacity ? String(event.capacity) : '',
+      image: editForm.image,
+      imageUrls: editForm.image ? [editForm.image] : event.imageUrls,
+    };
+
+    try {
+      setIsSavingEdit(true);
+      const updated = await updateEvent(event.id, input);
+      if (!updated) {
+        Alert.alert('Edit Event', 'Could not update this event right now.');
+        return;
+      }
+      setEditForm(null);
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
 
   const handleAddMemory = async () => {
     if (!event?.id || isMemoryBusy) return;
@@ -265,8 +338,12 @@ export default function EventDetailScreen() {
           </View>
 
           <View style={styles.actionsRow}>
-            <Pressable style={styles.primaryButton} onPress={() => toggleSaveEvent(event.id)}>
-              <Text style={styles.primaryButtonText}>{isSaved ? 'Going' : 'RSVP'}</Text>
+            <Pressable
+              style={styles.primaryButton}
+              onPress={isHostedByCurrentUser ? handleOpenEdit : () => toggleSaveEvent(event.id)}>
+              <Text style={styles.primaryButtonText}>
+                {isHostedByCurrentUser ? 'Edit' : isSaved ? 'Going' : 'RSVP'}
+              </Text>
             </Pressable>
             {(event.locationAddress || event.locationName) ? (
               <Pressable
@@ -285,6 +362,111 @@ export default function EventDetailScreen() {
         images={galleryImages}
         onClose={() => setIsGalleryVisible(false)}
       />
+
+      <Modal
+        visible={Boolean(editForm)}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setEditForm(null)}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.editOverlay}>
+          <Pressable style={styles.editBackdrop} onPress={() => setEditForm(null)} />
+          <View style={styles.editSheet}>
+            <View style={styles.editHeader}>
+              <Pressable style={styles.editIconButton} onPress={() => setEditForm(null)}>
+                <Ionicons name="close" size={24} color={theme.text} />
+              </Pressable>
+              <Text style={styles.editTitle}>Edit Event</Text>
+              <Pressable
+                style={[styles.editIconButton, styles.editSaveButton]}
+                disabled={!editForm || isSavingEdit}
+                onPress={() => void handleSaveEdit()}>
+                <Text style={styles.editSaveText}>{isSavingEdit ? '...' : 'Save'}</Text>
+              </Pressable>
+            </View>
+
+            {editForm ? (
+              <ScrollView
+                contentContainerStyle={styles.editContent}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}>
+                <TextInput
+                  value={editForm.title}
+                  onChangeText={(text) => setEditForm((form) => (form ? { ...form, title: text } : form))}
+                  placeholder="Title"
+                  placeholderTextColor={theme.textMuted}
+                  style={styles.editInput}
+                />
+                <TextInput
+                  value={editForm.description}
+                  onChangeText={(text) =>
+                    setEditForm((form) => (form ? { ...form, description: text } : form))
+                  }
+                  placeholder="Description"
+                  placeholderTextColor={theme.textMuted}
+                  style={[styles.editInput, styles.editTextArea]}
+                  multiline
+                />
+                <View style={styles.editRow}>
+                  <TextInput
+                    value={editForm.eventDate}
+                    onChangeText={(text) =>
+                      setEditForm((form) => (form ? { ...form, eventDate: text } : form))
+                    }
+                    placeholder="2026-04-25"
+                    placeholderTextColor={theme.textMuted}
+                    style={[styles.editInput, styles.editHalfInput]}
+                  />
+                  <TextInput
+                    value={editForm.startTime}
+                    onChangeText={(text) =>
+                      setEditForm((form) => (form ? { ...form, startTime: text } : form))
+                    }
+                    placeholder="16:00"
+                    placeholderTextColor={theme.textMuted}
+                    style={[styles.editInput, styles.editHalfInput]}
+                  />
+                </View>
+                <TextInput
+                  value={editForm.endTime}
+                  onChangeText={(text) =>
+                    setEditForm((form) => (form ? { ...form, endTime: text } : form))
+                  }
+                  placeholder="End time"
+                  placeholderTextColor={theme.textMuted}
+                  style={styles.editInput}
+                />
+                <TextInput
+                  value={editForm.locationName}
+                  onChangeText={(text) =>
+                    setEditForm((form) => (form ? { ...form, locationName: text } : form))
+                  }
+                  placeholder="Location"
+                  placeholderTextColor={theme.textMuted}
+                  style={styles.editInput}
+                />
+                <TextInput
+                  value={editForm.locationAddress}
+                  onChangeText={(text) =>
+                    setEditForm((form) => (form ? { ...form, locationAddress: text } : form))
+                  }
+                  placeholder="Address"
+                  placeholderTextColor={theme.textMuted}
+                  style={styles.editInput}
+                />
+                <TextInput
+                  value={editForm.image}
+                  onChangeText={(text) => setEditForm((form) => (form ? { ...form, image: text } : form))}
+                  placeholder="Flyer image URL"
+                  placeholderTextColor={theme.textMuted}
+                  style={styles.editInput}
+                />
+              </ScrollView>
+            ) : null}
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </AppScreen>
   );
 }

@@ -124,10 +124,6 @@ export function MonthlyCalendar({
   const theme = useAppTheme();
   const styles = useMemo(() => buildStyles(theme), [theme]);
   const year = month.getFullYear();
-  const monthsToRender = useMemo(
-    () => Array.from({ length: 8 }, (_, index) => new Date(year, month.getMonth() + index, 1)),
-    [month, year]
-  );
   const yearMonths = useMemo(
     () => Array.from({ length: 12 }, (_, index) => new Date(year, index, 1)),
     [year]
@@ -170,20 +166,13 @@ export function MonthlyCalendar({
 
   return (
     <View style={styles.monthList}>
-      {monthsToRender.map((visibleMonth, index) => (
-        <View key={`${visibleMonth.getFullYear()}-${visibleMonth.getMonth()}`} style={styles.monthSection}>
-          <Text style={styles.monthTitle}>
-            {visibleMonth.toLocaleDateString('en-US', { month: 'long' })}
-          </Text>
-          <MonthGrid
-            month={visibleMonth}
-            selectedDate={selectedDate}
-            scheduledDates={scheduledDates}
-            showWeekdays={index === 0}
-            onSelectDate={onSelectDate}
-          />
-        </View>
-      ))}
+      <MonthGrid
+        month={month}
+        selectedDate={selectedDate}
+        scheduledDates={scheduledDates}
+        showWeekdays
+        onSelectDate={onSelectDate}
+      />
     </View>
   );
 }
@@ -191,7 +180,7 @@ export function MonthlyCalendar({
 const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
   StyleSheet.create({
     monthList: {
-      gap: 28,
+      gap: 6,
     },
     monthSection: {
       gap: 12,
@@ -203,13 +192,13 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       letterSpacing: 0,
     },
     monthBlock: {
-      gap: 8,
+      gap: 6,
     },
     weekdaysRow: {
       flexDirection: 'row',
       borderBottomWidth: 1,
       borderBottomColor: theme.border,
-      paddingBottom: 8,
+      paddingBottom: 6,
     },
     weekdayLabel: {
       width: `${100 / 7}%`,
@@ -226,28 +215,28 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     },
     dayCell: {
       width: `${100 / 7}%`,
-      minHeight: 72,
+      minHeight: 64,
       borderBottomWidth: 1,
       borderBottomColor: theme.border,
       alignItems: 'center',
-      paddingTop: 12,
+      paddingTop: 9,
     },
     dayInner: {
-      width: 46,
-      height: 46,
-      borderRadius: 23,
+      width: 44,
+      height: 44,
+      borderRadius: 22,
       alignItems: 'center',
       justifyContent: 'center',
     },
     selectedInner: {
-      backgroundColor: '#ff453a',
+      backgroundColor: theme.accent,
     },
     todayInner: {
       backgroundColor: theme.surface,
     },
     dayLabel: {
       color: theme.text,
-      fontSize: 22,
+      fontSize: 21,
       fontWeight: '800',
     },
     selectedLabel: {
@@ -258,11 +247,11 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     },
     dayDot: {
       position: 'absolute',
-      bottom: -7,
-      width: 14,
-      height: 5,
+      bottom: -6,
+      width: 6,
+      height: 6,
       borderRadius: 999,
-      backgroundColor: theme.success,
+      backgroundColor: theme.accent,
     },
     selectedDot: {
       backgroundColor: '#ffffff',
@@ -271,7 +260,7 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       gap: 16,
     },
     yearTitle: {
-      color: '#ff453a',
+      color: theme.accent,
       fontSize: 44,
       fontWeight: '900',
       letterSpacing: 0,
@@ -296,7 +285,7 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       fontWeight: '900',
     },
     yearMonthTitleActive: {
-      color: '#ff453a',
+      color: theme.accent,
     },
     compactMonth: {
       gap: 4,
@@ -329,6 +318,6 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       width: 5,
       height: 5,
       borderRadius: 3,
-      backgroundColor: theme.success,
+      backgroundColor: theme.accent,
     },
   });

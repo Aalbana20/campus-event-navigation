@@ -25,25 +25,33 @@ export default function HomeScreen() {
   const styles = useMemo(() => buildStyles(theme), [theme]);
   const { unreadNotificationCount } = useMobileInbox();
   const [activeView, setActiveView] = useState<HomeView>('events');
+  const [calendarSearchSignal, setCalendarSearchSignal] = useState(0);
+  const [calendarCreateSignal, setCalendarCreateSignal] = useState(0);
 
   const handleOpenCreate = useCallback(() => {
+    if (activeView === 'calendar') {
+      setCalendarCreateSignal((signal) => signal + 1);
+      return;
+    }
     router.push('/story/create');
-  }, [router]);
+  }, [activeView, router]);
 
   const handleOpenNotifications = useCallback(() => {
     router.push('/inbox');
   }, [router]);
+
+  const handleOpenCalendarSearch = useCallback(() => {
+    setCalendarSearchSignal((signal) => signal + 1);
+  }, []);
 
   return (
     <View style={styles.root}>
       <View style={[styles.toggleBar, { paddingTop: insets.top + 4 }]}>
         <View style={styles.topBarRow}>
           <View style={styles.topActionSlot}>
-            {activeView === 'events' ? (
-              <Pressable style={styles.topActionButton} onPress={handleOpenCreate}>
-                <Ionicons name="add-outline" size={22} color={theme.text} />
-              </Pressable>
-            ) : null}
+            <Pressable style={styles.topActionButton} onPress={handleOpenCreate}>
+              <Ionicons name="add-outline" size={22} color={theme.text} />
+            </Pressable>
           </View>
 
           <SegmentedToggle
@@ -59,7 +67,11 @@ export default function HomeScreen() {
                 <Ionicons name="notifications-outline" size={20} color={theme.text} />
                 {unreadNotificationCount > 0 ? <View style={styles.topActionBadge} /> : null}
               </Pressable>
-            ) : null}
+            ) : (
+              <Pressable style={styles.topActionButton} onPress={handleOpenCalendarSearch}>
+                <Ionicons name="search-outline" size={20} color={theme.text} />
+              </Pressable>
+            )}
           </View>
         </View>
       </View>
@@ -68,7 +80,10 @@ export default function HomeScreen() {
         {activeView === 'events' ? (
           <DiscoverScreen hideModeSwitch initialMode="events" embedded />
         ) : (
-          <EventsScreen />
+          <EventsScreen
+            searchSignal={calendarSearchSignal}
+            createSignal={calendarCreateSignal}
+          />
         )}
       </View>
     </View>
