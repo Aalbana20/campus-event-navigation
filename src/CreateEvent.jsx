@@ -961,31 +961,45 @@ function CreateEvent({ embedded = false, modal = false, onPublished }) {
     }
   }
 
+  const stepOrder = isPrivate ? FLOW_ORDER_PRIVATE : FLOW_ORDER_PUBLIC
+  const currentStepIndex = Math.max(0, stepOrder.indexOf(activeStepId))
+  const safeStepId = stepOrder[currentStepIndex] || "type"
+  const currentScreen = FLOW_SCREENS[safeStepId]
+  const isLastStep = safeStepId === "review"
+  const isFirstStep = safeStepId === "type"
+
   const stepValidationError = useMemo(() => {
-    const stepId = STEP_DEFINITIONS[activeStepIndex]?.id
-    if (stepId === "basics" && !title.trim()) return "Add a title to continue."
-    if (stepId === "datetime" && !date) return "Pick a start date to continue."
+    if (safeStepId === "core") {
+      if (!title.trim()) return "Give your event a name to continue."
+      if (!date) return "Pick a start date to continue."
+    }
     return ""
-  }, [activeStepIndex, date, title])
-
-  const isLastStep = activeStepIndex === STEP_DEFINITIONS.length - 1
-  const currentStep = STEP_DEFINITIONS[activeStepIndex]
-
-  const goToStep = (index) => {
-    if (index < 0 || index >= STEP_DEFINITIONS.length) return
-    setActiveStepIndex(index)
-  }
+  }, [date, safeStepId, title])
 
   const handleNextStep = () => {
     if (stepValidationError) {
       showToast(stepValidationError, "error")
       return
     }
-    goToStep(activeStepIndex + 1)
+    const nextId = stepOrder[currentStepIndex + 1]
+    if (nextId) setActiveStepId(nextId)
   }
 
   const handlePrevStep = () => {
-    goToStep(activeStepIndex - 1)
+    const prevId = stepOrder[currentStepIndex - 1]
+    if (prevId) setActiveStepId(prevId)
+  }
+
+  const handlePickEventKind = (kind) => {
+    if (kind === "personal") {
+      navigate("/events?create=personal")
+      if (typeof onPublished === "function") {
+        onPublished()
+      }
+      return
+    }
+    setIsPrivate(kind === "private")
+    setActiveStepId("flyer")
   }
 
   const formattedReviewDate = useMemo(() => {
