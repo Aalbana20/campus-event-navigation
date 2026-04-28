@@ -5,7 +5,7 @@ import { useEvents } from "./context/EventContext"
 import { DEFAULT_AVATAR_URL, sanitizeAvatarUrl } from "./profileMedia"
 import { supabase } from "./supabaseClient"
 import { useToast } from "./context/ToastContext"
-import { applyEventImageFallback, getEventImageSrc } from "./eventImages"
+import { applyEventImageFallback } from "./eventImages"
 
 const MONTH_NAMES = [
   "January",
@@ -1042,17 +1042,17 @@ function CreateEvent({ embedded = false, modal = false, onPublished }) {
 
   return (
     <div className={`create-page ${embedded ? "embedded" : ""} ${modal ? "modal" : ""}`}>
-      {!embedded && (
+      {!embedded && !modal && (
         <div className="create-header">
           <p>Create and customize your event</p>
           <h1>Create Event</h1>
         </div>
       )}
 
-      {modal ? (
+      {modal && postPublishInfo ? (
         <div className="create-modal-heading">
           <span className="personal-modal-kicker">Event</span>
-          <h2>{postPublishInfo ? "Share Your Event" : "Create Event"}</h2>
+          <h2>Share Your Event</h2>
         </div>
       ) : null}
 
@@ -1164,511 +1164,616 @@ function CreateEvent({ embedded = false, modal = false, onPublished }) {
           </div>
         </div>
       ) : (
-      <div className={`create-layout ${embedded ? "embedded" : ""} ${modal ? "modal" : ""}`}>
-        <div className="create-form-card create-wizard">
-          <div className="create-wizard-progress" aria-label="Step progress">
-            {STEP_DEFINITIONS.map((stepConfig, index) => {
-              const isActive = index === activeStepIndex
-              const isComplete = index < activeStepIndex
+      <div className={`create-flow ${embedded ? "embedded" : ""} ${modal ? "modal" : ""} step-${safeStepId}`}>
+        <aside className="create-flow-preview" aria-label="Live preview">
+          {safeStepId === "review" ? (
+            <div className="create-flow-review-previews">
+              <div className="create-flow-preview-block">
+                <p className="create-flow-preview-kicker">Card preview</p>
+                <article className="event-card-preview">
+                  <div className="event-card-preview-image">
+                    {flyerPreview ? (
+                      <img
+                        src={flyerPreview}
+                        alt=""
+                        onError={applyEventImageFallback}
+                      />
+                    ) : (
+                      <div className="event-card-preview-image-fallback">
+                        <span aria-hidden="true">🎟</span>
+                      </div>
+                    )}
+                    <span
+                      className={`event-card-preview-pill ${isPrivate ? "private" : "public"}`}
+                    >
+                      {isPrivate ? "Private" : "Public"}
+                    </span>
+                  </div>
+                  <div className="event-card-preview-body">
+                    <h4>{title.trim() || "Untitled event"}</h4>
+                    <p>
+                      {formattedReviewDate}
+                      {time ? ` · ${formatTimeFromInput(time)}` : ""}
+                    </p>
+                    <p className="event-card-preview-meta">
+                      {locationName.trim() || locationAddress.trim() || "Location TBD"}
+                    </p>
+                    <div className="event-card-preview-foot">
+                      <span>0 going</span>
+                      <span>·</span>
+                      <span>{eventType}</span>
+                    </div>
+                  </div>
+                </article>
+              </div>
+
+              <div className="create-flow-preview-block">
+                <p className="create-flow-preview-kicker">Detail preview</p>
+                <article className="event-detail-preview">
+                  <div className="event-detail-preview-hero">
+                    {flyerPreview ? (
+                      <img
+                        src={flyerPreview}
+                        alt=""
+                        onError={applyEventImageFallback}
+                      />
+                    ) : (
+                      <div className="event-detail-preview-hero-fallback">
+                        <span aria-hidden="true">🎟</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="event-detail-preview-body">
+                    <h3>{title.trim() || "Untitled event"}</h3>
+                    <p className="event-detail-preview-meta">
+                      {formattedReviewDate}
+                      {time ? ` · ${buildTimeLabel(time, endTime) || formatTimeFromInput(time)}` : ""}
+                    </p>
+                    <p className="event-detail-preview-meta">
+                      {locationName.trim() || "Location TBD"}
+                      {locationAddress.trim() ? ` · ${locationAddress.trim()}` : ""}
+                    </p>
+                    {description.trim() ? (
+                      <p className="event-detail-preview-description">{description.trim()}</p>
+                    ) : (
+                      <p className="event-detail-preview-description event-detail-preview-description-placeholder">
+                        Your description will appear here.
+                      </p>
+                    )}
+                    {tags.length > 0 ? (
+                      <div className="event-detail-preview-tags">
+                        {tags.slice(0, 6).map((tag) => (
+                          <span key={tag} className="event-detail-preview-tag">
+                            #{tag}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+                    <div className="event-detail-preview-actions">
+                      <button type="button" className="event-detail-preview-action primary">
+                        RSVP
+                      </button>
+                      <button type="button" className="event-detail-preview-action">
+                        Save
+                      </button>
+                      <button type="button" className="event-detail-preview-action">
+                        Share
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              </div>
+            </div>
+          ) : (
+            <div className="create-flow-flyer-preview" aria-label="Flyer preview">
+              <div className="create-flow-flyer-frame">
+                {flyerPreview ? (
+                  <img
+                    src={flyerPreview}
+                    alt="Flyer preview"
+                    className="create-flow-flyer-image"
+                  />
+                ) : (
+                  <div className="create-flow-flyer-empty">
+                    <div className="create-flow-flyer-empty-mark" aria-hidden="true">
+                      <svg width="46" height="46" viewBox="0 0 24 24" fill="none">
+                        <rect x="3" y="3" width="18" height="18" rx="3" stroke="currentColor" strokeWidth="1.6" />
+                        <circle cx="9" cy="10" r="1.4" fill="currentColor" />
+                        <path d="m4.5 18 5-5 4 4 2-2 4 4" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+                      </svg>
+                    </div>
+                    <p>Flyer preview</p>
+                    <span>Pick a flyer in the next step</span>
+                  </div>
+                )}
+                {flyerPreview && (title.trim() || date) ? (
+                  <div className="create-flow-flyer-overlay">
+                    {title.trim() ? <strong>{title.trim()}</strong> : null}
+                    {date ? <span>{formattedReviewDate}</span> : null}
+                  </div>
+                ) : null}
+              </div>
+              <div className="create-flow-flyer-meta">
+                <p className="create-flow-flyer-meta-title">
+                  {isPrivate ? "Private event" : "Public event"}
+                </p>
+                <p className="create-flow-flyer-meta-helper">
+                  This preview updates as you go through each screen.
+                </p>
+              </div>
+            </div>
+          )}
+        </aside>
+
+        <section className="create-flow-stage" aria-label={currentScreen.title}>
+          <div className="create-flow-progress" aria-label="Progress">
+            {stepOrder.map((id, index) => {
+              const isActive = index === currentStepIndex
+              const isComplete = index < currentStepIndex
               return (
-                <button
-                  type="button"
-                  key={stepConfig.id}
-                  className={`create-wizard-step ${isActive ? "active" : ""} ${isComplete ? "complete" : ""}`}
-                  onClick={() => goToStep(index)}
-                  aria-current={isActive ? "step" : undefined}
-                >
-                  <span className="create-wizard-step-index" aria-hidden="true">
-                    {index + 1}
-                  </span>
-                  <span className="create-wizard-step-label">{stepConfig.label}</span>
-                </button>
+                <span
+                  key={id}
+                  className={`create-flow-progress-segment ${isActive ? "active" : ""} ${isComplete ? "complete" : ""}`}
+                  aria-hidden="true"
+                />
               )
             })}
           </div>
 
-          <div className="create-wizard-header">
-            <span className="create-wizard-kicker">
-              Step {activeStepIndex + 1} of {STEP_DEFINITIONS.length}
-            </span>
-            <h3 className="create-wizard-title">{currentStep.label}</h3>
-            <p className="create-wizard-helper">{currentStep.helper}</p>
-          </div>
+          <div className="create-flow-stage-screen">
+            <header className="create-flow-stage-header">
+              <h2 className="create-flow-stage-title">{currentScreen.title}</h2>
+              <p className="create-flow-stage-subtitle">{currentScreen.subtitle}</p>
+            </header>
 
-          <div className="create-wizard-body">
-            {currentStep.id === "basics" ? (
-              <>
-                <div className="form-group">
-                  <label>Event Title</label>
-                  <input
-                    type="text"
-                    placeholder="Spring Campus Festival"
-                    value={title}
-                    onChange={(event) => setTitle(event.target.value)}
-                  />
+            <div className={`create-flow-stage-body screen-${safeStepId}`}>
+              {safeStepId === "type" ? (
+                <div className="create-flow-type-grid">
+                  <button
+                    type="button"
+                    className="create-flow-type-card"
+                    onClick={() => handlePickEventKind("public")}
+                  >
+                    <span className="create-flow-type-icon" aria-hidden="true">🌐</span>
+                    <span className="create-flow-type-copy">
+                      <strong>Public Event</strong>
+                      <span>Anyone can discover and join</span>
+                    </span>
+                    <span className="create-flow-type-chevron" aria-hidden="true">›</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="create-flow-type-card"
+                    onClick={() => handlePickEventKind("private")}
+                  >
+                    <span className="create-flow-type-icon" aria-hidden="true">🔒</span>
+                    <span className="create-flow-type-copy">
+                      <strong>Private Event</strong>
+                      <span>Only selected people can see it</span>
+                    </span>
+                    <span className="create-flow-type-chevron" aria-hidden="true">›</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="create-flow-type-card"
+                    onClick={() => handlePickEventKind("personal")}
+                  >
+                    <span className="create-flow-type-icon" aria-hidden="true">👤</span>
+                    <span className="create-flow-type-copy">
+                      <strong>Personal Plan</strong>
+                      <span>Just for you (not shared)</span>
+                    </span>
+                    <span className="create-flow-type-chevron" aria-hidden="true">›</span>
+                  </button>
                 </div>
+              ) : null}
 
-                <div className="form-group">
-                  <label>Description</label>
-                  <textarea
-                    placeholder="Describe your event..."
-                    rows="5"
-                    value={description}
-                    onChange={(event) => setDescription(event.target.value)}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>Host</label>
-                  <input
-                    type="text"
-                    placeholder="Event creator"
-                    value={creatorName}
-                    readOnly
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>Tags</label>
-                  <div className="create-event-tags-input-wrap">
-                    <div className="create-event-tags-list">
-                      {tags.map((tag) => (
+              {safeStepId === "flyer" ? (
+                <div className="create-flow-flyer-screen">
+                  <div className="create-flow-flyer-actions">
+                    <label className="upload-btn">
+                      Upload from device
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleFlyerUpload}
+                        style={{ display: "none" }}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="ai-btn"
+                      onClick={() => setIsFlyerSearchOpen((prev) => !prev)}
+                      aria-expanded={isFlyerSearchOpen}
+                    >
+                      {isFlyerSearchOpen ? "Hide flyer library" : "Browse flyer library"}
+                    </button>
+                  </div>
+                  {isFlyerSearchOpen ? (
+                    <div className="flyer-search">
+                      <div className="flyer-search-categories" role="tablist" aria-label="Flyer categories">
                         <button
                           type="button"
-                          key={tag}
-                          className="create-event-tag-chip"
-                          onClick={() => handleRemoveTag(tag)}
-                          aria-label={`Remove ${tag}`}
+                          className={`flyer-search-chip ${!flyerSearchCategory ? "active" : ""}`}
+                          onClick={() => setFlyerSearchCategory("")}
                         >
-                          #{tag} <span>×</span>
+                          All
                         </button>
-                      ))}
-                    </div>
-
-                    <div className="create-event-tag-entry">
+                        {FLYER_CATEGORIES.map((category) => (
+                          <button
+                            key={category.id}
+                            type="button"
+                            className={`flyer-search-chip ${flyerSearchCategory === category.id ? "active" : ""}`}
+                            onClick={() => setFlyerSearchCategory(category.id)}
+                          >
+                            {category.label}
+                          </button>
+                        ))}
+                      </div>
                       <input
-                        type="text"
-                        value={tagInput}
-                        onChange={(event) => setTagInput(event.target.value)}
-                        onKeyDown={handleTagKeyDown}
-                        placeholder="Add tags like sports, basketball, movie..."
+                        type="search"
+                        className="flyer-search-input"
+                        placeholder="Search flyers"
+                        value={flyerSearchQuery}
+                        onChange={(event) => setFlyerSearchQuery(event.target.value)}
                       />
-                      <button
-                        type="button"
-                        className="create-event-add-tag-btn"
-                        onClick={() => handleAddTag()}
-                      >
-                        Add
-                      </button>
-                    </div>
-
-                    <div className="create-event-suggested-tags">
-                      <p className="create-event-suggested-label">Suggested tags</p>
-                      <div className="create-event-suggested-list">
-                        {suggestedTagOptions.map((option) => {
-                          const isSelected = tags.includes(option.tag)
-
-                          return (
+                      <div className="flyer-search-grid">
+                        {filteredFlyers.length > 0 ? (
+                          filteredFlyers.map((flyer) => (
                             <button
+                              key={flyer.id}
                               type="button"
-                              key={`${option.source}-${option.tag}`}
-                              className={`create-event-suggested-chip ${isSelected ? "selected" : ""}`}
-                              onClick={() => handleSuggestedTagToggle(option.tag)}
-                              aria-pressed={isSelected}
-                              title={option.reason}
+                              className={`flyer-search-tile ${flyerPreview === flyer.image ? "selected" : ""}`}
+                              onClick={() => handleSelectStockFlyer(flyer)}
+                              title={flyer.label}
                             >
-                              #{option.tag}
+                              <img src={flyer.image} alt={flyer.label} />
                             </button>
-                          )
-                        })}
+                          ))
+                        ) : (
+                          <p className="flyer-search-empty">No flyers match that filter.</p>
+                        )}
                       </div>
                     </div>
-                  </div>
+                  ) : null}
+                  <p className="create-flow-flyer-tip">
+                    Tip: a strong flyer is the easiest way to make people stop and tap.
+                  </p>
                 </div>
-              </>
-            ) : null}
+              ) : null}
 
-            {currentStep.id === "datetime" ? (
-              <div className="event-time-card" role="group" aria-label="Event time">
-                <div className="event-time-row">
-                  <span className="event-time-label">Starts</span>
-                  <div className="event-time-controls">
+              {safeStepId === "core" ? (
+                <div className="create-flow-screen-fields">
+                  <div className="form-group">
+                    <label>Title</label>
+                    <input
+                      type="text"
+                      placeholder="Spring Kickoff Party"
+                      value={title}
+                      onChange={(event) => setTitle(event.target.value)}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>Date</label>
                     <input
                       type="date"
-                      className="event-time-pill"
                       value={date}
                       min={new Date().toISOString().split("T")[0]}
                       onChange={(event) => setDate(event.target.value)}
                     />
-                    <input
-                      type="time"
-                      className="event-time-pill"
-                      value={time}
-                      onChange={(event) => setTime(event.target.value)}
-                    />
                   </div>
-                </div>
 
-                <div className="event-time-row">
-                  <span className="event-time-label">Ends</span>
-                  <div className="event-time-controls">
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>Start Time</label>
+                      <input
+                        type="time"
+                        value={time}
+                        onChange={(event) => setTime(event.target.value)}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>End Time</label>
+                      <input
+                        type="time"
+                        value={endTime}
+                        onChange={(event) => setEndTime(event.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label>End Date (optional)</label>
                     <input
                       type="date"
-                      className="event-time-pill"
-                      value={endDate || date}
+                      value={endDate || ""}
                       min={date || new Date().toISOString().split("T")[0]}
                       onChange={(event) => setEndDate(event.target.value)}
                     />
-                    <input
-                      type="time"
-                      className="event-time-pill"
-                      value={endTime}
-                      onChange={(event) => setEndTime(event.target.value)}
-                    />
                   </div>
                 </div>
-              </div>
-            ) : null}
+              ) : null}
 
-            {currentStep.id === "location" ? (
-              <>
-                <div className="form-group">
-                  <label>Location Name</label>
-                  <input
-                    type="text"
-                    placeholder="Student Center Ballroom"
-                    value={locationName}
-                    onChange={handleLocationNameChange}
-                  />
-                </div>
+              {safeStepId === "details" ? (
+                <div className="create-flow-screen-fields">
+                  <div className="form-group">
+                    <label>Description</label>
+                    <textarea
+                      placeholder="Describe the vibe, audience, and what people should expect."
+                      rows="5"
+                      value={description}
+                      onChange={(event) => setDescription(event.target.value)}
+                    />
+                  </div>
 
-                <div className="form-group">
-                  <label>Address</label>
-                  <div className="create-address-shell">
+                  <div className="form-group">
+                    <label>Tags</label>
+                    <div className="create-event-tags-input-wrap">
+                      <div className="create-event-tags-list">
+                        {tags.map((tag) => (
+                          <button
+                            type="button"
+                            key={tag}
+                            className="create-event-tag-chip"
+                            onClick={() => handleRemoveTag(tag)}
+                            aria-label={`Remove ${tag}`}
+                          >
+                            #{tag} <span>×</span>
+                          </button>
+                        ))}
+                      </div>
+                      <div className="create-event-tag-entry">
+                        <input
+                          type="text"
+                          value={tagInput}
+                          onChange={(event) => setTagInput(event.target.value)}
+                          onKeyDown={handleTagKeyDown}
+                          placeholder="Add hashtag"
+                        />
+                        <button
+                          type="button"
+                          className="create-event-add-tag-btn"
+                          onClick={() => handleAddTag()}
+                        >
+                          Add
+                        </button>
+                      </div>
+                      {suggestedTagOptions.length > 0 ? (
+                        <div className="create-event-suggested-tags">
+                          <p className="create-event-suggested-label">Suggested</p>
+                          <div className="create-event-suggested-list">
+                            {suggestedTagOptions.slice(0, 8).map((option) => {
+                              const isSelected = tags.includes(option.tag)
+                              return (
+                                <button
+                                  type="button"
+                                  key={`${option.source}-${option.tag}`}
+                                  className={`create-event-suggested-chip ${isSelected ? "selected" : ""}`}
+                                  onClick={() => handleSuggestedTagToggle(option.tag)}
+                                  aria-pressed={isSelected}
+                                  title={option.reason}
+                                >
+                                  #{option.tag}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label>Location Name</label>
                     <input
                       type="text"
-                      placeholder="30665 Student Services Center, Princess Anne, MD 21853"
-                      value={locationAddress}
-                      onChange={handleLocationAddressChange}
-                      onFocus={handleAddressFocus}
-                      onBlur={handleAddressBlur}
-                      autoComplete="street-address"
-                      aria-autocomplete={isGooglePlacesConfigured ? "list" : "none"}
-                      aria-expanded={isGooglePlacesConfigured ? isAddressDropdownOpen : false}
-                      data-autocomplete-provider={addressMeta.provider}
-                      data-autocomplete-status={addressMeta.status}
-                      data-place-id={addressMeta.placeId}
+                      placeholder="SSC Ballroom"
+                      value={locationName}
+                      onChange={handleLocationNameChange}
                     />
+                  </div>
 
-                    {(isAddressDropdownOpen || isAddressLoading) && isGooglePlacesConfigured ? (
-                      <div className="create-address-dropdown">
-                        {isAddressLoading ? (
-                          <div className="create-address-dropdown-state">Loading suggestions...</div>
-                        ) : addressSuggestions.length > 0 ? (
-                          <>
-                            {addressSuggestions.map((suggestion) => (
-                              <button
-                                key={suggestion.id}
-                                type="button"
-                                className="create-address-suggestion-btn"
-                                onMouseDown={(event) => event.preventDefault()}
-                                onClick={() => handleSelectAddressSuggestion(suggestion)}
-                              >
-                                <span className="create-address-suggestion-main">
-                                  {suggestion.mainText || suggestion.fullText}
-                                </span>
-                                {suggestion.secondaryText ? (
-                                  <span className="create-address-suggestion-secondary">
-                                    {suggestion.secondaryText}
+                  <div className="form-group">
+                    <label>Address</label>
+                    <div className="create-address-shell">
+                      <input
+                        type="text"
+                        placeholder="30665 Student Services Center Dr"
+                        value={locationAddress}
+                        onChange={handleLocationAddressChange}
+                        onFocus={handleAddressFocus}
+                        onBlur={handleAddressBlur}
+                        autoComplete="street-address"
+                        aria-autocomplete={isGooglePlacesConfigured ? "list" : "none"}
+                        aria-expanded={isGooglePlacesConfigured ? isAddressDropdownOpen : false}
+                        data-autocomplete-provider={addressMeta.provider}
+                        data-autocomplete-status={addressMeta.status}
+                        data-place-id={addressMeta.placeId}
+                      />
+                      {(isAddressDropdownOpen || isAddressLoading) && isGooglePlacesConfigured ? (
+                        <div className="create-address-dropdown">
+                          {isAddressLoading ? (
+                            <div className="create-address-dropdown-state">Loading suggestions...</div>
+                          ) : addressSuggestions.length > 0 ? (
+                            <>
+                              {addressSuggestions.map((suggestion) => (
+                                <button
+                                  key={suggestion.id}
+                                  type="button"
+                                  className="create-address-suggestion-btn"
+                                  onMouseDown={(event) => event.preventDefault()}
+                                  onClick={() => handleSelectAddressSuggestion(suggestion)}
+                                >
+                                  <span className="create-address-suggestion-main">
+                                    {suggestion.mainText || suggestion.fullText}
                                   </span>
-                                ) : null}
-                              </button>
-                            ))}
-                            <div className="create-address-powered">Powered by Google</div>
-                          </>
-                        ) : (
-                          <div className="create-address-dropdown-state">
-                            Keep typing or enter the address manually.
-                          </div>
-                        )}
+                                  {suggestion.secondaryText ? (
+                                    <span className="create-address-suggestion-secondary">
+                                      {suggestion.secondaryText}
+                                    </span>
+                                  ) : null}
+                                </button>
+                              ))}
+                              <div className="create-address-powered">Powered by Google</div>
+                            </>
+                          ) : (
+                            <div className="create-address-dropdown-state">
+                              Keep typing or enter the address manually.
+                            </div>
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>Price</label>
+                      <div className="create-segmented-control" role="tablist" aria-label="Price">
+                        {["Free", "Paid"].map((option) => (
+                          <button
+                            key={option}
+                            type="button"
+                            className={`create-segmented-option ${eventType === option ? "active" : ""}`}
+                            onClick={() => setEventType(option)}
+                          >
+                            {option}
+                          </button>
+                        ))}
                       </div>
-                    ) : null}
+                    </div>
+                    <div className="form-group">
+                      <label>Capacity</label>
+                      <input
+                        type="number"
+                        placeholder="100"
+                        value={capacity}
+                        onChange={(event) => setCapacity(event.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label>Dress Code (optional)</label>
+                    <input
+                      type="text"
+                      placeholder="Casual"
+                      value={dressCode}
+                      onChange={(event) => setDressCode(event.target.value)}
+                    />
                   </div>
                 </div>
-              </>
-            ) : null}
+              ) : null}
 
-            {currentStep.id === "media" ? (
-              <div className="create-wizard-media">
-                <div className="flyer-actions">
-                  <label className="upload-btn">
-                    Upload Flyer
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleFlyerUpload}
-                      style={{ display: "none" }}
-                    />
-                  </label>
-
-                  <button
-                    className="ai-btn"
-                    type="button"
-                    onClick={() => setIsFlyerSearchOpen((prev) => !prev)}
-                    aria-expanded={isFlyerSearchOpen}
-                  >
-                    {isFlyerSearchOpen ? "Hide flyer library" : "Browse flyer library"}
-                  </button>
-                </div>
-
-                {isFlyerSearchOpen ? (
-                  <div className="flyer-search">
-                    <div className="flyer-search-categories" role="tablist" aria-label="Flyer categories">
-                      <button
-                        type="button"
-                        className={`flyer-search-chip ${!flyerSearchCategory ? "active" : ""}`}
-                        onClick={() => setFlyerSearchCategory("")}
-                      >
-                        All
-                      </button>
-                      {FLYER_CATEGORIES.map((category) => (
+              {safeStepId === "visibility" ? (
+                <div className="create-flow-screen-fields">
+                  {invitedUsers.length > 0 ? (
+                    <div className="flyer-invite-chips">
+                      {invitedUsers.map((user) => (
                         <button
-                          key={category.id}
                           type="button"
-                          className={`flyer-search-chip ${flyerSearchCategory === category.id ? "active" : ""}`}
-                          onClick={() => setFlyerSearchCategory(category.id)}
+                          key={String(user.id || user.username)}
+                          className="flyer-invite-chip"
+                          onClick={() => handleToggleInvitedUser(user)}
+                          aria-label={`Remove ${user.name || user.username}`}
                         >
-                          {category.label}
+                          {user.name || user.username}
+                          <span aria-hidden="true">×</span>
                         </button>
                       ))}
                     </div>
-
-                    <input
-                      type="search"
-                      className="flyer-search-input"
-                      placeholder="Search flyers"
-                      value={flyerSearchQuery}
-                      onChange={(event) => setFlyerSearchQuery(event.target.value)}
-                    />
-
-                    <div className="flyer-search-grid">
-                      {filteredFlyers.length > 0 ? (
-                        filteredFlyers.map((flyer) => (
-                          <button
-                            key={flyer.id}
-                            type="button"
-                            className={`flyer-search-tile ${flyerPreview === flyer.image ? "selected" : ""}`}
-                            onClick={() => handleSelectStockFlyer(flyer)}
-                            title={flyer.label}
-                          >
-                            <img src={flyer.image} alt={flyer.label} />
-                          </button>
-                        ))
-                      ) : (
-                        <p className="flyer-search-empty">No flyers match that filter.</p>
-                      )}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-
-            {currentStep.id === "visibility" ? (
-              <>
-                <div className="form-group">
-                  <label>Who can see this event?</label>
-                  <div className="create-segmented-control" role="tablist" aria-label="Event visibility">
-                    <button
-                      type="button"
-                      className={`create-segmented-option ${!isPrivate ? "active" : ""}`}
-                      onClick={() => setIsPrivate(false)}
-                      aria-pressed={!isPrivate}
-                    >
-                      Public
-                    </button>
-                    <button
-                      type="button"
-                      className={`create-segmented-option ${isPrivate ? "active" : ""}`}
-                      onClick={() => setIsPrivate(true)}
-                      aria-pressed={isPrivate}
-                    >
-                      Private
-                    </button>
-                  </div>
-                  <p className="create-wizard-helper-line">
-                    {isPrivate
-                      ? "Only people you invite will see and RSVP to this event."
-                      : "Anyone on Campus can discover and RSVP to this event."}
-                  </p>
-                </div>
-
-                {isPrivate ? (
+                  ) : null}
                   <div className="form-group">
-                    <label>Invite people</label>
-                    {invitedUsers.length > 0 ? (
-                      <div className="flyer-invite-chips">
-                        {invitedUsers.map((user) => (
-                          <button
-                            type="button"
-                            key={String(user.id || user.username)}
-                            className="flyer-invite-chip"
-                            onClick={() => handleToggleInvitedUser(user)}
-                            aria-label={`Remove ${user.name || user.username}`}
-                          >
-                            {user.name || user.username}
-                            <span aria-hidden="true">×</span>
-                          </button>
-                        ))}
-                      </div>
-                    ) : null}
+                    <label>Search people you follow</label>
                     <input
                       type="search"
-                      className="flyer-search-input"
-                      placeholder="Search people you follow"
+                      placeholder="Find a friend"
                       value={inviteSearch}
                       onChange={(event) => setInviteSearch(event.target.value)}
                     />
-                    {inviteSuggestions.length > 0 ? (
-                      <ul className="flyer-invite-suggestions">
-                        {inviteSuggestions.map((user) => (
-                          <li key={String(user.id || user.username)}>
-                            <button type="button" onClick={() => handleToggleInvitedUser(user)}>
-                              <img
-                                src={user.image || user.avatar || DEFAULT_AVATAR_URL}
-                                alt=""
-                                onError={(event) => {
-                                  event.currentTarget.src = DEFAULT_AVATAR_URL
-                                }}
-                              />
-                              <span>
-                                <strong>{user.name || user.username || "User"}</strong>
-                                {user.username ? <em>@{user.username}</em> : null}
-                              </span>
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
                   </div>
-                ) : null}
-              </>
-            ) : null}
-
-            {currentStep.id === "details" ? (
-              <>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Event Type</label>
-                    <select
-                      value={eventType}
-                      onChange={(event) => setEventType(event.target.value)}
-                    >
-                      <option>Free</option>
-                      <option>Paid</option>
-                    </select>
-                  </div>
-
-                  <div className="form-group">
-                    <label>Capacity</label>
-                    <input
-                      type="number"
-                      placeholder="100"
-                      value={capacity}
-                      onChange={(event) => setCapacity(event.target.value)}
-                    />
-                  </div>
+                  {inviteSuggestions.length > 0 ? (
+                    <ul className="flyer-invite-suggestions">
+                      {inviteSuggestions.map((user) => (
+                        <li key={String(user.id || user.username)}>
+                          <button type="button" onClick={() => handleToggleInvitedUser(user)}>
+                            <img
+                              src={user.image || user.avatar || DEFAULT_AVATAR_URL}
+                              alt=""
+                              onError={(event) => {
+                                event.currentTarget.src = DEFAULT_AVATAR_URL
+                              }}
+                            />
+                            <span>
+                              <strong>{user.name || user.username || "User"}</strong>
+                              {user.username ? <em>@{user.username}</em> : null}
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="create-flow-helper">
+                      Pick anyone you follow. They&apos;ll get a private invite once you publish.
+                    </p>
+                  )}
                 </div>
+              ) : null}
 
-                <div className="form-group">
-                  <label>Dress Code</label>
-                  <input
-                    type="text"
-                    placeholder="Casual"
-                    value={dressCode}
-                    onChange={(event) => setDressCode(event.target.value)}
-                  />
-                </div>
-              </>
-            ) : null}
-
-            {currentStep.id === "review" ? (
-              <div className="create-wizard-review">
-                <ul className="create-wizard-review-list">
-                  {reviewSummary.map((row) => (
-                    <li key={row.label} className="create-wizard-review-row">
-                      <span className="create-wizard-review-label">{row.label}</span>
-                      <span className="create-wizard-review-value">{row.value}</span>
-                    </li>
-                  ))}
-                </ul>
-                {tags.length > 0 ? (
-                  <div className="create-wizard-review-tags">
-                    {tags.map((tag) => (
-                      <span key={tag} className="create-event-tag-chip" aria-label={tag}>
-                        #{tag}
-                      </span>
+              {safeStepId === "review" ? (
+                <div className="create-flow-review">
+                  <ul className="create-flow-review-list">
+                    {reviewSummary.map((row) => (
+                      <li key={row.label} className="create-flow-review-row">
+                        <span className="create-flow-review-label">{row.label}</span>
+                        <span className="create-flow-review-value">{row.value}</span>
+                      </li>
                     ))}
-                  </div>
-                ) : null}
-                {description.trim() ? (
-                  <p className="create-wizard-review-description">{description.trim()}</p>
-                ) : null}
-              </div>
-            ) : null}
+                  </ul>
+                  <p className="create-flow-helper">
+                    Use Back to update anything that&apos;s off, then hit Publish to go live.
+                  </p>
+                </div>
+              ) : null}
+            </div>
           </div>
 
-          <div className="create-wizard-footer">
-            <button
-              type="button"
-              className="create-wizard-back"
-              onClick={handlePrevStep}
-              disabled={activeStepIndex === 0}
-            >
-              Back
-            </button>
-            {isLastStep ? (
-              <button
-                type="button"
-                className="publish-btn create-wizard-publish"
-                onClick={handlePublish}
-                disabled={isUploading}
-              >
-                {isUploading ? "Publishing..." : "Publish Event"}
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="publish-btn create-wizard-next"
-                onClick={handleNextStep}
-              >
-                Continue
-              </button>
-            )}
-          </div>
-        </div>
-
-        <div className="flyer-card flyer-card--compact">
-          <div className="flyer-preview flyer-preview--compact">
-            {flyerPreview ? (
-              <img src={flyerPreview} alt="Flyer preview" className="flyer-image" />
-            ) : (
-              <p>Flyer Preview</p>
-            )}
-            {flyerPreview && (title.trim() || formattedReviewDate) ? (
-              <div className="flyer-preview-overlay">
-                {title.trim() ? <strong>{title.trim()}</strong> : null}
-                <span>{formattedReviewDate}</span>
-              </div>
-            ) : null}
-          </div>
-
-          <div className="flyer-card-meta">
-            <p className="flyer-card-meta-title">Live preview</p>
-            <p className="flyer-card-meta-helper">
-              Your flyer updates as you fill in the steps.
-            </p>
-          </div>
-        </div>
+          <footer className="create-flow-stage-footer">
+            <div className="create-flow-step-counter" aria-hidden="true">
+              {currentStepIndex + 1} / {stepOrder.length}
+            </div>
+            <div className="create-flow-stage-actions">
+              {!isFirstStep ? (
+                <button
+                  type="button"
+                  className="create-flow-back"
+                  onClick={handlePrevStep}
+                >
+                  Back
+                </button>
+              ) : null}
+              {safeStepId === "type" ? null : isLastStep ? (
+                <button
+                  type="button"
+                  className="publish-btn create-flow-publish"
+                  onClick={handlePublish}
+                  disabled={isUploading}
+                >
+                  {isUploading ? "Publishing..." : "Publish Event"}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="publish-btn create-flow-next"
+                  onClick={handleNextStep}
+                >
+                  Continue
+                </button>
+              )}
+            </div>
+          </footer>
+        </section>
       </div>
       )}
     </div>

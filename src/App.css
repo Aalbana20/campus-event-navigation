@@ -10067,6 +10067,16 @@ body.theme-dark .my-events-lane-empty {
   }
 }
 
+.create-event-modal .create-flow.modal {
+  width: 100%;
+}
+
+@media (min-width: 880px) {
+  .create-event-modal .create-flow.modal {
+    grid-template-columns: minmax(280px, 0.9fr) minmax(380px, 1.15fr);
+  }
+}
+
 body.theme-dark .create-event-modal {
   background: rgba(24, 24, 30, 0.96);
   border-color: rgba(255, 255, 255, 0.08);
