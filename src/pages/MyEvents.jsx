@@ -981,6 +981,18 @@ function MyEvents() {
           </div>
 
           <div className="calendar-command-section">
+            <span className="calendar-command-kicker">Hosting</span>
+            <button
+              type="button"
+              className="calendar-command-btn calendar-manage-trigger"
+              onClick={() => navigate("/events/manage")}
+            >
+              <span aria-hidden="true">⚙</span>
+              <span>Manage Events</span>
+            </button>
+          </div>
+
+          <div className="calendar-command-section">
             <span className="calendar-command-kicker">My Events</span>
             <MyEventsLane
               items={laneItems}

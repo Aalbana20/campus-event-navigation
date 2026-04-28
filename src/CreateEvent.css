@@ -618,3 +618,412 @@ body.theme-dark .create-segmented-option.active {
   color: var(--text-main, #f5f7fb);
   box-shadow: none;
 }
+
+/* ---------- Step-based wizard ---------- */
+.create-wizard {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.create-wizard-progress {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px;
+  background: rgba(15, 23, 42, 0.04);
+  border-radius: 18px;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.create-wizard-step {
+  flex: 1 1 0;
+  min-width: 92px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: transparent;
+  border: none;
+  color: #6b7280;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.create-wizard-step:hover {
+  background: rgba(15, 23, 42, 0.06);
+  color: #1d1d1f;
+}
+
+.create-wizard-step-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.08);
+  color: #4b5563;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.create-wizard-step-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.create-wizard-step.active {
+  background: #1d1d1f;
+  color: #ffffff;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
+}
+
+.create-wizard-step.active .create-wizard-step-index {
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+}
+
+.create-wizard-step.complete .create-wizard-step-index {
+  background: #2457d6;
+  color: #ffffff;
+}
+
+.create-wizard-step.complete {
+  color: #2457d6;
+}
+
+.create-wizard-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 4px;
+}
+
+.create-wizard-kicker {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #2457d6;
+}
+
+.create-wizard-title {
+  margin: 0;
+  font-size: 1.55rem;
+  font-weight: 800;
+  color: #1d1d1f;
+}
+
+.create-wizard-helper {
+  margin: 0;
+  color: #4b5563;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.create-wizard-helper-line {
+  margin: 8px 0 0;
+  color: #6b7280;
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+.create-wizard-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.create-wizard-body .form-group {
+  margin-bottom: 0;
+}
+
+.create-wizard-media {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.create-wizard-review {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.create-wizard-review-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.create-wizard-review-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  background: rgba(15, 23, 42, 0.02);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.create-wizard-review-row:last-child {
+  border-bottom: none;
+}
+
+.create-wizard-review-label {
+  color: #6b7280;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.create-wizard-review-value {
+  color: #1d1d1f;
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-align: right;
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+
+.create-wizard-review-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.create-wizard-review-description {
+  margin: 0;
+  color: #1d1d1f;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.04);
+}
+
+.create-wizard-footer {
+  display: flex;
+  gap: 12px;
+  padding-top: 8px;
+}
+
+.create-wizard-back {
+  flex: 0 0 auto;
+  min-width: 110px;
+  padding: 14px 18px;
+  border-radius: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: #ffffff;
+  color: #1d1d1f;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.18s ease, transform 0.18s ease, opacity 0.18s ease;
+}
+
+.create-wizard-back:hover:not(:disabled) {
+  transform: translateY(-1px);
+  background: #f5f7fb;
+}
+
+.create-wizard-back:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.create-wizard-next,
+.create-wizard-publish {
+  flex: 1;
+  margin-top: 0;
+}
+
+.flyer-card-meta {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: center;
+}
+
+.flyer-card-meta-title {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #1d1d1f;
+}
+
+.flyer-card-meta-helper {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #6b7280;
+  line-height: 1.45;
+}
+
+.flyer-preview-overlay {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 16px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(10px);
+  color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.flyer-preview-overlay strong {
+  font-size: 1.05rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.flyer-preview-overlay span {
+  font-size: 0.78rem;
+  font-weight: 700;
+  opacity: 0.85;
+}
+
+.flyer-preview {
+  position: relative;
+}
+
+@media (max-width: 720px) {
+  .create-wizard-progress {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    scrollbar-width: none;
+  }
+  .create-wizard-progress::-webkit-scrollbar {
+    display: none;
+  }
+  .create-wizard-step {
+    flex: 0 0 auto;
+    min-width: 0;
+  }
+  .create-wizard-step-label {
+    display: none;
+  }
+  .create-wizard-step.active .create-wizard-step-label {
+    display: inline;
+  }
+  .create-wizard-footer {
+    flex-direction: column-reverse;
+  }
+  .create-wizard-back,
+  .create-wizard-next,
+  .create-wizard-publish {
+    width: 100%;
+  }
+}
+
+/* Dark theme for wizard */
+body.theme-dark .create-wizard-progress {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+body.theme-dark .create-wizard-step {
+  color: rgba(245, 247, 251, 0.6);
+}
+
+body.theme-dark .create-wizard-step:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #f5f7fb;
+}
+
+body.theme-dark .create-wizard-step-index {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(245, 247, 251, 0.78);
+}
+
+body.theme-dark .create-wizard-step.active {
+  background: #f5f7fb;
+  color: #111318;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5);
+}
+
+body.theme-dark .create-wizard-step.active .create-wizard-step-index {
+  background: rgba(17, 19, 24, 0.18);
+  color: #111318;
+}
+
+body.theme-dark .create-wizard-step.complete {
+  color: #7aa7ff;
+}
+
+body.theme-dark .create-wizard-step.complete .create-wizard-step-index {
+  background: #4f8dff;
+  color: #ffffff;
+}
+
+body.theme-dark .create-wizard-kicker {
+  color: #7aa7ff;
+}
+
+body.theme-dark .create-wizard-title {
+  color: var(--text-strong, #ffffff);
+}
+
+body.theme-dark .create-wizard-helper {
+  color: var(--text-muted, #a3adba);
+}
+
+body.theme-dark .create-wizard-helper-line {
+  color: var(--text-muted, #a3adba);
+}
+
+body.theme-dark .create-wizard-review-list {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+body.theme-dark .create-wizard-review-row {
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom-color: rgba(255, 255, 255, 0.06);
+}
+
+body.theme-dark .create-wizard-review-label {
+  color: var(--text-muted, #a3adba);
+}
+
+body.theme-dark .create-wizard-review-value {
+  color: var(--text-main, #f5f7fb);
+}
+
+body.theme-dark .create-wizard-review-description {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-main, #f5f7fb);
+}
+
+body.theme-dark .create-wizard-back {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-main, #f5f7fb);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+body.theme-dark .create-wizard-back:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+body.theme-dark .flyer-card-meta-title {
+  color: var(--text-main, #f5f7fb);
+}
+
+body.theme-dark .flyer-card-meta-helper {
+  color: var(--text-muted, #a3adba);
+}

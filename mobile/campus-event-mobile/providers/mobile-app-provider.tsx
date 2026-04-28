@@ -2162,6 +2162,7 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
         : [];
       const avatarUrl = normalizeAvatarStorageValue(input.avatar, null) || '';
       const birthMonth = input.birthMonth ? Number(input.birthMonth) : null;
+      const birthDay = input.birthDay ? Number(input.birthDay) : null;
       const birthYear = input.birthYear ? Number(input.birthYear) : null;
       const profileBio = buildProfileSummary({
         accountType,
@@ -2222,6 +2223,7 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
             first_name: accountType === 'organization' ? null : cleanFirstName,
             last_name: accountType === 'organization' ? null : cleanLastName,
             birth_month: birthMonth,
+            birth_day: birthDay,
             birth_year: birthYear,
             gender: input.gender || null,
             school: input.school || null,

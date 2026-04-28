@@ -167,6 +167,25 @@ export const getBirthYearOptions = () => {
   return years
 }
 
+const DAYS_IN_MONTH = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+export const getDaysInMonth = (month, year) => {
+  const m = Number(month)
+  if (!m || m < 1 || m > 12) return 31
+  if (m === 2) {
+    const y = Number(year)
+    if (y && ((y % 4 === 0 && y % 100 !== 0) || y % 400 === 0)) return 29
+    return 28
+  }
+  return DAYS_IN_MONTH[m - 1]
+}
+
+export const getBirthDayOptions = (month, year) => {
+  const max = getDaysInMonth(month, year)
+  const out = []
+  for (let d = 1; d <= max; d += 1) out.push(String(d))
+  return out
+}
+
 export const buildLegacyBirthday = (birthMonth, birthYear) => {
   if (!birthMonth || !birthYear) return null
   return `${birthYear}-${String(birthMonth).padStart(2, "0")}-01`

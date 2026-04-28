@@ -13,34 +13,47 @@ import {
 } from 'react-native';
 
 // ---------- design tokens (forced dark to match web) ----------
+// Lifted dark — base sits slightly off pure black so cards/inputs read with
+// depth instead of disappearing.
 export const onbColors = {
-  bg: '#000000',
-  bgElevated: '#0e0e10',
-  bgElevated2: '#16161a',
+  bg: '#0b0b0d',
+  bgElevated: '#111113',
+  bgElevated2: '#141416',
+  bgInput: '#111113',
   border: '#2a2a2e',
   borderStrong: '#3a3a3f',
   text: '#ffffff',
-  textSecondary: '#8e8e93',
+  textSecondary: '#9b9ba1',
   textMuted: '#5a5a5f',
   link: '#0a84ff',
   accent: '#0a84ff',
+  accentStrong: '#1a8fff',
   success: '#30d158',
   warning: '#ffd60a',
   error: '#ff453a',
 };
 
 // ---------- TopBar ----------
+// Apple-style circular icon button: subtle translucent fill, soft border,
+// scale-on-press. Always rendered top-left so users can recover state
+// without restarting the flow.
 export function OnbTopBar(props: { onBack?: () => void; onClose?: () => void; variant?: 'back' | 'close' }) {
   const { onBack, onClose, variant = 'back' } = props;
+  const onPress = variant === 'close' ? onClose : onBack;
+  const glyph = variant === 'close' ? '✕' : '‹';
   return (
     <View style={topBarStyles.bar}>
-      {variant === 'close' ? (
-        <Pressable onPress={onClose} hitSlop={10} style={topBarStyles.icon}>
-          <Text style={topBarStyles.glyph}>✕</Text>
-        </Pressable>
-      ) : onBack ? (
-        <Pressable onPress={onBack} hitSlop={10} style={topBarStyles.icon}>
-          <Text style={topBarStyles.glyph}>‹</Text>
+      {onPress ? (
+        <Pressable
+          onPress={onPress}
+          hitSlop={12}
+          accessibilityLabel={variant === 'close' ? 'Close' : 'Back'}
+          style={({ pressed }) => [
+            topBarStyles.icon,
+            pressed ? topBarStyles.iconPressed : null,
+          ]}
+        >
+          <Text style={topBarStyles.glyph}>{glyph}</Text>
         </Pressable>
       ) : (
         <View style={topBarStyles.icon} />
@@ -50,8 +63,21 @@ export function OnbTopBar(props: { onBack?: () => void; onClose?: () => void; va
 }
 const topBarStyles = StyleSheet.create({
   bar: { height: 56, paddingHorizontal: 16, justifyContent: 'center' },
-  icon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  glyph: { color: onbColors.text, fontSize: 28, lineHeight: 28, fontWeight: '300' },
+  icon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+  },
+  iconPressed: {
+    transform: [{ scale: 0.92 }],
+    backgroundColor: 'rgba(255,255,255,0.16)',
+  },
+  glyph: { color: onbColors.text, fontSize: 24, lineHeight: 26, fontWeight: '300', includeFontPadding: false },
 });
 
 // ---------- Progress ----------
@@ -64,7 +90,15 @@ export function OnbProgress({ value }: { value: number }) {
   );
 }
 const progressStyles = StyleSheet.create({
-  track: { height: 3, backgroundColor: 'rgba(255,255,255,0.06)', marginHorizontal: 24, marginBottom: 16, borderRadius: 999, overflow: 'hidden' },
+  track: {
+    height: 3,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    marginHorizontal: 24,
+    marginTop: 12,
+    marginBottom: 20,
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
   fill: { height: '100%', backgroundColor: onbColors.text, borderRadius: 999 },
 });
 
@@ -80,7 +114,7 @@ export function OnbPrimaryButton({ children, disabled, ...rest }: BtnProps) {
         btnStyles.base,
         btnStyles.primary,
         disabled ? btnStyles.disabled : null,
-        pressed && !disabled ? btnStyles.pressed : null,
+        pressed && !disabled ? btnStyles.primaryPressed : null,
       ]}
     >
       <Text style={btnStyles.primaryLabel}>{children}</Text>
@@ -111,12 +145,22 @@ const btnStyles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 24,
   },
-  primary: { backgroundColor: onbColors.accent },
+  primary: {
+    backgroundColor: onbColors.accent,
+    shadowColor: onbColors.accent,
+    shadowOpacity: 0.35,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
+  },
+  primaryPressed: {
+    transform: [{ scale: 0.97 }],
+    backgroundColor: onbColors.accentStrong,
+  },
   ghost: { backgroundColor: 'transparent' },
-  disabled: { opacity: 0.45 },
-  pressed: { opacity: 0.85 },
-  ghostPressed: { backgroundColor: 'rgba(255,255,255,0.06)' },
-  primaryLabel: { color: '#fff', fontWeight: '600', fontSize: 17 },
+  disabled: { opacity: 0.4 },
+  ghostPressed: { backgroundColor: 'rgba(255,255,255,0.06)', transform: [{ scale: 0.98 }] },
+  primaryLabel: { color: '#fff', fontWeight: '600', fontSize: 17, letterSpacing: -0.2 },
   ghostLabel: { color: onbColors.text, fontWeight: '600', fontSize: 17 },
 });
 
@@ -194,6 +238,7 @@ const inputStyles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 14,
     paddingHorizontal: 16,
+    backgroundColor: onbColors.bgInput,
   },
   label: {
     color: onbColors.textSecondary,

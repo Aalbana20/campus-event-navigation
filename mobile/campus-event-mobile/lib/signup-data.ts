@@ -161,6 +161,34 @@ export const formatPhoneNumber = (value: string) => {
   return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
 };
 
+export const getBirthYearOptions = (): string[] => {
+  const currentYear = new Date().getFullYear();
+  const latestYear = currentYear - 13;
+  const earliestYear = currentYear - 100;
+  const years: string[] = [];
+  for (let year = latestYear; year >= earliestYear; year -= 1) years.push(String(year));
+  return years;
+};
+
+const DAYS_IN_MONTH = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+export const getDaysInMonth = (month?: string | number, year?: string | number) => {
+  const m = Number(month);
+  if (!m || m < 1 || m > 12) return 31;
+  if (m === 2) {
+    const y = Number(year);
+    if (y && ((y % 4 === 0 && y % 100 !== 0) || y % 400 === 0)) return 29;
+    return 28;
+  }
+  return DAYS_IN_MONTH[m - 1];
+};
+
+export const getBirthDayOptions = (month?: string | number, year?: string | number): string[] => {
+  const max = getDaysInMonth(month, year);
+  const out: string[] = [];
+  for (let d = 1; d <= max; d += 1) out.push(String(d));
+  return out;
+};
+
 export const buildLegacyBirthday = (birthMonth?: string, birthYear?: string) => {
   if (!birthMonth || !birthYear) return null;
   return `${birthYear}-${String(birthMonth).padStart(2, '0')}-01`;

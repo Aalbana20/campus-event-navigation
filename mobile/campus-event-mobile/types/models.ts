@@ -189,6 +189,7 @@ export type SignUpInput = {
   password: string;
   phoneNumber?: string;
   birthMonth?: string;
+  birthDay?: string;
   birthYear?: string;
   gender?: 'Male' | 'Female' | '';
   school?: string;

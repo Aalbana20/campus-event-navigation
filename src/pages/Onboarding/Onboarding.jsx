@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react"
+import React, { useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { supabase } from "../../supabaseClient"
 import {
@@ -14,23 +14,15 @@ import {
 } from "../../signupData"
 import OnboardingShell from "./OnboardingShell"
 import {
-  FloatingInput,
-  GhostButton,
-  PrimaryButton,
-} from "./OnboardingPrimitives"
-import {
   StepAccountType,
   StepAvatar,
-  StepBirth,
-  StepCollege,
   StepDone,
   StepEntry,
   StepInterests,
-  StepName,
+  StepNameBirth,
   StepOrgCategories,
+  StepOrgInfo,
   StepOrgName,
-  StepOrgType,
-  StepOrgVerify,
   StepOtp,
   StepPassword,
   StepPhone,
@@ -41,80 +33,46 @@ import {
 } from "./OnboardingSteps"
 import "./Onboarding.css"
 
-const INDIVIDUAL_COLLEGE = [
+// Personal flow per spec: account-type → username → phone → otp → password →
+// name+birth → avatar → interests → terms → school (optional, with required
+// .edu verify if a school is selected). signUp fires at flow end.
+const INDIVIDUAL_FLOW = [
   "account-type",
-  "college",
+  "username",
+  "phone",
+  "otp",
+  "password",
+  "name-birth",
+  "avatar",
+  "interests",
+  "terms",
   "school",
-  "username",
-  "birth",
-  "phone",
-  "otp",
-  "password",
-  "terms",
-  "avatar",
-  "interests",
-  "name",
 ]
-const INDIVIDUAL_NO_COLLEGE = [
-  "account-type",
-  "college",
-  "username",
-  "birth",
-  "phone",
-  "otp",
-  "email",
-  "password",
-  "terms",
-  "avatar",
-  "interests",
-  "name",
-]
+
+// Business flow: account-type → org-name → username → phone → otp → password →
+// org-info (type + recovery email) → logo → categories → terms. signUp at end.
 const ORG_FLOW = [
   "account-type",
   "org-name",
-  "org-type",
-  "org-verify",
+  "username",
   "phone",
   "otp",
   "password",
-  "terms",
+  "org-info",
   "org-logo",
   "org-categories",
+  "terms",
 ]
-
-function StepEmail({ data, update, goNext }) {
-  const value = data.email || ""
-  const valid = isValidEmail(value)
-  return (
-    <>
-      <h1 className="onb-title">Your email</h1>
-      <p className="onb-subtitle">For account recovery and important updates only. We don't post anything.</p>
-      <FloatingInput
-        label="Email"
-        type="email"
-        autoComplete="email"
-        value={value}
-        onChange={(e) => update({ email: e.target.value })}
-        autoFocus
-        helper={value && !valid ? "That doesn't look like a valid email." : null}
-        helperState={value && !valid ? "error" : null}
-      />
-      <div className="onb-spacer" />
-      <div className="onb-actions">
-        <PrimaryButton onClick={goNext} disabled={!valid}>Next</PrimaryButton>
-      </div>
-    </>
-  )
-}
 
 const initialData = {
   accountType: null, // "individual" | "organization"
-  inCollege: null,
   schoolId: "",
   schoolLabel: "",
+  schoolVerified: false,
   eduEmail: "",
   username: "",
   birthMonth: "",
+  birthDay: "",
   birthYear: "",
   phone: "",
   phoneVerified: false,
@@ -145,9 +103,8 @@ export default function Onboarding() {
 
   const flow = useMemo(() => {
     if (data.accountType === "organization") return ORG_FLOW
-    if (data.accountType === "individual" && data.inCollege === false) return INDIVIDUAL_NO_COLLEGE
-    return INDIVIDUAL_COLLEGE
-  }, [data.accountType, data.inCollege])
+    return INDIVIDUAL_FLOW
+  }, [data.accountType])
 
   const stepIndex = flow.indexOf(stepKey)
   const progress = stage === "flow" ? (stepIndex + 1) / flow.length : 0
@@ -161,8 +118,6 @@ export default function Onboarding() {
     }
     setStepKey(flow[idx + 1])
   }
-
-  const onFinish = (destination) => submit(destination)
 
   const goBack = () => {
     const idx = flow.indexOf(stepKey)
@@ -180,20 +135,6 @@ export default function Onboarding() {
     setError("")
     try {
       const isOrg = data.accountType === "organization"
-
-      const cleanEmail = isOrg
-        ? (data.orgEmail || "").trim().toLowerCase()
-        : data.inCollege
-        ? (data.eduEmail || "").trim().toLowerCase()
-        : (data.email || "").trim().toLowerCase()
-
-      if (!isValidEmail(cleanEmail)) {
-        throw new Error("We couldn't find a valid email to register your account.")
-      }
-      if (!data.password || data.password.length < 8) {
-        throw new Error("Password is too short.")
-      }
-
       const cleanUsername = (data.username || "").trim().toLowerCase()
       const cleanPhone = sanitizePhoneNumber(data.phone || "")
       const cleanOrgName = (data.orgName || "").trim()
@@ -201,11 +142,32 @@ export default function Onboarding() {
       const cleanLastName = (data.lastName || "").trim()
       const selectedSchool = US_SCHOOLS.find((s) => s.id === data.schoolId)
 
+      // Account type derives from school selection (personal-with-school =
+      // student) or organization. No more upfront "are you in college?" step.
       const accountType = isOrg
         ? "organization"
-        : data.inCollege
+        : selectedSchool && data.schoolVerified
         ? "student"
         : "regular"
+
+      // Resolve auth email: verified .edu > org email > synthesized fallback
+      // tied to the user's phone (no email step in the new flow).
+      const eduEmail = (data.eduEmail || "").trim().toLowerCase()
+      const orgEmail = (data.orgEmail || "").trim().toLowerCase()
+      const phoneDigits = cleanPhone.replace(/\D/g, "")
+      const fallbackHandle = cleanUsername || phoneDigits || `user${Date.now()}`
+      const cleanEmail = isOrg
+        ? orgEmail || `${fallbackHandle}@signup.campusevent.app`
+        : accountType === "student"
+        ? eduEmail
+        : `${fallbackHandle}@signup.campusevent.app`
+
+      if (!isValidEmail(cleanEmail)) {
+        throw new Error("We couldn't determine a valid email for this account.")
+      }
+      if (!data.password || data.password.length < 8) {
+        throw new Error("Password is too short.")
+      }
 
       const personalDisplayName = [cleanFirstName, cleanLastName].filter(Boolean).join(" ")
       const fullName = isOrg
@@ -218,14 +180,14 @@ export default function Onboarding() {
           ? data.interestDescription.trim().slice(0, 200)
           : buildProfileSummary({
               accountType,
-              firstName: "",
+              firstName: cleanFirstName,
               organizationName: cleanOrgName,
               interests,
             })
 
-      // Metadata keys map to profiles columns via the handle_new_auth_user trigger.
-      // Extra keys (college_status, school_email, phone, categories) are kept in
-      // auth.users.raw_user_meta_data even if not mapped to a column yet.
+      // Metadata keys map to profiles columns via handle_new_auth_user.
+      // Anything unmapped (phone, school_email, birth_day) still lives in
+      // auth.users.raw_user_meta_data.
       const metadata = {
         username: cleanUsername || cleanOrgName.toLowerCase().replace(/\s+/g, ""),
         name: fullName || cleanUsername,
@@ -237,18 +199,20 @@ export default function Onboarding() {
         avatar_url: fallbackAvatar,
         bio,
         account_type: accountType,
-        college_status: !isOrg ? (data.inCollege ? "in_college" : "not_in_college") : null,
         first_name: isOrg ? null : cleanFirstName || null,
         last_name: isOrg ? null : cleanLastName || null,
         birth_month: !isOrg && data.birthMonth ? Number(data.birthMonth) : null,
+        birth_day: !isOrg && data.birthDay ? Number(data.birthDay) : null,
         birth_year: !isOrg && data.birthYear ? Number(data.birthYear) : null,
         gender: null,
         school: accountType === "student" ? selectedSchool?.label || "" : null,
         school_name: accountType === "student" ? selectedSchool?.label || "" : null,
         school_id: accountType === "student" ? selectedSchool?.id || "" : null,
-        school_email: accountType === "student" ? cleanEmail : null,
-        student_verified: false,
-        verification_status: "unverified",
+        school_email: accountType === "student" ? eduEmail : null,
+        student_verified: accountType === "student" ? !!data.schoolVerified : false,
+        verification_status: accountType === "student" && data.schoolVerified
+          ? "verified"
+          : "unverified",
         organization_name: isOrg ? cleanOrgName : null,
         organization_type: isOrg ? data.orgType : null,
         organization_description: isOrg ? bio : null,
@@ -287,13 +251,11 @@ export default function Onboarding() {
       }
 
       if (signUpData.session) {
-        // Stay signed in and route directly to destination.
         await syncStoredUserFromSession(signUpData.session)
         navigate(destination === "edit" ? "/edit-profile" : "/home", { replace: true })
         return
       }
-      // Email confirmation required — no session yet. Send to login with a message
-      // tailored to the user's chosen destination.
+      // Email confirmation required — no session yet.
       localStorage.removeItem("user")
       sessionStorage.setItem(
         "authMessage",
@@ -340,22 +302,15 @@ export default function Onboarding() {
   }
 
   // stage === "flow"
+  const finishSignup = () => submit("home")
+
   let body = null
   switch (stepKey) {
     case "account-type":
       body = <StepAccountType data={data} update={update} goNext={goNext} />
       break
-    case "college":
-      body = <StepCollege data={data} update={update} goNext={goNext} />
-      break
-    case "school":
-      body = <StepSchool data={data} update={update} goNext={goNext} />
-      break
     case "username":
       body = <StepUsername data={data} update={update} goNext={goNext} />
-      break
-    case "birth":
-      body = <StepBirth data={data} update={update} goNext={goNext} />
       break
     case "phone":
       body = <StepPhone data={data} update={update} goNext={goNext} />
@@ -363,14 +318,11 @@ export default function Onboarding() {
     case "otp":
       body = <StepOtp data={data} update={update} goNext={goNext} goBack={goBack} />
       break
-    case "email":
-      body = <StepEmail data={data} update={update} goNext={goNext} />
-      break
     case "password":
       body = <StepPassword data={data} update={update} goNext={goNext} />
       break
-    case "terms":
-      body = <StepTerms goNext={goNext} goBack={goBack} />
+    case "name-birth":
+      body = <StepNameBirth data={data} update={update} goNext={goNext} />
       break
     case "avatar":
       body = <StepAvatar data={data} update={update} goNext={goNext} />
@@ -378,17 +330,24 @@ export default function Onboarding() {
     case "interests":
       body = <StepInterests data={data} update={update} goNext={goNext} />
       break
-    case "name":
-      body = <StepName data={data} update={update} onFinish={onFinish} />
+    case "terms":
+      body = <StepTerms goNext={goNext} goBack={goBack} />
+      break
+    case "school":
+      body = (
+        <StepSchool
+          data={data}
+          update={update}
+          onFinish={finishSignup}
+          onSkip={finishSignup}
+        />
+      )
       break
     case "org-name":
       body = <StepOrgName data={data} update={update} goNext={goNext} />
       break
-    case "org-type":
-      body = <StepOrgType data={data} update={update} goNext={goNext} />
-      break
-    case "org-verify":
-      body = <StepOrgVerify data={data} update={update} goNext={goNext} />
+    case "org-info":
+      body = <StepOrgInfo data={data} update={update} goNext={goNext} />
       break
     case "org-logo":
       body = <StepAvatar data={data} update={update} goNext={goNext} isOrg />

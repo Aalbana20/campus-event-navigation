@@ -19,6 +19,7 @@ const Discover = lazy(() => import("./pages/Discover"))
 const Explore = lazy(() => import("./pages/Explore"))
 const Messages = lazy(() => import("./pages/Messages"))
 const MyEvents = lazy(() => import("./pages/MyEvents"))
+const ManageEvents = lazy(() => import("./pages/ManageEvents"))
 const Profile = lazy(() => import("./pages/Profile"))
 const PublicProfile = lazy(() => import("./pages/PublicProfile"))
 const Recaps = lazy(() => import("./pages/Recaps"))
@@ -1551,6 +1552,7 @@ function App() {
           <Route path="/explore" element={<Explore />} />
           <Route path="/event/:eventId" element={<LegacyEventRedirect />} />
           <Route path="/events" element={<MyEvents />} />
+          <Route path="/events/manage" element={<ManageEvents />} />
           <Route path="/events/:eventId" element={<MyEvents />} />
           <Route path="/messages" element={<Messages />} />
           <Route path="/recaps" element={<Recaps />} />

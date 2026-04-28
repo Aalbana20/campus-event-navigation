@@ -2,19 +2,25 @@
    All selectors namespaced with .onb- so this never bleeds into App.css. */
 
 :root {
-  --onb-bg: #000000;
-  --onb-bg-elevated: #0e0e10;
-  --onb-bg-elevated-2: #16161a;
+  /* Lifted dark — not pure black. Cards/inputs sit on a base that's slightly
+     warmer than the page so depth reads naturally. */
+  --onb-bg: #0b0b0d;
+  --onb-bg-elevated: #111113;
+  --onb-bg-elevated-2: #141416;
+  --onb-bg-input: #111113;
   --onb-border: #2a2a2e;
   --onb-border-strong: #3a3a3f;
   --onb-text: #ffffff;
-  --onb-text-secondary: #8e8e93;
+  --onb-text-secondary: #9b9ba1;
   --onb-text-muted: #5a5a5f;
   --onb-link: #0a84ff;
   --onb-accent: #0a84ff;
+  --onb-accent-strong: #1a8fff;
   --onb-success: #30d158;
   --onb-warning: #ffd60a;
   --onb-error: #ff453a;
+
+  --onb-ease: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 .onb-root {
@@ -161,21 +167,41 @@
   padding: 0 16px;
 }
 
+/* Back / close icon button — Apple-style circular control with a subtle
+   translucent fill, soft blur, and scale-on-press. Sized 36px on phone,
+   40px on larger frames. */
 .onb-iconbtn {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   border-radius: 999px;
-  background: transparent;
-  border: 0;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   color: var(--onb-text);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: background 150ms ease;
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  transition:
+    background 180ms var(--onb-ease),
+    border-color 180ms var(--onb-ease),
+    transform 180ms var(--onb-ease),
+    box-shadow 180ms var(--onb-ease);
 }
-.onb-iconbtn:hover { background: rgba(255, 255, 255, 0.06); }
-.onb-iconbtn:active { background: rgba(255, 255, 255, 0.1); }
+.onb-iconbtn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+}
+.onb-iconbtn:active { transform: scale(0.92); background: rgba(255, 255, 255, 0.16); }
+.onb-iconbtn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.45);
+}
+@media (min-width: 768px) {
+  .onb-iconbtn { width: 40px; height: 40px; }
+}
 
 .onb-progress {
   flex-shrink: 0;
@@ -237,7 +263,9 @@
   padding-top: 24px;
 }
 
-/* ---- Buttons ---- */
+/* ---- Buttons ----
+   Premium feel: gradient on primary, soft scale on press, glow on hover,
+   180ms transitions. */
 .onb-btn {
   display: inline-flex;
   align-items: center;
@@ -251,29 +279,56 @@
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
-  transition: transform 120ms ease, opacity 150ms ease, background 150ms ease;
   width: 100%;
+  position: relative;
+  letter-spacing: -0.01em;
+  transition:
+    transform 180ms var(--onb-ease),
+    opacity 180ms var(--onb-ease),
+    background 180ms var(--onb-ease),
+    box-shadow 180ms var(--onb-ease),
+    filter 180ms var(--onb-ease);
 }
-.onb-btn:active:not(:disabled) { transform: scale(0.98); }
-.onb-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.onb-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.45);
+}
+.onb-btn:active:not(:disabled) { transform: scale(0.97); }
+.onb-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .onb-btn-primary {
-  background: var(--onb-accent);
   color: #fff;
+  background: linear-gradient(180deg, #1a8fff 0%, var(--onb-accent) 100%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.15) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.2) inset,
+    0 8px 22px rgba(10, 132, 255, 0.28);
 }
-.onb-btn-primary:hover:not(:disabled) { background: #1a8fff; }
+.onb-btn-primary:hover:not(:disabled) {
+  filter: brightness(1.06);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.2) inset,
+    0 -1px 0 rgba(0, 0, 0, 0.2) inset,
+    0 10px 28px rgba(10, 132, 255, 0.42);
+}
 
 .onb-btn-light {
   background: var(--onb-text);
   color: #000;
+  box-shadow: 0 8px 22px rgba(255, 255, 255, 0.08);
 }
-.onb-btn-light:hover:not(:disabled) { background: #f0f0f0; }
+.onb-btn-light:hover:not(:disabled) {
+  filter: brightness(0.97);
+  box-shadow: 0 10px 28px rgba(255, 255, 255, 0.14);
+}
 
 .onb-btn-ghost {
   background: transparent;
   color: var(--onb-text);
 }
-.onb-btn-ghost:hover:not(:disabled) { background: rgba(255, 255, 255, 0.06); }
+.onb-btn-ghost:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+}
 
 /* ---- Floating-label input ---- */
 .onb-field {
@@ -287,14 +342,26 @@
   height: 64px;
   border: 1px solid var(--onb-border);
   border-radius: 14px;
-  background: transparent;
+  background: var(--onb-bg-input);
   display: flex;
   align-items: center;
-  transition: border-color 150ms ease;
+  transition:
+    border-color 180ms var(--onb-ease),
+    box-shadow 180ms var(--onb-ease),
+    background 180ms var(--onb-ease);
 }
-.onb-input-wrap:focus-within { border-color: var(--onb-text); }
-.onb-input-wrap.has-error { border-color: var(--onb-error); }
-.onb-input-wrap.has-success { border-color: var(--onb-success); }
+.onb-input-wrap:focus-within {
+  border-color: rgba(10, 132, 255, 0.7);
+  box-shadow: 0 0 0 4px rgba(10, 132, 255, 0.14);
+}
+.onb-input-wrap.has-error {
+  border-color: var(--onb-error);
+  box-shadow: 0 0 0 4px rgba(255, 69, 58, 0.12);
+}
+.onb-input-wrap.has-success {
+  border-color: var(--onb-success);
+  box-shadow: 0 0 0 4px rgba(48, 209, 88, 0.12);
+}
 
 .onb-input {
   flex: 1;
@@ -382,7 +449,7 @@
 }
 .onb-card {
   background: var(--onb-bg-elevated);
-  border: 1px solid #1c1c1e;
+  border: 1px solid var(--onb-border);
   border-radius: 20px;
   padding: 20px;
   text-align: left;
@@ -393,14 +460,25 @@
   width: 100%;
   font-family: inherit;
   color: var(--onb-text);
-  transition: border-color 150ms ease, transform 120ms ease;
+  transition:
+    border-color 180ms var(--onb-ease),
+    background 180ms var(--onb-ease),
+    transform 180ms var(--onb-ease),
+    box-shadow 180ms var(--onb-ease);
 }
-.onb-card:hover { border-color: var(--onb-border-strong); }
-.onb-card:active { transform: scale(0.99); }
+.onb-card:hover {
+  border-color: var(--onb-border-strong);
+  background: var(--onb-bg-elevated-2);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+.onb-card:active { transform: scale(0.985); }
 .onb-card.is-selected {
-  border-color: var(--onb-text);
-  border-width: 1.5px;
-  box-shadow: 0 0 0 1px var(--onb-text) inset;
+  border-color: rgba(10, 132, 255, 0.85);
+  background: rgba(10, 132, 255, 0.06);
+  box-shadow:
+    0 0 0 1px rgba(10, 132, 255, 0.6) inset,
+    0 8px 28px rgba(10, 132, 255, 0.18);
 }
 .onb-card-icon {
   width: 48px;
@@ -501,6 +579,9 @@
   position: relative;
   padding: 0 4px;
 }
+.onb-wheel.is-3 {
+  grid-template-columns: 2fr 1fr 1.4fr;
+}
 .onb-wheel::before,
 .onb-wheel::after {
   content: "";
@@ -549,28 +630,49 @@
 }
 .onb-wheel-item.is-active { color: var(--onb-text); font-size: 20px; }
 
-/* ---- OTP input ---- */
+/* ---- OTP input ----
+   Six equal cells, fixed-size, capped row width so it never stretches into
+   massive boxes on wider frames. */
 .onb-otp-row {
-  display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 10px;
-  margin: 8px 0 16px;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 8px auto 16px;
+  width: 100%;
+  max-width: 360px;
 }
 .onb-otp-cell {
-  aspect-ratio: 1 / 1.15;
-  background: var(--onb-bg-elevated);
+  flex: 1 1 0;
+  min-width: 0;
+  width: 48px;
+  height: 56px;
+  padding: 0;
+  background: var(--onb-bg-input);
   border: 1px solid var(--onb-border);
   border-radius: 12px;
   text-align: center;
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 600;
   color: var(--onb-text);
   font-family: inherit;
   outline: 0;
-  transition: border-color 150ms ease, transform 120ms ease;
+  transition:
+    border-color 180ms var(--onb-ease),
+    box-shadow 180ms var(--onb-ease),
+    transform 180ms var(--onb-ease);
 }
-.onb-otp-cell:focus { border-color: var(--onb-text); }
-.onb-otp-row.has-error .onb-otp-cell { border-color: var(--onb-error); animation: onb-shake 380ms ease; }
+.onb-otp-cell:focus {
+  border-color: rgba(10, 132, 255, 0.7);
+  box-shadow: 0 0 0 4px rgba(10, 132, 255, 0.14);
+}
+.onb-otp-row.has-error .onb-otp-cell {
+  border-color: var(--onb-error);
+  animation: onb-shake 380ms ease;
+}
+@media (max-width: 380px) {
+  .onb-otp-row { gap: 6px; }
+  .onb-otp-cell { height: 52px; font-size: 20px; }
+}
 @keyframes onb-shake {
   0%, 100% { transform: translateX(0); }
   20% { transform: translateX(-6px); }
@@ -801,6 +903,51 @@
   font: inherit;
   cursor: pointer;
 }
+
+/* ---- "OR" divider between account-type cards ---- */
+.onb-or-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 8px 0;
+  color: var(--onb-text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  animation: onb-fade-in 380ms var(--onb-ease) both;
+}
+.onb-or-divider::before,
+.onb-or-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(
+    to right,
+    transparent,
+    var(--onb-border) 30%,
+    var(--onb-border) 70%,
+    transparent
+  );
+}
+@keyframes onb-fade-in {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ---- Skip link (school step) ---- */
+.onb-skip-link {
+  background: transparent;
+  border: 0;
+  color: var(--onb-text-secondary);
+  font: inherit;
+  font-size: 14px;
+  padding: 12px;
+  cursor: pointer;
+  text-align: center;
+  transition: color 150ms ease;
+}
+.onb-skip-link:hover { color: var(--onb-text); }
 
 /* ---- Inline banner ---- */
 .onb-banner {

@@ -8,9 +8,9 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
-  OnbBanner,
   OnbProgress,
   OnbTopBar,
   onbColors,
@@ -20,16 +20,12 @@ import {
   OnboardingData,
   StepAccountType,
   StepAvatar,
-  StepBirth,
-  StepCollege,
-  StepEmail,
   StepEntry,
   StepInterests,
-  StepName,
+  StepNameBirth,
   StepOrgCategories,
+  StepOrgInfo,
   StepOrgName,
-  StepOrgType,
-  StepOrgVerify,
   StepOtp,
   StepPassword,
   StepPhone,
@@ -44,24 +40,27 @@ import { useMobileApp } from '@/providers/mobile-app-provider';
 
 type Stage = 'entry' | 'flow' | 'submitting' | 'done';
 
-const INDIVIDUAL_COLLEGE = [
-  'account-type', 'college', 'school', 'username', 'birth',
-  'phone', 'otp', 'password', 'terms', 'avatar', 'interests', 'name',
-] as const;
-const INDIVIDUAL_NO_COLLEGE = [
-  'account-type', 'college', 'username', 'birth',
-  'phone', 'otp', 'email', 'password', 'terms', 'avatar', 'interests', 'name',
-] as const;
-const ORG_FLOW = [
-  'account-type', 'org-name', 'org-type', 'org-verify',
-  'phone', 'otp', 'password', 'terms', 'org-logo', 'org-categories',
+// Personal: account-type → username → phone → otp → password → name+birth →
+// avatar → interests → terms → school (optional, with required .edu verify
+// if a school is selected). signUp fires at the end.
+const INDIVIDUAL_FLOW = [
+  'account-type', 'username', 'phone', 'otp', 'password',
+  'name-birth', 'avatar', 'interests', 'terms', 'school',
 ] as const;
 
-type StepKey = (typeof INDIVIDUAL_COLLEGE | typeof INDIVIDUAL_NO_COLLEGE | typeof ORG_FLOW)[number];
+// Business: account-type → org-name → username → phone → otp → password →
+// org-info (type + recovery email) → logo → categories → terms.
+const ORG_FLOW = [
+  'account-type', 'org-name', 'username', 'phone', 'otp', 'password',
+  'org-info', 'org-logo', 'org-categories', 'terms',
+] as const;
+
+type StepKey = (typeof INDIVIDUAL_FLOW | typeof ORG_FLOW)[number];
 
 export default function SignUpScreen() {
   const router = useRouter();
   const { signUp } = useMobileApp();
+  const insets = useSafeAreaInsets();
   const [stage, setStage] = useState<Stage>('entry');
   const [stepKey, setStepKey] = useState<StepKey>('account-type');
   const [data, setData] = useState<OnboardingData>(initialOnboardingData);
@@ -72,9 +71,8 @@ export default function SignUpScreen() {
 
   const flow = useMemo<readonly StepKey[]>(() => {
     if (data.accountType === 'organization') return ORG_FLOW;
-    if (data.accountType === 'individual' && data.inCollege === false) return INDIVIDUAL_NO_COLLEGE;
-    return INDIVIDUAL_COLLEGE;
-  }, [data.accountType, data.inCollege]);
+    return INDIVIDUAL_FLOW;
+  }, [data.accountType]);
 
   const stepIndex = flow.indexOf(stepKey);
   const progress = stage === 'flow' ? (stepIndex + 1) / flow.length : 0;
@@ -83,7 +81,7 @@ export default function SignUpScreen() {
     const idx = flow.indexOf(stepKey);
     if (idx < 0) return;
     if (idx >= flow.length - 1) {
-      void submit('home');
+      void submit();
       return;
     }
     setStepKey(flow[idx + 1]);
@@ -98,22 +96,29 @@ export default function SignUpScreen() {
   };
   const onClose = () => router.replace('/auth/sign-in');
 
-  const submit = async (destination: 'home' | 'edit') => {
+  const submit = async () => {
     setStage('submitting');
     setError('');
     try {
       const isOrg = data.accountType === 'organization';
-      const cleanEmail = isOrg
-        ? data.orgEmail.trim().toLowerCase()
-        : data.inCollege
-          ? data.eduEmail.trim().toLowerCase()
-          : data.email.trim().toLowerCase();
-
-      if (!cleanEmail) throw new Error("We couldn't find a valid email to register your account.");
-      if (!data.password || data.password.length < 8) throw new Error('Password is too short.');
-
-      const accountType = isOrg ? 'organization' : data.inCollege ? 'student' : 'regular';
       const selectedSchool = US_SCHOOLS.find((s) => s.id === data.schoolId);
+      const accountType: 'student' | 'organization' | 'regular' = isOrg
+        ? 'organization'
+        : selectedSchool && data.schoolVerified
+          ? 'student'
+          : 'regular';
+
+      // Resolve auth email: verified .edu > org email > synthesized fallback.
+      const eduEmail = data.eduEmail.trim().toLowerCase();
+      const orgEmail = data.orgEmail.trim().toLowerCase();
+      const phoneDigits = data.phone.replace(/\D/g, '');
+      const usernameLower = data.username.trim().toLowerCase();
+      const fallbackHandle = usernameLower || phoneDigits || `user${Date.now()}`;
+      const cleanEmail = isOrg
+        ? orgEmail || `${fallbackHandle}@signup.campusevent.app`
+        : accountType === 'student'
+          ? eduEmail
+          : `${fallbackHandle}@signup.campusevent.app`;
 
       const result = await signUp({
         accountType,
@@ -122,20 +127,24 @@ export default function SignUpScreen() {
         fullName: isOrg
           ? data.orgName.trim()
           : [data.firstName.trim(), data.lastName.trim()].filter(Boolean).join(' '),
-        username: data.username.trim() || (isOrg ? data.orgName.trim().toLowerCase().replace(/\s+/g, '') : ''),
+        username:
+          usernameLower || (isOrg ? data.orgName.trim().toLowerCase().replace(/\s+/g, '') : ''),
         email: cleanEmail,
         password: data.password,
         phoneNumber: data.phone,
         birthMonth: isOrg ? undefined : data.birthMonth,
+        birthDay: isOrg ? undefined : data.birthDay,
         birthYear: isOrg ? undefined : data.birthYear,
         gender: '',
         school: accountType === 'student' ? selectedSchool?.label || '' : undefined,
         schoolId: accountType === 'student' ? selectedSchool?.id || '' : undefined,
-        schoolEmail: accountType === 'student' ? cleanEmail : undefined,
-        collegeStatus: isOrg ? null : data.inCollege ? 'in_college' : 'not_in_college',
+        schoolEmail: accountType === 'student' ? eduEmail : undefined,
+        collegeStatus: isOrg ? null : accountType === 'student' ? 'in_college' : 'not_in_college',
         organizationName: isOrg ? data.orgName.trim() : undefined,
         organizationType: isOrg ? data.orgType : undefined,
-        organizationDescription: isOrg ? `Official updates from ${data.orgName.trim()}.` : undefined,
+        organizationDescription: isOrg
+          ? `Official updates from ${data.orgName.trim()}.`
+          : undefined,
         interests: isOrg ? [] : data.interests,
         categories: isOrg ? data.orgCategories : [],
       });
@@ -146,19 +155,13 @@ export default function SignUpScreen() {
         router.replace({
           pathname: '/auth/sign-in',
           params: {
-            notice:
-              destination === 'edit'
-                ? "Account created. Confirm your email, then we'll take you to edit your profile."
-                : 'Account created. Check your email and then sign in.',
+            notice: 'Account created. Check your email and then sign in.',
           },
         });
         return;
       }
 
-      // Logged in immediately. Mobile has no /edit-profile route yet, so the
-      // "Edit profile" intent lands on the user's own profile tab where edits
-      // are made. Plain "Next" goes to home.
-      router.replace(destination === 'edit' ? '/(tabs)/profile' : '/(tabs)/home');
+      router.replace('/(tabs)/home');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Signup failed.');
       setStage('submitting');
@@ -186,24 +189,15 @@ export default function SignUpScreen() {
     );
   } else if (stage === 'submitting') {
     showProgress = false;
-    body = <StepSubmitting error={error} onRetry={() => void submit('home')} />;
+    onTopAction = () => setStage('flow');
+    body = <StepSubmitting error={error} onRetry={() => void submit()} />;
   } else if (stage === 'flow') {
-    const onFinish = (dest: 'home' | 'edit') => void submit(dest);
     switch (stepKey) {
       case 'account-type':
         body = <StepAccountType data={data} update={update} goNext={goNext} />;
         break;
-      case 'college':
-        body = <StepCollege data={data} update={update} goNext={goNext} />;
-        break;
-      case 'school':
-        body = <StepSchool data={data} update={update} goNext={goNext} />;
-        break;
       case 'username':
         body = <StepUsername data={data} update={update} goNext={goNext} />;
-        break;
-      case 'birth':
-        body = <StepBirth data={data} update={update} goNext={goNext} />;
         break;
       case 'phone':
         body = <StepPhone data={data} update={update} goNext={goNext} />;
@@ -211,14 +205,11 @@ export default function SignUpScreen() {
       case 'otp':
         body = <StepOtp data={data} update={update} goNext={goNext} goBack={goBack} />;
         break;
-      case 'email':
-        body = <StepEmail data={data} update={update} goNext={goNext} />;
-        break;
       case 'password':
         body = <StepPassword data={data} update={update} goNext={goNext} />;
         break;
-      case 'terms':
-        body = <StepTerms goNext={goNext} goBack={goBack} />;
+      case 'name-birth':
+        body = <StepNameBirth data={data} update={update} goNext={goNext} />;
         break;
       case 'avatar':
         body = <StepAvatar data={data} update={update} goNext={goNext} />;
@@ -226,17 +217,24 @@ export default function SignUpScreen() {
       case 'interests':
         body = <StepInterests data={data} update={update} goNext={goNext} />;
         break;
-      case 'name':
-        body = <StepName data={data} update={update} goNext={goNext} onFinish={onFinish} />;
+      case 'terms':
+        body = <StepTerms goNext={goNext} goBack={goBack} />;
+        break;
+      case 'school':
+        body = (
+          <StepSchool
+            data={data}
+            update={update}
+            onFinish={() => void submit()}
+            onSkip={() => void submit()}
+          />
+        );
         break;
       case 'org-name':
         body = <StepOrgName data={data} update={update} goNext={goNext} />;
         break;
-      case 'org-type':
-        body = <StepOrgType data={data} update={update} goNext={goNext} />;
-        break;
-      case 'org-verify':
-        body = <StepOrgVerify data={data} update={update} goNext={goNext} />;
+      case 'org-info':
+        body = <StepOrgInfo data={data} update={update} goNext={goNext} />;
         break;
       case 'org-logo':
         body = <StepAvatar data={data} update={update} goNext={goNext} isOrg />;
@@ -247,8 +245,15 @@ export default function SignUpScreen() {
     }
   }
 
+  // Push the top bar below the status bar / dynamic island so the back button
+  // isn't covered by system chrome (which would silently swallow taps and
+  // make the button feel "non-functional"). Add a small extra gap so the
+  // circle doesn't sit flush against the inset edge.
+  const topPadding = insets.top + 8;
+  const bottomPadding = insets.bottom + 8;
+
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { paddingTop: topPadding, paddingBottom: bottomPadding }]}>
       <StatusBar barStyle="light-content" />
       <OnbTopBar variant={topVariant} onBack={onTopAction} onClose={onClose} />
       {showProgress ? <OnbProgress value={progress} /> : null}

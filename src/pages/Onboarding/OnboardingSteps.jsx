@@ -7,7 +7,9 @@ import {
   ORGANIZATION_TYPES,
   US_SCHOOLS,
   formatPhoneNumber,
+  getBirthDayOptions,
   getBirthYearOptions,
+  getDaysInMonth,
   getPasswordChecks,
   isValidEmail,
   isValidUsername,
@@ -50,7 +52,7 @@ export function StepAccountType({ data, update, goNext }) {
   return (
     <>
       <h1 className="onb-title">How will you use the app?</h1>
-      <p className="onb-subtitle">You can run an org account separately later.</p>
+      <p className="onb-subtitle">Pick one. You can add the other later.</p>
       <div className="onb-card-stack">
         <button
           type="button"
@@ -59,11 +61,12 @@ export function StepAccountType({ data, update, goNext }) {
         >
           <span className="onb-card-icon"><User size={22} /></span>
           <span className="onb-card-body">
-            <p className="onb-card-title">Individual</p>
+            <p className="onb-card-title">Personal</p>
             <p className="onb-card-desc">Discover events, RSVP, message friends</p>
           </span>
           <ChevronRight size={20} className="onb-card-chev" />
         </button>
+        <div className="onb-or-divider"><span>or</span></div>
         <button
           type="button"
           className={`onb-card ${data.accountType === "organization" ? "is-selected" : ""}`}
@@ -71,7 +74,7 @@ export function StepAccountType({ data, update, goNext }) {
         >
           <span className="onb-card-icon"><Building2 size={22} /></span>
           <span className="onb-card-body">
-            <p className="onb-card-title">Organization</p>
+            <p className="onb-card-title">Business</p>
             <p className="onb-card-desc">Host events, build a following</p>
           </span>
           <ChevronRight size={20} className="onb-card-chev" />
@@ -111,11 +114,13 @@ export function StepCollege({ data, update, goNext }) {
   )
 }
 
-/* ---------------- Step 3: School + .edu verification ---------------- */
-export function StepSchool({ data, update, goNext }) {
+/* ---------------- Step: School (optional) + required .edu verification ----
+   Final step before signup completes. The user can skip school entirely; if
+   they pick one, they MUST verify a matching .edu email before continuing. */
+export function StepSchool({ data, update, onFinish, onSkip }) {
   const [query, setQuery] = useState(data.schoolLabel || "")
   const [showResults, setShowResults] = useState(false)
-  const [phase, setPhase] = useState("entering") // entering | sending | sent
+  const [phase, setPhase] = useState(data.schoolVerified ? "verified" : "entering")
   const [error, setError] = useState("")
 
   const filtered = useMemo(() => {
@@ -143,26 +148,34 @@ export function StepSchool({ data, update, goNext }) {
     setPhase("sending")
     // Verification placeholder. Real flow would call supabase.auth.signInWithOtp({ email })
     // here and gate progression on the user clicking the magic link, then verifying server-side.
-    setTimeout(() => setPhase("sent"), 1100)
+    setTimeout(() => {
+      update({ schoolVerified: true })
+      setPhase("verified")
+    }, 1100)
   }
 
-  if (phase === "sent") {
-    const masked = (data.eduEmail || "").replace(/^(.).+(@.+)$/, "$1***$2")
+  if (phase === "verified") {
     return (
       <>
-        <div style={{ paddingTop: 16 }}>
-          <div className="onb-status-ring success" style={{ width: 56, height: 56, marginBottom: 24 }}>
-            <span style={{ fontSize: 24, fontWeight: 700 }}>✓</span>
+        <div className="onb-center">
+          <div className="onb-status-ring success" style={{ width: 64, height: 64, marginBottom: 24 }}>
+            <span style={{ fontSize: 28, fontWeight: 700 }}>✓</span>
           </div>
-          <h1 className="onb-title">Check your inbox</h1>
+          <h1 className="onb-title">School verified</h1>
           <p className="onb-subtitle">
-            We sent a verification link to <strong style={{ color: "var(--onb-text)" }}>{masked}</strong>. Open it on this device, then come back and continue.
+            <strong style={{ color: "var(--onb-text)" }}>{selectedSchool?.label}</strong> is now linked to your account.
           </p>
         </div>
-        <div className="onb-spacer" />
         <div className="onb-actions">
-          <PrimaryButton onClick={goNext}>Continue</PrimaryButton>
-          <GhostButton onClick={() => setPhase("entering")}>Use a different email</GhostButton>
+          <PrimaryButton onClick={onFinish}>Finish &amp; create account</PrimaryButton>
+          <GhostButton
+            onClick={() => {
+              update({ schoolVerified: false })
+              setPhase("entering")
+            }}
+          >
+            Use a different school
+          </GhostButton>
         </div>
       </>
     )
@@ -170,8 +183,8 @@ export function StepSchool({ data, update, goNext }) {
 
   return (
     <>
-      <h1 className="onb-title">What school?</h1>
-      <p className="onb-subtitle">We'll send a verification link to your .edu address.</p>
+      <h1 className="onb-title">Add your school</h1>
+      <p className="onb-subtitle">Stay in the loop with campus events. Optional — skip and you'll still see public ones.</p>
 
       <div className="onb-field">
         <div className="onb-input-wrap">
@@ -212,14 +225,16 @@ export function StepSchool({ data, update, goNext }) {
         ) : null}
       </div>
 
-      <FloatingInput
-        label="School email"
-        type="email"
-        autoComplete="email"
-        value={data.eduEmail || ""}
-        onChange={(e) => update({ eduEmail: e.target.value })}
-        helper={expectedDomain ? `Must end with @${expectedDomain}` : "Pick a school first"}
-      />
+      {data.schoolId ? (
+        <FloatingInput
+          label="School email"
+          type="email"
+          autoComplete="email"
+          value={data.eduEmail || ""}
+          onChange={(e) => update({ eduEmail: e.target.value })}
+          helper={expectedDomain ? `Must end with @${expectedDomain}` : null}
+        />
+      ) : null}
 
       {error ? <Banner>{error}</Banner> : null}
 
@@ -229,8 +244,11 @@ export function StepSchool({ data, update, goNext }) {
           onClick={handleVerify}
           disabled={!data.schoolId || !data.eduEmail || phase === "sending"}
         >
-          {phase === "sending" ? "Sending..." : "Verify"}
+          {phase === "sending" ? "Sending..." : "Verify school email"}
         </PrimaryButton>
+        <button type="button" className="onb-skip-link" onClick={onSkip}>
+          Skip — I'll add it later
+        </button>
       </div>
     </>
   )
@@ -313,28 +331,55 @@ export function StepUsername({ data, update, goNext }) {
   )
 }
 
-/* ---------------- Step 5: Birth month + year ---------------- */
-export function StepBirth({ data, update, goNext }) {
+/* ---------------- Birthday wheel (Month/Day/Year) ---------------- */
+const ITEM_H = 44
+
+function BirthdayWheel({ data, update }) {
   const years = useMemo(() => getBirthYearOptions(), [])
-  const monthIdx = data.birthMonth ? Number(data.birthMonth) - 1 : 4 // default May
+  const monthIdx = data.birthMonth ? Number(data.birthMonth) - 1 : 4
   const yearIdx = data.birthYear ? years.indexOf(String(data.birthYear)) : 5
 
-  const monthRef = useRef(null)
-  const yearRef = useRef(null)
-  const ITEM_H = 44
+  const days = useMemo(
+    () => getBirthDayOptions(data.birthMonth || 5, data.birthYear || 2000),
+    [data.birthMonth, data.birthYear],
+  )
+  const dayIdx = data.birthDay
+    ? Math.min(Number(data.birthDay) - 1, days.length - 1)
+    : 0
 
-  // Sync scroll on first render to current selection.
+  const monthRef = useRef(null)
+  const dayRef = useRef(null)
+  const yearRef = useRef(null)
+
   useEffect(() => {
     if (monthRef.current) monthRef.current.scrollTop = monthIdx * ITEM_H
     if (yearRef.current) yearRef.current.scrollTop = yearIdx * ITEM_H
+    if (dayRef.current) dayRef.current.scrollTop = dayIdx * ITEM_H
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // If month/year shrinks the day range, clamp the selection.
+  useEffect(() => {
+    const max = getDaysInMonth(data.birthMonth, data.birthYear)
+    if (data.birthDay && Number(data.birthDay) > max) {
+      update({ birthDay: String(max) })
+      if (dayRef.current) dayRef.current.scrollTop = (max - 1) * ITEM_H
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data.birthMonth, data.birthYear])
 
   const onMonthScroll = (e) => {
     const idx = Math.round(e.currentTarget.scrollTop / ITEM_H)
     const safe = Math.max(0, Math.min(BIRTH_MONTHS.length - 1, idx))
     if (String(safe + 1) !== String(data.birthMonth)) {
       update({ birthMonth: String(safe + 1) })
+    }
+  }
+  const onDayScroll = (e) => {
+    const idx = Math.round(e.currentTarget.scrollTop / ITEM_H)
+    const safe = Math.max(0, Math.min(days.length - 1, idx))
+    if (String(safe + 1) !== String(data.birthDay)) {
+      update({ birthDay: String(safe + 1) })
     }
   }
   const onYearScroll = (e) => {
@@ -346,24 +391,31 @@ export function StepBirth({ data, update, goNext }) {
   }
 
   const monthLabel = BIRTH_MONTHS[monthIdx]?.label || "May"
+  const dayLabel = days[dayIdx] || ""
   const yearLabel = years[yearIdx] || ""
 
   return (
     <>
-      <h1 className="onb-title">When were you born?</h1>
-      <p className="onb-subtitle">We use this to recommend age-appropriate events. Hidden from your profile.</p>
-
       <div className="onb-wheel-display">
-        <div className="onb-wheel-display-label">Birth date</div>
-        <div className="onb-wheel-display-value">{monthLabel} {yearLabel}</div>
+        <div className="onb-wheel-display-label">Birthday</div>
+        <div className="onb-wheel-display-value">
+          {monthLabel} {dayLabel}, {yearLabel}
+        </div>
       </div>
 
-      <div className="onb-wheel">
+      <div className="onb-wheel is-3">
         <div className="onb-wheel-highlight" />
         <div ref={monthRef} className="onb-wheel-col" onScroll={onMonthScroll}>
           {BIRTH_MONTHS.map((m, i) => (
             <div key={m.value} className={`onb-wheel-item ${i === monthIdx ? "is-active" : ""}`}>
               {m.label}
+            </div>
+          ))}
+        </div>
+        <div ref={dayRef} className="onb-wheel-col" onScroll={onDayScroll}>
+          {days.map((d, i) => (
+            <div key={d} className={`onb-wheel-item ${i === dayIdx ? "is-active" : ""}`}>
+              {d}
             </div>
           ))}
         </div>
@@ -375,10 +427,60 @@ export function StepBirth({ data, update, goNext }) {
           ))}
         </div>
       </div>
+    </>
+  )
+}
+
+/* ---------------- Step: Name + Birthday (combined) ---------------- */
+export function StepNameBirth({ data, update, goNext }) {
+  const first = data.firstName || ""
+  const last = data.lastName || ""
+  const ready =
+    first.trim().length > 0 &&
+    !!data.birthMonth &&
+    !!data.birthDay &&
+    !!data.birthYear
+
+  return (
+    <>
+      <h1 className="onb-title">Your name &amp; birthday</h1>
+      <p className="onb-subtitle">So friends can find you. Birthday is hidden from your profile.</p>
+
+      <FloatingInput
+        label="First name"
+        value={first}
+        onChange={(e) => update({ firstName: e.target.value })}
+        autoComplete="given-name"
+        autoFocus
+      />
+      <FloatingInput
+        label="Last name (optional)"
+        value={last}
+        onChange={(e) => update({ lastName: e.target.value })}
+        autoComplete="family-name"
+      />
+
+      <BirthdayWheel data={data} update={update} />
 
       <div className="onb-spacer" />
       <div className="onb-actions">
-        <PrimaryButton onClick={goNext} disabled={!data.birthMonth || !data.birthYear}>Next</PrimaryButton>
+        <PrimaryButton onClick={goNext} disabled={!ready}>Next</PrimaryButton>
+      </div>
+    </>
+  )
+}
+
+/* ---------------- Step (legacy): Birth month + day + year ---------------- */
+export function StepBirth({ data, update, goNext }) {
+  const ready = !!data.birthMonth && !!data.birthDay && !!data.birthYear
+  return (
+    <>
+      <h1 className="onb-title">When were you born?</h1>
+      <p className="onb-subtitle">We use this to recommend age-appropriate events. Hidden from your profile.</p>
+      <BirthdayWheel data={data} update={update} />
+      <div className="onb-spacer" />
+      <div className="onb-actions">
+        <PrimaryButton onClick={goNext} disabled={!ready}>Next</PrimaryButton>
       </div>
     </>
   )
@@ -735,10 +837,10 @@ export function StepOrgName({ data, update, goNext }) {
   const value = data.orgName || ""
   return (
     <>
-      <h1 className="onb-title">What's your org called?</h1>
+      <h1 className="onb-title">What's your business called?</h1>
       <p className="onb-subtitle">This is how people will find and follow you.</p>
       <FloatingInput
-        label="Organization name"
+        label="Business name"
         value={value}
         onChange={(e) => update({ orgName: e.target.value })}
         autoFocus
@@ -751,77 +853,46 @@ export function StepOrgName({ data, update, goNext }) {
   )
 }
 
-export function StepOrgType({ data, update, goNext }) {
-  const value = data.orgType || ""
+/* ---------------- Org Info: type + recovery email (combined) ---------------- */
+export function StepOrgInfo({ data, update, goNext }) {
+  const type = data.orgType || ""
+  const email = data.orgEmail || ""
+  const ready = !!type && isValidEmail(email)
   return (
     <>
-      <h1 className="onb-title">What kind of org?</h1>
-      <p className="onb-subtitle">Pick the closest fit.</p>
+      <h1 className="onb-title">Tell us about your business</h1>
+      <p className="onb-subtitle">Pick a category and add an email we can reach you at.</p>
+
+      <p style={{
+        fontSize: 13,
+        fontWeight: 500,
+        color: "var(--onb-text-secondary)",
+        margin: "4px 0 8px",
+        letterSpacing: 0.2,
+      }}>
+        CATEGORY
+      </p>
       <div className="onb-chip-grid">
         {ORGANIZATION_TYPES.map((t) => (
-          <Chip key={t} active={value === t} onClick={() => update({ orgType: t })}>{t}</Chip>
+          <Chip key={t} active={type === t} onClick={() => update({ orgType: t })}>{t}</Chip>
         ))}
       </div>
-      <div className="onb-spacer" />
-      <div className="onb-actions">
-        <PrimaryButton onClick={goNext} disabled={!value}>Next</PrimaryButton>
-      </div>
-    </>
-  )
-}
 
-export function StepOrgVerify({ data, update, goNext }) {
-  const [phase, setPhase] = useState("entering")
-  const email = data.orgEmail || ""
-  const ready = isValidEmail(email)
-  const handleVerify = () => {
-    setPhase("sending")
-    setTimeout(() => setPhase("sent"), 1100)
-  }
-  if (phase === "sent") {
-    return (
-      <>
-        <div style={{ paddingTop: 16 }}>
-          <div className="onb-status-ring success" style={{ width: 56, height: 56, marginBottom: 24 }}>
-            <span style={{ fontSize: 24, fontWeight: 700 }}>✓</span>
-          </div>
-          <h1 className="onb-title">Check your inbox</h1>
-          <p className="onb-subtitle">
-            We sent a verification link to <strong style={{ color: "var(--onb-text)" }}>{email}</strong>. Open it to confirm your org.
-          </p>
-        </div>
-        <div className="onb-spacer" />
-        <div className="onb-actions">
-          <PrimaryButton onClick={goNext}>Continue</PrimaryButton>
-          <GhostButton onClick={() => setPhase("entering")}>Use a different email</GhostButton>
-        </div>
-      </>
-    )
-  }
-  return (
-    <>
-      <h1 className="onb-title">Verify your org</h1>
-      <p className="onb-subtitle">Use a work or school email tied to this organization.</p>
+      <div style={{ height: 16 }} />
 
       <FloatingInput
-        label="Organization email"
+        label="Business email"
         type="email"
         autoComplete="email"
         value={email}
         onChange={(e) => update({ orgEmail: e.target.value })}
-        autoFocus
+        helper={email && !isValidEmail(email) ? "That doesn't look like a valid email." : "We'll use this for sign-in and recovery."}
+        helperState={email && !isValidEmail(email) ? "error" : null}
       />
-
-      <p style={{ fontSize: 13, color: "var(--onb-text-secondary)", marginTop: 8 }}>
-        Don't have a work email?{" "}
-        <span className="onb-link" onClick={goNext}>Submit for manual review →</span>
-      </p>
 
       <div className="onb-spacer" />
       <div className="onb-actions">
-        <PrimaryButton onClick={handleVerify} disabled={!ready || phase === "sending"}>
-          {phase === "sending" ? "Sending..." : "Verify"}
-        </PrimaryButton>
+        <PrimaryButton onClick={goNext} disabled={!ready}>Next</PrimaryButton>
       </div>
     </>
   )
