@@ -35,11 +35,41 @@ function ShareTriggerIcon() {
   )
 }
 
+function AddToStoryIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 5v14" />
+      <path d="M5 12h14" />
+    </svg>
+  )
+}
+
+function RepostIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m17 2 4 4-4 4" />
+      <path d="M3 11V9a3 3 0 0 1 3-3h15" />
+      <path d="m7 22-4-4 4-4" />
+      <path d="M21 13v2a3 3 0 0 1-3 3H3" />
+    </svg>
+  )
+}
+
+function LinkIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M10 13a5 5 0 0 0 7.1 0l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1" />
+      <path d="M14 11a5 5 0 0 0-7.1 0l-2 2a5 5 0 0 0 7.1 7.1l1.1-1.1" />
+    </svg>
+  )
+}
+
 function EventActionControl({
   event,
   isOpen: controlledOpen,
   onClose: controlledOnClose,
   onAfterDelete,
+  showTrigger,
 }) {
   const navigate = useNavigate()
   const { showToast } = useToast()
@@ -52,6 +82,7 @@ function EventActionControl({
     deleteEvent,
   } = useEvents()
   const isControlled = typeof controlledOpen === "boolean"
+  const shouldShowTrigger = showTrigger ?? !isControlled
   const [internalOpen, setInternalOpen] = useState(false)
   const isShareSheetOpen = isControlled ? controlledOpen : internalOpen
   const [shareSearch, setShareSearch] = useState("")
@@ -128,6 +159,16 @@ function EventActionControl({
     [followingPeople, normalizedSearch]
   )
 
+  const visibleSharePeople = useMemo(() => {
+    const seen = new Set()
+    return [...filteredRecentDmPeople, ...filteredFollowingPeople].filter((person) => {
+      const key = getPersonKey(person)
+      if (!key || seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+  }, [filteredFollowingPeople, filteredRecentDmPeople])
+
   useEffect(() => {
     if (!shareFeedback) return undefined
 
@@ -162,6 +203,13 @@ function EventActionControl({
       setShareFeedback("Could not copy link.")
     }
 
+    closeShareSheet()
+  }
+
+  const handleAddToStory = (eventClick) => {
+    eventClick?.stopPropagation()
+    showToast?.("Add to story coming soon", "info")
+    setShareFeedback("Add to story coming soon")
     closeShareSheet()
   }
 
@@ -208,15 +256,6 @@ function EventActionControl({
     closeShareSheet()
   }
 
-  const handleMessageAction = (eventClick) => {
-    eventClick?.stopPropagation()
-
-    setShareSearch("")
-    window.requestAnimationFrame(() => {
-      shareSearchInputRef.current?.focus()
-    })
-  }
-
   const handleSendEventToPerson = async (person, eventClick) => {
     eventClick?.stopPropagation()
 
@@ -261,6 +300,17 @@ function EventActionControl({
 
   return (
     <>
+      {shouldShowTrigger ? (
+        <button
+          type="button"
+          className="event-card-share-btn event-action-control-trigger"
+          onClick={openShareSheet}
+          aria-label="Share event"
+        >
+          <ShareTriggerIcon />
+        </button>
+      ) : null}
+
       {shareFeedback ? (
         <div className="event-share-feedback" role="status" aria-live="polite">
           {shareFeedback}
@@ -273,14 +323,28 @@ function EventActionControl({
             <div className="event-share-sheet-handle" />
 
             <div className="event-share-search-row">
-              <input
-                ref={shareSearchInputRef}
-                type="text"
-                className="event-share-search-input"
-                placeholder="Search people"
-                value={shareSearch}
-                onChange={(eventClick) => setShareSearch(eventClick.target.value)}
-              />
+              <label className="event-share-search-shell">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
+                  <path d="m16.5 16.5 4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+                <input
+                  ref={shareSearchInputRef}
+                  type="text"
+                  className="event-share-search-input"
+                  placeholder="Search"
+                  value={shareSearch}
+                  onChange={(eventClick) => setShareSearch(eventClick.target.value)}
+                />
+              </label>
+              <button type="button" className="event-share-group-btn" onClick={(eventClick) => eventClick.stopPropagation()} aria-label="Create group">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M16 20v-1.4a4.6 4.6 0 0 0-4.6-4.6H7.6A4.6 4.6 0 0 0 3 18.6V20" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                  <circle cx="9.5" cy="7" r="3.4" stroke="currentColor" strokeWidth="1.8" />
+                  <path d="M21 20v-1.4a4.6 4.6 0 0 0-3.2-4.38" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M16 3.2a3.4 3.4 0 0 1 0 6.6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
             </div>
 
             <div className="event-share-sheet-preview">
@@ -296,77 +360,54 @@ function EventActionControl({
             </div>
 
             <div className="event-share-sheet-body">
-              {filteredRecentDmPeople.length > 0 ? (
-                <div className="event-share-section">
-                  <p className="event-share-section-label">Recent</p>
-                  <div className="event-share-people-grid">
-                    {filteredRecentDmPeople.map((person) => (
-                      <button
-                        key={`recent-${getPersonKey(person)}`}
-                        type="button"
-                        className="event-share-person-btn"
-                        onClick={(eventClick) => handleSendEventToPerson(person, eventClick)}
-                      >
-                        <img
-                          src={person.image}
-                          alt={person.name}
-                          className="event-share-person-avatar"
-                          onError={(eventClick) => {
-                            eventClick.currentTarget.src = DEFAULT_AVATAR
-                          }}
-                        />
-                        <span className="event-share-person-name">
-                          {person.username ? `@${person.username}` : person.name}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
+              {visibleSharePeople.length > 0 ? (
+                <div className="event-share-people-grid">
+                  {visibleSharePeople.map((person) => (
+                    <button
+                      key={`share-${getPersonKey(person)}`}
+                      type="button"
+                      className="event-share-person-btn"
+                      onClick={(eventClick) => handleSendEventToPerson(person, eventClick)}
+                    >
+                      <img
+                        src={person.image}
+                        alt={person.name}
+                        className="event-share-person-avatar"
+                        onError={(eventClick) => {
+                          eventClick.currentTarget.src = DEFAULT_AVATAR
+                        }}
+                      />
+                      <span className="event-share-person-name">
+                        {person.username ? `@${person.username}` : person.name}
+                      </span>
+                    </button>
+                  ))}
                 </div>
-              ) : null}
-
-              {filteredFollowingPeople.length > 0 ? (
-                <div className="event-share-section">
-                  <p className="event-share-section-label">Following</p>
-                  <div className="event-share-people-grid">
-                    {filteredFollowingPeople.map((person) => (
-                      <button
-                        key={`following-${getPersonKey(person)}`}
-                        type="button"
-                        className="event-share-person-btn"
-                        onClick={(eventClick) => handleSendEventToPerson(person, eventClick)}
-                      >
-                        <img
-                          src={person.image}
-                          alt={person.name}
-                          className="event-share-person-avatar"
-                          onError={(eventClick) => {
-                            eventClick.currentTarget.src = DEFAULT_AVATAR
-                          }}
-                        />
-                        <span className="event-share-person-name">
-                          {person.username ? `@${person.username}` : person.name}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-
-              {filteredRecentDmPeople.length === 0 && filteredFollowingPeople.length === 0 ? (
+              ) : (
                 <div className="event-share-empty-state">
                   {normalizedFollowingPeople.length === 0
                     ? "People you follow will appear here for quick sharing."
                     : "No people matched that search."}
                 </div>
-              ) : null}
+              )}
             </div>
 
             <div className="event-share-actions-row">
               <button
                 type="button"
+                className="event-share-action-btn"
+                onClick={handleAddToStory}
+              >
+                <AddToStoryIcon />
+                Add to story
+              </button>
+
+              <button
+                type="button"
                 className={`event-share-action-btn ${isReposted ? "active" : ""}`}
                 onClick={handleRepostEvent}
               >
+                <RepostIcon />
                 {isReposted ? "Unrepost" : "Repost"}
               </button>
 
@@ -375,7 +416,8 @@ function EventActionControl({
                 className="event-share-action-btn"
                 onClick={handleCopyLink}
               >
-                Copy Link
+                <LinkIcon />
+                Copy link
               </button>
 
               <button
@@ -383,35 +425,10 @@ function EventActionControl({
                 className="event-share-action-btn"
                 onClick={handleShareTo}
               >
-                Share to
+                <ShareTriggerIcon />
+                Share to...
               </button>
 
-              <button
-                type="button"
-                className="event-share-action-btn"
-                onClick={handleMessageAction}
-              >
-                Message
-              </button>
-
-              {isOwner ? (
-                <button
-                  type="button"
-                  className="event-share-action-btn destructive"
-                  onClick={handleDeleteEvent}
-                  disabled={isDeleting}
-                >
-                  {isDeleting ? "Deleting..." : "Delete"}
-                </button>
-              ) : null}
-
-              <button
-                type="button"
-                className="event-share-action-btn cancel"
-                onClick={closeShareSheet}
-              >
-                Cancel
-              </button>
             </div>
           </div>
         </div>

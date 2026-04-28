@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react"
-import { buildEventImageStyle } from "../eventImages"
+import { applyEventImageFallback, buildEventImageStyle, getEventImageSrc } from "../eventImages"
 import { useEvents } from "../context/EventContext"
 import EventActionControl from "./EventActionControl"
 import EventCreatorBadge from "./EventCreatorBadge"
@@ -10,7 +10,26 @@ const buildModalImageStyle = (event) =>
     "linear-gradient(180deg, rgba(15, 23, 42, 0.12), rgba(15, 23, 42, 0.84))"
   )
 
-function ExploreEventModal({ event, isSaved, actionLabel, onAction, onClose }) {
+function AttendeeGroupIcon({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M16 20v-1.4a4.6 4.6 0 0 0-4.6-4.6H7.6A4.6 4.6 0 0 0 3 18.6V20" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="9.5" cy="7" r="3.4" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M21 20v-1.4a4.6 4.6 0 0 0-3.2-4.38" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M16 3.2a3.4 3.4 0 0 1 0 6.6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function ExploreEventModal({
+  event,
+  isSaved = false,
+  actionLabel,
+  onAction,
+  onClose,
+  onOpenComments,
+  commentCount = 0,
+}) {
   const fileInputRef = useRef(null)
   const {
     currentUser,
@@ -22,6 +41,7 @@ function ExploreEventModal({ event, isSaved, actionLabel, onAction, onClose }) {
   const [eventMemories, setEventMemories] = useState([])
   const [isMemoryBusy, setIsMemoryBusy] = useState(false)
   const [memoryFeedback, setMemoryFeedback] = useState("")
+  const [isFlyerPreviewOpen, setIsFlyerPreviewOpen] = useState(false)
 
   useEffect(() => {
     if (!event?.id) return undefined
@@ -46,6 +66,24 @@ function ExploreEventModal({ event, isSaved, actionLabel, onAction, onClose }) {
   }, [currentUser?.id, currentUserAttendedEvent, event?.id, loadEventMemoriesForEvent])
 
   if (!event) return null
+
+  const eventTitle = event?.title || event?.name || "Untitled Event"
+  const eventHost = event?.organizer || event?.host || event?.organization || "Campus Organization"
+  const eventDate = event?.date || event?.eventDate || "Date TBA"
+  const eventTime =
+    event?.time ||
+    [event?.startTime, event?.endTime].filter(Boolean).join(" - ") ||
+    "Time TBA"
+  const eventLocation = event?.locationName || event?.location || "Location TBA"
+  const eventAddress = event?.locationAddress || event?.address || eventLocation
+  const eventDressCode = event?.dressCode || event?.dress_code || ""
+  const eventTags = Array.isArray(event?.tags) ? event.tags.filter(Boolean) : []
+  const actionButtonLabel = actionLabel || (isSaved ? "Going" : "RSVP")
+
+  const handlePrimaryAction = (eventClick) => {
+    eventClick.stopPropagation()
+    onAction?.(event)
+  }
 
   const handleMemoryFileChange = async (changeEvent) => {
     const file = changeEvent.target.files?.[0]
@@ -83,22 +121,28 @@ function ExploreEventModal({ event, isSaved, actionLabel, onAction, onClose }) {
 
         <EventActionControl event={event} />
 
-        <div className="explore-modal-hero" style={buildModalImageStyle(event)}>
+        <button
+          type="button"
+          className="explore-modal-hero flyer-preview-trigger"
+          style={buildModalImageStyle(event)}
+          onClick={() => setIsFlyerPreviewOpen(true)}
+          aria-label="Open full event flyer"
+        >
           <div className="explore-modal-hero-copy">
             <span className="explore-modal-hero-tag">#{event?.tags?.[0] || "Explore"}</span>
             <EventCreatorBadge event={event} />
-            <h2>{event?.title || "Untitled Event"}</h2>
+            <h2>{eventTitle}</h2>
             <p>
               {[
-                event?.date,
-                event?.time,
-                event?.locationName || event?.location || event?.locationAddress,
+                eventDate,
+                eventTime,
+                eventLocation,
               ]
                 .filter(Boolean)
                 .join(" • ")}
             </p>
           </div>
-        </div>
+        </button>
 
         <div className="explore-modal-body">
           <input
@@ -112,29 +156,89 @@ function ExploreEventModal({ event, isSaved, actionLabel, onAction, onClose }) {
           <div className="explore-modal-stats">
             <span>{event?.goingCount || 0} going</span>
             <span>{event?.repostedByIds?.length || 0} reposts</span>
-            <span>{event?.organizer || "Campus Organization"}</span>
+            <span>{eventHost}</span>
           </div>
 
           <p className="explore-modal-description">
             {event?.description || "A standout event worth discovering outside your usual circle."}
           </p>
 
-          <div className="explore-tag-row">
-            {(event?.tags?.length ? event.tags.slice(0, 4) : ["Explore"]).map((tag) => (
+          <div className="explore-modal-detail-grid">
+            <div className="explore-modal-detail">
+              <span>Host</span>
+              <strong>{eventHost}</strong>
+            </div>
+            <div className="explore-modal-detail">
+              <span>Date</span>
+              <strong>{eventDate}</strong>
+            </div>
+            <div className="explore-modal-detail">
+              <span>Time</span>
+              <strong>{eventTime}</strong>
+            </div>
+            <div className="explore-modal-detail">
+              <span>Location</span>
+              <strong>{eventLocation}</strong>
+            </div>
+            <div className="explore-modal-detail full-width">
+              <span>Address</span>
+              <strong>{eventAddress}</strong>
+            </div>
+            {eventDressCode ? (
+              <div className="explore-modal-detail full-width">
+                <span>Dress Code</span>
+                <strong>{eventDressCode}</strong>
+              </div>
+            ) : null}
+          </div>
+
+          {eventTags.length > 0 ? (
+            <div className="explore-tag-row">
+              {eventTags.slice(0, 5).map((tag) => (
               <span key={`${event.id}-${tag}`} className="explore-tag">
                 {tag}
               </span>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : null}
 
           <button
             type="button"
             className={`explore-action-btn ${isSaved ? "active" : ""}`}
-            onClick={onAction}
+            onClick={handlePrimaryAction}
             aria-pressed={isSaved}
           >
-            {actionLabel}
+            <AttendeeGroupIcon />
+            {actionButtonLabel}
           </button>
+
+          {onOpenComments ? (
+            <button
+              type="button"
+              className="explore-action-btn secondary"
+              onClick={(eventClick) => {
+                eventClick.stopPropagation()
+                onOpenComments(event)
+              }}
+            >
+              Comments {commentCount ? `(${commentCount})` : ""}
+            </button>
+          ) : null}
+
+          <div className="explore-modal-placeholder-grid">
+            <div>
+              <strong>Tagged Photos</strong>
+              <span>
+                {eventMemories.length > 0
+                  ? `${eventMemories.length} tagged photo${eventMemories.length === 1 ? "" : "s"}`
+                  : "No tagged photos yet."}
+              </span>
+            </div>
+            <div>
+              <strong>Recap</strong>
+              <span>Recap will appear here after the event.</span>
+            </div>
+          </div>
 
           <div
             style={{
@@ -220,6 +324,35 @@ function ExploreEventModal({ event, isSaved, actionLabel, onAction, onClose }) {
           </div>
         </div>
       </div>
+
+      {isFlyerPreviewOpen ? (
+        <div
+          className="flyer-lightbox-overlay"
+          onClick={(eventClick) => {
+            eventClick.stopPropagation()
+            setIsFlyerPreviewOpen(false)
+          }}
+        >
+          <button
+            type="button"
+            className="flyer-lightbox-close"
+            onClick={(eventClick) => {
+              eventClick.stopPropagation()
+              setIsFlyerPreviewOpen(false)
+            }}
+            aria-label="Close flyer preview"
+          >
+            ×
+          </button>
+          <img
+            src={getEventImageSrc(event?.image)}
+            alt={`${eventTitle} flyer`}
+            className="flyer-lightbox-image"
+            onClick={(eventClick) => eventClick.stopPropagation()}
+            onError={applyEventImageFallback}
+          />
+        </div>
+      ) : null}
     </div>
   )
 }

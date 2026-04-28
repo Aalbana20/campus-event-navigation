@@ -17,6 +17,7 @@ import { getAvatarImageSource, getEventImageSource } from '@/lib/mobile-media';
 import { EventRecord } from '@/types/models';
 
 import { EventActionTrigger } from './EventActionTrigger';
+import { EventGoingIcon } from './EventGoingIcon';
 
 type ExploreEventDetailModalProps = {
   event: EventRecord | null;
@@ -101,6 +102,7 @@ export function ExploreEventDetailModal({
             <Pressable
               style={[styles.actionButton, actionActive && styles.actionButtonActive]}
               onPress={onActionPress}>
+              <EventGoingIcon size={18} color={actionActive ? theme.success : theme.background} />
               <Text style={[styles.actionText, actionActive && styles.actionTextActive]}>
                 {actionLabel}
               </Text>
@@ -271,8 +273,10 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       fontWeight: '700',
     },
     actionButton: {
+      flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
+      gap: 8,
       paddingVertical: 14,
       borderRadius: 18,
       backgroundColor: theme.accent,

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import CreateEvent from "../CreateEvent"
-import MyEventCard from "../components/MyEventCard"
+import ExploreEventModal from "../components/ExploreEventModal"
 import { applyEventImageFallback, getEventImageSrc } from "../eventImages"
 import { useEvents } from "../context/EventContext"
 
@@ -1014,11 +1014,20 @@ function MyEvents() {
       </div>
 
       {selectedCalendarEvent && (
-        <div className="calendar-modal-overlay" onClick={() => setSelectedCalendarEvent(null)}>
-          <div className="calendar-modal-card" onClick={(event) => event.stopPropagation()}>
-            <MyEventCard event={selectedCalendarEvent} />
-          </div>
-        </div>
+        <ExploreEventModal
+          event={selectedCalendarEvent}
+          isSaved={(savedEvents || []).some(
+            (event) => String(event.id) === String(selectedCalendarEvent.id)
+          )}
+          actionLabel={
+            (savedEvents || []).some(
+              (event) => String(event.id) === String(selectedCalendarEvent.id)
+            )
+              ? "Going"
+              : "RSVP"
+          }
+          onClose={() => setSelectedCalendarEvent(null)}
+        />
       )}
 
       <PersonalItemModal

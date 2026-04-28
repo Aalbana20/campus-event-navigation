@@ -1,4 +1,4 @@
-import React, { useState } from "react"
+import React, { useEffect, useRef, useState } from "react"
 import { useEvents } from "../context/EventContext"
 import { applyEventImageFallback, getEventImageSrc } from "../eventImages"
 import { DEFAULT_AVATAR_URL, sanitizeAvatarUrl } from "../profileMedia"
@@ -11,6 +11,41 @@ const usersMatch = (a, b) => {
   return false
 }
 
+function AttendeeGroupIcon({ size = 28 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M16 20v-1.4a4.6 4.6 0 0 0-4.6-4.6H7.6A4.6 4.6 0 0 0 3 18.6V20"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle
+        cx="9.5"
+        cy="7"
+        r="3.4"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      />
+      <path
+        d="M21 20v-1.4a4.6 4.6 0 0 0-3.2-4.38"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M16 3.2a3.4 3.4 0 0 1 0 6.6"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
 function EventCard({
   event,
   isSaved = false,
@@ -19,11 +54,21 @@ function EventCard({
   onNotGoing,
   onOpenComments,
   onShare,
+  onRevealRewind,
   commentCount = 0,
 }) {
-  const { addEvent, cancelRSVP, currentUser, mutualUsers, savedEvents } = useEvents()
+  const {
+    addEvent,
+    cancelRSVP,
+    currentUser,
+    followingList,
+    followersList,
+    mutualUsers,
+    savedEvents,
+  } = useEvents()
   const [flipped, setFlipped] = useState(false)
   const [isMutualsOpen, setIsMutualsOpen] = useState(false)
+  const clickTimeoutRef = useRef(null)
 
   const eventTitle = event?.title || event?.name || "Untitled Event"
   const eventDescription = event?.description || event?.details || ""
@@ -47,9 +92,26 @@ function EventCard({
   const attendeeUsers = event?.attendees || event?.rsvpUsers || event?.goingUsers || []
   const savedEventIds = new Set((savedEvents || []).map((savedEvent) => String(savedEvent.id)))
   const isEventSaved = isSaved || savedEventIds.has(String(event?.id || ""))
+  const knownProfiles = [
+    ...(mutualUsers || []),
+    ...(followingList || []),
+    ...(followersList || []),
+    currentUser,
+  ].filter(Boolean)
+  const resolvePerson = (person) => {
+    if (!person) return null
+    if (typeof person === "object") return person
+    const key = String(person)
+    return (
+      knownProfiles.find(
+        (profile) => String(profile?.id || "") === key || String(profile?.username || "") === key
+      ) || null
+    )
+  }
+  const resolvedAttendeeUsers = attendeeUsers.map(resolvePerson).filter(Boolean)
 
   const mutualAttendees = (mutualUsers || []).filter((mutualUser) =>
-    attendeeUsers.some((attendee) => usersMatch(attendee, mutualUser))
+    resolvedAttendeeUsers.some((attendee) => usersMatch(attendee, mutualUser))
   )
 
   const orderedAttendees = (() => {
@@ -62,17 +124,28 @@ function EventCard({
       seen.push(person)
       ordered.push(person)
     })
-    attendeeUsers.forEach((person) => {
+    resolvedAttendeeUsers.forEach((person) => {
       if (isSeen(person)) return
       seen.push(person)
       ordered.push(person)
     })
+    if (ordered.length === 0 && isEventSaved && currentUser) {
+      ordered.push(currentUser)
+    }
 
     return ordered
   })()
 
-  const visibleAttendees = orderedAttendees.slice(0, 2)
+  const visibleAttendees = orderedAttendees.slice(0, 3)
   const goingCount = event?.goingCount ?? attendeeUsers.length ?? 0
+  const getAttendeeInitials = (person) =>
+    (person?.name || person?.username || "?")
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0])
+      .join("")
+      .toUpperCase()
 
   const openMutuals = (eventClick) => {
     eventClick.stopPropagation()
@@ -83,15 +156,52 @@ function EventCard({
     setIsMutualsOpen(false)
   }
 
-  const handleFlip = (e) => {
+  useEffect(
+    () => () => {
+      if (clickTimeoutRef.current) window.clearTimeout(clickTimeoutRef.current)
+    },
+    []
+  )
+
+  const openCardDetail = () => {
+    setFlipped((currentValue) => !currentValue)
+  }
+
+  const handleCardClick = (e) => {
     if (e.target.closest("button") || e.target.closest("a")) return
+    if (e.detail > 1) return
+
+    if (clickTimeoutRef.current) {
+      window.clearTimeout(clickTimeoutRef.current)
+    }
+
+    clickTimeoutRef.current = window.setTimeout(() => {
+      openCardDetail()
+      clickTimeoutRef.current = null
+    }, onRevealRewind ? 220 : 0)
+  }
+
+  const handleCardDoubleClick = (eventClick) => {
+    if (eventClick.target.closest("button") || eventClick.target.closest("a")) return
+    eventClick.preventDefault()
+
+    if (clickTimeoutRef.current) {
+      window.clearTimeout(clickTimeoutRef.current)
+      clickTimeoutRef.current = null
+    }
+
+    if (onRevealRewind) {
+      onRevealRewind(event)
+      return
+    }
+
     setFlipped((currentValue) => !currentValue)
   }
 
   const handleCardKeyDown = (eventKey) => {
     if (eventKey.key !== "Enter" && eventKey.key !== " ") return
     eventKey.preventDefault()
-    setFlipped((currentValue) => !currentValue)
+    openCardDetail()
   }
 
   const handleRsvpClick = (eventClick) => {
@@ -148,8 +258,9 @@ function EventCard({
   return (
     <>
       <div
-        className="flip-card event-card-shell"
-        onClick={handleFlip}
+        className={`flip-card event-card-shell ${flipped ? "event-card-expanded" : ""}`}
+        onClick={handleCardClick}
+        onDoubleClick={handleCardDoubleClick}
         onKeyDown={handleCardKeyDown}
         role="button"
         tabIndex={0}
@@ -173,64 +284,47 @@ function EventCard({
               <div className="event-card-top-meta-cluster">
                 <EventCreatorBadge event={event} className="event-card-creator" compact />
 
-                <button
-                  type="button"
-                  className="event-card-mutual-inline"
-                  onClick={openMutuals}
-                  aria-label={`View ${goingCount} people going`}
-                >
-                  {visibleAttendees.length > 0 ? (
-                    <div className="event-card-mutual-inline-avatars">
-                      {visibleAttendees.map((person, index) => (
-                        <img
-                          key={person.id || person.username || index}
-                          src={sanitizeAvatarUrl(person.image || person.avatar, DEFAULT_AVATAR_URL)}
-                          alt={person.name || "Attendee"}
-                          className="event-card-mutual-inline-avatar"
-                          onError={(eventClick) => {
-                            eventClick.currentTarget.src = DEFAULT_AVATAR_URL
-                          }}
-                        />
-                      ))}
-                    </div>
-                  ) : (
-                    <span className="event-card-mutual-inline-empty" aria-hidden="true">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                        <path
-                          d="M16 20v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1"
-                          stroke="currentColor"
-                          strokeWidth="1.8"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                        <circle
-                          cx="9.5"
-                          cy="7"
-                          r="3"
-                          stroke="currentColor"
-                          strokeWidth="1.8"
-                        />
-                        <path
-                          d="M23 20v-1a4 4 0 0 0-3-3.87"
-                          stroke="currentColor"
-                          strokeWidth="1.8"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                        <path
-                          d="M16 3.13a3 3 0 0 1 0 5.74"
-                          stroke="currentColor"
-                          strokeWidth="1.8"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    </span>
-                  )}
-                  <span className="event-card-mutual-inline-count">{goingCount}</span>
-                </button>
               </div>
             </div>
+
+            <button
+              type="button"
+              className="event-card-mutual-inline"
+              onClick={openMutuals}
+              aria-label={`View ${goingCount} people going`}
+            >
+              {visibleAttendees.length > 0 ? (
+                <div className="event-card-mutual-inline-avatars">
+                  {visibleAttendees.map((person, index) => {
+                    const avatarUrl = person.image || person.avatar
+                    return avatarUrl ? (
+                      <img
+                        key={person.id || person.username || index}
+                        src={sanitizeAvatarUrl(avatarUrl, DEFAULT_AVATAR_URL)}
+                        alt={person.name || "Attendee"}
+                        className="event-card-mutual-inline-avatar"
+                        onError={(eventClick) => {
+                          eventClick.currentTarget.style.display = "none"
+                        }}
+                      />
+                    ) : (
+                      <span
+                        key={person.id || person.username || index}
+                        className="event-card-mutual-inline-avatar initials"
+                        aria-label={person.name || person.username || "Attendee"}
+                      >
+                        {getAttendeeInitials(person)}
+                      </span>
+                    )
+                  })}
+                </div>
+              ) : (
+                <span className="event-card-mutual-inline-empty" aria-hidden="true">
+                  <AttendeeGroupIcon size={16} />
+                </span>
+              )}
+              <span className="event-card-mutual-inline-count">{goingCount}</span>
+            </button>
 
             <div className="event-card-info-pills">
               <div className="event-card-info-pill event-card-info-pill-title">{eventTitle}</div>
@@ -263,6 +357,18 @@ function EventCard({
 
           <div className="flip-card-back">
             <div className="discover-event-back-shell">
+              <div className="discover-event-back-flyer-wrap">
+                <img
+                  src={getEventImageSrc(event?.image)}
+                  alt={eventTitle}
+                  className="discover-event-back-flyer"
+                  draggable={false}
+                  loading="lazy"
+                  decoding="async"
+                  onError={applyEventImageFallback}
+                />
+              </div>
+
               <div className="discover-event-back-header">
                 <div className="discover-event-back-heading-row">
                   <span className="discover-event-back-kicker">Event Details</span>
@@ -297,10 +403,14 @@ function EventCard({
                 </div>
                 {eventOrganizer ? (
                   <div className="discover-event-back-detail">
-                    <span>Organizer</span>
+                    <span>Host</span>
                     <strong>{eventOrganizer}</strong>
                   </div>
                 ) : null}
+                <div className="discover-event-back-detail full-width">
+                  <span>Address</span>
+                  <strong>{event.locationAddress || event.address || displayLocation}</strong>
+                </div>
                 {eventPrice ? (
                   <div className="discover-event-back-detail">
                     <span>Price</span>
@@ -315,12 +425,27 @@ function EventCard({
                 ) : null}
               </div>
 
-              <div className="discover-event-back-stats" aria-label="Event activity">
+              <div className="discover-event-back-stats discover-event-going-area" aria-label="Event activity">
                 <button
                   type="button"
                   className="discover-event-back-stat interactive"
                   onClick={openMutuals}
                 >
+                  {visibleAttendees.length > 0 ? (
+                    <span className="discover-event-back-avatars" aria-hidden="true">
+                      {visibleAttendees.map((person, index) => (
+                        <img
+                          key={person.id || person.username || index}
+                          src={sanitizeAvatarUrl(person.image || person.avatar, DEFAULT_AVATAR_URL)}
+                          alt=""
+                          className="discover-event-back-avatar"
+                          onError={(eventClick) => {
+                            eventClick.currentTarget.src = DEFAULT_AVATAR_URL
+                          }}
+                        />
+                      ))}
+                    </span>
+                  ) : null}
                   <span>Going</span>
                   <strong>{goingCount}</strong>
                 </button>
@@ -357,6 +482,35 @@ function EventCard({
                   {isEventSaved ? "Going" : "RSVP"}
                 </button>
 
+                <button
+                  type="button"
+                  className={`discover-event-back-action secondary ${isEventSaved ? "active" : ""}`}
+                  onClick={handleRsvpClick}
+                  disabled={isActionLocked}
+                >
+                  {isEventSaved ? "Saved" : "Save"}
+                </button>
+
+                {onOpenComments ? (
+                  <button
+                    type="button"
+                    className="discover-event-back-action secondary"
+                    onClick={handleOpenCommentsClick}
+                  >
+                    Comment
+                  </button>
+                ) : null}
+
+                {onShare ? (
+                  <button
+                    type="button"
+                    className="discover-event-back-action secondary"
+                    onClick={handleShareClick}
+                  >
+                    Share
+                  </button>
+                ) : null}
+
                 {onNotGoing || isEventSaved ? (
                   <button
                     type="button"
@@ -377,16 +531,6 @@ function EventCard({
                     Directions
                   </button>
                 ) : null}
-
-                {onShare ? (
-                  <button
-                    type="button"
-                    className="discover-event-back-action secondary"
-                    onClick={handleShareClick}
-                  >
-                    Share
-                  </button>
-                ) : null}
               </div>
             </div>
           </div>
@@ -400,7 +544,7 @@ function EventCard({
             onClick={(eventClick) => eventClick.stopPropagation()}
           >
             <div className="event-mutuals-header">
-              <h3>People Going</h3>
+              <h3>People going</h3>
               <button
                 type="button"
                 className="event-mutuals-close"

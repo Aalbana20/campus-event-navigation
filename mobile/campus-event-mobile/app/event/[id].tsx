@@ -20,6 +20,7 @@ import {
 import { AppScreen } from '@/components/mobile/AppScreen';
 import { EventActionTrigger } from '@/components/mobile/EventActionTrigger';
 import { EventGalleryViewer } from '@/components/mobile/EventGalleryViewer';
+import { EventGoingIcon } from '@/components/mobile/EventGoingIcon';
 import { useAppTheme } from '@/lib/app-theme';
 import { getEventCreatorLabel } from '@/lib/mobile-backend';
 import { calculateDistanceMiles, formatDistanceAway } from '@/lib/mobile-event-distance';
@@ -345,6 +346,9 @@ export default function EventDetailScreen() {
             <Pressable
               style={styles.primaryButton}
               onPress={isHostedByCurrentUser ? handleOpenEdit : () => toggleSaveEvent(event.id)}>
+              {!isHostedByCurrentUser ? (
+                <EventGoingIcon size={18} color={theme.background} />
+              ) : null}
               <Text style={styles.primaryButtonText}>
                 {isHostedByCurrentUser ? 'Edit' : 'Going'}
               </Text>
@@ -720,8 +724,10 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     },
     primaryButton: {
       flex: 1,
+      flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
+      gap: 8,
       paddingVertical: 14,
       borderRadius: 18,
       backgroundColor: theme.accent,

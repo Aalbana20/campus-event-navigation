@@ -13,6 +13,7 @@ import {
 } from "../discoverPosts"
 import EventCard from "../components/EventCard"
 import EventActionControl from "../components/EventActionControl"
+import ExploreEventModal from "../components/ExploreEventModal"
 import { useEvents } from "../context/EventContext"
 import {
   buildDiscoverStoryStripItems,
@@ -54,6 +55,8 @@ function Discover({ hideModeSwitch = false, initialMode = "events" } = {}) {
   const [activeStoryIndex, setActiveStoryIndex] = useState(0)
   const [isStoryComposerOpen, setIsStoryComposerOpen] = useState(false)
   const [isEventShareOpen, setIsEventShareOpen] = useState(false)
+  const [selectedDetailEvent, setSelectedDetailEvent] = useState(null)
+  const [isRewindVisible, setIsRewindVisible] = useState(false)
   const [createComposerMode, setCreateComposerMode] = useState(null)
   const [discoverPosts, setDiscoverPosts] = useState([])
   const [storyRecords, setStoryRecords] = useState([])
@@ -226,6 +229,12 @@ function Discover({ hideModeSwitch = false, initialMode = "events" } = {}) {
   ])
 
   const handleReject = useCallback(() => {
+    if (isRewindVisible) {
+      setDiscoverActionFeedback("Rewind coming soon.")
+      setIsRewindVisible(false)
+      return
+    }
+
     if (!currentEvent || isActionLocked) return
 
     const removedIndex = safeCurrentIndex
@@ -249,12 +258,26 @@ function Discover({ hideModeSwitch = false, initialMode = "events" } = {}) {
       setButtonFlash("")
       setIsActionLocked(false)
     }, 300)
-  }, [currentEvent, discoverEvents.length, isActionLocked, prepareNextCard, safeCurrentIndex])
+  }, [
+    currentEvent,
+    discoverEvents.length,
+    isActionLocked,
+    isRewindVisible,
+    prepareNextCard,
+    safeCurrentIndex,
+  ])
 
   const handleRsvpAction = useCallback(() => {
     if (!currentEvent || isActionLocked) return
+    setIsRewindVisible(false)
     handleAccept()
   }, [currentEvent, handleAccept, isActionLocked])
+
+  const handleRevealRewind = useCallback(() => {
+    if (!currentEvent) return
+    setIsRewindVisible(true)
+    setDiscoverActionFeedback("Rewind ready.")
+  }, [currentEvent])
 
   const handleToggleSaveForLater = useCallback(() => {
     if (!currentEvent) return
@@ -552,7 +575,7 @@ function Discover({ hideModeSwitch = false, initialMode = "events" } = {}) {
 
       const target = event.target instanceof Element ? event.target : null
       const isInteractiveTarget = Boolean(
-        target?.closest("button, a, input, textarea, select, [role='button']")
+        target?.closest("button, a, input, textarea, select")
       )
 
       if (isInteractiveTarget) {
@@ -1144,8 +1167,17 @@ function Discover({ hideModeSwitch = false, initialMode = "events" } = {}) {
               aria-label="Skip current event"
             >
               <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M19 12H5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M11 6l-6 6 6 6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                {isRewindVisible ? (
+                  <>
+                    <path d="M3 12a9 9 0 1 0 3-6.7" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M3 4.5v6h6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                  </>
+                ) : (
+                  <>
+                    <path d="M19 12H5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M11 6l-6 6 6 6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                  </>
+                )}
               </svg>
             </button>
 
@@ -1186,6 +1218,7 @@ function Discover({ hideModeSwitch = false, initialMode = "events" } = {}) {
                       onNotGoing={handleReject}
                       onOpenComments={handleOpenComments}
                       onShare={() => setIsEventShareOpen(true)}
+                      onRevealRewind={handleRevealRewind}
                       commentCount={eventCommentsById[currentEventId]?.length || 0}
                     />
                   </div>
@@ -1239,8 +1272,11 @@ function Discover({ hideModeSwitch = false, initialMode = "events" } = {}) {
                   aria-pressed={savedEventIds.has(currentEventId)}
                 >
                   <span className="discover-side-action-icon" aria-hidden="true">
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill={savedEventIds.has(currentEventId) ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 1 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M16 20v-1.4a4.6 4.6 0 0 0-4.6-4.6H7.6A4.6 4.6 0 0 0 3 18.6V20" />
+                      <circle cx="9.5" cy="7" r="3.4" />
+                      <path d="M21 20v-1.4a4.6 4.6 0 0 0-3.2-4.38" />
+                      <path d="M16 3.2a3.4 3.4 0 0 1 0 6.6" />
                     </svg>
                   </span>
                   <span className="discover-side-action-count">{currentEvent.attendees?.length || currentEvent.rsvpUsers?.length || currentEvent.goingCount || 0}</span>
@@ -1365,6 +1401,26 @@ function Discover({ hideModeSwitch = false, initialMode = "events" } = {}) {
             setIsEventShareOpen(false)
             prepareNextCard(safeCurrentIndex, discoverEvents.length)
           }}
+        />
+      ) : null}
+
+      {selectedDetailEvent ? (
+        <ExploreEventModal
+          event={selectedDetailEvent}
+          isSaved={savedEventIds.has(String(selectedDetailEvent.id))}
+          actionLabel={savedEventIds.has(String(selectedDetailEvent.id)) ? "Going" : "RSVP"}
+          onAction={(event) => {
+            addEvent({ ...event, rsvpDate: new Date().toISOString() }, currentUser)
+            setDiscoverActionFeedback("Saved for later.")
+          }}
+          onOpenComments={(event) => {
+            setSelectedDetailEvent(null)
+            setActiveCommentEventId(String(event.id))
+            setCommentDraft("")
+            loadComments(String(event.id))
+          }}
+          commentCount={eventCommentsById[String(selectedDetailEvent.id)]?.length || 0}
+          onClose={() => setSelectedDetailEvent(null)}
         />
       ) : null}
 

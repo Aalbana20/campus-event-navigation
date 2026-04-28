@@ -2,17 +2,38 @@ import React, { useState } from "react"
 import { applyEventImageFallback, getEventImageSrc } from "../eventImages"
 import EventActionControl from "./EventActionControl"
 import EventCreatorBadge from "./EventCreatorBadge"
+import ExploreEventModal from "./ExploreEventModal"
 
 function MyEventCard({ event }) {
   const [flipped, setFlipped] = useState(false)
+  const [isDetailOpen, setIsDetailOpen] = useState(false)
   const eventTitle = event?.title || event?.name || "Untitled Event"
   const displayLocation = event.locationName || event.location || "No location"
   const mapsQuery = encodeURIComponent(event.locationAddress || event.location || "")
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${mapsQuery}`
 
   return (
-    <div className="my-flip-card event-card-shell" onClick={() => setFlipped(!flipped)}>
-      <EventActionControl event={event} />
+    <>
+      <div
+        className="my-flip-card event-card-shell"
+        onClick={(eventClick) => {
+          if (eventClick.target.closest("button") || eventClick.target.closest("a")) return
+          setIsDetailOpen(true)
+        }}
+        onDoubleClick={(eventClick) => {
+          eventClick.preventDefault()
+          eventClick.stopPropagation()
+          setFlipped((currentValue) => !currentValue)
+        }}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(eventKey) => {
+          if (eventKey.key !== "Enter" && eventKey.key !== " ") return
+          eventKey.preventDefault()
+          setIsDetailOpen(true)
+        }}
+      >
+        <EventActionControl event={event} />
 
       <div className={`my-flip-card-inner ${flipped ? "flipped" : ""}`}>
         <div className="my-flip-card-front">
@@ -46,7 +67,17 @@ function MyEventCard({ event }) {
           </button>
         </div>
       </div>
-    </div>
+      </div>
+
+      {isDetailOpen ? (
+        <ExploreEventModal
+          event={event}
+          isSaved
+          actionLabel="Going"
+          onClose={() => setIsDetailOpen(false)}
+        />
+      ) : null}
+    </>
   )
 }
 

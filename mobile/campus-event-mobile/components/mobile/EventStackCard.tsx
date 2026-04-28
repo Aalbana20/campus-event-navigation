@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   Image,
   ImageBackground,
   Pressable,
@@ -15,6 +16,7 @@ import { getEventCreatorLabel } from '@/lib/mobile-backend';
 import { getAvatarImageSource, getEventImageSource } from '@/lib/mobile-media';
 import { useMobileApp } from '@/providers/mobile-app-provider';
 import { EventRecord, ProfileRecord } from '@/types/models';
+import { EventGoingIcon } from './EventGoingIcon';
 
 type EventStackCardProps = {
   event: EventRecord;
@@ -48,6 +50,8 @@ export function EventStackCard({
   const theme = useAppTheme();
   const styles = useMemo(() => buildStyles(theme), [theme]);
   const { followingProfiles, profiles } = useMobileApp();
+  const [isRewindVisible, setIsRewindVisible] = useState(false);
+  const suppressNextPressRef = useRef(false);
 
   const attendeeIds = event.attendees ?? [];
 
@@ -123,8 +127,32 @@ export function EventStackCard({
     onPressShare?.(event);
   };
 
+  const handleRevealRewind = () => {
+    suppressNextPressRef.current = true;
+    setIsRewindVisible(true);
+  };
+
+  const handleCardPress = () => {
+    if (suppressNextPressRef.current) {
+      suppressNextPressRef.current = false;
+      return;
+    }
+
+    onPress?.();
+  };
+
+  const handleRewindPress = (eventPress: GestureResponderEvent) => {
+    stopEventPress(eventPress);
+    setIsRewindVisible(false);
+    Alert.alert('Rewind', 'Rewind coming soon.');
+  };
+
   return (
-    <Pressable style={[styles.card, { height }]} onPress={onPress}>
+    <Pressable
+      style={[styles.card, { height }]}
+      onPress={handleCardPress}
+      onLongPress={handleRevealRewind}
+      delayLongPress={360}>
       <ImageBackground
         source={getEventImageSource(event.image)}
         style={styles.image}
@@ -193,18 +221,7 @@ export function EventStackCard({
           <View style={styles.actionRail}>
             <Pressable style={styles.actionButton} onPress={handleRsvpPress}>
               <View style={styles.rsvpIconWrap}>
-                <Ionicons
-                  name="person-outline"
-                  size={32}
-                  color={isRsvped ? '#4ade80' : '#ffffff'}
-                />
-                <View style={[styles.rsvpCheckBadge, isRsvped ? styles.rsvpCheckBadgeActive : undefined]}>
-                  <Ionicons
-                    name="checkmark"
-                    size={11}
-                    color={isRsvped ? '#ffffff' : 'rgba(255,255,255,0.9)'}
-                  />
-                </View>
+                <EventGoingIcon size={34} color={isRsvped ? '#4ade80' : '#ffffff'} />
               </View>
               <Text style={styles.actionCount}>{event.attendees?.length ?? 0}</Text>
             </Pressable>
@@ -235,6 +252,13 @@ export function EventStackCard({
             Tap for details
           </Text>
         </View>
+
+        {isRewindVisible ? (
+          <Pressable style={styles.rewindButton} onPress={handleRewindPress}>
+            <Ionicons name="refresh-outline" size={18} color="#ffffff" />
+            <Text style={styles.rewindText}>Rewind</Text>
+          </Pressable>
+        ) : null}
       </ImageBackground>
     </Pressable>
   );
@@ -423,17 +447,6 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       alignItems: 'center',
       justifyContent: 'center',
     },
-    rsvpCheckBadge: {
-      position: 'absolute',
-      top: 13,
-      left: 8,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: 'transparent',
-    },
-    rsvpCheckBadgeActive: {
-      opacity: 1,
-    },
     bottomHintWrap: {
       zIndex: 3,
       alignItems: 'flex-start',
@@ -444,5 +457,25 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       fontSize: 11,
       fontWeight: '600',
       paddingHorizontal: 4,
+    },
+    rewindButton: {
+      position: 'absolute',
+      left: 18,
+      bottom: 46,
+      zIndex: 5,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 7,
+      paddingHorizontal: 13,
+      paddingVertical: 9,
+      borderRadius: 999,
+      backgroundColor: 'rgba(8, 11, 16, 0.72)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.16)',
+    },
+    rewindText: {
+      color: '#ffffff',
+      fontSize: 13,
+      fontWeight: '800',
     },
   });
