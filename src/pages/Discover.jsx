@@ -1408,8 +1408,15 @@ function Discover({ hideModeSwitch = false, initialMode = "events" } = {}) {
         <ExploreEventModal
           event={selectedDetailEvent}
           isSaved={savedEventIds.has(String(selectedDetailEvent.id))}
-          actionLabel={savedEventIds.has(String(selectedDetailEvent.id)) ? "Going" : "RSVP"}
+          actionLabel={savedEventIds.has(String(selectedDetailEvent.id)) ? "Cancel" : "RSVP"}
           onAction={(event) => {
+            const eventId = String(event.id)
+            if (savedEventIds.has(eventId)) {
+              cancelRSVP(event.id)
+              setDiscoverActionFeedback("RSVP canceled.")
+              return
+            }
+
             addEvent({ ...event, rsvpDate: new Date().toISOString() }, currentUser)
             setDiscoverActionFeedback("Saved for later.")
           }}

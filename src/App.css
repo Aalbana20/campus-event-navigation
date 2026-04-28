@@ -4849,14 +4849,6 @@ body.theme-dark .discover-stories-panel {
   color: rgba(255, 255, 255, 0.78);
 }
 
-/* my-event-creator still needs absolute placement (used in MyEventCard) */
-.my-event-creator {
-  position: absolute;
-  top: 18px;
-  left: 18px;
-  z-index: 3;
-}
-
 /* event-card-creator lives inside .event-card-top-meta-cluster flex row — no absolute */
 .event-card-creator {
   position: relative;
@@ -5479,115 +5471,6 @@ body.theme-dark .calendar-modal-overlay {
 .cards-scroll::-webkit-scrollbar-thumb {
   background: #cfcfd6;
   border-radius: 999px;
-}
-
-/* =========================================================
-   MY EVENTS - FLIP CARD
-========================================================= */
-.my-flip-card {
-  min-width: 280px;
-  max-width: 280px;
-  height: 380px;
-  perspective: 1000px;
-  -webkit-perspective: 1000px;
-  flex-shrink: 0;
-  cursor: pointer;
-  transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1),
-    box-shadow 0.45s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.my-flip-card:hover {
-  transform: translateY(-6px) scale(1.015);
-}
-
-.my-flip-card:hover .my-flip-card-front,
-.my-flip-card:hover .my-flip-card-back {
-  box-shadow: 0 28px 60px rgba(0, 0, 0, 0.18);
-}
-
-.my-flip-card-inner {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  transition: transform 0.7s ease;
-  transform-style: preserve-3d;
-  -webkit-transform-style: preserve-3d;
-}
-
-.my-flip-card-inner.flipped {
-  transform: rotateY(180deg);
-}
-
-.my-flip-card-front,
-.my-flip-card-back {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  border-radius: 24px;
-  overflow: hidden;
-  background: white;
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.1);
-}
-
-.my-flip-card-front {
-  display: flex;
-  flex-direction: column;
-  background: var(--explore-event-fallback);
-}
-
-.my-flip-card-back {
-  transform: rotateY(180deg);
-  padding: 22px 20px;
-  text-align: left;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-}
-
-.my-flip-card-back h3 {
-  margin: 0 0 14px;
-  font-size: 26px;
-}
-
-.my-flip-card-back p {
-  margin: 0 0 10px;
-  font-size: 15px;
-  color: #4f4f55;
-  line-height: 1.4;
-}
-
-/* =========================================================
-   MY EVENTS - IMAGE + TEXT
-========================================================= */
-.my-event-image {
-  display: block;
-  width: 100%;
-  height: 220px;
-  object-fit: cover;
-  background: var(--explore-event-fallback);
-}
-
-.my-event-info {
-  display: block;
-  padding: 18px;
-}
-
-.my-event-info h3 {
-  display: block;
-  margin: 0 0 10px;
-  font-size: 24px;
-  font-weight: 700;
-  color: #1d1d1f;
-}
-
-.my-event-info p {
-  display: block;
-  margin: 0 0 8px;
-  color: #5d5d63;
-  font-size: 15px;
 }
 
 /* =========================================================
@@ -7828,8 +7711,6 @@ body.theme-dark .profile-created-section,
 body.theme-dark .profile-rsvp-section,
 body.theme-dark .profile-section,
 body.theme-dark .calendar-modal-card,
-body.theme-dark .my-flip-card-front,
-body.theme-dark .my-flip-card-back,
 body.theme-dark .flip-card-back,
 body.theme-dark .discover-friend-card {
   background: var(--bg-elevated);
@@ -7881,7 +7762,6 @@ body.theme-dark .calendar-day.clickable:hover {
 
 body.theme-dark .calendar-month-btn,
 body.theme-dark .calendar-day,
-body.theme-dark .my-event-info h3,
 body.theme-dark .flip-card-back h2,
 body.theme-dark .profile-action-btn,
 body.theme-dark .profile-btn,
@@ -7891,7 +7771,6 @@ body.theme-dark .form-group label {
   color: var(--text-main);
 }
 
-body.theme-dark .my-event-info p,
 body.theme-dark .flip-card-back p,
 body.theme-dark .profile-empty-state,
 body.theme-dark .profile-rsvp-empty,
@@ -8487,23 +8366,16 @@ body.theme-dark .profile-page .profile-action-btn:not(.secondary):hover {
 body.theme-dark .flip-card,
 body.theme-dark .flip-card-inner,
 body.theme-dark .flip-card-front,
-body.theme-dark .flip-card-back,
-body.theme-dark .my-flip-card,
-body.theme-dark .my-flip-card-inner,
-body.theme-dark .my-flip-card-front,
-body.theme-dark .my-flip-card-back {
+body.theme-dark .flip-card-back {
   border-radius: 28px;
   overflow: hidden;
 }
 
-body.theme-dark .event-image,
-body.theme-dark .my-event-image {
+body.theme-dark .event-image {
   border-radius: inherit;
   overflow: hidden;
 }
 
-body.theme-dark .my-flip-card-front,
-body.theme-dark .my-flip-card-back,
 body.theme-dark .flip-card-front,
 body.theme-dark .flip-card-back {
   background: #1b2028;
@@ -8594,21 +8466,6 @@ body.theme-dark .calendar-modal-card {
   overflow: hidden;
   background: transparent;
   box-shadow: none;
-}
-
-body.theme-dark .calendar-modal-card .my-flip-card,
-body.theme-dark .calendar-modal-card .my-flip-card-inner,
-body.theme-dark .calendar-modal-card .my-flip-card-front,
-body.theme-dark .calendar-modal-card .my-flip-card-back {
-  border-radius: 28px;
-  overflow: hidden;
-}
-
-body.theme-dark .calendar-modal-card .my-flip-card-front,
-body.theme-dark .calendar-modal-card .my-flip-card-back {
-  background: rgba(27, 32, 40, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.04);
-  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.22);
 }
 
 /* =========================================================
@@ -9697,11 +9554,6 @@ body.theme-dark .personal-form-actions button:last-child {
   .apple-calendar-year-grid {
     grid-template-columns: 1fr;
   }
-}
-
-body.theme-dark .calendar-modal-card .my-event-image {
-  border-radius: inherit;
-  overflow: hidden;
 }
 
 /* RSVP Activity micro polish */
@@ -11388,8 +11240,6 @@ body.theme-dark .event-mutuals-modal,
 body.theme-dark .calendar-box,
 body.theme-dark .create-form-card,
 body.theme-dark .flyer-card,
-body.theme-dark .my-flip-card-front,
-body.theme-dark .my-flip-card-back,
 body.theme-dark .flip-card-front,
 body.theme-dark .flip-card-back,
 body.theme-dark .discover-friend-card,

@@ -1,5 +1,6 @@
+import { Image } from 'expo-image';
 import React, { useMemo } from 'react';
-import { Image, ImageStyle, StyleProp } from 'react-native';
+import { ImageStyle, StyleProp } from 'react-native';
 
 type EventGoingIconProps = {
   size?: number;
@@ -25,7 +26,7 @@ export function EventGoingIcon({ size = 24, color = '#ffffff', style }: EventGoi
     <Image
       source={{ uri }}
       style={[{ width: size, height: size }, style]}
-      resizeMode="contain"
+      contentFit="contain"
     />
   );
 }

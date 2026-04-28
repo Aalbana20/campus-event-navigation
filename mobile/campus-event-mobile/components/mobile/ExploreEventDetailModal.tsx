@@ -102,7 +102,7 @@ export function ExploreEventDetailModal({
             <Pressable
               style={[styles.actionButton, actionActive && styles.actionButtonActive]}
               onPress={onActionPress}>
-              <EventGoingIcon size={18} color={actionActive ? theme.success : theme.background} />
+              <EventGoingIcon size={24} color={actionActive ? theme.success : theme.background} />
               <Text style={[styles.actionText, actionActive && styles.actionTextActive]}>
                 {actionLabel}
               </Text>

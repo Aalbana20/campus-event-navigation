@@ -1523,7 +1523,7 @@ export function InboxScreen({
           event={selectedNotificationEvent}
           actionLabel={
             selectedNotificationEvent && savedEventIds.includes(String(selectedNotificationEvent.id))
-              ? 'Going'
+              ? 'Cancel'
               : "I'm Going"
           }
           actionActive={Boolean(

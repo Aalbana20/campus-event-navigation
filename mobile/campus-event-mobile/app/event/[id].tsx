@@ -60,6 +60,7 @@ export default function EventDetailScreen() {
   const {
     getEventById,
     currentUser,
+    savedEventIds,
     toggleSaveEvent,
     updateEvent,
     currentUserAttendedEvent,
@@ -173,6 +174,7 @@ export default function EventDetailScreen() {
   }
 
   const isHostedByCurrentUser = event.createdBy === currentUser.id;
+  const isRsvped = savedEventIds.includes(String(event.id));
 
   const handleOpenEdit = () => {
     setEditForm(toEditEventForm(event));
@@ -347,10 +349,10 @@ export default function EventDetailScreen() {
               style={styles.primaryButton}
               onPress={isHostedByCurrentUser ? handleOpenEdit : () => toggleSaveEvent(event.id)}>
               {!isHostedByCurrentUser ? (
-                <EventGoingIcon size={18} color={theme.background} />
+                <EventGoingIcon size={24} color={theme.background} />
               ) : null}
               <Text style={styles.primaryButtonText}>
-                {isHostedByCurrentUser ? 'Edit' : 'Going'}
+                {isHostedByCurrentUser ? 'Edit' : isRsvped ? 'Cancel' : 'Going'}
               </Text>
             </Pressable>
             {(event.locationAddress || event.locationName) ? (

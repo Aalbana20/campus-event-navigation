@@ -363,6 +363,7 @@ export default function ProfileContentTabs({ profileId, isOwner = false, allEven
   const {
     savedEvents,
     addEvent,
+    cancelRSVP,
     setPostGridVisibility,
     loadGridPostsForAuthor,
     currentUser,
@@ -1097,8 +1098,16 @@ export default function ProfileContentTabs({ profileId, isOwner = false, allEven
         <ExploreEventModal
           event={selectedEvent}
           isSaved={(savedEvents || []).some((event) => event.id === selectedEvent.id)}
-          actionLabel="I'm Going"
-          onAction={() => addEvent(selectedEvent)}
+          actionLabel={(savedEvents || []).some((event) => event.id === selectedEvent.id) ? "Cancel" : "I'm Going"}
+          onAction={() => {
+            const isSaved = (savedEvents || []).some((event) => event.id === selectedEvent.id)
+            if (isSaved) {
+              cancelRSVP(selectedEvent.id)
+              setSelectedEvent(null)
+              return
+            }
+            addEvent(selectedEvent)
+          }}
           onClose={() => setSelectedEvent(null)}
         />
       )}

@@ -78,7 +78,7 @@ function ExploreEventModal({
   const eventAddress = event?.locationAddress || event?.address || eventLocation
   const eventDressCode = event?.dressCode || event?.dress_code || ""
   const eventTags = Array.isArray(event?.tags) ? event.tags.filter(Boolean) : []
-  const actionButtonLabel = actionLabel || (isSaved ? "Going" : "RSVP")
+  const actionButtonLabel = actionLabel || (isSaved ? "Cancel" : "RSVP")
 
   const handlePrimaryAction = (eventClick) => {
     eventClick.stopPropagation()

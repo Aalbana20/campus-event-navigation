@@ -13,6 +13,7 @@ import {
 import MapView, { Marker, PROVIDER_DEFAULT, type Region } from 'react-native-maps';
 
 import { useAppTheme } from '@/lib/app-theme';
+import { EventGoingIcon } from '@/components/mobile/EventGoingIcon';
 import { getEventImageSource } from '@/lib/mobile-media';
 import { useMobileApp } from '@/providers/mobile-app-provider';
 import type { EventRecord } from '@/types/models';
@@ -277,13 +278,9 @@ export default function MapScreen() {
               <Pressable
                 style={[styles.previewButton, styles.secondaryPreviewButton]}
                 onPress={handleToggleRsvp}>
-                <Ionicons
-                  name={selectedEventIsSaved ? 'checkmark-circle' : 'add-circle-outline'}
-                  size={17}
-                  color="#ffffff"
-                />
+                <EventGoingIcon size={22} color="#ffffff" />
                 <Text style={styles.secondaryPreviewButtonText}>
-                  {selectedEventIsSaved ? 'Going' : 'RSVP'}
+                  {selectedEventIsSaved ? 'Cancel' : 'RSVP'}
                 </Text>
               </Pressable>
 

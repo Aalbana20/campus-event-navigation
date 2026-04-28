@@ -479,7 +479,7 @@ function EventCard({
                   onClick={handleRsvpClick}
                   disabled={isActionLocked}
                 >
-                  {isEventSaved ? "Going" : "RSVP"}
+                  {isEventSaved ? "Cancel" : "RSVP"}
                 </button>
 
                 <button

@@ -373,7 +373,7 @@ function MapModal({
                   className={savedEventIds.has(String(selectedPin.event.id)) ? "active" : ""}
                   onClick={() => onToggleRsvp(selectedPin.event)}
                 >
-                  {savedEventIds.has(String(selectedPin.event.id)) ? "Going" : "RSVP"}
+                  {savedEventIds.has(String(selectedPin.event.id)) ? "Cancel" : "RSVP"}
                 </button>
                 <button type="button" onClick={() => onOpenEvent(selectedPin.event)}>
                   View details

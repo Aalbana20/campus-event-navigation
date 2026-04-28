@@ -525,7 +525,7 @@ function MyEventsLane({ items, onOpenItem, emptyMessage }) {
 }
 
 function MyEvents() {
-  const { savedEvents, allEvents, currentUser } = useEvents()
+  const { savedEvents, allEvents, currentUser, addEvent, cancelRSVP } = useEvents()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const [selectedCalendarEvent, setSelectedCalendarEvent] = useState(null)
@@ -1023,9 +1023,22 @@ function MyEvents() {
             (savedEvents || []).some(
               (event) => String(event.id) === String(selectedCalendarEvent.id)
             )
-              ? "Going"
+              ? "Cancel"
               : "RSVP"
           }
+          onAction={(event) => {
+            const isSaved = (savedEvents || []).some(
+              (savedEvent) => String(savedEvent.id) === String(event.id)
+            )
+
+            if (isSaved) {
+              cancelRSVP(event.id)
+              setSelectedCalendarEvent(null)
+              return
+            }
+
+            addEvent({ ...event, rsvpDate: new Date().toISOString() }, currentUser)
+          }}
           onClose={() => setSelectedCalendarEvent(null)}
         />
       )}

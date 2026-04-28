@@ -221,7 +221,7 @@ export function EventStackCard({
           <View style={styles.actionRail}>
             <Pressable style={styles.actionButton} onPress={handleRsvpPress}>
               <View style={styles.rsvpIconWrap}>
-                <EventGoingIcon size={34} color={isRsvped ? '#4ade80' : '#ffffff'} />
+                <EventGoingIcon size={26} color={isRsvped ? '#4ade80' : '#ffffff'} />
               </View>
               <Text style={styles.actionCount}>{event.attendees?.length ?? 0}</Text>
             </Pressable>

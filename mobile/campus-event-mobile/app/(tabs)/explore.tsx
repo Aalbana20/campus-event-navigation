@@ -733,7 +733,7 @@ export default function ExploreScreen() {
         event={selectedEvent}
         actionLabel={
           selectedEvent && savedEventIds.includes(String(selectedEvent.id))
-            ? 'Going'
+            ? 'Cancel'
             : "I'm Going"
         }
         actionActive={Boolean(
