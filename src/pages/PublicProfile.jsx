@@ -37,6 +37,10 @@ function PublicProfile() {
   const [profileContentCounts, setProfileContentCounts] = useState({ posts: 0 })
   const [mutualFollowers, setMutualFollowers] = useState([])
   const [mutualFollowerCount, setMutualFollowerCount] = useState(0)
+  const [mutualFollowerIds, setMutualFollowerIds] = useState([])
+  const [isMutualsListOpen, setIsMutualsListOpen] = useState(false)
+  const [mutualsListUsers, setMutualsListUsers] = useState([])
+  const [isMutualsListLoading, setIsMutualsListLoading] = useState(false)
 
   const loadCounts = useCallback(async (profileId) => {
     if (!profileId) {
@@ -95,37 +99,90 @@ function PublicProfile() {
   }, [isOwnProfileRoute, loadCounts, viewedUsername])
 
   const loadMutualFollowers = useCallback(async (profileId) => {
-    const followingIds = (followingList || [])
-      .map((person) => person.id)
-      .filter(Boolean)
+    const { data: authData } = await supabase.auth.getUser()
+    const currentUserId = currentUser?.id || authData?.user?.id
 
-    if (!profileId || !currentUser?.id || followingIds.length === 0) {
+    if (!profileId || !currentUserId || String(profileId) === String(currentUserId)) {
       setMutualFollowers([])
       setMutualFollowerCount(0)
+      setMutualFollowerIds([])
       return
     }
 
+    // Step 1: pull current user's following IDs directly. Don't rely on EventContext
+    // ordering — query Supabase so this works even on a cold load.
+    const { data: myFollowingRows, error: myFollowingError } = await supabase
+      .from("follows")
+      .select("following_id")
+      .eq("follower_id", currentUserId)
+
+    if (myFollowingError) {
+      console.error("[mutuals] my-following query failed:", myFollowingError)
+      setMutualFollowers([])
+      setMutualFollowerCount(0)
+      setMutualFollowerIds([])
+      return
+    }
+
+    const followingIds = (myFollowingRows || [])
+      .map((row) => String(row.following_id || ""))
+      .filter(Boolean)
+
+    if (followingIds.length === 0) {
+      if (typeof window !== "undefined" && import.meta.env?.DEV) {
+        console.debug("[mutuals:web] PublicProfile", {
+          currentUserId,
+          viewedProfileId: profileId,
+          followingIdsCount: 0,
+          targetFollowerIdsCount: 0,
+          mutualIdsCount: 0,
+          mutualProfilesCount: 0,
+        })
+      }
+      setMutualFollowers([])
+      setMutualFollowerCount(0)
+      setMutualFollowerIds([])
+      return
+    }
+
+    // Step 2: pull the target's followers directly and intersect in JS.
+    // This avoids relying on a cached context list and makes the debug counts honest.
     const { data: relationRows, error: relationError } = await supabase
       .from("follows")
       .select("follower_id")
       .eq("following_id", profileId)
-      .in("follower_id", followingIds)
 
     if (relationError) {
-      console.error("Unable to load mutual followers:", relationError)
+      console.error("[mutuals] target-followers query failed:", relationError)
       setMutualFollowers([])
       setMutualFollowerCount(0)
+      setMutualFollowerIds([])
       return
     }
 
-    const mutualIds = (relationRows || [])
-      .map((row) => row.follower_id)
+    const followingIdSet = new Set(followingIds)
+    const targetFollowerIds = (relationRows || [])
+      .map((row) => String(row.follower_id || ""))
       .filter(Boolean)
+    const mutualIds = (relationRows || [])
+      .map((row) => String(row.follower_id || ""))
+      .filter((id) => id && followingIdSet.has(id))
 
     setMutualFollowerCount(mutualIds.length)
+    setMutualFollowerIds(mutualIds)
 
     if (mutualIds.length === 0) {
       setMutualFollowers([])
+      if (typeof window !== "undefined" && import.meta.env?.DEV) {
+        console.debug("[mutuals:web] PublicProfile", {
+          currentUserId,
+          viewedProfileId: profileId,
+          followingIdsCount: followingIds.length,
+          targetFollowerIdsCount: targetFollowerIds.length,
+          mutualIdsCount: 0,
+          mutualProfilesCount: 0,
+        })
+      }
       return
     }
 
@@ -135,8 +192,18 @@ function PublicProfile() {
       .in("id", mutualIds.slice(0, 3))
 
     if (profilesError || !profilesData) {
-      console.error("Unable to load mutual follower profiles:", profilesError)
+      console.error("[mutuals] preview profiles query failed:", profilesError)
       setMutualFollowers([])
+      if (typeof window !== "undefined" && import.meta.env?.DEV) {
+        console.debug("[mutuals:web] PublicProfile", {
+          currentUserId,
+          viewedProfileId: profileId,
+          followingIdsCount: followingIds.length,
+          targetFollowerIdsCount: targetFollowerIds.length,
+          mutualIdsCount: mutualIds.length,
+          mutualProfilesCount: 0,
+        })
+      }
       return
     }
 
@@ -158,7 +225,59 @@ function PublicProfile() {
         .map((id) => profileMap.get(String(id)))
         .filter(Boolean)
     )
-  }, [currentUser?.id, defaultAvatar, followingList])
+
+    if (typeof window !== "undefined" && import.meta.env?.DEV) {
+      console.debug("[mutuals:web] PublicProfile", {
+        currentUserId,
+        viewedProfileId: profileId,
+        followingIdsCount: followingIds.length,
+        targetFollowerIdsCount: targetFollowerIds.length,
+        mutualIdsCount: mutualIds.length,
+        mutualProfilesCount: profilesData.length,
+        mutualIds: mutualIds.slice(0, 6),
+      })
+    }
+  }, [currentUser?.id, defaultAvatar])
+
+  const loadMutualsList = useCallback(async () => {
+    if (mutualFollowerIds.length === 0) {
+      setMutualsListUsers([])
+      return
+    }
+
+    setIsMutualsListLoading(true)
+
+    const { data: profilesData, error: profilesError } = await supabase
+      .from("profiles")
+      .select("id, name, username, avatar_url")
+      .in("id", mutualFollowerIds)
+
+    if (profilesError || !profilesData) {
+      console.error("Unable to load mutual followers list:", profilesError)
+      setMutualsListUsers([])
+      setIsMutualsListLoading(false)
+      return
+    }
+
+    const profileMap = new Map(
+      profilesData.map((person) => [
+        String(person.id),
+        {
+          id: person.id,
+          name: person.name || person.username || "User",
+          username: person.username || "",
+          image: sanitizeAvatarUrl(person.avatar_url, defaultAvatar),
+        },
+      ])
+    )
+
+    setMutualsListUsers(
+      mutualFollowerIds
+        .map((id) => profileMap.get(String(id)))
+        .filter(Boolean)
+    )
+    setIsMutualsListLoading(false)
+  }, [defaultAvatar, mutualFollowerIds])
 
   useEffect(() => {
     setFollowOverride(null)
@@ -170,6 +289,9 @@ function PublicProfile() {
     setProfileContentCounts({ posts: 0 })
     setMutualFollowers([])
     setMutualFollowerCount(0)
+    setMutualFollowerIds([])
+    setIsMutualsListOpen(false)
+    setMutualsListUsers([])
   }, [viewedUsername])
 
   useEffect(() => {
@@ -536,7 +658,15 @@ function PublicProfile() {
             <p className="bio">{profile.bio || "No bio yet."}</p>
 
             {mutualLabel ? (
-              <div className="public-profile-mutual-row">
+              <button
+                type="button"
+                className="public-profile-mutual-row public-profile-mutual-row-btn"
+                onClick={async () => {
+                  setIsMutualsListOpen(true)
+                  await loadMutualsList()
+                }}
+                aria-label={`${mutualLabel}. View all mutual followers.`}
+              >
                 <div className="public-profile-mutual-avatars" aria-hidden="true">
                   {mutualFollowers.slice(0, 3).map((person) => (
                     <img
@@ -550,7 +680,7 @@ function PublicProfile() {
                   ))}
                 </div>
                 <p>{mutualLabel}</p>
-              </div>
+              </button>
             ) : null}
 
             <div className="profile-action-row public-profile-action-row">
@@ -648,6 +778,82 @@ function PublicProfile() {
                     ? "No followers yet."
                     : "Not following anyone yet."}
                 </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isMutualsListOpen && (
+        <div
+          className="profile-overlay"
+          onClick={() => setIsMutualsListOpen(false)}
+        >
+          <div className="profile-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="profile-modal-header">
+              <h3>{mutualsListUsers.length === 1 ? "Mutual" : "Mutuals"}</h3>
+              <button
+                type="button"
+                className="profile-modal-close"
+                onClick={() => setIsMutualsListOpen(false)}
+                aria-label="Close mutual followers list"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="profile-modal-body">
+              {isMutualsListLoading ? (
+                <p className="profile-empty-state">Loading...</p>
+              ) : mutualsListUsers.length > 0 ? (
+                <div className="profile-list">
+                  {mutualsListUsers.map((person) => (
+                    <div
+                      className="profile-list-item public-profile-list-item"
+                      key={person.id}
+                    >
+                      <button
+                        type="button"
+                        className="profile-list-identity-btn"
+                        onClick={() => {
+                          setIsMutualsListOpen(false)
+                          navigate(`/profile/${person.username || person.id}`)
+                        }}
+                      >
+                        <img
+                          className="profile-list-avatar"
+                          src={person.image || defaultAvatar}
+                          alt={person.name || person.username || "User"}
+                          onError={(event) => {
+                            event.currentTarget.src = defaultAvatar
+                          }}
+                        />
+                        <span className="public-profile-mutual-copy">
+                          <span className="profile-list-name">
+                            {person.name || person.username || "Unknown user"}
+                          </span>
+                          {person.username ? (
+                            <span className="public-profile-mutual-username">
+                              @{person.username}
+                            </span>
+                          ) : null}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className="profile-action-btn secondary public-profile-mutual-msg-btn"
+                        onClick={() => {
+                          setIsMutualsListOpen(false)
+                          navigate(`/messages?thread=${person.id}`)
+                        }}
+                      >
+                        Message
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="profile-empty-state">No mutual followers yet.</p>
               )}
             </div>
           </div>

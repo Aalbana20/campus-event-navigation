@@ -202,6 +202,7 @@ export function EventProvider({ children }) {
   const [followingList, setFollowingList] = useState([])
   const [followersList, setFollowersList] = useState([])
   const [repostedEventIds, setRepostedEventIds] = useState(new Set())
+  const [mutualGoingByEventId, setMutualGoingByEventId] = useState({})
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined
@@ -365,12 +366,15 @@ export function EventProvider({ children }) {
         const followingIds = (followingResult.data || []).map((f) => f.following_id)
         const followerIds = (followersResult.data || []).map((f) => f.follower_id)
 
+        let followingProfilesList = []
+
         if (followingIds.length > 0) {
           const { data: followingProfiles } = await supabase
             .from("profiles")
             .select("id, name, username, avatar_url")
             .in("id", followingIds)
-          setFollowingList(toUserList(followingProfiles))
+          followingProfilesList = toUserList(followingProfiles)
+          setFollowingList(followingProfilesList)
         } else {
           setFollowingList([])
         }
@@ -383,6 +387,30 @@ export function EventProvider({ children }) {
           setFollowersList(toUserList(followerProfiles))
         } else {
           setFollowersList([])
+        }
+
+        if (followingIds.length > 0) {
+          const { data: followingRsvps } = await supabase
+            .from("rsvps")
+            .select("user_id, event_id")
+            .in("user_id", followingIds)
+
+          const profileById = new Map(
+            followingProfilesList.map((profile) => [String(profile.id), profile])
+          )
+          const nextMutualGoing = {}
+          for (const row of followingRsvps || []) {
+            const profile = profileById.get(String(row.user_id))
+            if (!profile || !row.event_id) continue
+            const key = String(row.event_id)
+            if (!nextMutualGoing[key]) nextMutualGoing[key] = []
+            if (!nextMutualGoing[key].some((person) => person.id === profile.id)) {
+              nextMutualGoing[key].push(profile)
+            }
+          }
+          setMutualGoingByEventId(nextMutualGoing)
+        } else {
+          setMutualGoingByEventId({})
         }
       } catch (error) {
         console.error("Failed to load event context:", error)
@@ -741,6 +769,9 @@ export function EventProvider({ children }) {
     [followersList, followingList]
   )
 
+  const getMutualGoingForEvent = (eventId) =>
+    mutualGoingByEventId[String(eventId || "")] || []
+
   return (
     <EventContext.Provider
       value={{
@@ -748,6 +779,8 @@ export function EventProvider({ children }) {
         followingList,
         followersList,
         mutualUsers,
+        mutualGoingByEventId,
+        getMutualGoingForEvent,
         savedEvents,
         addEvent,
         allEvents,

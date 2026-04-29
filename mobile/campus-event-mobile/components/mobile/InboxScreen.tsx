@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { GestureResponderEvent } from 'react-native';
 import {
@@ -645,8 +645,10 @@ export function InboxScreen({
   subtitle,
 }: InboxScreenProps) {
   const router = useRouter();
+  const navigation = useNavigation();
   const params = useLocalSearchParams<{ tab?: string; dm?: string }>();
   const theme = useAppTheme();
+  const composerInputRef = useRef<TextInput>(null);
   const styles = useMemo(() => buildStyles(theme), [theme]);
   const {
     notifications,
@@ -666,6 +668,7 @@ export function InboxScreen({
   const {
     currentUser,
     profiles,
+    events,
     savedEventIds,
     getEventById,
     getProfileById,
@@ -692,6 +695,8 @@ export function InboxScreen({
   const [messageReactions, setMessageReactions] = useState<Record<string, string>>({});
   const [messageStickers, setMessageStickers] = useState<Record<string, string>>({});
   const [replyingTo, setReplyingTo] = useState<MenuMessage | null>(null);
+  const [plusMenuOpen, setPlusMenuOpen] = useState(false);
+  const [eventsPickerOpen, setEventsPickerOpen] = useState(false);
   const activeTab = lockedTab || internalTab;
   const resolvedTitle = title || (activeTab === 'dms' ? 'DMs' : 'Notifications');
   const resolvedSubtitle =
@@ -974,6 +979,10 @@ export function InboxScreen({
     setReplyingTo(null);
   };
 
+  const focusComposerInput = useCallback(() => {
+    composerInputRef.current?.focus();
+  }, []);
+
   const openMessageMenu = (message: MenuMessage, event: GestureResponderEvent) => {
     const { height, width } = Dimensions.get('window');
     const pageX = event.nativeEvent.pageX || width / 2;
@@ -1032,10 +1041,69 @@ export function InboxScreen({
     setActiveMessageMenu(null);
   };
 
+  const chatActive = activeTab === 'dms' && Boolean(activeThread);
+
+  useEffect(() => {
+    const defaultTabBarStyle = {
+      backgroundColor: theme.tabBar,
+      borderTopWidth: 0,
+      elevation: 0,
+      shadowOpacity: 0,
+      height: 78,
+      paddingTop: 8,
+      paddingBottom: 10,
+    };
+    const hiddenTabBarStyle = { display: 'none' as const };
+
+    const setBoth = (style: typeof defaultTabBarStyle | typeof hiddenTabBarStyle) => {
+      navigation.setOptions({ tabBarStyle: style });
+      const parent = navigation.getParent?.();
+      parent?.setOptions?.({ tabBarStyle: style });
+    };
+
+    setBoth(chatActive ? hiddenTabBarStyle : defaultTabBarStyle);
+
+    return () => {
+      setBoth(defaultTabBarStyle);
+    };
+  }, [chatActive, navigation, theme.tabBar]);
+
+  const shareableEvents = useMemo(() => {
+    if (!currentUser?.id) return [] as EventRecord[];
+    const seen = new Set<string>();
+    const list: EventRecord[] = [];
+    events.forEach((event) => {
+      const id = String(event.id);
+      if (seen.has(id)) return;
+      const isAttending = Array.isArray(event.attendees)
+        ? event.attendees.includes(currentUser.id)
+        : false;
+      const isCreated = String(event.createdBy) === String(currentUser.id);
+      const isSaved = savedEventIds.includes(id);
+      if (isAttending || isCreated || isSaved) {
+        seen.add(id);
+        list.push(event);
+      }
+    });
+    return list;
+  }, [currentUser?.id, events, savedEventIds]);
+
+  const handleSelectShareEvent = (event: EventRecord) => {
+    if (!activeThreadId) return;
+    const meta = [event.date, event.time, event.locationName].filter(Boolean).join(' • ');
+    const link = `campus-event://event/${event.id}`;
+    const body = [`Check out ${event.title || 'this event'}`, meta, link].filter(Boolean).join('\n');
+    sendDmMessage(activeThreadId, body);
+    setEventsPickerOpen(false);
+    setPlusMenuOpen(false);
+  };
+
+  const isComposerTyping = draftMessage.length > 0;
+
   return (
-    <AppScreen>
-      <View style={styles.page}>
-        {activeTab === 'notifications' ? (
+    <AppScreen edges={chatActive ? ['top', 'bottom'] : ['top']}>
+      <View style={[styles.page, chatActive && styles.pageChatMode]}>
+        {chatActive ? null : activeTab === 'notifications' ? (
           <View style={styles.notificationHeader}>
             {showBackButton ? (
               <Pressable style={styles.notificationBackButton} onPress={() => router.back()}>
@@ -1279,13 +1347,16 @@ export function InboxScreen({
         ) : activeThread ? (
           <View style={styles.chatShell}>
             <View style={styles.chatHeader}>
-              <Pressable style={styles.iconButton} onPress={() => setActiveThreadId(null)}>
-                <Ionicons name="chevron-back" size={18} color={theme.text} />
+              <Pressable style={styles.chatHeaderBack} onPress={() => setActiveThreadId(null)}>
+                <Ionicons name="chevron-back" size={28} color={theme.text} />
               </Pressable>
-              <View style={styles.chatHeaderCopy}>
-                <Text style={styles.chatTitle}>{activeThread.name}</Text>
-                <Text style={styles.chatSubtitle}>Direct messages</Text>
-              </View>
+              <Image
+                source={getAvatarImageSource(activeThread.image)}
+                style={styles.chatHeaderAvatar}
+              />
+              <Text style={styles.chatHeaderName} numberOfLines={1}>
+                {activeThread.name}
+              </Text>
             </View>
 
             <ScrollView contentContainerStyle={styles.chatMessages} showsVerticalScrollIndicator={false}>
@@ -1366,17 +1437,160 @@ export function InboxScreen({
             ) : null}
 
             <View style={styles.chatComposer}>
-              <TextInput
-                value={draftMessage}
-                onChangeText={setDraftMessage}
-                placeholder={`Message ${activeThread.name}`}
-                placeholderTextColor={theme.textMuted}
-                style={styles.chatInput}
-              />
-              <Pressable style={styles.sendButton} onPress={handleSend}>
-                <Text style={styles.sendButtonText}>Send</Text>
-              </Pressable>
+              {!isComposerTyping ? (
+                <Pressable
+                  style={styles.composerCameraButton}
+                  onPress={() => Alert.alert('Camera', 'Camera capture is coming soon.')}>
+                  <Ionicons name="camera" size={20} color="#ffffff" />
+                </Pressable>
+              ) : null}
+
+              <View
+                style={[
+                  styles.composerPill,
+                  isComposerTyping && styles.composerPillTyping,
+                ]}
+                onTouchStart={focusComposerInput}>
+                <TextInput
+                  ref={composerInputRef}
+                  value={draftMessage}
+                  onChangeText={setDraftMessage}
+                  placeholder="Message..."
+                  placeholderTextColor={theme.textMuted}
+                  style={styles.composerInput}
+                  editable
+                  multiline
+                  blurOnSubmit={false}
+                />
+
+                {isComposerTyping ? (
+                  <Pressable
+                    style={styles.composerSendButton}
+                    onPress={handleSend}
+                    accessibilityLabel="Send message">
+                    <Ionicons name="paper-plane" size={16} color={theme.accentText} />
+                  </Pressable>
+                ) : (
+                  <View style={styles.composerActionsRow}>
+                    <Pressable
+                      style={styles.composerIconButton}
+                      onPress={() => Alert.alert('Voice notes', 'Voice messages are coming soon.')}>
+                      <Ionicons name="mic-outline" size={19} color={theme.text} />
+                    </Pressable>
+                    <Pressable
+                      style={styles.composerIconButton}
+                      onPress={() =>
+                        Alert.alert('Gallery', 'Image picker is coming soon.')
+                      }>
+                      <Ionicons name="image-outline" size={19} color={theme.text} />
+                    </Pressable>
+                    <Pressable
+                      style={styles.composerPlusButton}
+                      onPress={() => setPlusMenuOpen((open) => !open)}
+                      accessibilityLabel="More attachments">
+                      <Ionicons name="add" size={17} color={theme.text} />
+                    </Pressable>
+                  </View>
+                )}
+              </View>
             </View>
+
+            <Modal
+              transparent
+              visible={plusMenuOpen}
+              animationType="fade"
+              onRequestClose={() => setPlusMenuOpen(false)}>
+              <Pressable
+                style={styles.plusMenuBackdrop}
+                onPress={() => setPlusMenuOpen(false)}>
+                <Pressable
+                  style={styles.plusMenuCard}
+                  onPress={(event) => event.stopPropagation()}>
+                  {([
+                    {
+                      key: 'location',
+                      icon: 'location-outline' as const,
+                      label: 'Location',
+                      onPress: () =>
+                        Alert.alert('Location', 'Location sharing is coming soon.'),
+                    },
+                    {
+                      key: 'draw',
+                      icon: 'brush-outline' as const,
+                      label: 'Draw',
+                      onPress: () => Alert.alert('Draw', 'Drawing is coming soon.'),
+                    },
+                    {
+                      key: 'gifs',
+                      icon: 'film-outline' as const,
+                      label: 'GIFs',
+                      onPress: () => Alert.alert('GIFs', 'GIF picker is coming soon.'),
+                    },
+                    {
+                      key: 'stickers',
+                      icon: 'happy-outline' as const,
+                      label: 'Stickers',
+                      onPress: () => Alert.alert('Stickers', 'Sticker library is coming soon.'),
+                    },
+                    {
+                      key: 'events',
+                      icon: 'calendar-outline' as const,
+                      label: 'Events',
+                      onPress: () => {
+                        setPlusMenuOpen(false);
+                        setEventsPickerOpen(true);
+                      },
+                    },
+                  ] as const).map((item) => (
+                    <Pressable
+                      key={item.key}
+                      style={styles.plusMenuRow}
+                      onPress={() => {
+                        if (item.key !== 'events') {
+                          setPlusMenuOpen(false);
+                        }
+                        item.onPress();
+                      }}>
+                      <Ionicons name={item.icon} size={20} color={theme.text} />
+                      <Text style={styles.plusMenuLabel}>{item.label}</Text>
+                    </Pressable>
+                  ))}
+                </Pressable>
+              </Pressable>
+            </Modal>
+
+            <Modal
+              transparent
+              visible={eventsPickerOpen}
+              animationType="slide"
+              onRequestClose={() => setEventsPickerOpen(false)}>
+              <Pressable
+                style={styles.eventsPickerBackdrop}
+                onPress={() => setEventsPickerOpen(false)}>
+                <Pressable
+                  style={styles.eventsPickerSheet}
+                  onPress={(event) => event.stopPropagation()}>
+                  <View style={styles.eventsPickerHandle} />
+                  <Text style={styles.eventsPickerTitle}>Share an event</Text>
+                  {shareableEvents.length > 0 ? (
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.eventsPickerList}>
+                      {shareableEvents.map((event) => (
+                        <DmEventPreviewCard
+                          key={event.id}
+                          event={event}
+                          onPress={() => handleSelectShareEvent(event)}
+                        />
+                      ))}
+                    </ScrollView>
+                  ) : (
+                    <Text style={styles.eventsPickerEmpty}>No events to share yet.</Text>
+                  )}
+                </Pressable>
+              </Pressable>
+            </Modal>
 
             <Modal
               transparent
@@ -1607,6 +1821,12 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       paddingTop: 8,
       paddingBottom: 18,
       gap: 16,
+    },
+    pageChatMode: {
+      paddingHorizontal: 0,
+      paddingTop: 0,
+      paddingBottom: 0,
+      gap: 0,
     },
     header: {
       flexDirection: 'row',
@@ -2519,28 +2739,37 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     },
     chatShell: {
       flex: 1,
-      gap: 12,
     },
     chatHeader: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 12,
+      gap: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: theme.border,
     },
-    chatHeaderCopy: {
-      gap: 3,
+    chatHeaderBack: {
+      width: 36,
+      height: 36,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
-    chatTitle: {
+    chatHeaderAvatar: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      backgroundColor: theme.surfaceAlt,
+    },
+    chatHeaderName: {
+      flex: 1,
       color: theme.text,
       fontSize: 17,
-      fontWeight: '800',
-    },
-    chatSubtitle: {
-      color: theme.textMuted,
-      fontSize: 12,
-      fontWeight: '600',
+      fontWeight: '700',
     },
     chatMessages: {
-      paddingVertical: 8,
+      paddingHorizontal: 18,
+      paddingVertical: 10,
       gap: 10,
     },
     chatBubble: {
@@ -2609,6 +2838,8 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       flexDirection: 'row',
       alignItems: 'center',
       gap: 10,
+      marginHorizontal: 12,
+      marginBottom: 4,
       borderRadius: 18,
       borderWidth: 1,
       borderColor: theme.border,
@@ -2640,31 +2871,147 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     },
     chatComposer: {
       flexDirection: 'row',
+      alignItems: 'flex-end',
       gap: 10,
-      alignItems: 'center',
-      paddingTop: 4,
+      paddingHorizontal: 12,
+      paddingTop: 8,
+      paddingBottom: 10,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: theme.border,
+      backgroundColor: theme.background,
     },
-    chatInput: {
+    composerCameraButton: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: theme.accent,
+    },
+    composerPill: {
       flex: 1,
-      borderRadius: 18,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      borderRadius: 22,
       borderWidth: 1,
       borderColor: theme.border,
       backgroundColor: theme.surface,
-      paddingHorizontal: 16,
-      paddingVertical: 13,
-      color: theme.text,
-      fontSize: 14,
+      paddingLeft: 16,
+      paddingRight: 6,
+      minHeight: 40,
     },
-    sendButton: {
-      borderRadius: 18,
-      paddingHorizontal: 16,
-      paddingVertical: 13,
+    composerPillTyping: {
+      paddingRight: 6,
+    },
+    composerInput: {
+      flex: 1,
+      color: theme.text,
+      fontSize: 15,
+      paddingVertical: 8,
+      maxHeight: 120,
+    },
+    composerActionsRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingRight: 4,
+    },
+    composerIconButton: {
+      width: 26,
+      height: 26,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    composerPlusButton: {
+      width: 26,
+      height: 26,
+      borderRadius: 7,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: theme.surfaceAlt,
+    },
+    composerSendButton: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
       backgroundColor: theme.accent,
     },
-    sendButtonText: {
-      color: theme.background,
-      fontSize: 13,
+    plusMenuBackdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.35)',
+      justifyContent: 'flex-end',
+      alignItems: 'flex-end',
+      paddingHorizontal: 16,
+      paddingBottom: 80,
+    },
+    plusMenuCard: {
+      minWidth: 200,
+      borderRadius: 22,
+      paddingVertical: 8,
+      paddingHorizontal: 6,
+      backgroundColor: 'rgba(20, 20, 24, 0.96)',
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.08)',
+      shadowColor: '#000',
+      shadowOpacity: 0.45,
+      shadowRadius: 28,
+      shadowOffset: { width: 0, height: 18 },
+      elevation: 18,
+    },
+    plusMenuRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 14,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      borderRadius: 12,
+    },
+    plusMenuLabel: {
+      color: theme.text,
+      fontSize: 15,
+      fontWeight: '600',
+    },
+    eventsPickerBackdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.55)',
+      justifyContent: 'flex-end',
+    },
+    eventsPickerSheet: {
+      paddingTop: 10,
+      paddingBottom: 24,
+      backgroundColor: theme.background,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      borderTopWidth: 1,
+      borderTopColor: theme.border,
+      gap: 12,
+    },
+    eventsPickerHandle: {
+      alignSelf: 'center',
+      width: 40,
+      height: 4,
+      borderRadius: 999,
+      backgroundColor: 'rgba(255, 255, 255, 0.22)',
+    },
+    eventsPickerTitle: {
+      color: theme.text,
+      fontSize: 17,
       fontWeight: '800',
+      paddingHorizontal: 18,
+    },
+    eventsPickerList: {
+      paddingHorizontal: 18,
+      gap: 12,
+    },
+    eventsPickerEmpty: {
+      color: theme.textMuted,
+      fontSize: 14,
+      paddingHorizontal: 18,
+      paddingVertical: 24,
+      textAlign: 'center',
     },
     messageMenuBackdrop: {
       flex: 1,

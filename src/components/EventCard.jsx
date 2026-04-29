@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react"
 import { useEvents } from "../context/EventContext"
 import { applyEventImageFallback, getEventImageSrc } from "../eventImages"
 import { DEFAULT_AVATAR_URL, sanitizeAvatarUrl } from "../profileMedia"
+import { buildMutualGoingLabel } from "../mutuals"
 import EventCreatorBadge from "./EventCreatorBadge"
 
 const usersMatch = (a, b) => {
@@ -64,6 +65,7 @@ function EventCard({
     followingList,
     followersList,
     mutualUsers,
+    getMutualGoingForEvent,
     savedEvents,
   } = useEvents()
   const [flipped, setFlipped] = useState(false)
@@ -110,8 +112,13 @@ function EventCard({
   }
   const resolvedAttendeeUsers = attendeeUsers.map(resolvePerson).filter(Boolean)
 
-  const mutualAttendees = (mutualUsers || []).filter((mutualUser) =>
-    resolvedAttendeeUsers.some((attendee) => usersMatch(attendee, mutualUser))
+  const mutualGoing = (
+    (typeof getMutualGoingForEvent === "function" && event?.id
+      ? getMutualGoingForEvent(event.id)
+      : null) ||
+    (mutualUsers || []).filter((mutualUser) =>
+      resolvedAttendeeUsers.some((attendee) => usersMatch(attendee, mutualUser))
+    )
   )
 
   const orderedAttendees = (() => {
@@ -119,7 +126,7 @@ function EventCard({
     const ordered = []
     const isSeen = (person) => seen.some((known) => usersMatch(known, person))
 
-    mutualAttendees.forEach((person) => {
+    mutualGoing.forEach((person) => {
       if (isSeen(person)) return
       seen.push(person)
       ordered.push(person)
@@ -138,6 +145,7 @@ function EventCard({
 
   const visibleAttendees = orderedAttendees.slice(0, 3)
   const goingCount = event?.goingCount ?? attendeeUsers.length ?? 0
+  const mutualGoingLabel = buildMutualGoingLabel(mutualGoing, goingCount)
   const getAttendeeInitials = (person) =>
     (person?.name || person?.username || "?")
       .split(/\s+/)
@@ -327,6 +335,39 @@ function EventCard({
             </button>
 
             <div className="event-card-info-pills">
+              {mutualGoingLabel ? (
+                <button
+                  type="button"
+                  className="event-card-mutual-strip"
+                  onClick={openMutuals}
+                  aria-label={mutualGoingLabel}
+                >
+                  <span className="event-card-mutual-strip-avatars" aria-hidden="true">
+                    {mutualGoing.slice(0, 3).map((person, index) => {
+                      const avatarUrl = person.image || person.avatar
+                      return avatarUrl ? (
+                        <img
+                          key={person.id || person.username || index}
+                          src={sanitizeAvatarUrl(avatarUrl, DEFAULT_AVATAR_URL)}
+                          alt=""
+                          className="event-card-mutual-strip-avatar"
+                          onError={(eventClick) => {
+                            eventClick.currentTarget.src = DEFAULT_AVATAR_URL
+                          }}
+                        />
+                      ) : (
+                        <span
+                          key={person.id || person.username || index}
+                          className="event-card-mutual-strip-avatar initials"
+                        >
+                          {getAttendeeInitials(person)}
+                        </span>
+                      )
+                    })}
+                  </span>
+                  <span className="event-card-mutual-strip-text">{mutualGoingLabel}</span>
+                </button>
+              ) : null}
               <div className="event-card-info-pill event-card-info-pill-title">{eventTitle}</div>
 
               <div className="event-card-info-pill">

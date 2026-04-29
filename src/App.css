@@ -3486,6 +3486,106 @@ body.theme-dark .discover-stories-panel {
   color: rgba(255, 255, 255, 0.76);
 }
 
+/* Mutual "Going with..." strip on the event card front */
+.event-card-mutual-strip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 5px 12px 5px 6px;
+  border-radius: 999px;
+  background: rgba(8, 11, 16, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  transition: background 0.18s ease;
+  margin-bottom: 4px;
+}
+
+.event-card-mutual-strip:hover,
+.event-card-mutual-strip:focus-visible {
+  background: rgba(8, 11, 16, 0.72);
+  outline: none;
+}
+
+.event-card-mutual-strip-avatars {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.event-card-mutual-strip-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  object-fit: cover;
+  border: 1.5px solid rgba(8, 11, 16, 0.95);
+  margin-left: -7px;
+  background: rgba(255, 255, 255, 0.14);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 0.55rem;
+  font-weight: 800;
+}
+
+.event-card-mutual-strip-avatar:first-child {
+  margin-left: 0;
+}
+
+.event-card-mutual-strip-avatar.initials {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.22),
+    rgba(255, 255, 255, 0.08)
+  );
+}
+
+.event-card-mutual-strip-text {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
+.public-profile-mutual-row-btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  width: min(100%, 720px);
+}
+
+.public-profile-mutual-row-btn:hover p,
+.public-profile-mutual-row-btn:focus-visible p {
+  text-decoration: underline;
+}
+
+.public-profile-mutual-row-btn:focus-visible {
+  outline: none;
+}
+
+.public-profile-mutual-msg-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: auto;
+  min-width: fit-content;
+  min-height: 0;
+  margin-left: auto;
+  padding: 6px 12px;
+  white-space: nowrap;
+}
+
 /* =========================================================
    EVENT CARD — SIDE ACTION ICONS (WEB)
 ========================================================= */

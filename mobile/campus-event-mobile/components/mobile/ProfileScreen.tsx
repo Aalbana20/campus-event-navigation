@@ -14,7 +14,12 @@ import {
 } from 'react-native';
 
 import { useAppTheme } from '@/lib/app-theme';
+import { normalizeProfileRow } from '@/lib/mobile-backend';
 import { getAvatarImageSource } from '@/lib/mobile-media';
+import {
+  buildMutualFollowedByLabel,
+  getMutualFollowersFor,
+} from '@/lib/mobile-mutuals';
 import {
   pickProfileImage,
   type SelectedProfileImage,
@@ -26,14 +31,16 @@ import {
   type StoryHighlightItemRecord,
   type StoryHighlightRecord,
 } from '@/lib/mobile-story-highlights';
+import { supabase } from '@/lib/supabase';
 import { useMobileApp } from '@/providers/mobile-app-provider';
-import type { EventPrivacy, EventRecord } from '@/types/models';
+import type { EventPrivacy, EventRecord, ProfileRecord } from '@/types/models';
 
 import { AppScreen } from './AppScreen';
 import { EventListCard } from './EventListCard';
 import { PersonRowCard } from './PersonRowCard';
 import { ProfileContentTabs } from './ProfileContentTabs';
 import { ProfileHighlightsRow } from './ProfileHighlightsRow';
+import { ProfileMutualsSheet } from './ProfileMutualsSheet';
 import { StoryHighlightPicker } from './StoryHighlightPicker';
 import { StoryViewerModal } from './StoryViewerModal';
 
@@ -151,6 +158,7 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
   const {
     currentUser,
     followingProfiles,
+    followRelationships,
     recentDmPeople,
     getProfileByUsername,
     getFollowersForProfile,
@@ -163,6 +171,8 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
     updateProfile,
   } = useMobileApp();
   const [activeList, setActiveList] = useState<ActiveList>(null);
+  const [isMutualsSheetVisible, setIsMutualsSheetVisible] = useState(false);
+  const [mutualFollowers, setMutualFollowers] = useState<ProfileRecord[]>([]);
 
   // Highlights state (owner sees "+ New"; visitors just see the grid).
   const [highlights, setHighlights] = useState<StoryHighlightRecord[]>([]);
@@ -219,6 +229,159 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
   useEffect(() => {
     void refreshHighlights();
   }, [refreshHighlights]);
+
+  const loadProfileMutualFollowers = useCallback(async () => {
+    if (!resolvedProfileId || !currentUser.id || isOwnProfile) {
+      setMutualFollowers([]);
+      return;
+    }
+
+    const logMutuals = (payload: {
+      source: string;
+      followingIdsCount: number;
+      targetFollowerIdsCount: number;
+      mutualIdsCount: number;
+      mutualProfilesCount: number;
+      mutualIds?: string[];
+    }) => {
+      if (!__DEV__) return;
+      console.debug('[mutuals:mobile] ProfileScreen', {
+        currentUserId: currentUser.id,
+        viewedProfileId: resolvedProfileId,
+        ...payload,
+      });
+    };
+
+    const useProviderFallback = (source: string) => {
+      const providerMutuals = getMutualFollowersFor({
+        profileId: resolvedProfileId,
+        currentUserId: currentUser.id,
+        followingProfiles,
+        followRelationships,
+      });
+      setMutualFollowers(providerMutuals);
+      logMutuals({
+        source,
+        followingIdsCount: followingProfiles.length,
+        targetFollowerIdsCount: followRelationships.filter(
+          (relation) => relation.followingId === resolvedProfileId
+        ).length,
+        mutualIdsCount: providerMutuals.length,
+        mutualProfilesCount: providerMutuals.length,
+        mutualIds: providerMutuals.map((person) => person.id).slice(0, 6),
+      });
+    };
+
+    if (!supabase) {
+      useProviderFallback('provider-no-supabase');
+      return;
+    }
+
+    const { data: myFollowingRows, error: myFollowingError } = await supabase
+      .from('follows')
+      .select('following_id')
+      .eq('follower_id', currentUser.id);
+
+    if (myFollowingError) {
+      console.error('[mutuals:mobile] my-following query failed:', myFollowingError);
+      useProviderFallback('provider-after-my-following-error');
+      return;
+    }
+
+    const followingIds = (myFollowingRows || [])
+      .map((row) => String(row.following_id || ''))
+      .filter(Boolean);
+
+    if (followingIds.length === 0) {
+      setMutualFollowers([]);
+      logMutuals({
+        source: 'supabase-direct',
+        followingIdsCount: 0,
+        targetFollowerIdsCount: 0,
+        mutualIdsCount: 0,
+        mutualProfilesCount: 0,
+      });
+      return;
+    }
+
+    const { data: targetFollowerRows, error: targetFollowerError } = await supabase
+      .from('follows')
+      .select('follower_id')
+      .eq('following_id', resolvedProfileId);
+
+    if (targetFollowerError) {
+      console.error('[mutuals:mobile] target-followers query failed:', targetFollowerError);
+      useProviderFallback('provider-after-target-followers-error');
+      return;
+    }
+
+    const followingIdSet = new Set(followingIds);
+    const targetFollowerIds = (targetFollowerRows || [])
+      .map((row) => String(row.follower_id || ''))
+      .filter(Boolean);
+    const mutualIds = targetFollowerIds.filter((id) => followingIdSet.has(id));
+
+    if (mutualIds.length === 0) {
+      setMutualFollowers([]);
+      logMutuals({
+        source: 'supabase-direct',
+        followingIdsCount: followingIds.length,
+        targetFollowerIdsCount: targetFollowerIds.length,
+        mutualIdsCount: 0,
+        mutualProfilesCount: 0,
+      });
+      return;
+    }
+
+    const { data: mutualProfileRows, error: mutualProfilesError } = await supabase
+      .from('profiles')
+      .select('id, name, username, bio, avatar_url, account_type, student_verified, verification_status')
+      .in('id', mutualIds);
+
+    if (mutualProfilesError) {
+      console.error('[mutuals:mobile] mutual profiles query failed:', mutualProfilesError);
+      setMutualFollowers([]);
+      logMutuals({
+        source: 'supabase-direct-profile-error',
+        followingIdsCount: followingIds.length,
+        targetFollowerIdsCount: targetFollowerIds.length,
+        mutualIdsCount: mutualIds.length,
+        mutualProfilesCount: 0,
+        mutualIds: mutualIds.slice(0, 6),
+      });
+      return;
+    }
+
+    const profileMap = new Map(
+      (mutualProfileRows || []).map((row) => {
+        const profile = normalizeProfileRow(row);
+        return [profile.id, profile] as const;
+      })
+    );
+    const orderedMutuals = mutualIds
+      .map((id) => profileMap.get(id))
+      .filter(Boolean) as ProfileRecord[];
+
+    setMutualFollowers(orderedMutuals);
+    logMutuals({
+      source: 'supabase-direct',
+      followingIdsCount: followingIds.length,
+      targetFollowerIdsCount: targetFollowerIds.length,
+      mutualIdsCount: mutualIds.length,
+      mutualProfilesCount: orderedMutuals.length,
+      mutualIds: mutualIds.slice(0, 6),
+    });
+  }, [
+    currentUser.id,
+    followRelationships,
+    followingProfiles,
+    isOwnProfile,
+    resolvedProfileId,
+  ]);
+
+  useEffect(() => {
+    void loadProfileMutualFollowers();
+  }, [loadProfileMutualFollowers]);
 
   const handleOpenHighlight = useCallback((highlight: StoryHighlightRecord) => {
     setActiveHighlightId(highlight.id);
@@ -292,6 +455,10 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
   const followers = getFollowersForProfile(profile.id);
   const following = getFollowingForProfile(profile.id);
   const createdEvents = getCreatedEventsForProfile(profile.id);
+  const mutualLabel = buildMutualFollowedByLabel(
+    mutualFollowers,
+    mutualFollowers.length
+  );
   const shouldShowFirstCreatePrompt =
     isOwnProfile && createdEvents.length === 0 && profileContentCounts.posts === 0;
   const isVerifiedProfile =
@@ -465,16 +632,24 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
             </Pressable>
           )}
 
-          <Pressable
-            style={styles.usernameMenuButton}
-            onPress={() =>
-              Alert.alert('Account switching', 'Account switching support is coming soon.')
-            }>
-            <Text style={styles.topUsername} numberOfLines={1}>
-              {profile.username}
-            </Text>
-            <Ionicons name="chevron-down" size={15} color={theme.textMuted} />
-          </Pressable>
+          {isOwnProfile ? (
+            <Pressable
+              style={styles.usernameMenuButton}
+              onPress={() =>
+                Alert.alert('Account switching', 'Account switching support is coming soon.')
+              }>
+              <Text style={styles.topUsername} numberOfLines={1}>
+                {profile.username}
+              </Text>
+              <Ionicons name="chevron-down" size={15} color={theme.textMuted} />
+            </Pressable>
+          ) : (
+            <View style={styles.usernameMenuButton}>
+              <Text style={styles.topUsername} numberOfLines={1}>
+                {profile.username || profile.name}
+              </Text>
+            </View>
+          )}
 
           {isOwnProfile ? (
             <Pressable
@@ -521,17 +696,39 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
 
           {profile.bio ? <Text style={styles.bio}>{profile.bio}</Text> : null}
 
+          {!isOwnProfile && mutualLabel ? (
+            <Pressable
+              style={styles.mutualRow}
+              onPress={() => setIsMutualsSheetVisible(true)}>
+              <View style={styles.mutualAvatars}>
+                {mutualFollowers.slice(0, 3).map((person, index) => (
+                  <Image
+                    key={person.id}
+                    source={getAvatarImageSource(person.avatar)}
+                    style={[
+                      styles.mutualAvatar,
+                      { marginLeft: index > 0 ? -10 : 0, zIndex: 3 - index },
+                    ]}
+                  />
+                ))}
+              </View>
+              <Text style={styles.mutualLabel} numberOfLines={2}>
+                {mutualLabel}
+              </Text>
+            </Pressable>
+          ) : null}
+
           <View style={styles.actionRow}>
             {isOwnProfile ? (
               <>
                 <Pressable
-                  style={styles.secondaryButton}
+                  style={[styles.secondaryButton, styles.profileActionButton]}
                   onPress={handleOpenEdit}>
                   <Ionicons name="pencil-outline" size={14} color={theme.accent} />
                   <Text style={styles.secondaryButtonText}>Edit Profile</Text>
                 </Pressable>
                 <Pressable
-                  style={styles.secondaryButton}
+                  style={[styles.secondaryButton, styles.profileActionButton]}
                   onPress={() => router.push('/recaps')}>
                   <Ionicons name="chatbubbles-outline" size={14} color={theme.accent} />
                   <Text style={styles.secondaryButtonText}>Recaps</Text>
@@ -546,14 +743,14 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
             ) : (
               <>
                 <Pressable
-                  style={[styles.primaryButton, styles.publicActionButton]}
+                  style={[styles.primaryButton, styles.profileActionButton, styles.publicActionButton]}
                   onPress={handleToggleFollow}>
-                  <Text style={styles.primaryButtonText}>
+                  <Text style={styles.profileActionButtonText}>
                     {isFollowingProfile(profile.id) ? 'Following' : 'Follow'}
                   </Text>
                 </Pressable>
                 <Pressable
-                  style={[styles.secondaryButton, styles.publicActionButton]}
+                  style={[styles.secondaryButton, styles.profileActionButton, styles.publicActionButton]}
                   onPress={() =>
                     router.push({
                       pathname: '/(tabs)/messages',
@@ -563,7 +760,7 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
                   <Text style={styles.secondaryButtonText}>Message</Text>
                 </Pressable>
                 <Pressable
-                  style={[styles.secondaryButton, styles.publicActionButton]}
+                  style={[styles.secondaryButton, styles.profileActionButton, styles.publicActionButton]}
                   onPress={() => {
                     console.log('Recap coming soon.');
                   }}>
@@ -605,6 +802,30 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
           onContentCountsChange={handleProfileContentCountsChange}
         />
       </ScrollView>
+
+      <ProfileMutualsSheet
+        visible={isMutualsSheetVisible}
+        profiles={mutualFollowers}
+        onClose={() => setIsMutualsSheetVisible(false)}
+        onPressProfile={(person) => {
+          setIsMutualsSheetVisible(false);
+          if (person.username === currentUser.username) {
+            router.push('/(tabs)/profile');
+            return;
+          }
+          router.push({
+            pathname: '/profile/[username]',
+            params: { username: person.username || person.id },
+          });
+        }}
+        onPressMessage={(person) => {
+          setIsMutualsSheetVisible(false);
+          router.push({
+            pathname: '/(tabs)/messages',
+            params: { dm: person.id },
+          });
+        }}
+      />
 
       <StoryHighlightPicker
         visible={isHighlightPickerVisible}
@@ -1140,6 +1361,34 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) => {
       fontSize: 14,
       lineHeight: 20,
     },
+    mutualRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      width: '100%',
+      marginTop: 8,
+      marginBottom: 10,
+      paddingVertical: 4,
+    },
+    mutualAvatars: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    mutualAvatar: {
+      width: 24,
+      height: 24,
+      borderRadius: 12,
+      borderWidth: 2,
+      borderColor: theme.surface,
+      backgroundColor: theme.surfaceAlt,
+    },
+    mutualLabel: {
+      flex: 1,
+      color: profileMutedText,
+      fontSize: 13,
+      fontWeight: '600',
+      lineHeight: 17,
+    },
     statsRow: {
       flexDirection: 'row',
       gap: 0,
@@ -1161,12 +1410,12 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) => {
       opacity: 1,
     },
     statValue: {
-      color: profileText,
+      color: theme.accent,
       fontSize: 18,
       fontWeight: '800',
     },
     statLabel: {
-      color: profileMutedText,
+      color: theme.accent,
       fontSize: 11,
       fontWeight: '700',
     },
@@ -1201,6 +1450,16 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) => {
       backgroundColor: theme.accentSoft,
       borderWidth: 1,
       borderColor: theme.accent,
+    },
+    profileActionButton: {
+      backgroundColor: theme.accentSoft,
+      borderWidth: 1,
+      borderColor: theme.accent,
+    },
+    profileActionButtonText: {
+      color: theme.accent,
+      fontSize: 14,
+      fontWeight: '800',
     },
     // Override min-width / fixed sizing so the three public-profile action
     // buttons (Following, Message, Recap) split the row evenly.

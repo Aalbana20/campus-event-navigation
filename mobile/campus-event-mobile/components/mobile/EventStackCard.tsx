@@ -14,6 +14,7 @@ import type { GestureResponderEvent } from 'react-native';
 import { useAppTheme } from '@/lib/app-theme';
 import { getEventCreatorLabel } from '@/lib/mobile-backend';
 import { getAvatarImageSource, getEventImageSource } from '@/lib/mobile-media';
+import { buildMutualGoingLabel } from '@/lib/mobile-mutuals';
 import { useMobileApp } from '@/providers/mobile-app-provider';
 import { EventRecord, ProfileRecord } from '@/types/models';
 import { EventGoingIcon } from './EventGoingIcon';
@@ -82,6 +83,7 @@ export function EventStackCard({
   }, [attendeeIds, mutualsGoing, profiles]);
 
   const goingCount = event.goingCount ?? attendeeIds.length ?? 0;
+  const mutualGoingLabel = buildMutualGoingLabel(mutualsGoing, goingCount);
 
   const swipeFeedbackColor =
     swipeDirection === 'right'
@@ -197,6 +199,25 @@ export function EventStackCard({
 
         <View style={styles.bottomContent}>
           <View style={styles.infoPills}>
+            {mutualGoingLabel ? (
+              <Pressable style={styles.mutualStrip} onPress={handleMutualsPress}>
+                <View style={styles.mutualStripAvatars}>
+                  {mutualsGoing.slice(0, 3).map((attendee, index) => (
+                    <Image
+                      key={attendee.id}
+                      source={getAvatarImageSource(attendee.avatar)}
+                      style={[
+                        styles.mutualStripAvatar,
+                        { marginLeft: index > 0 ? -7 : 0, zIndex: 3 - index },
+                      ]}
+                    />
+                  ))}
+                </View>
+                <Text style={styles.mutualStripText} numberOfLines={1}>
+                  {mutualGoingLabel}
+                </Text>
+              </Pressable>
+            ) : null}
             <View style={[styles.infoPill, styles.titlePill]}>
               <Text style={styles.title} numberOfLines={2}>
                 {eventTitle}
@@ -372,6 +393,37 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       fontWeight: '700',
       minWidth: 12,
       textAlign: 'center',
+    },
+    mutualStrip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      alignSelf: 'flex-start',
+      gap: 8,
+      paddingVertical: 5,
+      paddingHorizontal: 12,
+      paddingLeft: 6,
+      borderRadius: 999,
+      backgroundColor: 'rgba(8, 11, 16, 0.55)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.12)',
+      maxWidth: '100%',
+    },
+    mutualStripAvatars: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    mutualStripAvatar: {
+      width: 20,
+      height: 20,
+      borderRadius: 10,
+      borderWidth: 1.5,
+      borderColor: 'rgba(8, 11, 16, 0.95)',
+    },
+    mutualStripText: {
+      color: '#ffffff',
+      fontSize: 12,
+      fontWeight: '700',
+      flexShrink: 1,
     },
     bottomContent: {
       zIndex: 3,
