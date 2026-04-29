@@ -2,24 +2,35 @@ import { Ionicons } from '@expo/vector-icons';
 import { Buffer } from 'buffer';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Image,
+  Keyboard,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
+  useWindowDimensions,
 } from 'react-native';
 
 import { useAppTheme } from '@/lib/app-theme';
 import { supabase } from '@/lib/supabase';
 import { useMobileApp } from '@/providers/mobile-app-provider';
-import { CreateEventInput, EventPrivacy } from '@/types/models';
+import { CreateEventInput, EventPrivacy, EventRecord } from '@/types/models';
+
+import { EventDetailView } from './EventDetailView';
+import { EventStackCard } from './EventStackCard';
 
 const BASE_TAGS = ['campus', 'community', 'students'];
+const DEFAULT_EVENT_IMAGE =
+  'https://images.unsplash.com/photo-1501386761578-eac5c94b800a?auto=format&fit=crop&w=900&q=80';
+
+type ComposerStep = 'image' | 'edit' | 'details' | 'review';
+type EditPanel = 'title' | 'date' | 'time' | null;
 
 const TAG_RULES = [
   { keywords: ['basketball', 'game', 'court'], tags: ['sports', 'game', 'basketball'] },
@@ -54,6 +65,34 @@ const formatDateLabel = (value: string) => {
   const date = new Date(Number(year), Number(month) - 1, Number(day));
   return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
 };
+
+const formatUsDateInput = (value: string) => {
+  if (!value) return '';
+
+  const [year, month, day] = value.split('-');
+  if (!year || !month || !day) return value;
+
+  return `${month}/${day}/${year}`;
+};
+
+const parseUsDateInput = (value: string) => {
+  const match = value.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!match) return '';
+
+  const [, monthValue, dayValue, yearValue] = match;
+  const month = Number(monthValue);
+  const day = Number(dayValue);
+  const year = Number(yearValue);
+
+  if (year < 1900 || month < 1 || month > 12 || day < 1 || day > 31) return '';
+
+  return `${yearValue}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+};
+
+const extractDescriptionTags = (value: string) =>
+  [...value.matchAll(/#([a-z0-9_-]+)/gi)]
+    .map((match) => normalizeTag(match[1]))
+    .filter(Boolean);
 
 const formatTimeLabel = (time: string) => {
   if (!time) return '';
@@ -99,40 +138,24 @@ const readFileAsArrayBuffer = async (fileUri: string) => {
   ) as ArrayBuffer;
 };
 
-function FieldShell({
-  children,
-  onVoicePress,
-}: {
-  children: React.ReactNode;
-  onVoicePress: () => void;
-}) {
-  const theme = useAppTheme();
-  const styles = useMemo(() => buildStyles(theme), [theme]);
-
-  return (
-    <View style={styles.fieldShell}>
-      {children}
-      <Pressable style={styles.voiceButton} onPress={onVoicePress}>
-        <Ionicons name="mic-outline" size={16} color={theme.textMuted} />
-      </Pressable>
-    </View>
-  );
-}
-
 export function CreateEventComposer({
   initialDate = '',
   initialPrivacy = 'public',
   inviteeIds = [],
+  onExit,
   onPublished,
 }: {
   initialDate?: string;
   initialPrivacy?: EventPrivacy;
   inviteeIds?: string[];
+  onExit?: () => void;
   onPublished?: () => void;
 }) {
   const theme = useAppTheme();
   const styles = useMemo(() => buildStyles(theme), [theme]);
   const { createEvent, currentUser } = useMobileApp();
+  const titleInputRef = useRef<TextInput>(null);
+  const dateInputRef = useRef<TextInput>(null);
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -142,29 +165,44 @@ export function CreateEventComposer({
   const [locationName, setLocationName] = useState('');
   const [locationAddress, setLocationAddress] = useState('');
   const [privacy, setPrivacy] = useState<EventPrivacy>(initialPrivacy);
-  const [tagInput, setTagInput] = useState('');
-  const [tags, setTags] = useState<string[]>([]);
   const [eventType, setEventType] = useState<'Free' | 'Paid'>('Free');
   const [capacity, setCapacity] = useState('');
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [selectedFlyerAsset, setSelectedFlyerAsset] =
     useState<ImagePicker.ImagePickerAsset | null>(null);
   const [selectedFlyerUri, setSelectedFlyerUri] = useState('');
-  const [flyerAspectRatio, setFlyerAspectRatio] = useState(0.75);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [step, setStep] = useState<ComposerStep>('image');
+  const [activeEditPanel, setActiveEditPanel] = useState<EditPanel>(null);
+  const [dateInput, setDateInput] = useState(formatUsDateInput(initialDate));
+  const [previewDetailVisible, setPreviewDetailVisible] = useState(false);
   const hostName = currentUser.name || currentUser.username || 'Campus Host';
+  const { height: windowHeight } = useWindowDimensions();
 
   useEffect(() => {
     if (initialDate && !date) {
       setDate(initialDate);
+      setDateInput(formatUsDateInput(initialDate));
     }
   }, [date, initialDate]);
 
   useEffect(() => {
     setPrivacy(initialPrivacy);
   }, [initialPrivacy]);
+
+  useEffect(() => {
+    if (step !== 'edit') return;
+    if (activeEditPanel === 'title') {
+      requestAnimationFrame(() => titleInputRef.current?.focus());
+    }
+    if (activeEditPanel === 'date') {
+      requestAnimationFrame(() => dateInputRef.current?.focus());
+    }
+    if (activeEditPanel === 'time') {
+      Keyboard.dismiss();
+    }
+  }, [activeEditPanel, step]);
 
   const setSelectedFlyer = (asset: ImagePicker.ImagePickerAsset) => {
     if (!asset.uri) {
@@ -176,9 +214,6 @@ export function CreateEventComposer({
     setSelectedFlyerUri(asset.uri);
     setImageUrls([]);
 
-    if (asset.width && asset.height) {
-      setFlyerAspectRatio(asset.width / asset.height);
-    }
   };
 
   const uploadSelectedFlyer = async () => {
@@ -253,23 +288,6 @@ export function CreateEventComposer({
     setSelectedFlyer(result.assets[0]);
   };
 
-  const handleTakePhoto = async () => {
-    const permission = await ImagePicker.requestCameraPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert('Permission required', 'Allow camera access to capture a flyer.');
-      return;
-    }
-
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.8,
-    });
-
-    if (result.canceled || !result.assets.length) return;
-
-    setSelectedFlyer(result.assets[0]);
-  };
-
   const suggestedTags = useMemo(() => {
     const haystack = [title, description, locationName, locationAddress, hostName].join(' ').toLowerCase();
 
@@ -283,15 +301,17 @@ export function CreateEventComposer({
     return uniqueTags.map(normalizeTag).filter(Boolean);
   }, [description, hostName, locationAddress, locationName, privacy, title]);
 
-  const addTag = (rawTag: string) => {
-    const nextTag = normalizeTag(rawTag);
-    if (!nextTag || tags.includes(nextTag)) return;
-    setTags((currentTags) => [...currentTags, nextTag]);
-    setTagInput('');
-  };
+  const derivedTags = useMemo(() => {
+    const manualTags = extractDescriptionTags(description);
+    return manualTags.length ? manualTags : suggestedTags.slice(0, 4);
+  }, [description, suggestedTags]);
 
-  const removeTag = (tag: string) => {
-    setTags((currentTags) => currentTags.filter((currentTag) => currentTag !== tag));
+  const handleDateInputChange = (value: string) => {
+    setDateInput(value);
+    const parsedDate = parseUsDateInput(value);
+    if (parsedDate) {
+      setDate(parsedDate);
+    }
   };
 
   const handlePublish = async () => {
@@ -318,8 +338,7 @@ export function CreateEventComposer({
       locationName,
       locationAddress,
       host: hostName,
-      dressCode: 'Open',
-      tags,
+      tags: derivedTags,
       privacy,
       eventType,
       capacity,
@@ -344,177 +363,381 @@ export function CreateEventComposer({
     setLocationName('');
     setLocationAddress('');
     setPrivacy('public');
-    setTagInput('');
-    setTags([]);
     setEventType('Free');
     setCapacity('');
     setImageUrls([]);
     setSelectedFlyerAsset(null);
     setSelectedFlyerUri('');
-    setFlyerAspectRatio(0.75);
     setIsPublishing(false);
-    setStep(1);
+    setStep('image');
+    setActiveEditPanel(null);
+    setDateInput('');
+    setPreviewDetailVisible(false);
 
     Alert.alert('Event Published', `"${createdEvent.title}" is now live in your Events flow.`);
     onPublished?.();
   };
 
-  const previewMeta = [formatDateLabel(date), formatTimeLabel(startTime), formatTimeLabel(endTime)]
-    .filter(Boolean)
-    .join(' • ');
+  const handleComposerBack = () => {
+    if (step === 'image') {
+      onExit?.();
+      return;
+    }
+    if (step === 'edit') {
+      setStep('image');
+      return;
+    }
+    if (step === 'details') {
+      setStep('edit');
+      return;
+    }
+    if (previewDetailVisible) {
+      setPreviewDetailVisible(false);
+      return;
+    }
+    setStep('details');
+  };
 
-  const flyerPreview = (
-    <View style={[styles.flyerPreviewFrame, { aspectRatio: flyerAspectRatio || 0.75 }]}>
-      {selectedFlyerUri ? (
-        <Image source={{ uri: selectedFlyerUri }} style={styles.flyerPreviewImage} resizeMode="contain" />
-      ) : (
-        <View style={styles.flyerEmpty}>
-          <Ionicons name="image-outline" size={34} color={theme.textMuted} />
-          <Text style={styles.imagePickerText}>Choose a flyer</Text>
-        </View>
-      )}
-      {step === 2 && selectedFlyerUri ? (
-        <View style={styles.flyerOverlayText}>
-          {title ? <Text style={styles.flyerOverlayTitle} numberOfLines={2}>{title}</Text> : null}
-          {previewMeta ? <Text style={styles.flyerOverlayMeta}>{previewMeta}</Text> : null}
+  const goToStep = (nextStep: ComposerStep) => {
+    setPreviewDetailVisible(false);
+    if (nextStep === 'edit') {
+      setActiveEditPanel(null);
+    }
+    setStep(nextStep);
+  };
+
+  const formattedStartTime = formatTimeLabel(startTime);
+  const formattedEndTime = formatTimeLabel(endTime);
+  const displayTime = [formattedStartTime, formattedEndTime].filter(Boolean).join(' - ');
+  const previewImageSource = { uri: selectedFlyerUri || DEFAULT_EVENT_IMAGE };
+  const timeOptions = ['09:00', '12:00', '15:00', '18:00', '19:30', '21:00', '23:00'];
+  const stepTitle =
+    step === 'image'
+      ? 'Event Card'
+      : step === 'edit'
+        ? 'Edit Card'
+        : step === 'details'
+          ? 'Event Details'
+          : 'Review Event';
+
+  const cardTitle = title.trim();
+  const cardDate = dateInput.trim();
+
+  const cardOverlays = step === 'image' ? (
+    <View style={styles.uploadPlaceholder}>
+      <Ionicons name="cloud-upload-outline" size={26} color={theme.text} />
+      <Text style={styles.uploadPlaceholderText}>Upload Event Card</Text>
+    </View>
+  ) : (
+    <>
+      {step === 'edit' ? (
+        <View style={styles.cardCreatorBadge}>
+          <Image source={{ uri: currentUser.avatar || DEFAULT_EVENT_IMAGE }} style={styles.cardCreatorAvatar} />
+          <Text style={styles.cardCreatorName} numberOfLines={1}>
+            {(currentUser.name || currentUser.username || 'You').split(' ')[0]}
+          </Text>
         </View>
       ) : null}
+      <Pressable
+        style={[
+          styles.cardOverlayBlock,
+          styles.cardTitleBlock,
+          activeEditPanel === 'title' && styles.cardOverlayBlockActive,
+        ]}
+        onPress={() => setActiveEditPanel('title')}>
+        <Ionicons name="text-outline" size={18} color="#ffffff" />
+        {step === 'edit' && activeEditPanel === 'title' ? (
+          <TextInput
+            ref={titleInputRef}
+            value={title}
+            onChangeText={setTitle}
+            placeholder="Add Title"
+            placeholderTextColor="rgba(255,255,255,0.72)"
+            style={[styles.cardOverlayInput, styles.cardTitleInput]}
+          />
+        ) : (
+          <Text style={styles.cardOverlayTitleText} numberOfLines={2}>
+            {cardTitle || 'Add Title'}
+          </Text>
+        )}
+      </Pressable>
+
+      <Pressable
+        style={[
+          styles.cardOverlayBlock,
+          styles.cardDateBlock,
+          activeEditPanel === 'date' && styles.cardOverlayBlockActive,
+        ]}
+        onPress={() => setActiveEditPanel('date')}>
+        <Ionicons name="calendar-outline" size={18} color="#ffffff" />
+        {step === 'edit' && activeEditPanel === 'date' ? (
+          <TextInput
+            ref={dateInputRef}
+            value={dateInput}
+            onChangeText={handleDateInputChange}
+            placeholder="MM/DD/YYYY"
+            placeholderTextColor="rgba(255,255,255,0.72)"
+            keyboardType="numbers-and-punctuation"
+            style={styles.cardOverlayInput}
+          />
+        ) : (
+          <Text style={styles.cardOverlayText}>{cardDate || 'Add Date'}</Text>
+        )}
+      </Pressable>
+
+      <Pressable
+        style={[
+          styles.cardOverlayBlock,
+          styles.cardTimeBlock,
+          activeEditPanel === 'time' && styles.cardOverlayBlockActive,
+        ]}
+        onPress={() => setActiveEditPanel('time')}>
+        <Ionicons name="time-outline" size={18} color="#ffffff" />
+        <Text style={styles.cardOverlayText}>{displayTime || 'Add Time'}</Text>
+      </Pressable>
+    </>
+  );
+
+  const eventCardPreview = (
+    <View
+      style={[
+        styles.eventCardPreview,
+        step === 'image' && styles.eventCardPreviewLarge,
+        step === 'edit' && [
+          styles.eventCardPreviewEdit,
+          { height: Math.max(520, Math.round(windowHeight * 0.62)) },
+        ],
+        step === 'review' && styles.eventCardPreviewReview,
+        step === 'edit' && (activeEditPanel === 'title' || activeEditPanel === 'date') && styles.eventCardPreviewEditing,
+      ]}>
+      <Image source={previewImageSource} style={styles.eventCardImage} resizeMode="cover" />
+      <View style={styles.eventCardShade} />
+      {cardOverlays}
     </View>
   );
 
-  const progressBar = (
-    <View style={styles.progressRow}>
-      {[1, 2, 3].map((item) => (
-        <View key={item} style={[styles.progressSegment, item <= step && styles.progressSegmentActive]} />
-      ))}
-    </View>
-  );
+  const draftEventImage = selectedFlyerUri || imageUrls[0] || DEFAULT_EVENT_IMAGE;
+  const draftEvent: EventRecord = {
+    id: 'review-draft',
+    title: cardTitle || 'Untitled Event',
+    description,
+    date: cardDate || formatDateLabel(date) || 'Date TBA',
+    eventDate: date,
+    startTime,
+    endTime,
+    time: displayTime || 'Time TBA',
+    location: locationName || locationAddress,
+    locationName,
+    locationAddress,
+    locationCoordinates: null,
+    host: hostName,
+    organizer: hostName,
+    dressCode: '',
+    image: draftEventImage,
+    imageUrls: imageUrls.length > 0 ? imageUrls : [draftEventImage],
+    price: eventType,
+    capacity: capacity ? Number(capacity) : null,
+    tags: derivedTags,
+    createdBy: currentUser.id,
+    creatorUsername: currentUser.username,
+    creatorName: currentUser.name,
+    creatorAvatar: currentUser.avatar,
+    goingCount: 0,
+    commentCount: 0,
+    privacy,
+    isPrivate: privacy === 'private',
+    attendees: [],
+    repostedByIds: [],
+  };
 
   return (
     <View style={styles.formCard}>
-      {progressBar}
+      <View style={styles.composerHeader}>
+        <Pressable style={styles.composerBackButton} onPress={handleComposerBack}>
+          <Ionicons name="chevron-back" size={24} color={theme.text} />
+        </Pressable>
+        <Text style={styles.composerHeaderTitle}>{stepTitle}</Text>
+        <View style={styles.composerHeaderSpacer} />
+      </View>
 
-      {step === 1 ? (
-        <View style={styles.stepBlock}>
-          <Text style={styles.stepTitle}>Add Flyer</Text>
-          <Text style={styles.stepSubtitle}>Upload a flyer for your event. We’ll use it as the main image.</Text>
-          {flyerPreview}
+      {step === 'image' ? (
+        <View style={[styles.stepBlock, styles.imageStepBlock]}>
+          {eventCardPreview}
           <View style={styles.uploadRow}>
             <Pressable style={styles.uploadButton} onPress={() => void handlePickImage()} disabled={isUploadingImage}>
-              <Ionicons name="images-outline" size={20} color={theme.text} />
-              <Text style={styles.uploadButtonText}>{isUploadingImage ? 'Uploading...' : 'Gallery'}</Text>
+              <Ionicons name="cloud-upload-outline" size={18} color={theme.text} />
+              <Text style={styles.uploadButtonText}>{isUploadingImage ? 'Uploading...' : 'Upload'}</Text>
             </Pressable>
-            <Pressable style={styles.uploadButton} onPress={() => void handleTakePhoto()} disabled={isUploadingImage}>
-              <Ionicons name="camera-outline" size={20} color={theme.text} />
-              <Text style={styles.uploadButtonText}>Camera</Text>
+            <Pressable
+              style={styles.uploadButton}
+              onPress={() => Alert.alert('Generate', 'AI image generation is coming soon.')}>
+              <Ionicons name="sparkles-outline" size={18} color={theme.text} />
+              <Text style={styles.uploadButtonText}>Generate</Text>
             </Pressable>
           </View>
-          <Pressable style={styles.publishButton} onPress={() => setStep(2)}>
+          <Pressable style={styles.publishButton} onPress={() => goToStep('edit')}>
             <Text style={styles.publishButtonText}>Next</Text>
           </Pressable>
         </View>
       ) : null}
 
-      {step === 2 ? (
-        <View style={styles.stepBlock}>
-          <Text style={styles.stepTitle}>Event Preview</Text>
-          <Text style={styles.stepSubtitle}>Adjust your event details. This is what people will see first.</Text>
-          {flyerPreview}
-          <Text style={styles.label}>Title</Text>
-          <TextInput value={title} onChangeText={setTitle} placeholder="Spring Kickoff Party" placeholderTextColor={theme.textMuted} style={styles.input} />
-          <Text style={styles.label}>Date</Text>
-          <TextInput value={date} onChangeText={setDate} placeholder="2026-05-01" placeholderTextColor={theme.textMuted} style={styles.input} />
-          <View style={styles.row}>
-            <View style={styles.rowItem}>
+      {step === 'edit' ? (
+        <View
+          style={[
+            styles.stepBlock,
+            styles.editStepBlock,
+            { minHeight: Math.max(640, Math.round(windowHeight * 0.84)) },
+          ]}>
+          {eventCardPreview}
+          <View style={[styles.editToolRow, styles.editFooterRow]}>
+            {([
+              ['title', 'text-outline', 'Title'],
+              ['date', 'calendar-outline', 'Date'],
+              ['time', 'time-outline', 'Time'],
+            ] as const).map(([key, icon, label]) => (
+              <Pressable
+                key={key}
+                style={[styles.editToolButton, activeEditPanel === key && styles.editToolButtonActive]}
+                onPress={() => setActiveEditPanel(key)}>
+                <Ionicons name={icon} size={16} color={activeEditPanel === key ? '#ffffff' : theme.text} />
+                <Text style={[styles.editToolText, activeEditPanel === key && styles.editToolTextActive]}>
+                  {label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          {activeEditPanel === 'time' ? (
+            <View style={styles.editorPanel}>
               <Text style={styles.label}>Start Time</Text>
-              <TextInput value={startTime} onChangeText={setStartTime} placeholder="21:00" placeholderTextColor={theme.textMuted} style={styles.input} />
-            </View>
-            <View style={styles.rowItem}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pickerRow}>
+                {timeOptions.map((option) => (
+                  <Pressable
+                    key={`start-${option}`}
+                    style={[styles.pickerChip, startTime === option && styles.pickerChipActive]}
+                    onPress={() => setStartTime(option)}>
+                    <Text style={[styles.pickerChipText, startTime === option && styles.pickerChipTextActive]}>
+                      {formatTimeLabel(option)}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
               <Text style={styles.label}>End Time</Text>
-              <TextInput value={endTime} onChangeText={setEndTime} placeholder="01:00" placeholderTextColor={theme.textMuted} style={styles.input} />
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pickerRow}>
+                {timeOptions.map((option) => (
+                  <Pressable
+                    key={`end-${option}`}
+                    style={[styles.pickerChip, endTime === option && styles.pickerChipActive]}
+                    onPress={() => setEndTime(option)}>
+                    <Text style={[styles.pickerChipText, endTime === option && styles.pickerChipTextActive]}>
+                      {formatTimeLabel(option)}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
             </View>
-          </View>
-          <View style={styles.buttonRow}>
-            <Pressable style={styles.backButton} onPress={() => setStep(1)}>
-              <Text style={styles.backButtonText}>Back</Text>
-            </Pressable>
-            <Pressable style={[styles.publishButton, styles.buttonRowPrimary]} onPress={() => setStep(3)}>
-              <Text style={styles.publishButtonText}>Next</Text>
-            </Pressable>
-          </View>
+          ) : null}
+
+          <Pressable style={styles.editNextButton} onPress={() => goToStep('details')}>
+            <Text style={styles.editNextButtonText}>Next</Text>
+          </Pressable>
         </View>
       ) : null}
 
-      {step === 3 ? (
-        <View style={styles.stepBlock}>
-          <Text style={styles.stepTitle}>Event Details</Text>
-          <Text style={styles.stepSubtitle}>Add more information about your event.</Text>
+      {step === 'details' ? (
+        <View style={[styles.stepBlock, styles.detailsStepBlock]}>
           <Text style={styles.label}>Description</Text>
           <TextInput
             value={description}
             onChangeText={setDescription}
-            placeholder="Describe the vibe, audience, and what people should expect. Add hashtags at the bottom."
+            placeholder="Describe the event..."
             placeholderTextColor={theme.textMuted}
             multiline
             textAlignVertical="top"
             style={[styles.input, styles.textarea]}
           />
-          <View style={styles.tagsWrap}>
-            {tags.map((tag) => (
-              <Pressable key={tag} style={styles.tagChip} onPress={() => removeTag(tag)}>
-                <Text style={styles.tagChipText}>#{tag}</Text>
-              </Pressable>
-            ))}
-          </View>
-          <View style={styles.tagInputRow}>
-            <TextInput value={tagInput} onChangeText={setTagInput} placeholder="Add hashtag" placeholderTextColor={theme.textMuted} style={[styles.input, styles.tagInput]} />
-            <Pressable style={styles.tagAddButton} onPress={() => addTag(tagInput)}>
-              <Text style={styles.tagAddButtonText}>Add</Text>
-            </Pressable>
-          </View>
-          <View style={styles.suggestedWrap}>
-            {suggestedTags.slice(0, 6).map((tag) => (
-              <Pressable
-                key={tag}
-                style={[styles.suggestedChip, tags.includes(tag) && styles.suggestedChipSelected]}
-                onPress={() => (tags.includes(tag) ? removeTag(tag) : addTag(tag))}>
-                <Text style={[styles.suggestedChipText, tags.includes(tag) && styles.suggestedChipTextSelected]}>#{tag}</Text>
-              </Pressable>
-            ))}
-          </View>
-          <Text style={styles.label}>Location Name</Text>
-          <TextInput value={locationName} onChangeText={setLocationName} placeholder="SSC Ballroom" placeholderTextColor={theme.textMuted} style={styles.input} />
           <Text style={styles.label}>Address</Text>
-          <TextInput value={locationAddress} onChangeText={setLocationAddress} placeholder="30665 Student Services Center Dr" placeholderTextColor={theme.textMuted} style={styles.input} />
-          <View style={styles.row}>
-            <View style={styles.rowItem}>
-              <Text style={styles.label}>Price</Text>
-              <View style={styles.segmentedRow}>
-                {(['Free', 'Paid'] as const).map((option) => (
-                  <Pressable key={option} style={[styles.segmentedButton, eventType === option && styles.segmentedButtonActive]} onPress={() => setEventType(option)}>
-                    <Text style={[styles.segmentedText, eventType === option && styles.segmentedTextActive]}>{option}</Text>
-                  </Pressable>
-                ))}
-              </View>
-            </View>
-            <View style={styles.rowItem}>
-              <Text style={styles.label}>Capacity</Text>
-            <TextInput value={capacity} onChangeText={setCapacity} placeholder="100" placeholderTextColor={theme.textMuted} keyboardType="number-pad" style={styles.input} />
-            </View>
+          <View style={styles.addressInputWrap}>
+            <Ionicons name="search-outline" size={18} color={theme.textMuted} />
+            <TextInput
+              value={locationAddress}
+              onChangeText={setLocationAddress}
+              placeholder="Search address..."
+              placeholderTextColor={theme.textMuted}
+              style={styles.addressInput}
+            />
           </View>
-          <View style={styles.buttonRow}>
-            <Pressable style={styles.backButton} onPress={() => setStep(2)}>
-              <Text style={styles.backButtonText}>Back</Text>
-            </Pressable>
-            <Pressable
-              style={[styles.publishButton, styles.buttonRowPrimary]}
-              disabled={isPublishing || isUploadingImage}
-              onPress={() => void handlePublish()}>
-              <Text style={styles.publishButtonText}>
-                {isPublishing || isUploadingImage ? 'Publishing...' : 'Publish Event'}
-              </Text>
-            </Pressable>
+          {locationAddress.trim() || locationName.trim() ? (
+            <>
+              <Text style={styles.label}>Location Name</Text>
+              <TextInput
+                value={locationName}
+                onChangeText={setLocationName}
+                placeholder="Location name will appear here"
+                placeholderTextColor={theme.textMuted}
+                style={styles.input}
+              />
+            </>
+          ) : null}
+          <Text style={styles.label}>Price</Text>
+          <View style={styles.priceSwitch}>
+            {(['Free', 'Paid'] as const).map((option) => (
+              <Pressable
+                key={option}
+                style={[styles.priceSwitchOption, eventType === option && styles.priceSwitchOptionActive]}
+                onPress={() => setEventType(option)}>
+                <Text style={[styles.priceSwitchText, eventType === option && styles.priceSwitchTextActive]}>
+                  {option}
+                </Text>
+              </Pressable>
+            ))}
           </View>
+          <Pressable style={styles.publishButton} onPress={() => goToStep('review')}>
+            <Text style={styles.publishButtonText}>Review</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
+      {step === 'review' ? (
+        <View
+          style={[
+            styles.stepBlock,
+            styles.reviewStepBlock,
+            { minHeight: Math.max(560, Math.round(windowHeight * 0.84)) },
+          ]}>
+          <View
+            style={[
+              styles.reviewCardSlot,
+              { height: Math.max(420, Math.round(windowHeight * 0.68)) },
+            ]}>
+            <EventStackCard
+              event={draftEvent}
+              height={Math.max(420, Math.round(windowHeight * 0.68))}
+              onPress={() => setPreviewDetailVisible(true)}
+            />
+          </View>
+
+          <Pressable
+            style={styles.shareEventButton}
+            disabled={isPublishing || isUploadingImage}
+            onPress={() => void handlePublish()}>
+            <Text style={styles.shareEventButtonText}>
+              {isPublishing || isUploadingImage ? 'Sharing...' : 'Share Event'}
+            </Text>
+          </Pressable>
+
+          <Modal
+            visible={previewDetailVisible}
+            animationType="slide"
+            onRequestClose={() => setPreviewDetailVisible(false)}>
+            <EventDetailView
+              event={draftEvent}
+              onBack={() => setPreviewDetailVisible(false)}
+              primaryActionLabel="Going"
+              showGoingIcon
+              showActionTrigger={false}
+            />
+          </Modal>
         </View>
       ) : null}
     </View>
@@ -524,7 +747,34 @@ export function CreateEventComposer({
 const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
   StyleSheet.create({
     formCard: {
-      gap: 18,
+      gap: 16,
+    },
+    composerHeader: {
+      minHeight: 48,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginTop: 8,
+      marginBottom: 8,
+    },
+    composerBackButton: {
+      width: 42,
+      height: 42,
+      borderRadius: 21,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: 'rgba(18,21,28,0.78)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.08)',
+    },
+    composerHeaderTitle: {
+      color: theme.text,
+      fontSize: 16,
+      fontWeight: '900',
+    },
+    composerHeaderSpacer: {
+      width: 42,
+      height: 42,
     },
     progressRow: {
       flexDirection: 'row',
@@ -542,11 +792,20 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       backgroundColor: theme.accent,
     },
     stepBlock: {
-      gap: 12,
+      gap: 14,
+    },
+    imageStepBlock: {
+      flex: 1,
+    },
+    detailsStepBlock: {
+      paddingTop: 28,
+    },
+    reviewStepBlock: {
+      flex: 1,
     },
     stepTitle: {
       color: theme.text,
-      fontSize: 22,
+      fontSize: 16,
       fontWeight: '900',
       textAlign: 'center',
     },
@@ -565,9 +824,9 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     },
     input: {
       borderWidth: 1,
-      borderColor: 'rgba(255,255,255,0.08)',
-      backgroundColor: 'rgba(58,58,60,0.55)',
-      borderRadius: 13,
+      borderColor: 'rgba(255,255,255,0.11)',
+      backgroundColor: 'rgba(18,21,28,0.86)',
+      borderRadius: 14,
       paddingHorizontal: 14,
       paddingVertical: 12,
       color: theme.text,
@@ -575,7 +834,7 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       fontWeight: '500',
     },
     textarea: {
-      minHeight: 108,
+      minHeight: 112,
       paddingTop: 16,
     },
     row: {
@@ -636,6 +895,174 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       borderWidth: 1,
       borderColor: 'rgba(255,255,255,0.1)',
     },
+    eventCardPreview: {
+      alignSelf: 'center',
+      width: '100%',
+      aspectRatio: 0.72,
+      maxHeight: 430,
+      borderRadius: 20,
+      overflow: 'hidden',
+      backgroundColor: 'rgba(18,21,28,0.92)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.14)',
+      shadowColor: theme.accent,
+      shadowOpacity: 0.22,
+      shadowRadius: 24,
+      shadowOffset: { width: 0, height: 16 },
+      elevation: 14,
+    },
+    eventCardPreviewLarge: {
+      aspectRatio: 0.62,
+      maxHeight: 560,
+    },
+    eventCardPreviewEdit: {
+      width: '100%',
+      aspectRatio: undefined,
+      maxHeight: undefined,
+      borderRadius: 28,
+    },
+    eventCardPreviewEditing: {
+      marginTop: -14,
+    },
+    eventCardPreviewReview: {
+      aspectRatio: 0.82,
+      maxHeight: 520,
+    },
+    eventCardImage: {
+      width: '100%',
+      height: '100%',
+    },
+    eventCardShade: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: 'rgba(0,0,0,0.28)',
+    },
+    uploadPlaceholder: {
+      ...StyleSheet.absoluteFillObject,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 10,
+      backgroundColor: 'rgba(0,0,0,0.18)',
+    },
+    uploadPlaceholderText: {
+      color: '#ffffff',
+      fontSize: 22,
+      fontWeight: '900',
+    },
+    cardOverlayBlock: {
+      position: 'absolute',
+      minHeight: 34,
+      minWidth: 110,
+      maxWidth: '74%',
+      borderRadius: 999,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      backgroundColor: 'rgba(0, 0, 0, 0.45)',
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.1)',
+    },
+    cardOverlayBlockActive: {
+      borderColor: theme.accent,
+      backgroundColor: 'rgba(6,8,12,0.7)',
+    },
+    cardTitleBlock: {
+      left: 14,
+      bottom: 92,
+      minWidth: 168,
+      borderRadius: 14,
+      paddingVertical: 9,
+      paddingHorizontal: 13,
+    },
+    cardDateBlock: {
+      left: 14,
+      bottom: 50,
+    },
+    cardTimeBlock: {
+      left: 14,
+      bottom: 12,
+    },
+    cardOverlayInput: {
+      flex: 1,
+      minWidth: 80,
+      padding: 0,
+      color: '#ffffff',
+      fontSize: 13,
+      fontWeight: '700',
+    },
+    cardTitleInput: {
+      fontSize: 16,
+      fontWeight: '800',
+    },
+    cardOverlayTitleText: {
+      flex: 1,
+      color: '#ffffff',
+      fontSize: 16,
+      fontWeight: '800',
+      lineHeight: 20,
+    },
+    cardOverlayText: {
+      color: 'rgba(255, 255, 255, 0.95)',
+      fontSize: 13,
+      fontWeight: '700',
+    },
+    cardCreatorBadge: {
+      position: 'absolute',
+      top: 14,
+      left: 14,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingVertical: 5,
+      paddingHorizontal: 6,
+      paddingRight: 11,
+      borderRadius: 999,
+      backgroundColor: 'rgba(8, 11, 16, 0.48)',
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.12)',
+      maxWidth: '72%',
+    },
+    cardCreatorAvatar: {
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+    },
+    cardCreatorName: {
+      color: '#ffffff',
+      fontSize: 12,
+      fontWeight: '700',
+      flexShrink: 1,
+    },
+    eventCardTextLayer: {
+      position: 'absolute',
+      left: 22,
+      right: 22,
+      alignItems: 'center',
+      gap: 8,
+    },
+    eventCardTextTop: {
+      top: 42,
+    },
+    eventCardTextCenter: {
+      top: '42%',
+    },
+    eventCardTextBottom: {
+      bottom: 46,
+    },
+    previewTitle: {
+      color: '#ffffff',
+      fontWeight: '900',
+      lineHeight: 34,
+      textAlign: 'center',
+      letterSpacing: 0,
+    },
+    previewMeta: {
+      color: 'rgba(255,255,255,0.9)',
+      fontSize: 13,
+      fontWeight: '800',
+      textAlign: 'center',
+    },
     flyerPreviewImage: {
       width: '100%',
       height: '100%',
@@ -674,14 +1101,15 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     },
     uploadButton: {
       flex: 1,
-      minHeight: 58,
-      borderRadius: 18,
+      minHeight: 52,
+      borderRadius: 16,
       alignItems: 'center',
       justifyContent: 'center',
-      gap: 6,
-      backgroundColor: 'rgba(44,44,46,0.72)',
+      flexDirection: 'row',
+      gap: 8,
+      backgroundColor: 'rgba(18,21,28,0.86)',
       borderWidth: 1,
-      borderColor: 'rgba(255,255,255,0.08)',
+      borderColor: 'rgba(255,255,255,0.12)',
     },
     uploadButtonText: {
       color: theme.text,
@@ -780,6 +1208,214 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     segmentedTextActive: {
       color: theme.text,
     },
+    editToolRow: {
+      flexDirection: 'row',
+      gap: 8,
+    },
+    editFooterRow: {
+      marginTop: 'auto',
+    },
+    editToolButton: {
+      flex: 1,
+      minHeight: 44,
+      borderRadius: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      backgroundColor: 'rgba(18,21,28,0.86)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.12)',
+      paddingHorizontal: 10,
+    },
+    editToolButtonActive: {
+      backgroundColor: theme.accentSoft,
+      borderColor: theme.accent,
+      shadowColor: theme.accent,
+      shadowOpacity: 0.28,
+      shadowRadius: 14,
+      shadowOffset: { width: 0, height: 6 },
+      elevation: 6,
+    },
+    editToolText: {
+      color: theme.text,
+      fontSize: 13,
+      fontWeight: '700',
+    },
+    editStepBlock: {
+      flex: 1,
+    },
+    editNextButton: {
+      marginTop: 8,
+      marginBottom: 4,
+      alignSelf: 'stretch',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 11,
+      borderRadius: 999,
+      backgroundColor: theme.accent,
+      shadowColor: theme.accent,
+      shadowOpacity: 0.28,
+      shadowRadius: 16,
+      shadowOffset: { width: 0, height: 8 },
+      elevation: 8,
+    },
+    editNextButtonText: {
+      color: '#ffffff',
+      fontSize: 15,
+      fontWeight: '800',
+      letterSpacing: 0.2,
+    },
+    editToolTextActive: {
+      color: '#ffffff',
+    },
+    editorPanel: {
+      gap: 10,
+      borderRadius: 18,
+      padding: 12,
+      backgroundColor: 'rgba(18,21,28,0.72)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.1)',
+    },
+    miniControlRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      flexWrap: 'wrap',
+    },
+    miniChip: {
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 999,
+      backgroundColor: 'rgba(255,255,255,0.06)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.1)',
+    },
+    miniChipActive: {
+      backgroundColor: theme.accentSoft,
+      borderColor: theme.accent,
+    },
+    miniChipText: {
+      color: theme.textMuted,
+      fontSize: 12,
+      fontWeight: '800',
+      textTransform: 'capitalize',
+    },
+    miniChipTextActive: {
+      color: '#ffffff',
+    },
+    sizeButton: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: 'rgba(255,255,255,0.08)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.12)',
+    },
+    sizeButtonText: {
+      color: theme.text,
+      fontSize: 18,
+      fontWeight: '900',
+    },
+    pickerRow: {
+      gap: 8,
+      paddingRight: 12,
+    },
+    pickerChip: {
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      borderRadius: 999,
+      backgroundColor: 'rgba(255,255,255,0.06)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.1)',
+    },
+    pickerChipActive: {
+      backgroundColor: theme.accent,
+      borderColor: theme.accent,
+    },
+    pickerChipText: {
+      color: theme.textMuted,
+      fontSize: 12,
+      fontWeight: '800',
+    },
+    pickerChipTextActive: {
+      color: '#ffffff',
+    },
+    addressInputWrap: {
+      minHeight: 48,
+      borderRadius: 14,
+      paddingHorizontal: 14,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      backgroundColor: 'rgba(18,21,28,0.86)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.11)',
+    },
+    addressInput: {
+      flex: 1,
+      color: theme.text,
+      fontSize: 15,
+      fontWeight: '500',
+      paddingVertical: 12,
+    },
+    priceSwitch: {
+      flexDirection: 'row',
+      padding: 4,
+      borderRadius: 24,
+      backgroundColor: 'rgba(18,21,28,0.86)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.11)',
+      overflow: 'hidden',
+    },
+    priceSwitchOption: {
+      flex: 1,
+      minHeight: 40,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: 20,
+    },
+    priceSwitchOptionActive: {
+      backgroundColor: theme.accent,
+    },
+    priceSwitchText: {
+      color: theme.textMuted,
+      fontSize: 13,
+      fontWeight: '800',
+    },
+    priceSwitchTextActive: {
+      color: '#ffffff',
+    },
+    reviewList: {
+      gap: 12,
+      padding: 14,
+      borderRadius: 18,
+      backgroundColor: 'rgba(18,21,28,0.72)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.1)',
+    },
+    reviewRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 12,
+    },
+    reviewCopy: {
+      flex: 1,
+      gap: 2,
+    },
+    reviewLabel: {
+      color: theme.text,
+      fontSize: 13,
+      fontWeight: '900',
+    },
+    reviewValue: {
+      color: theme.textMuted,
+      fontSize: 12,
+      lineHeight: 17,
+      fontWeight: '600',
+    },
     imagePicker: {
       borderWidth: 1,
       borderColor: 'rgba(255,255,255,0.1)',
@@ -864,11 +1500,16 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       alignItems: 'center',
       justifyContent: 'center',
       paddingVertical: 14,
-      borderRadius: 14,
+      borderRadius: 18,
       backgroundColor: theme.accent,
+      shadowColor: theme.accent,
+      shadowOpacity: 0.32,
+      shadowRadius: 18,
+      shadowOffset: { width: 0, height: 10 },
+      elevation: 10,
     },
     publishButtonText: {
-      color: theme.background,
+      color: '#ffffff',
       fontSize: 15,
       fontWeight: '800',
     },
@@ -880,12 +1521,12 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     backButton: {
       flex: 0.42,
       minHeight: 52,
-      borderRadius: 14,
+      borderRadius: 18,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: 'rgba(44,44,46,0.72)',
+      backgroundColor: 'rgba(18,21,28,0.86)',
       borderWidth: 1,
-      borderColor: 'rgba(255,255,255,0.08)',
+      borderColor: 'rgba(255,255,255,0.12)',
     },
     backButtonText: {
       color: theme.text,
@@ -894,6 +1535,30 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     },
     buttonRowPrimary: {
       flex: 1,
+    },
+    reviewCardSlot: {
+      width: '100%',
+    },
+    shareEventButton: {
+      marginTop: 'auto',
+      marginBottom: 8,
+      alignSelf: 'stretch',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 11,
+      borderRadius: 999,
+      backgroundColor: theme.accent,
+      shadowColor: theme.accent,
+      shadowOpacity: 0.28,
+      shadowRadius: 16,
+      shadowOffset: { width: 0, height: 8 },
+      elevation: 8,
+    },
+    shareEventButtonText: {
+      color: '#ffffff',
+      fontSize: 15,
+      fontWeight: '800',
+      letterSpacing: 0.2,
     },
     previewText: {
       color: theme.textMuted,

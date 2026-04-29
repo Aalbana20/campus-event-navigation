@@ -1313,7 +1313,7 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
         currentUser.name ||
         currentUser.username ||
         'Campus Host';
-      const dressCode = input.dressCode.trim() || 'Open';
+      const dressCode = input.dressCode?.trim() || '';
       const sanitizedImageUrls = normalizeEventImageUrls(input);
       const sanitizedImage = sanitizedImageUrls[0] || '';
       const price = input.eventType === 'Paid' ? '$10' : 'Free';
@@ -1401,7 +1401,7 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
         currentUser.name ||
         currentUser.username ||
         'Campus Host';
-      const dressCode = input.dressCode.trim() || 'Open';
+      const dressCode = input.dressCode?.trim() || '';
       const sanitizedImageUrls = normalizeEventImageUrls(input);
       const sanitizedImage = sanitizedImageUrls[0] || '';
       const price = input.eventType === 'Paid' ? '$10' : 'Free';

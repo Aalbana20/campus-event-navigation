@@ -23,6 +23,29 @@ type CalendarCreateMode = 'event' | 'personal';
 type CreateFlowStep = 'type' | 'privateInvite' | 'event' | 'personal';
 type EventCreateKind = 'public' | 'private';
 
+const TEMPLATE_CARDS = [
+  {
+    key: 'party',
+    title: 'Party',
+    image: 'https://images.unsplash.com/photo-1501386761578-eac5c94b800a?auto=format&fit=crop&w=500&q=80',
+  },
+  {
+    key: 'sports',
+    title: 'Sports',
+    image: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&w=500&q=80',
+  },
+  {
+    key: 'study',
+    title: 'Study',
+    image: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=500&q=80',
+  },
+  {
+    key: 'concert',
+    title: 'Concert',
+    image: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?auto=format&fit=crop&w=500&q=80',
+  },
+];
+
 type CalendarCreateSheetProps = {
   visible: boolean;
   selectedDate: string | null;
@@ -52,6 +75,7 @@ export function CalendarCreateSheet({
   const [flowStep, setFlowStep] = useState<CreateFlowStep>('type');
   const [eventKind, setEventKind] = useState<EventCreateKind>('public');
   const [friendQuery, setFriendQuery] = useState('');
+  const [templateQuery, setTemplateQuery] = useState('');
   const [selectedFriendIds, setSelectedFriendIds] = useState<Set<string>>(new Set());
   const [personalTitle, setPersonalTitle] = useState('');
   const [personalDate, setPersonalDate] = useState(defaultDate);
@@ -63,6 +87,7 @@ export function CalendarCreateSheet({
     setFlowStep(initialMode === 'personal' ? 'personal' : 'type');
     setEventKind('public');
     setFriendQuery('');
+    setTemplateQuery('');
     setSelectedFriendIds(new Set());
     setPersonalDate(defaultDate);
   }, [defaultDate, initialMode, visible]);
@@ -74,6 +99,19 @@ export function CalendarCreateSheet({
       [profile.name, profile.username].join(' ').toLowerCase().includes(query)
     );
   }, [followingProfiles, friendQuery]);
+
+  const selectedFriends = useMemo(
+    () => followingProfiles.filter((profile) => selectedFriendIds.has(profile.id)),
+    [followingProfiles, selectedFriendIds]
+  );
+
+  const filteredTemplates = useMemo(() => {
+    const query = templateQuery.trim().toLowerCase();
+    if (!query) return TEMPLATE_CARDS;
+    return TEMPLATE_CARDS.filter((template) =>
+      template.title.toLowerCase().includes(query)
+    );
+  }, [templateQuery]);
 
   const resetPersonalForm = () => {
     setPersonalTitle('');
@@ -115,10 +153,10 @@ export function CalendarCreateSheet({
   const renderHeader = (title: string) => (
     <View style={styles.header}>
       <Pressable style={styles.iconButton} onPress={flowStep === 'type' ? onClose : handleBack}>
-        <Ionicons name={flowStep === 'type' ? 'close' : 'chevron-back'} size={25} color={theme.text} />
+        <Ionicons name="chevron-back" size={24} color={theme.text} />
       </Pressable>
 
-      <Text style={styles.headerTitle}>{title}</Text>
+      {title ? <Text style={styles.headerTitle}>{title}</Text> : <View style={styles.headerTitleSpacer} />}
 
       <View style={styles.headerSpacer} />
     </View>
@@ -126,66 +164,80 @@ export function CalendarCreateSheet({
 
   const renderTypeSelection = () => (
     <View style={styles.typeContent}>
-      {renderHeader('New')}
+      {renderHeader('Create Event')}
       <View style={styles.centerCopy}>
-        <Text style={styles.heroTitle}>What are you creating?</Text>
-        <Text style={styles.heroSubtitle}>Choose the type of event you want to create.</Text>
+        <Text style={styles.heroSubtitle}>How would you like to create this event?</Text>
       </View>
 
-      <View style={styles.optionList}>
+      <View style={styles.typeGrid}>
         <Pressable
-          style={styles.createOption}
+          style={[styles.createOption, styles.createOptionHalf]}
           onPress={() => {
             setEventKind('public');
             setFlowStep('event');
           }}>
           <View style={styles.optionIcon}>
-            <Ionicons name="globe-outline" size={28} color={theme.accent} />
+            <Ionicons name="globe-outline" size={18} color={theme.accent} />
           </View>
-          <View style={styles.optionCopy}>
-            <Text style={styles.optionTitle}>Public Event</Text>
-            <Text style={styles.optionSubtitle}>Anyone can discover and join</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={22} color={theme.textMuted} />
+          <Text style={styles.optionTitle}>Public</Text>
         </Pressable>
 
         <Pressable
-          style={styles.createOption}
+          style={[styles.createOption, styles.createOptionHalf]}
           onPress={() => {
             setEventKind('private');
             setFlowStep('privateInvite');
           }}>
           <View style={styles.optionIcon}>
-            <Ionicons name="lock-closed-outline" size={28} color={theme.accent} />
+            <Ionicons name="lock-closed-outline" size={18} color={theme.text} />
           </View>
-          <View style={styles.optionCopy}>
-            <Text style={styles.optionTitle}>Private Event</Text>
-            <Text style={styles.optionSubtitle}>Only selected people can see it</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={22} color={theme.textMuted} />
+          <Text style={styles.optionTitle}>Private</Text>
         </Pressable>
 
-        <Pressable style={styles.createOption} onPress={() => setFlowStep('personal')}>
+        <Pressable
+          style={[styles.createOption, styles.createOptionFull]}
+          onPress={() => {
+            setEventKind('public');
+            setFlowStep('event');
+          }}>
           <View style={styles.optionIcon}>
-            <Ionicons name="person-outline" size={28} color={theme.accent} />
+            <Ionicons name="person-outline" size={18} color={theme.text} />
           </View>
-          <View style={styles.optionCopy}>
-            <Text style={styles.optionTitle}>Personal Plan</Text>
-            <Text style={styles.optionSubtitle}>Just for you (not shared)</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={22} color={theme.textMuted} />
+          <Text style={styles.optionTitle}>Personal</Text>
         </Pressable>
+      </View>
+
+      <View style={styles.templatesBlock}>
+        <View style={styles.templateSearchBox}>
+          <Ionicons name="search-outline" size={21} color={theme.text} />
+          <TextInput
+            value={templateQuery}
+            onChangeText={setTemplateQuery}
+            placeholder="Search templates"
+            placeholderTextColor={theme.textMuted}
+            style={styles.templateSearchInput}
+          />
+        </View>
+        <Text style={styles.sectionLabel}>Templates</Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.templateCarousel}>
+          {filteredTemplates.map((template) => (
+            <Pressable key={template.key} style={styles.templateCard}>
+              <Image source={{ uri: template.image }} style={styles.templateImage} />
+              <View style={styles.templateShade} />
+              <Text style={styles.templateTitle}>{template.title}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
       </View>
     </View>
   );
 
   const renderPrivateInvite = () => (
     <View style={styles.typeContent}>
-      {renderHeader('Private Event')}
-      <View style={styles.centerCopy}>
-        <Text style={styles.heroTitle}>Who can see this?</Text>
-        <Text style={styles.heroSubtitle}>Select the people you want to invite.</Text>
-      </View>
+      {renderHeader('Select People')}
 
       <View style={styles.searchBox}>
         <Ionicons name="search-outline" size={18} color={theme.textMuted} />
@@ -197,6 +249,31 @@ export function CalendarCreateSheet({
           style={styles.searchInput}
         />
       </View>
+
+      {selectedFriends.length > 0 ? (
+        <View style={styles.selectedCluster}>
+          <View style={styles.selectedAvatarStack}>
+            {selectedFriends.slice(0, 3).map((friend, index) => (
+              <Image
+                key={friend.id}
+                source={getAvatarImageSource(friend.avatar)}
+                style={[
+                  styles.selectedAvatar,
+                  { marginLeft: index === 0 ? 0 : -12, zIndex: 4 - index },
+                ]}
+              />
+            ))}
+            {selectedFriends.length > 3 ? (
+              <View style={[styles.selectedAvatar, styles.selectedCountBubble]}>
+                <Text style={styles.selectedCountText}>+{selectedFriends.length - 3}</Text>
+              </View>
+            ) : null}
+          </View>
+          <Text style={styles.selectedClusterText}>
+            {selectedFriends.length} selected
+          </Text>
+        </View>
+      ) : null}
 
       <ScrollView contentContainerStyle={styles.friendList} showsVerticalScrollIndicator={false}>
         {filteredFriends.map((friend) => {
@@ -216,7 +293,7 @@ export function CalendarCreateSheet({
               <Image source={getAvatarImageSource(friend.avatar)} style={styles.friendAvatar} />
               <Text style={styles.friendName}>{friend.name || friend.username}</Text>
               <View style={[styles.checkCircle, isSelected && styles.checkCircleActive]}>
-                {isSelected ? <Ionicons name="checkmark" size={16} color={theme.background} /> : null}
+                <Ionicons name={isSelected ? 'checkmark' : 'add'} size={16} color={isSelected ? '#ffffff' : theme.text} />
               </View>
             </Pressable>
           );
@@ -224,7 +301,8 @@ export function CalendarCreateSheet({
       </ScrollView>
 
       <Pressable style={styles.bottomPrimaryButton} onPress={() => setFlowStep('event')}>
-        <Text style={styles.bottomPrimaryText}>Continue</Text>
+        <Text style={styles.bottomPrimaryText}>Next</Text>
+        <Ionicons name="arrow-forward" size={18} color="#ffffff" />
       </Pressable>
     </View>
   );
@@ -243,7 +321,6 @@ export function CalendarCreateSheet({
               contentContainerStyle={styles.content}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}>
-              {renderHeader(eventKind === 'private' ? 'Private Event' : 'New Event')}
               <CreateEventComposer
                 key={`event-${visible ? defaultDate : 'closed'}`}
                 initialDate={defaultDate}
@@ -251,6 +328,7 @@ export function CalendarCreateSheet({
                 inviteeIds={
                   eventKind === 'private' ? Array.from(selectedFriendIds) : []
                 }
+                onExit={handleBack}
                 onPublished={onClose}
               />
             </ScrollView>
@@ -327,16 +405,16 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     overlay: {
       flex: 1,
       justifyContent: 'flex-end',
-      backgroundColor: 'rgba(0,0,0,0.58)',
+      backgroundColor: 'rgba(0,0,0,0.72)',
     },
     sheet: {
       height: '100%',
       borderTopLeftRadius: 0,
       borderTopRightRadius: 0,
-      backgroundColor: 'rgba(18,19,24,0.99)',
+      backgroundColor: 'rgba(6,9,15,0.99)',
       borderWidth: 1,
       borderColor: 'rgba(255,255,255,0.06)',
-      paddingTop: 18,
+      paddingTop: 34,
       paddingHorizontal: 18,
       overflow: 'hidden',
     },
@@ -347,26 +425,29 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       marginBottom: 16,
     },
     iconButton: {
-      width: 56,
-      height: 56,
-      borderRadius: 28,
+      width: 42,
+      height: 42,
+      borderRadius: 21,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: 'rgba(28,30,36,0.92)',
+      backgroundColor: 'rgba(18,21,28,0.78)',
       borderWidth: 1,
       borderColor: 'rgba(255,255,255,0.08)',
     },
     headerSpacer: {
-      width: 56,
-      height: 56,
+      width: 42,
+      height: 42,
+    },
+    headerTitleSpacer: {
+      flex: 1,
     },
     confirmButton: {
       backgroundColor: 'rgba(99,99,102,0.5)',
     },
     headerTitle: {
       color: theme.text,
-      fontSize: 22,
-      fontWeight: '800',
+      fontSize: 16,
+      fontWeight: '900',
     },
     segmentedControl: {
       flexDirection: 'row',
@@ -406,7 +487,7 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     centerCopy: {
       alignItems: 'center',
       gap: 8,
-      marginTop: 42,
+      marginTop: 34,
       marginBottom: 34,
     },
     heroTitle: {
@@ -419,52 +500,113 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       fontSize: 14,
       textAlign: 'center',
     },
-    optionList: {
-      gap: 18,
+    typeGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 10,
     },
     createOption: {
-      minHeight: 136,
-      borderRadius: 22,
-      padding: 24,
+      minHeight: 50,
+      borderRadius: 15,
+      paddingHorizontal: 16,
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 18,
-      backgroundColor: 'rgba(28,30,36,0.86)',
+      justifyContent: 'center',
+      gap: 9,
+      backgroundColor: 'rgba(18,21,28,0.86)',
       borderWidth: 1,
-      borderColor: 'rgba(255,45,146,0.36)',
+      borderColor: 'rgba(255,255,255,0.12)',
+    },
+    createOptionHalf: {
+      flex: 1,
+      minWidth: '46%',
+    },
+    createOptionFull: {
+      width: '100%',
+      marginTop: 4,
+      borderColor: 'rgba(124,60,255,0.42)',
     },
     optionIcon: {
-      width: 48,
-      height: 48,
-      borderRadius: 24,
+      width: 24,
+      height: 24,
+      borderRadius: 12,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: 'rgba(255,45,146,0.14)',
-    },
-    optionCopy: {
-      flex: 1,
-      gap: 6,
+      backgroundColor: theme.accentSoft,
     },
     optionTitle: {
       color: theme.text,
-      fontSize: 16,
-      fontWeight: '900',
+      fontSize: 14,
+      fontWeight: '800',
     },
-    optionSubtitle: {
-      color: theme.textMuted,
-      fontSize: 13,
-      lineHeight: 18,
+    templatesBlock: {
+      gap: 12,
+      marginTop: 'auto',
+      paddingBottom: 18,
+    },
+    templateSearchBox: {
+      minHeight: 54,
+      borderRadius: 27,
+      paddingHorizontal: 18,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      backgroundColor: 'rgba(18,21,28,0.86)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.12)',
+    },
+    templateSearchInput: {
+      flex: 1,
+      color: theme.text,
+      fontSize: 16,
+      fontWeight: '600',
+    },
+    sectionLabel: {
+      color: theme.text,
+      fontSize: 14,
+      fontWeight: '800',
+    },
+    templateCarousel: {
+      gap: 10,
+      paddingRight: 18,
+    },
+    templateCard: {
+      width: 78,
+      height: 118,
+      borderRadius: 15,
+      overflow: 'hidden',
+      backgroundColor: 'rgba(18,21,28,0.9)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.14)',
+    },
+    templateImage: {
+      width: '100%',
+      height: '100%',
+    },
+    templateShade: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: 'rgba(0,0,0,0.24)',
+    },
+    templateTitle: {
+      position: 'absolute',
+      left: 8,
+      right: 8,
+      bottom: 8,
+      color: '#ffffff',
+      fontSize: 12,
+      fontWeight: '800',
+      textAlign: 'center',
     },
     searchBox: {
       minHeight: 48,
-      borderRadius: 16,
+      borderRadius: 14,
       paddingHorizontal: 14,
       flexDirection: 'row',
       alignItems: 'center',
       gap: 10,
-      backgroundColor: theme.surface,
+      backgroundColor: 'rgba(18,21,28,0.86)',
       borderWidth: 1,
-      borderColor: theme.border,
+      borderColor: 'rgba(255,255,255,0.12)',
       marginBottom: 16,
     },
     searchInput: {
@@ -481,7 +623,7 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       alignItems: 'center',
       gap: 12,
       borderBottomWidth: 1,
-      borderBottomColor: theme.border,
+      borderBottomColor: 'rgba(255,255,255,0.08)',
     },
     friendAvatar: {
       width: 42,
@@ -498,29 +640,68 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       width: 26,
       height: 26,
       borderRadius: 13,
-      borderWidth: 2,
-      borderColor: theme.border,
       alignItems: 'center',
       justifyContent: 'center',
+      backgroundColor: theme.accent,
     },
     checkCircleActive: {
       backgroundColor: theme.accent,
-      borderColor: theme.accent,
+    },
+    selectedCluster: {
+      minHeight: 52,
+      borderRadius: 26,
+      paddingHorizontal: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: 'rgba(18,21,28,0.82)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.1)',
+      marginBottom: 8,
+    },
+    selectedAvatarStack: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    selectedAvatar: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      borderWidth: 2,
+      borderColor: 'rgba(6,9,15,1)',
+      backgroundColor: 'rgba(42,45,54,1)',
+    },
+    selectedCountBubble: {
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    selectedCountText: {
+      color: '#ffffff',
+      fontSize: 12,
+      fontWeight: '900',
+    },
+    selectedClusterText: {
+      color: theme.textMuted,
+      fontSize: 12,
+      fontWeight: '700',
     },
     bottomPrimaryButton: {
       position: 'absolute',
-      left: 0,
       right: 0,
       bottom: 26,
-      minHeight: 58,
+      minHeight: 48,
+      minWidth: 98,
+      paddingHorizontal: 18,
       borderRadius: 18,
+      flexDirection: 'row',
+      gap: 8,
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: theme.accent,
     },
     bottomPrimaryText: {
-      color: theme.background,
-      fontSize: 16,
+      color: '#ffffff',
+      fontSize: 14,
       fontWeight: '900',
     },
     formGroup: {

@@ -4,7 +4,6 @@ import * as Location from 'expo-location';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
-  Image,
   KeyboardAvoidingView,
   Linking,
   Modal,
@@ -18,14 +17,12 @@ import {
 } from 'react-native';
 
 import { AppScreen } from '@/components/mobile/AppScreen';
-import { EventActionTrigger } from '@/components/mobile/EventActionTrigger';
+import { EventDetailView } from '@/components/mobile/EventDetailView';
 import { EventGalleryViewer } from '@/components/mobile/EventGalleryViewer';
-import { EventGoingIcon } from '@/components/mobile/EventGoingIcon';
 import { useAppTheme } from '@/lib/app-theme';
-import { getEventCreatorLabel } from '@/lib/mobile-backend';
 import { calculateDistanceMiles, formatDistanceAway } from '@/lib/mobile-event-distance';
 import type { EventMemoryRecord } from '@/lib/mobile-event-memories';
-import { getAvatarImageSource, getEventGalleryUris, getEventImageSource } from '@/lib/mobile-media';
+import { getEventGalleryUris } from '@/lib/mobile-media';
 import { pickStoryMediaFromLibrary } from '@/lib/mobile-story-composer';
 import { useMobileApp } from '@/providers/mobile-app-provider';
 import type { CreateEventInput, EventRecord } from '@/types/models';
@@ -195,7 +192,6 @@ export default function EventDetailScreen() {
       locationCoordinates: event.locationCoordinates || null,
       host: event.host,
       organizer: event.organizer,
-      dressCode: event.dressCode,
       tags: event.tags,
       privacy: event.privacy,
       eventType: event.price && event.price !== 'Free' ? 'Paid' : 'Free',
@@ -240,132 +236,24 @@ export default function EventDetailScreen() {
   };
 
   return (
-    <AppScreen>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <View style={styles.heroWrap}>
-          <Pressable style={styles.heroImagePressable} onPress={() => setIsGalleryVisible(true)}>
-            <Image source={getEventImageSource(event.image)} style={styles.heroImage} />
-            {galleryImages.length > 1 ? (
-              <View style={styles.galleryCountPill}>
-                <Ionicons name="images-outline" size={14} color="#ffffff" />
-                <Text style={styles.galleryCountText}>{galleryImages.length}</Text>
-              </View>
-            ) : null}
-          </Pressable>
-          <Pressable style={styles.backButton} onPress={() => router.back()}>
-            <Ionicons name="chevron-back" size={20} color="#ffffff" />
-          </Pressable>
-          <EventActionTrigger event={event} style={styles.actionButton} />
-        </View>
-
-        <View style={styles.body}>
-          <View style={styles.headerRow}>
-            <View style={styles.titleBlock}>
-              <Text style={styles.title}>{event.title}</Text>
-              <Text style={styles.meta}>
-                {[event.date, event.time, event.locationName].filter(Boolean).join(' • ')}
-              </Text>
-              <View style={styles.creatorCard}>
-                <View style={styles.creatorRow}>
-                  <Image source={getAvatarImageSource(event.creatorAvatar)} style={styles.creatorAvatar} />
-                  <View style={styles.creatorTextWrap}>
-                    <Text style={styles.creatorLabel}>Hosted by</Text>
-                    <Text style={styles.creatorName} numberOfLines={1}>
-                      {getEventCreatorLabel(event)}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-            </View>
-            <View style={styles.privacyPill}>
-              <Text style={styles.privacyText}>{event.isPrivate ? 'Private' : 'Public'}</Text>
-            </View>
-          </View>
-
-          <View style={styles.sectionBlock}>
-            <Text style={styles.description}>
-              {event.description || 'No description available yet.'}
-            </Text>
-          </View>
-
-          <View style={styles.detailsCard}>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Dress Code</Text>
-              <Text style={styles.detailValue}>{event.dressCode || 'Open'}</Text>
-            </View>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Address</Text>
-              <Text style={styles.detailValue}>
-                {event.locationAddress || event.locationName || 'Address unavailable'}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.memoriesSection}>
-            <View style={styles.memoryHeader}>
-              <View>
-                <Text style={styles.sectionEyebrow}>Tag Photos</Text>
-                <Text style={styles.memoryCopy}>
-                  Photos people tagged to this event after attending.
-                </Text>
-              </View>
-              {canAddMemory ? (
-                <Pressable
-                  style={styles.memoryButton}
-                  disabled={isMemoryBusy}
-                  onPress={() => void handleAddMemory()}>
-                  <Text style={styles.memoryButtonText}>
-                    {isMemoryBusy ? 'Adding...' : 'Tag Photo'}
-                  </Text>
-                </Pressable>
-              ) : null}
-            </View>
-
-            {eventMemories.length > 0 ? (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                <View style={styles.memoryRow}>
-                  {eventMemories.map((memory) => (
-                    <View key={memory.id} style={styles.memoryTile}>
-                      {memory.mediaType === 'video' ? (
-                        <View style={styles.memoryVideoFallback}>
-                          <Ionicons name="play-circle-outline" size={30} color="#ffffff" />
-                        </View>
-                      ) : (
-                        <Image source={{ uri: memory.mediaUrl }} style={styles.memoryImage} />
-                      )}
-                    </View>
-                  ))}
-                </View>
-              </ScrollView>
-            ) : (
-              <View style={styles.memoryEmpty}>
-                <Text style={styles.memoryEmptyText}>No tagged photos yet.</Text>
-              </View>
-            )}
-          </View>
-
-          <View style={styles.actionsRow}>
-            <Pressable
-              style={styles.primaryButton}
-              onPress={isHostedByCurrentUser ? handleOpenEdit : () => toggleSaveEvent(event.id)}>
-              {!isHostedByCurrentUser ? (
-                <EventGoingIcon size={24} color={theme.background} />
-              ) : null}
-              <Text style={styles.primaryButtonText}>
-                {isHostedByCurrentUser ? 'Edit' : isRsvped ? 'Cancel' : 'Going'}
-              </Text>
-            </Pressable>
-            {(event.locationAddress || event.locationName) ? (
-              <Pressable
-                style={[styles.secondaryButton, styles.mapButton]}
-                onPress={() => Linking.openURL(mapsUrl).catch(() => {})}>
-                <Ionicons name="map-outline" size={16} color={theme.text} />
-                <Text style={styles.secondaryButtonText}>{mapButtonLabel}</Text>
-              </Pressable>
-            ) : null}
-          </View>
-        </View>
-      </ScrollView>
+    <>
+      <EventDetailView
+        event={event}
+        onBack={() => router.back()}
+        galleryImages={galleryImages}
+        onPressHeroImage={() => setIsGalleryVisible(true)}
+        primaryActionLabel={isHostedByCurrentUser ? 'Edit' : isRsvped ? 'Cancel' : 'Going'}
+        onPrimaryActionPress={
+          isHostedByCurrentUser ? handleOpenEdit : () => toggleSaveEvent(event.id)
+        }
+        showGoingIcon={!isHostedByCurrentUser}
+        mapButtonLabel={mapButtonLabel}
+        onPressMap={() => Linking.openURL(mapsUrl).catch(() => {})}
+        canAddMemory={canAddMemory}
+        isMemoryBusy={isMemoryBusy}
+        onAddMemory={() => void handleAddMemory()}
+        eventMemories={eventMemories}
+      />
 
       <EventGalleryViewer
         visible={isGalleryVisible}
@@ -477,7 +365,7 @@ export default function EventDetailScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
-    </AppScreen>
+    </>
   );
 }
 

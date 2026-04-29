@@ -63,7 +63,6 @@ export default function ManageEventScreen() {
       locationCoordinates: event.locationCoordinates || null,
       host: event.host,
       organizer: event.organizer,
-      dressCode: event.dressCode,
       tags: event.tags,
       privacy: event.privacy,
       eventType: event.price && event.price !== 'Free' ? 'Paid' : 'Free',

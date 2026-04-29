@@ -157,7 +157,7 @@ export type CreateEventInput = {
   locationCoordinates?: EventLocationCoordinates | null;
   host?: string;
   organizer?: string;
-  dressCode: string;
+  dressCode?: string;
   tags: string[];
   privacy: EventPrivacy;
   eventType?: 'Free' | 'Paid';
