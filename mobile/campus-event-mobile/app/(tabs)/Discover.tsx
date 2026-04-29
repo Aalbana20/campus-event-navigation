@@ -180,7 +180,7 @@ export default function DiscoverScreen({
       return;
     }
 
-    router.push({ pathname: '/(tabs)/events', params: { tab: 'create', createMode: 'event' } });
+    router.push('/create-event');
   }, [router]);
 
   const storyItems = useMemo(

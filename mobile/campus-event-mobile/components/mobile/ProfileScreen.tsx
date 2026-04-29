@@ -466,7 +466,7 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
     }
 
     if (option === 'event') {
-      router.push({ pathname: '/(tabs)/events', params: { tab: 'create', createMode: 'event' } });
+      router.push('/create-event');
     }
   };
 

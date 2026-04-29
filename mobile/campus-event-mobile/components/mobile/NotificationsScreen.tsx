@@ -1,8 +1,7 @@
-import { useFocusEffect } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Image,
   Pressable,
   RefreshControl,
@@ -18,6 +17,7 @@ import {
   MobileNotification,
   useMobileInbox,
 } from '@/providers/mobile-inbox-provider';
+import { useMobileApp } from '@/providers/mobile-app-provider';
 
 import { AppScreen } from './AppScreen';
 
@@ -79,6 +79,7 @@ export function NotificationsScreen() {
   const theme = useAppTheme();
   const router = useRouter();
   const styles = useMemo(() => buildStyles(theme), [theme]);
+  const { currentUser } = useMobileApp();
   const {
     notifications,
     unreadNotificationCount,
@@ -88,6 +89,7 @@ export function NotificationsScreen() {
 
   const [filter, setFilter] = useState<FilterKey>('all');
   const [refreshing, setRefreshing] = useState(false);
+  const headerTitle = currentUser.username || currentUser.name || 'Notifications';
 
   // The provider derives notifications from app data; pull-to-refresh just
   // gives a brief visual cue while React rerenders.
@@ -149,8 +151,11 @@ export function NotificationsScreen() {
   return (
     <AppScreen style={styles.screen}>
       <View style={styles.header}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.title}>Notifications</Text>
+        <Pressable onPress={() => router.back()} hitSlop={8} style={styles.backButton}>
+          <Ionicons name="chevron-back" size={24} color={theme.text} />
+        </Pressable>
+        <View style={styles.headerCopy}>
+          <Text style={styles.title} numberOfLines={1}>{headerTitle}</Text>
           <Text style={styles.subtitle}>
             {unreadNotificationCount > 0
               ? `${unreadNotificationCount} new update${unreadNotificationCount === 1 ? '' : 's'}`
@@ -226,16 +231,29 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     screen: { backgroundColor: theme.background },
     header: {
       flexDirection: 'row',
-      alignItems: 'flex-end',
+      alignItems: 'center',
+      gap: 10,
       paddingHorizontal: 20,
       paddingTop: 12,
       paddingBottom: 16,
     },
+    backButton: {
+      width: 42,
+      height: 42,
+      borderRadius: 21,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: 'rgba(18,21,28,0.78)',
+      borderWidth: 1,
+      borderColor: theme.border,
+    },
+    headerCopy: {
+      flex: 1,
+    },
     title: {
       color: theme.text,
-      fontSize: 28,
-      fontWeight: '700',
-      letterSpacing: -0.4,
+      fontSize: 20,
+      fontWeight: '800',
     },
     subtitle: {
       color: theme.textMuted,

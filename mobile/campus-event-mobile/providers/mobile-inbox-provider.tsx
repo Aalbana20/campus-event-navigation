@@ -413,6 +413,22 @@ export function MobileInboxProvider({ children }: { children: React.ReactNode })
           });
         }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'messages',
+        },
+        (payload) => {
+          const deletedMessageId = String((payload.old as Partial<MessageRow>)?.id || '');
+          if (!deletedMessageId) return;
+
+          setMessageRows((currentRows) =>
+            currentRows.filter((message) => String(message.id) !== deletedMessageId)
+          );
+        }
+      )
       .subscribe();
 
     return () => {
@@ -744,23 +760,29 @@ export function MobileInboxProvider({ children }: { children: React.ReactNode })
   const deleteDmMessage = async (threadId: string, messageId: string) => {
     if (!messageId) return;
 
+    if (String(messageId).startsWith('temp-')) {
+      setMessageRows((currentRows) =>
+        currentRows.filter((message) => String(message.id) !== String(messageId))
+      );
+      return;
+    }
+
+    if (!supabase || !currentUser.id) return;
+
     const previousRows = messageRows;
     setMessageRows((currentRows) =>
       currentRows.filter((message) => String(message.id) !== String(messageId))
     );
 
-    if (String(messageId).startsWith('temp-')) return;
-
-    if (!supabase || !currentUser.id) return;
-
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('messages')
       .delete()
       .eq('id', messageId)
-      .or(`sender_id.eq.${currentUser.id},recipient_id.eq.${currentUser.id}`);
+      .or(`sender_id.eq.${currentUser.id},recipient_id.eq.${currentUser.id}`)
+      .select('id');
 
-    if (error) {
-      console.error('Unable to delete mobile DM:', error);
+    if (error || !data?.length) {
+      console.error('Unable to delete mobile DM:', error || 'No message row deleted');
       setMessageRows(previousRows);
       openDmThread(threadId);
     }

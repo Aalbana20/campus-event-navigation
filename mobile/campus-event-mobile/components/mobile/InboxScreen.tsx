@@ -700,6 +700,7 @@ export function InboxScreen({
   const [replyingTo, setReplyingTo] = useState<MenuMessage | null>(null);
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
   const [eventsPickerOpen, setEventsPickerOpen] = useState(false);
+  const [attachedEvent, setAttachedEvent] = useState<EventRecord | null>(null);
   const activeTab = lockedTab || internalTab;
   const resolvedTitle = title || (activeTab === 'dms' ? 'DMs' : 'Notifications');
   const resolvedSubtitle =
@@ -843,6 +844,12 @@ export function InboxScreen({
     }
   }, [activeThreadId, getThreadById, dmThreads]);
 
+  useEffect(() => {
+    setAttachedEvent(null);
+    setPlusMenuOpen(false);
+    setEventsPickerOpen(false);
+  }, [activeThreadId]);
+
   // Load persisted reactions for the active thread
   useEffect(() => {
     if (!activeThreadId || !currentUser?.id || !supabase) return;
@@ -984,12 +991,18 @@ export function InboxScreen({
   }, []);
 
   const handleSend = () => {
-    if (!activeThreadId || !draftMessage.trim()) return;
+    if (!activeThreadId) return;
 
-    void sendDmMessage(activeThreadId, draftMessage).then(() => {
+    const trimmedDraft = draftMessage.trim();
+    const eventLink = attachedEvent ? `campus-event://event/${attachedEvent.id}` : '';
+    const messageBody = [trimmedDraft, eventLink].filter(Boolean).join('\n');
+    if (!messageBody) return;
+
+    void sendDmMessage(activeThreadId, messageBody).then(() => {
       scrollChatToBottom();
     });
     setDraftMessage('');
+    setAttachedEvent(null);
     setReplyingTo(null);
     scrollChatToBottom();
   };
@@ -1104,16 +1117,12 @@ export function InboxScreen({
   }, [currentUser?.id, events, savedEventIds]);
 
   const handleSelectShareEvent = (event: EventRecord) => {
-    if (!activeThreadId) return;
-    const meta = [event.date, event.time, event.locationName].filter(Boolean).join(' • ');
-    const link = `campus-event://event/${event.id}`;
-    const body = [`Check out ${event.title || 'this event'}`, meta, link].filter(Boolean).join('\n');
-    sendDmMessage(activeThreadId, body);
+    setAttachedEvent(event);
     setEventsPickerOpen(false);
     setPlusMenuOpen(false);
   };
 
-  const isComposerTyping = draftMessage.length > 0;
+  const isComposerTyping = draftMessage.length > 0 || Boolean(attachedEvent);
 
   return (
     <AppScreen edges={chatActive ? ['top', 'bottom'] : ['top']}>
@@ -1461,61 +1470,87 @@ export function InboxScreen({
             ) : null}
 
             <View style={styles.chatComposer}>
-              {!isComposerTyping ? (
-                <Pressable
-                  style={styles.composerCameraButton}
-                  onPress={() => Alert.alert('Camera', 'Camera capture is coming soon.')}>
-                  <Ionicons name="camera" size={20} color="#ffffff" />
-                </Pressable>
+              {attachedEvent ? (
+                <View style={styles.attachedEventPreview}>
+                  <Image
+                    source={getEventImageSource(attachedEvent.image)}
+                    style={styles.attachedEventImage}
+                  />
+                  <View style={styles.attachedEventCopy}>
+                    <Text style={styles.attachedEventTitle} numberOfLines={1}>
+                      {attachedEvent.title || 'Campus Event'}
+                    </Text>
+                    <Text style={styles.attachedEventMeta} numberOfLines={1}>
+                      {[attachedEvent.date, attachedEvent.time].filter(Boolean).join(' • ') ||
+                        'Date TBA'}
+                    </Text>
+                  </View>
+                  <Pressable
+                    style={styles.attachedEventRemove}
+                    onPress={() => setAttachedEvent(null)}
+                    accessibilityLabel="Remove event attachment">
+                    <Ionicons name="close" size={15} color={theme.text} />
+                  </Pressable>
+                </View>
               ) : null}
 
-              <View
-                style={[
-                  styles.composerPill,
-                  isComposerTyping && styles.composerPillTyping,
-                ]}
-                onTouchStart={focusComposerInput}>
-                <TextInput
-                  ref={composerInputRef}
-                  value={draftMessage}
-                  onChangeText={setDraftMessage}
-                  placeholder="Message..."
-                  placeholderTextColor={theme.textMuted}
-                  style={styles.composerInput}
-                  editable
-                  multiline
-                  blurOnSubmit={false}
-                />
-
-                {isComposerTyping ? (
+              <View style={styles.chatComposerRow}>
+                {!isComposerTyping ? (
                   <Pressable
-                    style={styles.composerSendButton}
-                    onPress={handleSend}
-                    accessibilityLabel="Send message">
-                    <Ionicons name="paper-plane" size={16} color={theme.accentText} />
+                    style={styles.composerCameraButton}
+                    onPress={() => Alert.alert('Camera', 'Camera capture is coming soon.')}>
+                    <Ionicons name="camera" size={20} color="#ffffff" />
                   </Pressable>
-                ) : (
-                  <View style={styles.composerActionsRow}>
+                ) : null}
+
+                <View
+                  style={[
+                    styles.composerPill,
+                    isComposerTyping && styles.composerPillTyping,
+                  ]}
+                  onTouchStart={focusComposerInput}>
+                  <TextInput
+                    ref={composerInputRef}
+                    value={draftMessage}
+                    onChangeText={setDraftMessage}
+                    placeholder="Message..."
+                    placeholderTextColor={theme.textMuted}
+                    style={styles.composerInput}
+                    editable
+                    multiline
+                    blurOnSubmit={false}
+                  />
+
+                  {isComposerTyping ? (
                     <Pressable
-                      style={styles.composerIconButton}
-                      onPress={() => Alert.alert('Voice notes', 'Voice messages are coming soon.')}>
-                      <Ionicons name="mic-outline" size={19} color={theme.text} />
+                      style={styles.composerSendButton}
+                      onPress={handleSend}
+                      accessibilityLabel="Send message">
+                      <Ionicons name="paper-plane" size={16} color={theme.accentText} />
                     </Pressable>
-                    <Pressable
-                      style={styles.composerIconButton}
-                      onPress={() =>
-                        Alert.alert('Gallery', 'Image picker is coming soon.')
-                      }>
-                      <Ionicons name="image-outline" size={19} color={theme.text} />
-                    </Pressable>
-                    <Pressable
-                      style={styles.composerPlusButton}
-                      onPress={() => setPlusMenuOpen((open) => !open)}
-                      accessibilityLabel="More attachments">
-                      <Ionicons name="add" size={17} color={theme.text} />
-                    </Pressable>
-                  </View>
-                )}
+                  ) : (
+                    <View style={styles.composerActionsRow}>
+                      <Pressable
+                        style={styles.composerIconButton}
+                        onPress={() => Alert.alert('Voice notes', 'Voice messages are coming soon.')}>
+                        <Ionicons name="mic-outline" size={19} color={theme.text} />
+                      </Pressable>
+                      <Pressable
+                        style={styles.composerIconButton}
+                        onPress={() =>
+                          Alert.alert('Gallery', 'Image picker is coming soon.')
+                        }>
+                        <Ionicons name="image-outline" size={19} color={theme.text} />
+                      </Pressable>
+                      <Pressable
+                        style={styles.composerPlusButton}
+                        onPress={() => setPlusMenuOpen((open) => !open)}
+                        accessibilityLabel="More attachments">
+                        <Ionicons name="add" size={17} color={theme.text} />
+                      </Pressable>
+                    </View>
+                  )}
+                </View>
               </View>
             </View>
 
@@ -2897,15 +2932,56 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       backgroundColor: theme.surfaceAlt,
     },
     chatComposer: {
-      flexDirection: 'row',
-      alignItems: 'flex-end',
-      gap: 10,
+      gap: 8,
       paddingHorizontal: 12,
       paddingTop: 8,
       paddingBottom: 10,
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: theme.border,
       backgroundColor: theme.background,
+    },
+    attachedEventPreview: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: theme.border,
+      backgroundColor: theme.surface,
+      padding: 8,
+    },
+    attachedEventImage: {
+      width: 44,
+      height: 44,
+      borderRadius: 12,
+      backgroundColor: theme.surfaceAlt,
+    },
+    attachedEventCopy: {
+      flex: 1,
+      gap: 3,
+    },
+    attachedEventTitle: {
+      color: theme.text,
+      fontSize: 14,
+      fontWeight: '800',
+    },
+    attachedEventMeta: {
+      color: theme.textMuted,
+      fontSize: 12,
+      fontWeight: '600',
+    },
+    attachedEventRemove: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: theme.surfaceAlt,
+    },
+    chatComposerRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-end',
+      gap: 10,
     },
     composerCameraButton: {
       width: 38,

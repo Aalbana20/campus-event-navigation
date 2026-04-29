@@ -68,6 +68,10 @@ function AppBootstrap() {
         options={{ headerShown: false, presentation: 'fullScreenModal' }}
       />
       <Stack.Screen
+        name="create-event"
+        options={{ headerShown: false, presentation: 'fullScreenModal' }}
+      />
+      <Stack.Screen
         name="map"
         options={{ headerShown: false, presentation: 'fullScreenModal' }}
       />

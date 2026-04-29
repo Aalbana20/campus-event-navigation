@@ -155,7 +155,9 @@ export function CalendarCreateSheet({
 
   const renderHeader = (title: string) => (
     <View style={styles.header}>
-      <Pressable style={styles.iconButton} onPress={flowStep === 'type' ? onClose : handleBack}>
+      <Pressable
+        style={[styles.iconButton, styles.headerBackButton]}
+        onPress={flowStep === 'type' ? onClose : handleBack}>
         <Ionicons name="chevron-back" size={24} color={theme.text} />
       </Pressable>
 
@@ -453,6 +455,9 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       backgroundColor: 'rgba(18,21,28,0.78)',
       borderWidth: 1,
       borderColor: 'rgba(255,255,255,0.08)',
+    },
+    headerBackButton: {
+      transform: [{ translateY: 8 }],
     },
     headerSpacer: {
       width: 42,

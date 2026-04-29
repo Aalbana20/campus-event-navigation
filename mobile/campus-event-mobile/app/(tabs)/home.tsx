@@ -27,7 +27,6 @@ export default function HomeScreen() {
   const { unreadNotificationCount } = useMobileInbox();
   const [activeView, setActiveView] = useState<HomeView>('events');
   const [calendarSearchSignal, setCalendarSearchSignal] = useState(0);
-  const [calendarCreateSignal, setCalendarCreateSignal] = useState(0);
   const [isCreateMenuVisible, setIsCreateMenuVisible] = useState(false);
 
   const handleOpenCreate = useCallback(() => {
@@ -47,13 +46,8 @@ export default function HomeScreen() {
       return;
     }
 
-    if (activeView === 'calendar') {
-      setCalendarCreateSignal((signal) => signal + 1);
-      return;
-    }
-
-    router.push({ pathname: '/(tabs)/events', params: { tab: 'create', createMode: 'event' } });
-  }, [activeView, router]);
+    router.push('/create-event');
+  }, [router]);
 
   const handleOpenNotifications = useCallback(() => {
     router.push('/inbox');
@@ -101,7 +95,6 @@ export default function HomeScreen() {
         ) : (
           <EventsScreen
             searchSignal={calendarSearchSignal}
-            createSignal={calendarCreateSignal}
           />
         )}
       </View>
