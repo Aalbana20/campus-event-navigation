@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { SegmentedToggle } from '@/components/mobile/SegmentedToggle';
+import { GlobalCreateMenu, type GlobalCreateOptionKey } from '@/components/mobile/GlobalCreateMenu';
 import { useAppTheme } from '@/lib/app-theme';
 import { useMobileInbox } from '@/providers/mobile-inbox-provider';
 
@@ -27,13 +28,31 @@ export default function HomeScreen() {
   const [activeView, setActiveView] = useState<HomeView>('events');
   const [calendarSearchSignal, setCalendarSearchSignal] = useState(0);
   const [calendarCreateSignal, setCalendarCreateSignal] = useState(0);
+  const [isCreateMenuVisible, setIsCreateMenuVisible] = useState(false);
 
   const handleOpenCreate = useCallback(() => {
+    setIsCreateMenuVisible(true);
+  }, []);
+
+  const handleCreateOption = useCallback((option: GlobalCreateOptionKey) => {
+    setIsCreateMenuVisible(false);
+
+    if (option === 'post') {
+      router.push({ pathname: '/story/create', params: { mode: 'post' } });
+      return;
+    }
+
+    if (option === 'story') {
+      router.push({ pathname: '/story/create', params: { mode: 'story' } });
+      return;
+    }
+
     if (activeView === 'calendar') {
       setCalendarCreateSignal((signal) => signal + 1);
       return;
     }
-    router.push('/story/create');
+
+    router.push({ pathname: '/(tabs)/events', params: { tab: 'create', createMode: 'event' } });
   }, [activeView, router]);
 
   const handleOpenNotifications = useCallback(() => {
@@ -86,6 +105,12 @@ export default function HomeScreen() {
           />
         )}
       </View>
+
+      <GlobalCreateMenu
+        visible={isCreateMenuVisible}
+        onClose={() => setIsCreateMenuVisible(false)}
+        onSelect={handleCreateOption}
+      />
     </View>
   );
 }

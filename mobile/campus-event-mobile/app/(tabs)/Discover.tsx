@@ -22,6 +22,7 @@ import { DiscoverModeSwitch } from '@/components/mobile/DiscoverModeSwitch';
 import { EventCommentsSheet, type EventCommentRecord } from '@/components/mobile/EventCommentsSheet';
 import { EventMutualsSheet } from '@/components/mobile/EventMutualsSheet';
 import { EventStackCard } from '@/components/mobile/EventStackCard';
+import { GlobalCreateMenu, type GlobalCreateOptionKey } from '@/components/mobile/GlobalCreateMenu';
 import { StoryViewerModal } from '@/components/mobile/StoryViewerModal';
 import { useAppTheme } from '@/lib/app-theme';
 import {
@@ -121,6 +122,7 @@ export default function DiscoverScreen({
   const [mutualSheetTitle, setMutualSheetTitle] = useState('');
   const [mutualSheetProfiles, setMutualSheetProfiles] = useState<ProfileRecord[]>([]);
   const [storiesMeasuredHeight, setStoriesMeasuredHeight] = useState(112);
+  const [isCreateMenuVisible, setIsCreateMenuVisible] = useState(false);
 
   const loadPosts = useCallback(async () => {
     const [nextPosts, nextLikedIds, nextSavedIds] = await Promise.all([
@@ -162,7 +164,23 @@ export default function DiscoverScreen({
   );
 
   const handleOpenCreateStory = useCallback(() => {
-    router.push('/story/create');
+    router.push({ pathname: '/story/create', params: { mode: 'story' } });
+  }, [router]);
+
+  const handleCreateOption = useCallback((option: GlobalCreateOptionKey) => {
+    setIsCreateMenuVisible(false);
+
+    if (option === 'post') {
+      router.push({ pathname: '/story/create', params: { mode: 'post' } });
+      return;
+    }
+
+    if (option === 'story') {
+      router.push({ pathname: '/story/create', params: { mode: 'story' } });
+      return;
+    }
+
+    router.push({ pathname: '/(tabs)/events', params: { tab: 'create', createMode: 'event' } });
   }, [router]);
 
   const storyItems = useMemo(
@@ -859,7 +877,7 @@ export default function DiscoverScreen({
       {activeTab === 'friends' && !hideModeSwitch ? (
         <View style={[styles.headerBar, styles.headerBarAbsolute]}>
           <View style={styles.headerActionsLeft}>
-            <Pressable style={[styles.headerIconButton, styles.glassyIconButton]} onPress={() => router.push('/story/create')}>
+            <Pressable style={[styles.headerIconButton, styles.glassyIconButton]} onPress={() => setIsCreateMenuVisible(true)}>
               <Ionicons name="add-outline" size={20} color="#ffffff" />
             </Pressable>
           </View>
@@ -889,7 +907,7 @@ export default function DiscoverScreen({
           {!(embedded && hideModeSwitch) ? (
             <View style={styles.headerBar}>
               <View style={styles.headerActionsLeft}>
-                <Pressable style={styles.headerIconButton} onPress={() => router.push('/story/create')}>
+                <Pressable style={styles.headerIconButton} onPress={() => setIsCreateMenuVisible(true)}>
                   <Ionicons name="add-outline" size={20} color={theme.text} />
                 </Pressable>
               </View>
@@ -1078,6 +1096,12 @@ export default function DiscoverScreen({
         onReplyToStory={handleReplyToStory}
         onShareStory={handleShareStory}
         onLoadViewers={handleLoadViewers}
+      />
+
+      <GlobalCreateMenu
+        visible={isCreateMenuVisible}
+        onClose={() => setIsCreateMenuVisible(false)}
+        onSelect={handleCreateOption}
       />
     </AppScreen>
   );

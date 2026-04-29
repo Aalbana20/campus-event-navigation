@@ -11,6 +11,7 @@ import {
   Text,
   TextInput,
   View,
+  useWindowDimensions,
 } from 'react-native';
 
 import { useAppTheme } from '@/lib/app-theme';
@@ -71,6 +72,8 @@ export function CalendarCreateSheet({
   const theme = useAppTheme();
   const styles = useMemo(() => buildStyles(theme), [theme]);
   const { followingProfiles } = useMobileApp();
+  const { height: windowHeight } = useWindowDimensions();
+  const privateInviteTopOffset = Math.round(windowHeight * 0.38);
   const defaultDate = selectedDate || toDateKey(new Date());
   const [flowStep, setFlowStep] = useState<CreateFlowStep>('type');
   const [eventKind, setEventKind] = useState<EventCreateKind>('public');
@@ -239,41 +242,50 @@ export function CalendarCreateSheet({
     <View style={styles.typeContent}>
       {renderHeader('Select People')}
 
-      <View style={styles.searchBox}>
-        <Ionicons name="search-outline" size={18} color={theme.textMuted} />
-        <TextInput
-          value={friendQuery}
-          onChangeText={setFriendQuery}
-          placeholder="Search friends..."
-          placeholderTextColor={theme.textMuted}
-          style={styles.searchInput}
-        />
-      </View>
-
-      {selectedFriends.length > 0 ? (
-        <View style={styles.selectedCluster}>
-          <View style={styles.selectedAvatarStack}>
-            {selectedFriends.slice(0, 3).map((friend, index) => (
-              <Image
-                key={friend.id}
-                source={getAvatarImageSource(friend.avatar)}
-                style={[
-                  styles.selectedAvatar,
-                  { marginLeft: index === 0 ? 0 : -12, zIndex: 4 - index },
-                ]}
-              />
-            ))}
-            {selectedFriends.length > 3 ? (
-              <View style={[styles.selectedAvatar, styles.selectedCountBubble]}>
-                <Text style={styles.selectedCountText}>+{selectedFriends.length - 3}</Text>
-              </View>
-            ) : null}
+      <View style={[styles.privateInviteTop, { marginTop: privateInviteTopOffset }]}>
+        {selectedFriends.length > 0 ? (
+          <View style={styles.selectedCluster}>
+            <View style={styles.selectedAvatarStack}>
+              {selectedFriends.slice(0, 3).map((friend, index) => (
+                <Image
+                  key={friend.id}
+                  source={getAvatarImageSource(friend.avatar)}
+                  style={[
+                    styles.selectedAvatar,
+                    { marginLeft: index === 0 ? 0 : -11, zIndex: 4 - index },
+                  ]}
+                />
+              ))}
+              {selectedFriends.length > 3 ? (
+                <View
+                  style={[
+                    styles.selectedAvatar,
+                    styles.selectedCountBubble,
+                    { marginLeft: -11, zIndex: 1 },
+                  ]}>
+                  <Text style={styles.selectedCountText}>+{selectedFriends.length - 3}</Text>
+                </View>
+              ) : null}
+            </View>
+            <Text style={styles.selectedClusterText}>
+              {selectedFriends.length} selected
+            </Text>
           </View>
-          <Text style={styles.selectedClusterText}>
-            {selectedFriends.length} selected
-          </Text>
+        ) : (
+          <View style={styles.selectedClusterEmpty} />
+        )}
+
+        <View style={styles.searchBox}>
+          <Ionicons name="search-outline" size={17} color={theme.textMuted} />
+          <TextInput
+            value={friendQuery}
+            onChangeText={setFriendQuery}
+            placeholder="Search friends..."
+            placeholderTextColor={theme.textMuted}
+            style={styles.searchInput}
+          />
         </View>
-      ) : null}
+      </View>
 
       <ScrollView contentContainerStyle={styles.friendList} showsVerticalScrollIndicator={false}>
         {filteredFriends.map((friend) => {
@@ -290,17 +302,25 @@ export function CalendarCreateSheet({
                   return nextIds;
                 })
               }>
-              <Image source={getAvatarImageSource(friend.avatar)} style={styles.friendAvatar} />
+              <View style={styles.friendAvatarFrame}>
+                <Image source={getAvatarImageSource(friend.avatar)} style={styles.friendAvatar} />
+              </View>
               <Text style={styles.friendName}>{friend.name || friend.username}</Text>
               <View style={[styles.checkCircle, isSelected && styles.checkCircleActive]}>
-                <Ionicons name={isSelected ? 'checkmark' : 'add'} size={16} color={isSelected ? '#ffffff' : theme.text} />
+                {isSelected ? <Ionicons name="checkmark" size={15} color="#ffffff" /> : null}
               </View>
             </Pressable>
           );
         })}
       </ScrollView>
 
-      <Pressable style={styles.bottomPrimaryButton} onPress={() => setFlowStep('event')}>
+      <Pressable
+        style={[
+          styles.bottomPrimaryButton,
+          selectedFriends.length === 0 && styles.bottomPrimaryButtonDisabled,
+        ]}
+        disabled={selectedFriends.length === 0}
+        onPress={() => setFlowStep('event')}>
         <Text style={styles.bottomPrimaryText}>Next</Text>
         <Ionicons name="arrow-forward" size={18} color="#ffffff" />
       </Pressable>
@@ -597,76 +617,93 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       fontWeight: '800',
       textAlign: 'center',
     },
+    privateInviteTop: {
+      marginBottom: 14,
+    },
     searchBox: {
       minHeight: 48,
-      borderRadius: 14,
-      paddingHorizontal: 14,
+      borderRadius: 24,
+      paddingHorizontal: 16,
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 10,
-      backgroundColor: 'rgba(18,21,28,0.86)',
+      gap: 9,
+      backgroundColor: 'rgba(16,19,27,0.92)',
       borderWidth: 1,
-      borderColor: 'rgba(255,255,255,0.12)',
-      marginBottom: 16,
+      borderColor: 'rgba(255,255,255,0.1)',
     },
     searchInput: {
       flex: 1,
       color: theme.text,
-      fontSize: 15,
+      fontSize: 14,
+      fontWeight: '600',
     },
     friendList: {
       paddingBottom: 110,
     },
     friendRow: {
-      minHeight: 68,
+      minHeight: 55,
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 12,
+      gap: 11,
       borderBottomWidth: 1,
-      borderBottomColor: 'rgba(255,255,255,0.08)',
+      borderBottomColor: 'rgba(255,255,255,0.06)',
+    },
+    friendAvatarFrame: {
+      width: 39,
+      height: 39,
+      borderRadius: 19.5,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.16)',
+      backgroundColor: 'rgba(255,255,255,0.03)',
     },
     friendAvatar: {
-      width: 42,
-      height: 42,
-      borderRadius: 21,
+      width: 34,
+      height: 34,
+      borderRadius: 17,
     },
     friendName: {
       flex: 1,
       color: theme.text,
-      fontSize: 15,
-      fontWeight: '800',
+      fontSize: 14,
+      fontWeight: '700',
     },
     checkCircle: {
-      width: 26,
-      height: 26,
-      borderRadius: 13,
+      width: 24,
+      height: 24,
+      borderRadius: 12,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: theme.accent,
+      backgroundColor: 'rgba(255,255,255,0.04)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.18)',
     },
     checkCircleActive: {
       backgroundColor: theme.accent,
+      borderColor: theme.accent,
     },
     selectedCluster: {
-      minHeight: 52,
-      borderRadius: 26,
-      paddingHorizontal: 12,
+      minHeight: 36,
+      paddingHorizontal: 4,
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'space-between',
-      backgroundColor: 'rgba(18,21,28,0.82)',
-      borderWidth: 1,
-      borderColor: 'rgba(255,255,255,0.1)',
-      marginBottom: 8,
+      justifyContent: 'center',
+      gap: 11,
+      marginBottom: 10,
+    },
+    selectedClusterEmpty: {
+      height: 18,
+      marginBottom: 10,
     },
     selectedAvatarStack: {
       flexDirection: 'row',
       alignItems: 'center',
     },
     selectedAvatar: {
-      width: 34,
-      height: 34,
-      borderRadius: 17,
+      width: 31,
+      height: 31,
+      borderRadius: 15.5,
       borderWidth: 2,
       borderColor: 'rgba(6,9,15,1)',
       backgroundColor: 'rgba(42,45,54,1)',
@@ -677,7 +714,7 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     },
     selectedCountText: {
       color: '#ffffff',
-      fontSize: 12,
+      fontSize: 11,
       fontWeight: '900',
     },
     selectedClusterText: {
@@ -698,6 +735,9 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: theme.accent,
+    },
+    bottomPrimaryButtonDisabled: {
+      opacity: 0.42,
     },
     bottomPrimaryText: {
       color: '#ffffff',

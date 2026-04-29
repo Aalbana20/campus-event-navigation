@@ -37,6 +37,7 @@ import type { EventPrivacy, EventRecord, ProfileRecord } from '@/types/models';
 
 import { AppScreen } from './AppScreen';
 import { EventListCard } from './EventListCard';
+import { GlobalCreateMenu, type GlobalCreateOptionKey } from './GlobalCreateMenu';
 import { PersonRowCard } from './PersonRowCard';
 import { ProfileContentTabs } from './ProfileContentTabs';
 import { ProfileHighlightsRow } from './ProfileHighlightsRow';
@@ -71,40 +72,6 @@ type EditEventFormState = {
   privacy: EventPrivacy;
   image: string;
 };
-type CreateOption = {
-  key: 'post' | 'story' | 'event' | 'personal';
-  label: string;
-  subtitle: string;
-  icon: keyof typeof Ionicons.glyphMap;
-};
-
-const CREATE_OPTIONS: CreateOption[] = [
-  {
-    key: 'post',
-    label: 'Post',
-    subtitle: 'Share a photo or video to your profile.',
-    icon: 'grid-outline',
-  },
-  {
-    key: 'story',
-    label: 'Story',
-    subtitle: 'Post a moment that disappears later.',
-    icon: 'radio-button-on-outline',
-  },
-  {
-    key: 'event',
-    label: 'Event',
-    subtitle: 'Create a campus event with RSVP details.',
-    icon: 'calendar-clear-outline',
-  },
-  {
-    key: 'personal',
-    label: 'Personal',
-    subtitle: 'Add a private calendar item.',
-    icon: 'bookmark-outline',
-  },
-];
-
 const toEditEventForm = (event: EventRecord): EditEventFormState => ({
   title: event.title || '',
   description: event.description || '',
@@ -485,7 +452,7 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
     followProfile(profile.id);
   };
 
-  const handleCreateOption = (option: CreateOption['key']) => {
+  const handleCreateOption = (option: GlobalCreateOptionKey) => {
     setIsCreateMenuVisible(false);
 
     if (option === 'post') {
@@ -500,10 +467,7 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
 
     if (option === 'event') {
       router.push({ pathname: '/(tabs)/events', params: { tab: 'create', createMode: 'event' } });
-      return;
     }
-
-    router.push({ pathname: '/(tabs)/events', params: { tab: 'create', createMode: 'personal' } });
   };
 
   const handleOpenEdit = () => {
@@ -850,40 +814,11 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
         onLoadViewers={async () => []}
       />
 
-      <Modal
+      <GlobalCreateMenu
         visible={isCreateMenuVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setIsCreateMenuVisible(false)}>
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setIsCreateMenuVisible(false)}>
-          <Pressable
-            style={styles.createMenuSheet}
-            onPress={(eventPress) => eventPress.stopPropagation()}>
-            <View style={styles.modalHandle} />
-            <Text style={styles.createMenuTitle}>Create</Text>
-
-            <View style={styles.createMenuList}>
-              {CREATE_OPTIONS.map((option) => (
-                <Pressable
-                  key={option.key}
-                  style={styles.createMenuRow}
-                  onPress={() => handleCreateOption(option.key)}>
-                  <View style={styles.createMenuIcon}>
-                    <Ionicons name={option.icon} size={21} color={theme.text} />
-                  </View>
-                  <View style={styles.createMenuCopy}>
-                    <Text style={styles.createMenuLabel}>{option.label}</Text>
-                    <Text style={styles.createMenuSubtitle}>{option.subtitle}</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color={theme.textMuted} />
-                </Pressable>
-              ))}
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
+        onClose={() => setIsCreateMenuVisible(false)}
+        onSelect={handleCreateOption}
+      />
 
       <Modal visible={activeList !== null} transparent animationType="slide" onRequestClose={() => setActiveList(null)}>
         <Pressable style={styles.modalOverlay} onPress={() => setActiveList(null)}>
@@ -1615,60 +1550,6 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) => {
       fontSize: 18,
       fontWeight: '800',
       marginBottom: 14,
-    },
-    createMenuSheet: {
-      borderTopLeftRadius: 30,
-      borderTopRightRadius: 30,
-      backgroundColor: profileSurface,
-      paddingHorizontal: 18,
-      paddingTop: 12,
-      paddingBottom: 34,
-      borderWidth: 1,
-      borderColor: profileBorder,
-    },
-    createMenuTitle: {
-      color: profileText,
-      fontSize: 22,
-      fontWeight: '900',
-      marginBottom: 12,
-    },
-    createMenuList: {
-      gap: 8,
-    },
-    createMenuRow: {
-      minHeight: 72,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
-      paddingHorizontal: 12,
-      paddingVertical: 10,
-      borderRadius: 20,
-      backgroundColor: profileSurfaceAlt,
-      borderWidth: 1,
-      borderColor: profileBorder,
-    },
-    createMenuIcon: {
-      width: 42,
-      height: 42,
-      borderRadius: 21,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : theme.surface,
-    },
-    createMenuCopy: {
-      flex: 1,
-      gap: 3,
-    },
-    createMenuLabel: {
-      color: profileText,
-      fontSize: 16,
-      fontWeight: '900',
-    },
-    createMenuSubtitle: {
-      color: profileMutedText,
-      fontSize: 12,
-      lineHeight: 16,
-      fontWeight: '600',
     },
     modalContent: {
       gap: 12,

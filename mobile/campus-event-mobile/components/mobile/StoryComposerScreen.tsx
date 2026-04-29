@@ -29,16 +29,15 @@ import {
 import { useMobileApp } from '@/providers/mobile-app-provider';
 
 type ComposerStage = 'camera' | 'preview';
-type ComposerMode = 'Post' | 'Story' | 'Event' | 'Live';
+type ComposerMode = 'Post' | 'Story' | 'Live';
 
 const HOLD_TO_RECORD_DELAY_MS = 220;
 
-const MODES: ComposerMode[] = ['Post', 'Story', 'Event', 'Live'];
+const MODES: ComposerMode[] = ['Post', 'Story', 'Live'];
 
 const resolveInitialMode = (value?: string | string[] | null): ComposerMode => {
   const normalizedValue = String(Array.isArray(value) ? value[0] : value || '').toLowerCase();
   if (normalizedValue === 'post') return 'Post';
-  if (normalizedValue === 'event') return 'Event';
   return 'Story';
 };
 
@@ -91,11 +90,6 @@ export function StoryComposerScreen() {
 
   const handleSwitchMode = (nextMode: ComposerMode) => {
     if (nextMode === activeMode) return;
-
-    if (nextMode === 'Event') {
-      router.replace({ pathname: '/(tabs)/events', params: { tab: 'create' } });
-      return;
-    }
 
     if (nextMode === 'Live') {
       Alert.alert('Live', 'Live broadcasting is coming soon. Stay tuned.');
