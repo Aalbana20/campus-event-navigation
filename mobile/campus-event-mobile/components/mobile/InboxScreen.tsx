@@ -8,8 +8,10 @@ import {
   Animated,
   Dimensions,
   Image,
+  KeyboardAvoidingView,
   Modal,
   PanResponder,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -649,6 +651,7 @@ export function InboxScreen({
   const params = useLocalSearchParams<{ tab?: string; dm?: string }>();
   const theme = useAppTheme();
   const composerInputRef = useRef<TextInput>(null);
+  const chatMessagesScrollRef = useRef<ScrollView>(null);
   const styles = useMemo(() => buildStyles(theme), [theme]);
   const {
     notifications,
@@ -971,12 +974,24 @@ export function InboxScreen({
     setActiveThreadMenu(null);
   };
 
+  const scrollChatToBottom = useCallback(() => {
+    requestAnimationFrame(() => {
+      chatMessagesScrollRef.current?.scrollToEnd({ animated: true });
+    });
+    setTimeout(() => {
+      chatMessagesScrollRef.current?.scrollToEnd({ animated: true });
+    }, 80);
+  }, []);
+
   const handleSend = () => {
     if (!activeThreadId || !draftMessage.trim()) return;
 
-    sendDmMessage(activeThreadId, draftMessage);
+    void sendDmMessage(activeThreadId, draftMessage).then(() => {
+      scrollChatToBottom();
+    });
     setDraftMessage('');
     setReplyingTo(null);
+    scrollChatToBottom();
   };
 
   const focusComposerInput = useCallback(() => {
@@ -1102,7 +1117,11 @@ export function InboxScreen({
 
   return (
     <AppScreen edges={chatActive ? ['top', 'bottom'] : ['top']}>
-      <View style={[styles.page, chatActive && styles.pageChatMode]}>
+      <KeyboardAvoidingView
+        style={[styles.page, chatActive && styles.pageChatMode]}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}
+        enabled={chatActive}>
         {chatActive ? null : activeTab === 'notifications' ? (
           <View style={styles.notificationHeader}>
             {showBackButton ? (
@@ -1359,7 +1378,12 @@ export function InboxScreen({
               </Text>
             </View>
 
-            <ScrollView contentContainerStyle={styles.chatMessages} showsVerticalScrollIndicator={false}>
+            <ScrollView
+              ref={chatMessagesScrollRef}
+              style={styles.chatMessagesScroll}
+              contentContainerStyle={styles.chatMessages}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}>
               {(messagesByThread[activeThread.id] || []).map((message) => {
                 const eventShare = parseDmMessageForEventShare(message.text);
                 const sharedEvent = eventShare ? getEventById(eventShare.eventId) : undefined;
@@ -1808,7 +1832,7 @@ export function InboxScreen({
             ) : null}
           </Pressable>
         </Modal>
-      </View>
+      </KeyboardAvoidingView>
     </AppScreen>
   );
 }
@@ -2738,6 +2762,9 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       alignSelf: 'center',
     },
     chatShell: {
+      flex: 1,
+    },
+    chatMessagesScroll: {
       flex: 1,
     },
     chatHeader: {
