@@ -1178,15 +1178,15 @@ function MainLayout() {
             {isCreateMenuOpen ? (
               <div className="app-rail-create-menu" role="menu" aria-label="Create">
                 <button type="button" role="menuitem" onClick={() => handleCreateAction("/home?create=post")}>
+                  <span className="app-rail-create-menu-icon" aria-hidden="true">□</span>
                   Post
                 </button>
                 <button type="button" role="menuitem" onClick={() => handleCreateAction("/home?create=story")}>
+                  <span className="app-rail-create-menu-icon" aria-hidden="true">◌</span>
                   Story
                 </button>
-                <button type="button" role="menuitem" onClick={() => handleCreateAction("/events?create=personal")}>
-                  Personal
-                </button>
                 <button type="button" role="menuitem" onClick={() => handleCreateAction("/events?create=event")}>
+                  <span className="app-rail-create-menu-icon" aria-hidden="true">＋</span>
                   Event
                 </button>
               </div>

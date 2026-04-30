@@ -5,6 +5,7 @@ import {
   formatRelativeTime,
   getDaysUntilDate,
 } from '@/lib/mobile-backend';
+import { formatDmMessagePreview } from '@/lib/mobile-dm-content';
 import { supabase } from '@/lib/supabase';
 import { useMobileApp } from '@/providers/mobile-app-provider';
 
@@ -75,8 +76,9 @@ type MobileInboxContextValue = {
   toggleDmThreadPinned: (threadId: string) => void;
   deleteDmThread: (threadId: string) => void;
   openDmThread: (threadId: string) => void;
-  sendDmMessage: (threadId: string, text: string) => Promise<void>;
+  sendDmMessage: (threadId: string, text: string) => Promise<boolean>;
   deleteDmMessage: (threadId: string, messageId: string) => Promise<void>;
+  unsendDmMessage: (threadId: string, messageId: string) => Promise<void>;
 };
 
 const MobileInboxContext = createContext<MobileInboxContextValue | null>(null);
@@ -88,6 +90,9 @@ type MessageRow = {
   content: string;
   created_at?: string | null;
   read?: boolean | null;
+  deleted_for_sender_at?: string | null;
+  deleted_for_recipient_at?: string | null;
+  unsent_at?: string | null;
 };
 
 type NotificationStateRow = {
@@ -101,6 +106,22 @@ type DmThreadPreferenceRow = {
   muted_at?: string | null;
   pinned_at?: string | null;
   deleted_at?: string | null;
+};
+
+const BASE_MESSAGE_SELECT = 'id, sender_id, recipient_id, content, created_at, read';
+const VISIBILITY_MESSAGE_SELECT =
+  `${BASE_MESSAGE_SELECT}, deleted_for_sender_at, deleted_for_recipient_at, unsent_at`;
+
+const isMissingMessageVisibilityColumnError = (error: { code?: string; message?: string } | null) => {
+  const message = error?.message || '';
+
+  return (
+    Boolean(error) &&
+    /(deleted_for_sender_at|deleted_for_recipient_at|unsent_at)/i.test(message) &&
+    (error?.code === '42703' ||
+      error?.code === 'PGRST204' ||
+      /does not exist|schema cache|column/i.test(message))
+  );
 };
 
 const createEmptyDmThreadPreferences = (): MobileDmThreadPreferences => ({
@@ -125,6 +146,11 @@ const normalizeDmThreadPreferences = (value: unknown): MobileDmThreadPreferences
     deleted: readIds('deleted'),
   };
 };
+
+const normalizeStringList = (value: unknown) =>
+  Array.isArray(value)
+    ? [...new Set(value.map((id) => String(id)).filter(Boolean))]
+    : [];
 
 const toggleDmThreadPreferenceEntry = (
   preferences: MobileDmThreadPreferences,
@@ -163,6 +189,13 @@ const normalizeDmThreadPreferencesFromRows = (
   deleted: rows.filter((row) => row.deleted_at).map((row) => String(row.thread_user_id)),
 });
 
+const isMessageVisibleForUser = (message: MessageRow, userId: string) => {
+  if (!userId || message.unsent_at) return false;
+  if (String(message.sender_id) === String(userId)) return !message.deleted_for_sender_at;
+  if (String(message.recipient_id) === String(userId)) return !message.deleted_for_recipient_at;
+  return false;
+};
+
 export function MobileInboxProvider({ children }: { children: React.ReactNode }) {
   const {
     session,
@@ -179,9 +212,16 @@ export function MobileInboxProvider({ children }: { children: React.ReactNode })
   const [dmThreadPreferences, setDmThreadPreferences] = useState<MobileDmThreadPreferences>(
     createEmptyDmThreadPreferences()
   );
+  const [locallyDeletedDmMessageIds, setLocallyDeletedDmMessageIds] = useState<Set<string>>(
+    new Set()
+  );
   const hasInitializedUnreadThreads = useRef(false);
+  const locallyDeletedDmMessageIdsRef = useRef<Set<string>>(new Set());
   const dmThreadPreferencesStorageKey = currentUser.id
     ? `mobile-dm-thread-preferences-${currentUser.id}`
+    : null;
+  const dmMessageDeletesStorageKey = currentUser.id
+    ? `mobile-dm-message-deletes-${currentUser.id}`
     : null;
 
   useEffect(() => {
@@ -227,6 +267,76 @@ export function MobileInboxProvider({ children }: { children: React.ReactNode })
       console.error('Unable to persist mobile DM thread preferences:', error);
     });
   }, [dmThreadPreferences, dmThreadPreferencesStorageKey]);
+
+  useEffect(() => {
+    if (!dmMessageDeletesStorageKey) {
+      setLocallyDeletedDmMessageIds(new Set());
+      return;
+    }
+
+    let isActive = true;
+
+    const loadDeletedMessageIds = async () => {
+      try {
+        const stored = await AsyncStorage.getItem(dmMessageDeletesStorageKey);
+        if (!isActive) return;
+
+        setLocallyDeletedDmMessageIds(
+          new Set(stored ? normalizeStringList(JSON.parse(stored)) : [])
+        );
+      } catch (error) {
+        console.error('Unable to load local mobile DM message deletions:', error);
+        if (isActive) {
+          setLocallyDeletedDmMessageIds(new Set());
+        }
+      }
+    };
+
+    void loadDeletedMessageIds();
+
+    return () => {
+      isActive = false;
+    };
+  }, [dmMessageDeletesStorageKey]);
+
+  useEffect(() => {
+    locallyDeletedDmMessageIdsRef.current = locallyDeletedDmMessageIds;
+
+    if (locallyDeletedDmMessageIds.size === 0) return;
+
+    setMessageRows((currentRows) =>
+      currentRows.filter((message) => !locallyDeletedDmMessageIds.has(String(message.id)))
+    );
+  }, [locallyDeletedDmMessageIds]);
+
+  const persistLocallyDeletedDmMessageIds = (nextIds: Set<string>) => {
+    if (!dmMessageDeletesStorageKey) return;
+
+    void AsyncStorage.setItem(
+      dmMessageDeletesStorageKey,
+      JSON.stringify([...nextIds])
+    ).catch((error) => {
+      console.error('Unable to persist local mobile DM message deletions:', error);
+    });
+  };
+
+  const addLocallyDeletedDmMessageId = (messageId: string) => {
+    setLocallyDeletedDmMessageIds((currentIds) => {
+      const nextIds = new Set(currentIds);
+      nextIds.add(String(messageId));
+      persistLocallyDeletedDmMessageIds(nextIds);
+      return nextIds;
+    });
+  };
+
+  const removeLocallyDeletedDmMessageId = (messageId: string) => {
+    setLocallyDeletedDmMessageIds((currentIds) => {
+      const nextIds = new Set(currentIds);
+      nextIds.delete(String(messageId));
+      persistLocallyDeletedDmMessageIds(nextIds);
+      return nextIds;
+    });
+  };
 
   const persistDmThreadPreferencesToSupabase = (
     previousPreferences: MobileDmThreadPreferences,
@@ -345,20 +455,35 @@ export function MobileInboxProvider({ children }: { children: React.ReactNode })
     let isActive = true;
 
     const loadMessages = async () => {
-      const { data, error } = await client
+      let messageResult = await client
         .from('messages')
-        .select('id, sender_id, recipient_id, content, created_at, read')
+        .select(VISIBILITY_MESSAGE_SELECT)
         .or(`sender_id.eq.${session.user.id},recipient_id.eq.${session.user.id}`)
+        .is('unsent_at', null)
         .order('created_at', { ascending: true });
 
+      if (isMissingMessageVisibilityColumnError(messageResult.error)) {
+        messageResult = await client
+          .from('messages')
+          .select(BASE_MESSAGE_SELECT)
+          .or(`sender_id.eq.${session.user.id},recipient_id.eq.${session.user.id}`)
+          .order('created_at', { ascending: true });
+      }
+
       if (!isActive) return;
+
+      const { data, error } = messageResult;
 
       if (error) {
         console.error('Unable to load mobile DMs:', error);
         return;
       }
 
-      const nextRows = (data || []) as MessageRow[];
+      const nextRows = ((data || []) as MessageRow[]).filter(
+        (message) =>
+          isMessageVisibleForUser(message, session.user.id) &&
+          !locallyDeletedDmMessageIdsRef.current.has(String(message.id))
+      );
       setMessageRows(nextRows);
 
       if (!hasInitializedUnreadThreads.current) {
@@ -399,6 +524,10 @@ export function MobileInboxProvider({ children }: { children: React.ReactNode })
           );
 
           setMessageRows((currentRows) => {
+            if (locallyDeletedDmMessageIdsRef.current.has(String(nextMessage.id))) {
+              return currentRows;
+            }
+
             if (currentRows.some((message) => message.id === nextMessage.id)) {
               return currentRows;
             }
@@ -410,6 +539,60 @@ export function MobileInboxProvider({ children }: { children: React.ReactNode })
             const nextIds = new Set(currentIds);
             nextIds.add(String(nextMessage.sender_id));
             return nextIds;
+          });
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'messages',
+          filter: `sender_id=eq.${session.user.id}`,
+        },
+        (payload) => {
+          const nextMessage = payload.new as MessageRow;
+
+          setMessageRows((currentRows) => {
+            const visible =
+              isMessageVisibleForUser(nextMessage, session.user.id) &&
+              !locallyDeletedDmMessageIdsRef.current.has(String(nextMessage.id));
+            if (!visible) {
+              return currentRows.filter((message) => String(message.id) !== String(nextMessage.id));
+            }
+            if (currentRows.some((message) => String(message.id) === String(nextMessage.id))) {
+              return currentRows.map((message) =>
+                String(message.id) === String(nextMessage.id) ? nextMessage : message
+              );
+            }
+            return [...currentRows, nextMessage];
+          });
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'messages',
+          filter: `recipient_id=eq.${session.user.id}`,
+        },
+        (payload) => {
+          const nextMessage = payload.new as MessageRow;
+
+          setMessageRows((currentRows) => {
+            const visible =
+              isMessageVisibleForUser(nextMessage, session.user.id) &&
+              !locallyDeletedDmMessageIdsRef.current.has(String(nextMessage.id));
+            if (!visible) {
+              return currentRows.filter((message) => String(message.id) !== String(nextMessage.id));
+            }
+            if (currentRows.some((message) => String(message.id) === String(nextMessage.id))) {
+              return currentRows.map((message) =>
+                String(message.id) === String(nextMessage.id) ? nextMessage : message
+              );
+            }
+            return [...currentRows, nextMessage];
           });
         }
       )
@@ -466,7 +649,7 @@ export function MobileInboxProvider({ children }: { children: React.ReactNode })
           name: profile?.name || 'Campus User',
           username: profile?.username || '',
           image: profile?.avatar || '',
-          preview: message.content,
+          preview: formatDmMessagePreview(message.content),
           time: formatRelativeTime(message.created_at),
           isMuted: mutedIds.has(threadId),
           isPinned: pinnedIds.has(threadId),
@@ -715,10 +898,10 @@ export function MobileInboxProvider({ children }: { children: React.ReactNode })
   };
 
   const sendDmMessage = async (threadId: string, text: string) => {
-    if (!supabase || !currentUser.id) return;
+    if (!supabase || !currentUser.id) return false;
 
     const trimmedText = text.trim();
-    if (!trimmedText) return;
+    if (!trimmedText) return false;
 
     const tempId = `temp-${Date.now()}`;
     const optimisticMessage: MessageRow = {
@@ -747,7 +930,7 @@ export function MobileInboxProvider({ children }: { children: React.ReactNode })
       setMessageRows((currentRows) =>
         currentRows.filter((message) => message.id !== tempId)
       );
-      return;
+      return false;
     }
 
     setMessageRows((currentRows) =>
@@ -755,6 +938,7 @@ export function MobileInboxProvider({ children }: { children: React.ReactNode })
         message.id === tempId ? ((data as MessageRow) || message) : message
       )
     );
+    return true;
   };
 
   const deleteDmMessage = async (threadId: string, messageId: string) => {
@@ -770,19 +954,73 @@ export function MobileInboxProvider({ children }: { children: React.ReactNode })
     if (!supabase || !currentUser.id) return;
 
     const previousRows = messageRows;
+    addLocallyDeletedDmMessageId(messageId);
+    setMessageRows((currentRows) =>
+      currentRows.filter((message) => String(message.id) !== String(messageId))
+    );
+
+    const targetMessage = messageRows.find(
+      (message) => String(message.id) === String(messageId)
+    );
+    const deletedAtColumn =
+      targetMessage?.sender_id === currentUser.id
+        ? 'deleted_for_sender_at'
+        : 'deleted_for_recipient_at';
+
+    const { data, error } = await supabase
+      .from('messages')
+      .update({ [deletedAtColumn]: new Date().toISOString() })
+      .eq('id', messageId)
+      .or(`sender_id.eq.${currentUser.id},recipient_id.eq.${currentUser.id}`)
+      .select('id');
+
+    if (isMissingMessageVisibilityColumnError(error)) {
+      return;
+    }
+
+    if (error || !data?.length) {
+      console.error('Unable to delete mobile DM:', error || 'No message row deleted');
+      removeLocallyDeletedDmMessageId(messageId);
+      setMessageRows(previousRows);
+      openDmThread(threadId);
+    }
+  };
+
+  const unsendDmMessage = async (threadId: string, messageId: string) => {
+    if (!messageId || !supabase || !currentUser.id) return;
+
+    const previousRows = messageRows;
     setMessageRows((currentRows) =>
       currentRows.filter((message) => String(message.id) !== String(messageId))
     );
 
     const { data, error } = await supabase
       .from('messages')
-      .delete()
+      .update({ unsent_at: new Date().toISOString() })
       .eq('id', messageId)
-      .or(`sender_id.eq.${currentUser.id},recipient_id.eq.${currentUser.id}`)
+      .eq('sender_id', currentUser.id)
       .select('id');
 
+    if (isMissingMessageVisibilityColumnError(error)) {
+      const { data: deletedData, error: deleteError } = await supabase
+        .from('messages')
+        .delete()
+        .eq('id', messageId)
+        .eq('sender_id', currentUser.id)
+        .select('id');
+
+      if (!deleteError && deletedData?.length) {
+        return;
+      }
+
+      console.error('Unable to unsend mobile DM:', deleteError || 'No message row unsent');
+      setMessageRows(previousRows);
+      openDmThread(threadId);
+      return;
+    }
+
     if (error || !data?.length) {
-      console.error('Unable to delete mobile DM:', error || 'No message row deleted');
+      console.error('Unable to unsend mobile DM:', error || 'No message row unsent');
       setMessageRows(previousRows);
       openDmThread(threadId);
     }
@@ -810,6 +1048,7 @@ export function MobileInboxProvider({ children }: { children: React.ReactNode })
     openDmThread,
     sendDmMessage,
     deleteDmMessage,
+    unsendDmMessage,
   };
 
   return <MobileInboxContext.Provider value={value}>{children}</MobileInboxContext.Provider>;

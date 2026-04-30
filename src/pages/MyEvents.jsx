@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import CreateEvent from "../CreateEvent"
+import Discover from "./Discover"
 import ExploreEventModal from "../components/ExploreEventModal"
 import { applyEventImageFallback, getEventImageSrc } from "../eventImages"
 import { useEvents } from "../context/EventContext"
@@ -57,6 +58,12 @@ const VIEW_OPTIONS = [
   { id: "week", label: "Week" },
   { id: "month", label: "Month" },
   { id: "year", label: "Year" },
+]
+const EVENTS_PAGE_MODES = [
+  { id: "events", label: "Events" },
+  { id: "calendar", label: "Calendar" },
+  { id: "friends", label: "Friends" },
+  { id: "explore", label: "Explore" },
 ]
 const PERSONAL_STORAGE_KEY = "campus-personal-calendar-items"
 
@@ -549,6 +556,7 @@ function MyEvents() {
   const [isPersonalComposerOpen, setIsPersonalComposerOpen] = useState(false)
   const [isCreateMenuOpen, setIsCreateMenuOpen] = useState(false)
   const [isHeroHidden, setIsHeroHidden] = useState(false)
+  const [eventsPageMode, setEventsPageMode] = useState("calendar")
   const createMenuRef = useRef(null)
 
   const createMode = searchParams.get("create")
@@ -788,16 +796,6 @@ function MyEvents() {
     }
   }
 
-  const handleCreatePersonal = () => {
-    setPersonalDraft({
-      title: "",
-      date: getDateKey(anchorDate),
-      time: "",
-      note: "",
-    })
-    setIsPersonalComposerOpen(true)
-  }
-
   const closePersonalComposer = () => {
     setIsPersonalComposerOpen(false)
     if (isPersonalCreateRouteOpen) {
@@ -869,149 +867,175 @@ function MyEvents() {
 
   return (
     <main className={`calendar-page-shell ${isHeroHidden ? "hero-hidden" : ""}`}>
-      <section className="calendar-hero">
-        <div className="calendar-hero-heading">
-          <p className="calendar-hero-kicker">{getViewSubtitle(calendarView, anchorDate)}</p>
-          <h1>{getViewTitle(calendarView, anchorDate)}</h1>
-        </div>
-
+      <div className="web-events-mode-tabs-wrap">
         <SegmentedControl
-          label="Calendar view"
-          options={VIEW_OPTIONS}
-          value={calendarView}
-          onChange={setCalendarView}
-          className="calendar-view-control"
+          label="Events page mode"
+          options={EVENTS_PAGE_MODES}
+          value={eventsPageMode}
+          onChange={setEventsPageMode}
+          className="web-events-mode-tabs"
         />
+      </div>
 
-        <div className="calendar-hero-actions">
-          <label className="calendar-search calendar-search--inline">
-            <span aria-hidden="true">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
-                <path d="m20 20-3.8-3.8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              </svg>
-            </span>
-            <input
-              type="search"
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Search calendar"
-              aria-label="Search calendar"
-            />
-          </label>
+      {eventsPageMode === "events" ? (
+        <section className="web-events-discover-pane">
+          <Discover hideModeSwitch initialMode="events" />
+        </section>
+      ) : null}
 
-          <div className="calendar-date-controls" aria-label="Calendar navigation">
-            <button type="button" onClick={goToPrevious} aria-label="Previous">
-              ‹
-            </button>
-            <button type="button" className="today-btn" onClick={() => setAnchorDate(startOfDay(new Date()))}>
-              Today
-            </button>
-            <button type="button" onClick={goToNext} aria-label="Next">
-              ›
-            </button>
-          </div>
-        </div>
-      </section>
+      {eventsPageMode === "calendar" ? (
+        <>
+          <section className="calendar-hero">
+            <div className="calendar-hero-heading">
+              <p className="calendar-hero-kicker">{getViewSubtitle(calendarView, anchorDate)}</p>
+              <h1>{getViewTitle(calendarView, anchorDate)}</h1>
+            </div>
 
-      <div className="calendar-workspace">
-        <aside className="calendar-command-panel" aria-label="Calendar controls">
-          <div className="calendar-command-section">
-            <span className="calendar-command-kicker">Scope</span>
             <SegmentedControl
-              label="Calendar filter"
-              options={FILTER_OPTIONS}
-              value={calendarFilter}
-              onChange={setCalendarFilter}
-              className="calendar-filter-control"
+              label="Calendar view"
+              options={VIEW_OPTIONS}
+              value={calendarView}
+              onChange={setCalendarView}
+              className="calendar-view-control"
             />
-          </div>
 
-          <div className="calendar-command-section" ref={createMenuRef}>
-            <span className="calendar-command-kicker">Create</span>
-            <button
-              type="button"
-              className="calendar-command-btn calendar-create-trigger"
-              aria-haspopup="menu"
-              aria-expanded={isCreateMenuOpen}
-              onClick={() => setIsCreateMenuOpen((open) => !open)}
-            >
-              <span className="calendar-create-trigger-icon" aria-hidden="true">+</span>
-              <span>Create</span>
-            </button>
+            <div className="calendar-hero-actions">
+              <label className="calendar-search calendar-search--inline">
+                <span aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                    <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
+                    <path d="m20 20-3.8-3.8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                </span>
+                <input
+                  type="search"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="Search calendar"
+                  aria-label="Search calendar"
+                />
+              </label>
 
-            {isCreateMenuOpen && (
-              <div className="calendar-create-menu calendar-create-menu--panel" role="menu">
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => openCreateRoute("/home?create=post")}
-                >
-                  Post
+              <div className="calendar-date-controls" aria-label="Calendar navigation">
+                <button type="button" onClick={goToPrevious} aria-label="Previous">
+                  ‹
                 </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => openCreateRoute("/home?create=story")}
-                >
-                  Story
+                <button type="button" className="today-btn" onClick={() => setAnchorDate(startOfDay(new Date()))}>
+                  Today
                 </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => {
-                    setIsCreateMenuOpen(false)
-                    handleCreatePersonal()
-                  }}
-                >
-                  Personal
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => {
-                    setIsCreateMenuOpen(false)
-                    openCreateEventModal()
-                  }}
-                >
-                  Event
+                <button type="button" onClick={goToNext} aria-label="Next">
+                  ›
                 </button>
               </div>
-            )}
-          </div>
+            </div>
+          </section>
 
-          <div className="calendar-command-section">
-            <span className="calendar-command-kicker">Hosting</span>
-            <button
-              type="button"
-              className="calendar-command-btn calendar-manage-trigger"
-              onClick={() => navigate("/events/manage")}
+          <div className="calendar-workspace">
+            <aside className="calendar-command-panel" aria-label="Calendar controls">
+              <div className="calendar-command-section">
+                <span className="calendar-command-kicker">Scope</span>
+                <SegmentedControl
+                  label="Calendar filter"
+                  options={FILTER_OPTIONS}
+                  value={calendarFilter}
+                  onChange={setCalendarFilter}
+                  className="calendar-filter-control"
+                />
+              </div>
+
+              <div className="calendar-command-section" ref={createMenuRef}>
+                <span className="calendar-command-kicker">Create</span>
+                <button
+                  type="button"
+                  className="calendar-command-btn calendar-create-trigger"
+                  aria-haspopup="menu"
+                  aria-expanded={isCreateMenuOpen}
+                  onClick={() => setIsCreateMenuOpen((open) => !open)}
+                >
+                  <span className="calendar-create-trigger-icon" aria-hidden="true">+</span>
+                  <span>Create</span>
+                </button>
+
+                {isCreateMenuOpen && (
+                  <div className="calendar-create-menu calendar-create-menu--panel" role="menu">
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => openCreateRoute("/home?create=post")}
+                    >
+                      Post
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => openCreateRoute("/home?create=story")}
+                    >
+                      Story
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setIsCreateMenuOpen(false)
+                        openCreateEventModal()
+                      }}
+                    >
+                      Event
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div className="calendar-command-section">
+                <span className="calendar-command-kicker">Hosting</span>
+                <button
+                  type="button"
+                  className="calendar-command-btn calendar-manage-trigger"
+                  onClick={() => navigate("/events/manage")}
+                >
+                  <span aria-hidden="true">⚙</span>
+                  <span>Manage Events</span>
+                </button>
+              </div>
+
+              <div className="calendar-command-section">
+                <span className="calendar-command-kicker">My Events</span>
+                <MyEventsLane
+                  items={laneItems}
+                  onOpenItem={handleOpenCalendarItem}
+                  emptyMessage={laneEmptyMessage}
+                />
+              </div>
+            </aside>
+
+            <section
+              className={`calendar-main-surface view-${calendarView}`}
+              onTouchStart={handleTouchStart}
+              onTouchEnd={handleTouchEnd}
+              onMouseDown={handleMouseDown}
+              onMouseUp={handleMouseUp}
             >
-              <span aria-hidden="true">⚙</span>
-              <span>Manage Events</span>
-            </button>
+              {renderCalendarView()}
+            </section>
           </div>
+        </>
+      ) : null}
 
-          <div className="calendar-command-section">
-            <span className="calendar-command-kicker">My Events</span>
-            <MyEventsLane
-              items={laneItems}
-              onOpenItem={handleOpenCalendarItem}
-              emptyMessage={laneEmptyMessage}
-            />
-          </div>
-        </aside>
-
-        <section
-          className={`calendar-main-surface view-${calendarView}`}
-          onTouchStart={handleTouchStart}
-          onTouchEnd={handleTouchEnd}
-          onMouseDown={handleMouseDown}
-          onMouseUp={handleMouseUp}
-        >
-          {renderCalendarView()}
+      {eventsPageMode === "friends" ? (
+        <section className="web-events-placeholder-pane">
+          <p>Friends</p>
+          <h2>Friends activity is coming to web.</h2>
+          <span>Use this space for friend-hosted events and shared plans when the web view is ready.</span>
         </section>
-      </div>
+      ) : null}
+
+      {eventsPageMode === "explore" ? (
+        <section className="web-events-placeholder-pane">
+          <p>Explore</p>
+          <h2>Explore mode is coming to web events.</h2>
+          <span>Trending, nearby, and this-week event discovery can live here next.</span>
+        </section>
+      ) : null}
 
       {selectedCalendarEvent && (
         <ExploreEventModal

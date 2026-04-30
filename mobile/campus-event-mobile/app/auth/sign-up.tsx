@@ -26,7 +26,6 @@ import {
   StepOrgCategories,
   StepOrgInfo,
   StepOrgName,
-  StepOtp,
   StepPassword,
   StepPhone,
   StepSchool,
@@ -40,18 +39,17 @@ import { useMobileApp } from '@/providers/mobile-app-provider';
 
 type Stage = 'entry' | 'flow' | 'submitting' | 'done';
 
-// Personal: account-type → username → phone → otp → password → name+birth →
-// avatar → interests → terms → school (optional, with required .edu verify
-// if a school is selected). signUp fires at the end.
+// Personal: account-type → username → phone → password → name+birth →
+// avatar → interests → terms → school (optional). signUp fires at the end.
 const INDIVIDUAL_FLOW = [
-  'account-type', 'username', 'phone', 'otp', 'password',
+  'account-type', 'username', 'phone', 'password',
   'name-birth', 'avatar', 'interests', 'terms', 'school',
 ] as const;
 
-// Business: account-type → org-name → username → phone → otp → password →
+// Business: account-type → org-name → username → phone → password →
 // org-info (type + recovery email) → logo → categories → terms.
 const ORG_FLOW = [
-  'account-type', 'org-name', 'username', 'phone', 'otp', 'password',
+  'account-type', 'org-name', 'username', 'phone', 'password',
   'org-info', 'org-logo', 'org-categories', 'terms',
 ] as const;
 
@@ -104,7 +102,7 @@ export default function SignUpScreen() {
       const selectedSchool = US_SCHOOLS.find((s) => s.id === data.schoolId);
       const accountType: 'student' | 'organization' | 'regular' = isOrg
         ? 'organization'
-        : selectedSchool && data.schoolVerified
+        : selectedSchool
           ? 'student'
           : 'regular';
 
@@ -151,16 +149,6 @@ export default function SignUpScreen() {
 
       if (!result.ok) throw new Error(result.error || 'Unable to create your account right now.');
 
-      if (result.requiresEmailConfirmation) {
-        router.replace({
-          pathname: '/auth/sign-in',
-          params: {
-            notice: 'Account created. Check your email and then sign in.',
-          },
-        });
-        return;
-      }
-
       router.replace('/(tabs)/home');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Signup failed.');
@@ -201,9 +189,6 @@ export default function SignUpScreen() {
         break;
       case 'phone':
         body = <StepPhone data={data} update={update} goNext={goNext} />;
-        break;
-      case 'otp':
-        body = <StepOtp data={data} update={update} goNext={goNext} goBack={goBack} />;
         break;
       case 'password':
         body = <StepPassword data={data} update={update} goNext={goNext} />;

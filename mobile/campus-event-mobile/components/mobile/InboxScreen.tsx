@@ -21,7 +21,12 @@ import {
 } from 'react-native';
 
 import { useAppTheme } from '@/lib/app-theme';
-import { parseDmMessageForEventShare } from '@/lib/mobile-dm-content';
+import {
+  createDmEventAttachmentPayload,
+  parseDmEventAttachmentPayload,
+  parseDmMessageForEventShare,
+  type DmEventAttachmentPayload,
+} from '@/lib/mobile-dm-content';
 import { supabase } from '@/lib/supabase';
 import { getAvatarImageSource, getEventImageSource } from '@/lib/mobile-media';
 import { loadActiveProfileNotes, type ProfileNoteRecord } from '@/lib/mobile-profile-notes';
@@ -73,6 +78,43 @@ type ActiveMessageMenu = {
   left: number;
   top: number;
 };
+
+const buildEventAttachmentRecord = (
+  event: DmEventAttachmentPayload['event'],
+  localEvent?: EventRecord
+): EventRecord => ({
+  id: event.id,
+  title: localEvent?.title || event.title || 'Campus Event',
+  description: localEvent?.description || '',
+  date: localEvent?.date || event.date || 'Date TBA',
+  eventDate: localEvent?.eventDate || '',
+  startTime: localEvent?.startTime || '',
+  endTime: localEvent?.endTime || '',
+  time: localEvent?.time || event.time || 'Time TBA',
+  location: localEvent?.location || event.location || '',
+  locationName: localEvent?.locationName || event.location || '',
+  locationAddress: localEvent?.locationAddress || '',
+  locationCoordinates: localEvent?.locationCoordinates || null,
+  host: localEvent?.host || '',
+  organizer: localEvent?.organizer || '',
+  dressCode: localEvent?.dressCode || '',
+  image: localEvent?.image || event.image || '',
+  imageUrls: localEvent?.imageUrls || [],
+  price: localEvent?.price,
+  capacity: localEvent?.capacity,
+  tags: localEvent?.tags || [],
+  createdBy: localEvent?.createdBy || '',
+  creatorUsername: localEvent?.creatorUsername || '',
+  creatorName: localEvent?.creatorName || '',
+  creatorAvatar: localEvent?.creatorAvatar || '',
+  goingCount: localEvent?.goingCount || 0,
+  commentCount: localEvent?.commentCount || 0,
+  privacy: localEvent?.privacy || 'public',
+  isPrivate: localEvent?.isPrivate || false,
+  attendees: localEvent?.attendees || [],
+  repostedByIds: localEvent?.repostedByIds || [],
+  createdAt: localEvent?.createdAt,
+});
 
 type NotificationFilter = (typeof NOTIFICATION_FILTERS)[number]['key'];
 type NotificationSection = {
@@ -667,6 +709,7 @@ export function InboxScreen({
     openDmThread,
     sendDmMessage,
     deleteDmMessage,
+    unsendDmMessage,
   } = useMobileInbox();
   const {
     currentUser,
@@ -994,16 +1037,31 @@ export function InboxScreen({
     if (!activeThreadId) return;
 
     const trimmedDraft = draftMessage.trim();
-    const eventLink = attachedEvent ? `campus-event://event/${attachedEvent.id}` : '';
-    const messageBody = [trimmedDraft, eventLink].filter(Boolean).join('\n');
+    const messageBody = attachedEvent
+      ? createDmEventAttachmentPayload({
+          text: trimmedDraft,
+          event: {
+            id: attachedEvent.id,
+            title: attachedEvent.title,
+            image: attachedEvent.image,
+            date: attachedEvent.date,
+            time: attachedEvent.time,
+            location:
+              attachedEvent.locationName ||
+              attachedEvent.location ||
+              attachedEvent.locationAddress,
+          },
+        })
+      : trimmedDraft;
     if (!messageBody) return;
 
-    void sendDmMessage(activeThreadId, messageBody).then(() => {
+    void sendDmMessage(activeThreadId, messageBody).then((didSend) => {
+      if (!didSend) return;
+      setDraftMessage('');
+      setAttachedEvent(null);
+      setReplyingTo(null);
       scrollChatToBottom();
     });
-    setDraftMessage('');
-    setAttachedEvent(null);
-    setReplyingTo(null);
     scrollChatToBottom();
   };
 
@@ -1063,6 +1121,15 @@ export function InboxScreen({
   const handleDeleteMessage = () => {
     if (!activeThreadId || !activeMessageMenu) return;
     void deleteDmMessage(activeThreadId, activeMessageMenu.message.id);
+    if (replyingTo?.id === activeMessageMenu.message.id) {
+      setReplyingTo(null);
+    }
+    setActiveMessageMenu(null);
+  };
+
+  const handleUnsendMessage = () => {
+    if (!activeThreadId || !activeMessageMenu) return;
+    void unsendDmMessage(activeThreadId, activeMessageMenu.message.id);
     if (replyingTo?.id === activeMessageMenu.message.id) {
       setReplyingTo(null);
     }
@@ -1394,12 +1461,22 @@ export function InboxScreen({
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}>
               {(messagesByThread[activeThread.id] || []).map((message) => {
-                const eventShare = parseDmMessageForEventShare(message.text);
-                const sharedEvent = eventShare ? getEventById(eventShare.eventId) : undefined;
-                const showEventPreview = Boolean(eventShare && sharedEvent);
-                const textToRender = showEventPreview
-                  ? (eventShare?.trimmedBody || '').trim()
-                  : message.text;
+                const eventAttachment = parseDmEventAttachmentPayload(message.text);
+                const legacyEventShare = eventAttachment
+                  ? null
+                  : parseDmMessageForEventShare(message.text);
+                const eventId = eventAttachment?.event.id || legacyEventShare?.eventId || '';
+                const localEvent = eventId ? getEventById(eventId) : undefined;
+                const sharedEvent = eventAttachment
+                  ? buildEventAttachmentRecord(eventAttachment.event, localEvent)
+                  : localEvent;
+                const showEventPreview = Boolean(sharedEvent && (eventAttachment || legacyEventShare));
+                const textToRender = eventAttachment
+                  ? (eventAttachment.text || '').trim()
+                  : showEventPreview
+                    ? (legacyEventShare?.trimmedBody || '').trim()
+                    : message.text;
+                const isEventCardOnly = showEventPreview && !textToRender;
 
                 return (
                   <Pressable
@@ -1407,17 +1484,23 @@ export function InboxScreen({
                     delayLongPress={360}
                     onLongPress={(event) => openMessageMenu(message, event)}
                     style={[
-                      styles.chatBubble,
-                      message.sender === 'me' ? styles.chatBubbleMe : styles.chatBubbleThem,
-                      showEventPreview && styles.chatBubbleWithPreview,
+                      isEventCardOnly ? styles.chatEventCardPressable : styles.chatBubble,
+                      isEventCardOnly
+                        ? message.sender === 'me'
+                          ? styles.chatEventCardMe
+                          : styles.chatEventCardThem
+                        : message.sender === 'me'
+                          ? styles.chatBubbleMe
+                          : styles.chatBubbleThem,
+                      showEventPreview && !isEventCardOnly && styles.chatBubbleWithPreview,
                     ]}>
-                    {showEventPreview && sharedEvent && eventShare ? (
+                    {showEventPreview && sharedEvent ? (
                       <DmEventPreviewCard
                         event={sharedEvent}
                         onPress={() => {
                           router.push({
                             pathname: '/event/[id]',
-                            params: { id: eventShare.eventId },
+                            params: { id: eventId },
                           });
                         }}
                       />
@@ -1428,7 +1511,7 @@ export function InboxScreen({
                         style={[
                           styles.chatBubbleText,
                           message.sender === 'me' && styles.chatBubbleTextMe,
-                          showEventPreview && styles.chatBubbleTextWithPreview,
+                          showEventPreview && !isEventCardOnly && styles.chatBubbleTextWithPreview,
                         ]}>
                         {textToRender}
                       </Text>
@@ -1687,9 +1770,17 @@ export function InboxScreen({
                       <Pressable style={styles.messageActionRow} onPress={handleDeleteMessage}>
                         <Ionicons name="trash-outline" size={18} color="#ff5d73" />
                         <Text style={[styles.messageActionText, styles.messageActionDanger]}>
-                          Delete message
+                          Delete for me
                         </Text>
                       </Pressable>
+                      {activeMessageMenu.message.sender === 'me' ? (
+                        <Pressable style={styles.messageActionRow} onPress={handleUnsendMessage}>
+                          <Ionicons name="remove-circle-outline" size={18} color="#ff5d73" />
+                          <Text style={[styles.messageActionText, styles.messageActionDanger]}>
+                            Unsend
+                          </Text>
+                        </Pressable>
+                      ) : null}
                     </View>
                   </Pressable>
                 ) : null}
@@ -2850,6 +2941,16 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       backgroundColor: theme.surface,
       borderWidth: 1,
       borderColor: theme.border,
+    },
+    chatEventCardPressable: {
+      position: 'relative',
+      maxWidth: '82%',
+    },
+    chatEventCardMe: {
+      alignSelf: 'flex-end',
+    },
+    chatEventCardThem: {
+      alignSelf: 'flex-start',
     },
     chatBubbleText: {
       color: theme.text,

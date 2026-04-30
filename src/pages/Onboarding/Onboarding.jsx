@@ -23,7 +23,6 @@ import {
   StepOrgCategories,
   StepOrgInfo,
   StepOrgName,
-  StepOtp,
   StepPassword,
   StepPhone,
   StepSchool,
@@ -33,14 +32,13 @@ import {
 } from "./OnboardingSteps"
 import "./Onboarding.css"
 
-// Personal flow per spec: account-type → username → phone → otp → password →
-// name+birth → avatar → interests → terms → school (optional, with required
-// .edu verify if a school is selected). signUp fires at flow end.
+// Personal flow per spec: account-type → username → phone → password →
+// name+birth → avatar → interests → terms → school (optional).
+// signUp fires at flow end.
 const INDIVIDUAL_FLOW = [
   "account-type",
   "username",
   "phone",
-  "otp",
   "password",
   "name-birth",
   "avatar",
@@ -49,14 +47,13 @@ const INDIVIDUAL_FLOW = [
   "school",
 ]
 
-// Business flow: account-type → org-name → username → phone → otp → password →
+// Business flow: account-type → org-name → username → phone → password →
 // org-info (type + recovery email) → logo → categories → terms. signUp at end.
 const ORG_FLOW = [
   "account-type",
   "org-name",
   "username",
   "phone",
-  "otp",
   "password",
   "org-info",
   "org-logo",
@@ -146,7 +143,7 @@ export default function Onboarding() {
       // student) or organization. No more upfront "are you in college?" step.
       const accountType = isOrg
         ? "organization"
-        : selectedSchool && data.schoolVerified
+        : selectedSchool
         ? "student"
         : "regular"
 
@@ -192,8 +189,10 @@ export default function Onboarding() {
         username: cleanUsername || cleanOrgName.toLowerCase().replace(/\s+/g, ""),
         name: fullName || cleanUsername,
         email: cleanEmail,
+        email_verified: false,
         phone: cleanPhone,
         phone_number: cleanPhone,
+        phone_verified: false,
         interests,
         categories: isOrg ? data.orgCategories || [] : [],
         avatar_url: fallbackAvatar,
@@ -229,8 +228,19 @@ export default function Onboarding() {
       if (signUpError) throw signUpError
       if (!signUpData.user) throw new Error("Signup failed.")
 
+      let activeSession = signUpData.session
+      if (!activeSession) {
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+          email: cleanEmail,
+          password: data.password,
+        })
+        if (!signInError && signInData.session) {
+          activeSession = signInData.session
+        }
+      }
+
       // Upload avatar/logo if we have a session (i.e. email confirmation off).
-      if (signUpData.session && data.avatarFile) {
+      if (activeSession && data.avatarFile) {
         const url = await uploadProfileImageToStorage({
           userId: signUpData.user.id,
           file: data.avatarFile,
@@ -250,8 +260,8 @@ export default function Onboarding() {
         }
       }
 
-      if (signUpData.session) {
-        await syncStoredUserFromSession(signUpData.session)
+      if (activeSession) {
+        await syncStoredUserFromSession(activeSession)
         navigate(destination === "edit" ? "/edit-profile" : "/home", { replace: true })
         return
       }
@@ -260,8 +270,8 @@ export default function Onboarding() {
       sessionStorage.setItem(
         "authMessage",
         destination === "edit"
-          ? "Account created. Confirm your email, then we'll take you to edit your profile."
-          : "Account created. Check your email to verify, then log in."
+          ? "Account created. Sign in, then we'll take you to edit your profile."
+          : "Account created. Sign in with your new account."
       )
       setStage("done")
     } catch (e) {
@@ -314,9 +324,6 @@ export default function Onboarding() {
       break
     case "phone":
       body = <StepPhone data={data} update={update} goNext={goNext} />
-      break
-    case "otp":
-      body = <StepOtp data={data} update={update} goNext={goNext} goBack={goBack} />
       break
     case "password":
       body = <StepPassword data={data} update={update} goNext={goNext} />

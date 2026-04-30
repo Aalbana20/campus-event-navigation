@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import {
   sanitizeAvatarStorageValue,
+  syncStoredUserFromSession,
   uploadProfileImageToStorage,
 } from "../profileMedia"
 import {
@@ -272,7 +273,9 @@ function SignUp() {
         username: normalizedUsername,
         name: fullName || normalizedUsername,
         email: cleanEmail,
+        email_verified: false,
         phone_number: cleanPhoneNumber,
+        phone_verified: false,
         interests: isPersonalAccount ? selectedInterests : [],
         avatar_url: fallbackAvatarValue,
         bio: profileBio,
@@ -312,8 +315,19 @@ function SignUp() {
         return
       }
 
+      let activeSession = data.session
+      if (!activeSession) {
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+          email: cleanEmail,
+          password: form.password,
+        })
+        if (!signInError && signInData.session) {
+          activeSession = signInData.session
+        }
+      }
+
       const avatarUrl =
-        data.session && profileImageFile
+        activeSession && profileImageFile
           ? await uploadProfileImageToStorage({
               userId: data.user.id,
               file: profileImageFile,
@@ -329,7 +343,7 @@ function SignUp() {
       // upsert when the user is already signed in (i.e. email confirmation is
       // off) and we uploaded a profile image after auth.signUp — in which case
       // we patch the avatar/logo URL. RLS will allow it because auth.uid() === id.
-      if (data.session && avatarUrl && avatarUrl !== fallbackAvatarValue) {
+      if (activeSession && avatarUrl && avatarUrl !== fallbackAvatarValue) {
         const { error: metadataError } = await supabase.auth.updateUser({
           data: {
             ...metadata,
@@ -357,16 +371,16 @@ function SignUp() {
         }
       }
 
-      if (data.session) {
-        await supabase.auth.signOut()
+      if (activeSession) {
+        await syncStoredUserFromSession(activeSession)
+        navigate("/home", { replace: true })
+        return
       }
 
       localStorage.removeItem("user")
       sessionStorage.setItem(
         "authMessage",
-        data.session
-          ? "Account created. Log in with your new account."
-          : "Account created. Check your email to verify it, then log in."
+        "Account created. Sign in with your new account."
       )
       navigate("/auth/login", { replace: true })
     } catch (error) {

@@ -441,6 +441,7 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       flexDirection: 'column',
       alignItems: 'flex-start',
       gap: 6,
+      transform: [{ translateY: -28 }],
     },
     infoPill: {
       flexDirection: 'row',

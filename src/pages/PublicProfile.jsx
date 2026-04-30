@@ -1,4 +1,23 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react"
+import {
+  Activity,
+  Ban,
+  Bell,
+  CalendarDays,
+  ChevronLeft,
+  EyeOff,
+  Flag,
+  Info,
+  Link as LinkIcon,
+  MessageCircle,
+  MoreHorizontal,
+  Share2,
+  UserMinus,
+  Video,
+  Volume2,
+  VolumeX,
+  X,
+} from "lucide-react"
 import { Navigate, useNavigate, useParams } from "react-router-dom"
 import { useEvents } from "../context/EventContext"
 import { DEFAULT_AVATAR_URL, sanitizeAvatarUrl } from "../profileMedia"
@@ -41,6 +60,11 @@ function PublicProfile() {
   const [isMutualsListOpen, setIsMutualsListOpen] = useState(false)
   const [mutualsListUsers, setMutualsListUsers] = useState([])
   const [isMutualsListLoading, setIsMutualsListLoading] = useState(false)
+  const [isMuted, setIsMuted] = useState(false)
+  const [isBlocked, setIsBlocked] = useState(false)
+  const [notificationMenuOpen, setNotificationMenuOpen] = useState(false)
+  const [activeProfileSheet, setActiveProfileSheet] = useState(null)
+  const [reportStep, setReportStep] = useState("topic")
 
   const loadCounts = useCallback(async (profileId) => {
     if (!profileId) {
@@ -292,6 +316,11 @@ function PublicProfile() {
     setMutualFollowerIds([])
     setIsMutualsListOpen(false)
     setMutualsListUsers([])
+    setIsMuted(false)
+    setIsBlocked(false)
+    setNotificationMenuOpen(false)
+    setActiveProfileSheet(null)
+    setReportStep("topic")
   }, [viewedUsername])
 
   useEffect(() => {
@@ -338,7 +367,39 @@ function PublicProfile() {
   const isFollowingProfile =
     followOverride === null ? derivedIsFollowing : followOverride
 
+  const profileDisplayName = profile?.name || profile?.username || "this profile"
+  const profileUsernameLabel = profile?.username ? `@${profile.username}` : profileDisplayName
+  const profileUrl = profile
+    ? `${window.location.origin}/#/profile/${profile.username || profile.id}`
+    : ""
+  const profileAvatarUrl = profile
+    ? sanitizeAvatarUrl(profile.avatar_url, defaultAvatar)
+    : defaultAvatar
+  const currentUserAvatarUrl = sanitizeAvatarUrl(
+    currentUser?.avatar_url || currentUser?.avatar || "",
+    defaultAvatar
+  )
+  const joinedDateLabel =
+    profile?.created_at || profile?.createdAt
+      ? new Date(profile.created_at || profile.createdAt).toLocaleDateString("en-US", {
+          month: "long",
+          year: "numeric",
+        })
+      : "Not available"
+  const locationLabel =
+    profile?.location ||
+    profile?.country ||
+    profile?.campus ||
+    profile?.hometown ||
+    "Not available"
+
   const handleToggleFollow = async () => {
+    if (isBlocked) {
+      setIsBlocked(false)
+      setMenuFeedback(`${profileUsernameLabel} unblocked.`)
+      return
+    }
+
     if (!profile?.id || isFollowBusy) return
 
     const nextIsFollowing = !isFollowingProfile
@@ -373,13 +434,16 @@ function PublicProfile() {
     setMenuOpen(false)
   }
 
+  const closeProfileSheet = () => {
+    setActiveProfileSheet(null)
+    setReportStep("topic")
+  }
+
   const copyProfileLink = async () => {
     if (!profile) return
 
-    const profileLink = `${window.location.origin}/#/profile/${profile.username || profile.id}`
-
     try {
-      await navigator.clipboard.writeText(profileLink)
+      await navigator.clipboard.writeText(profileUrl)
       setMenuFeedback("Profile link copied.")
     } catch {
       setMenuFeedback("Could not copy link.")
@@ -395,10 +459,6 @@ function PublicProfile() {
   const handleShareProfile = async () => {
     if (!profile) return
 
-    const profileLink = `${window.location.origin}/#/profile/${profile.username || profile.id}`
-    const profileDisplayName =
-      profile.name || (profile.username ? `@${profile.username}` : "this profile")
-
     if (!navigator.share) {
       await copyProfileLink()
       return
@@ -408,7 +468,7 @@ function PublicProfile() {
       await navigator.share({
         title: profile.name || profile.username || "Campus Event profile",
         text: `Check out ${profileDisplayName} on Campus Event Navigation.`,
-        url: profileLink,
+        url: profileUrl,
       })
       setMenuFeedback("Profile shared.")
       closeMenu()
@@ -423,17 +483,76 @@ function PublicProfile() {
   }
 
   const handleReportProfile = () => {
-    setMenuFeedback("Report received. We'll take a look.")
     closeMenu()
+    setReportStep("topic")
+    setActiveProfileSheet("report")
   }
 
   const handleBlockProfile = () => {
-    setMenuFeedback("Block tools are not connected yet.")
+    setIsBlocked((currentValue) => {
+      const nextValue = !currentValue
+      setMenuFeedback(
+        nextValue
+          ? `${profileUsernameLabel} blocked locally.`
+          : `${profileUsernameLabel} unblocked.`
+      )
+      return nextValue
+    })
     closeMenu()
   }
 
-  const handleSuggestedProfiles = () => {
-    setMenuFeedback("Suggested profiles are coming soon.")
+  const handleMuteProfile = () => {
+    setIsMuted((currentValue) => {
+      const nextValue = !currentValue
+      setMenuFeedback(
+        nextValue
+          ? `${profileUsernameLabel} muted locally.`
+          : `${profileUsernameLabel} unmuted.`
+      )
+      return nextValue
+    })
+    closeMenu()
+  }
+
+  const handleHideStory = () => {
+    setMenuFeedback("Story hiding is a placeholder for now.")
+    closeMenu()
+  }
+
+  const handleRemoveFollower = async () => {
+    if (!profile?.id) return
+
+    closeMenu()
+
+    const { data: authData } = await supabase.auth.getUser()
+    const currentUserId = currentUser?.id || authData?.user?.id
+
+    if (!currentUserId) {
+      setMenuFeedback("Sign in again to remove a follower.")
+      return
+    }
+
+    const { error } = await supabase
+      .from("follows")
+      .delete()
+      .eq("follower_id", profile.id)
+      .eq("following_id", currentUserId)
+
+    setMenuFeedback(
+      error
+        ? "Could not remove follower right now."
+        : `${profileUsernameLabel} removed as your follower.`
+    )
+  }
+
+  const handleNotificationPreference = (label) => {
+    setMenuFeedback(`${label} notifications preference saved locally.`)
+    setNotificationMenuOpen(false)
+  }
+
+  const handleReportReason = (label) => {
+    setMenuFeedback(`Report selected: ${label}.`)
+    closeProfileSheet()
   }
 
   const loadPanelUsers = useCallback(async (panelType) => {
@@ -613,16 +732,25 @@ function PublicProfile() {
                 </h2>
               </div>
 
-              <button
-                type="button"
-                className="profile-menu-btn"
-                onClick={() => setMenuOpen(true)}
-                aria-label="Open profile actions"
-              >
-                <span />
-                <span />
-                <span />
-              </button>
+              <div className="public-profile-top-actions">
+                <button
+                  type="button"
+                  className="profile-icon-action-btn"
+                  onClick={() => setNotificationMenuOpen(true)}
+                  aria-label="Open profile notification preferences"
+                >
+                  <Bell size={20} strokeWidth={2.3} />
+                </button>
+
+                <button
+                  type="button"
+                  className="profile-menu-btn"
+                  onClick={() => setMenuOpen(true)}
+                  aria-label="Open profile actions"
+                >
+                  <MoreHorizontal size={23} strokeWidth={2.5} />
+                </button>
+              </div>
             </div>
 
             <div className="profile-stats">
@@ -686,11 +814,17 @@ function PublicProfile() {
             <div className="profile-action-row public-profile-action-row">
               <button
                 type="button"
-                className={`profile-action-btn public-profile-btn ${isFollowingProfile ? "secondary" : ""}`}
+                className={`profile-action-btn public-profile-btn ${isFollowingProfile ? "secondary" : ""} ${isBlocked ? "blocked" : ""}`}
                 onClick={handleToggleFollow}
                 disabled={isFollowBusy}
               >
-                {isFollowBusy ? "Working..." : isFollowingProfile ? "Following" : "Follow"}
+                {isFollowBusy
+                  ? "Working..."
+                  : isBlocked
+                    ? "Blocked"
+                    : isFollowingProfile
+                      ? "Following"
+                      : "Follow"}
               </button>
 
               <button
@@ -869,7 +1003,17 @@ function PublicProfile() {
                 className="menu-action-btn danger"
                 onClick={handleReportProfile}
               >
+                <Flag size={18} />
                 Report
+              </button>
+
+              <button
+                type="button"
+                className="menu-action-btn"
+                onClick={handleMuteProfile}
+              >
+                {isMuted ? <Volume2 size={18} /> : <VolumeX size={18} />}
+                {isMuted ? `Unmute ${profileUsernameLabel}` : `Mute ${profileUsernameLabel}`}
               </button>
 
               <button
@@ -877,7 +1021,50 @@ function PublicProfile() {
                 className="menu-action-btn danger"
                 onClick={handleBlockProfile}
               >
-                Block
+                <Ban size={18} />
+                {isBlocked ? `Unblock ${profileUsernameLabel}` : `Block ${profileUsernameLabel}`}
+              </button>
+
+              <button
+                type="button"
+                className="menu-action-btn"
+                onClick={() => {
+                  closeMenu()
+                  setActiveProfileSheet("about")
+                }}
+              >
+                <Info size={18} />
+                About this account
+              </button>
+
+              <button
+                type="button"
+                className="menu-action-btn"
+                onClick={() => {
+                  closeMenu()
+                  setActiveProfileSheet("shared")
+                }}
+              >
+                <Activity size={18} />
+                See shared activity
+              </button>
+
+              <button
+                type="button"
+                className="menu-action-btn"
+                onClick={handleHideStory}
+              >
+                <EyeOff size={18} />
+                Hide your story
+              </button>
+
+              <button
+                type="button"
+                className="menu-action-btn danger"
+                onClick={handleRemoveFollower}
+              >
+                <UserMinus size={18} />
+                Remove follower
               </button>
 
               <button
@@ -885,7 +1072,8 @@ function PublicProfile() {
                 className="menu-action-btn"
                 onClick={handleCopyProfile}
               >
-                Copy Profile Link
+                <LinkIcon size={18} />
+                Copy profile URL
               </button>
 
               <button
@@ -893,7 +1081,8 @@ function PublicProfile() {
                 className="menu-action-btn"
                 onClick={handleShareProfile}
               >
-                Share Profile
+                <Share2 size={18} />
+                Share this profile
               </button>
 
               <button
@@ -904,6 +1093,222 @@ function PublicProfile() {
                 Cancel
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {notificationMenuOpen && (
+        <div className="menu-overlay" onClick={() => setNotificationMenuOpen(false)}>
+          <div className="menu-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="profile-sheet-heading">
+              <h3>Notifications</h3>
+              <p>Choose what you want to hear about from {profileUsernameLabel}.</p>
+            </div>
+            <div className="menu-actions">
+              {[
+                ["All accounts you follow", Bell],
+                ["Events", CalendarDays],
+                ["Stories", Activity],
+                ["Posts", MessageCircle],
+                ["Videos", Video],
+                ["Live", Bell],
+                [`Notifications from ${profileUsernameLabel}`, Bell],
+              ].map(([label, IconComponent]) => {
+                const icon = React.createElement(IconComponent, { size: 18 })
+
+                return (
+                  <button
+                    type="button"
+                    className="menu-action-btn"
+                    key={label}
+                    onClick={() => handleNotificationPreference(label)}
+                  >
+                    {icon}
+                    {label}
+                  </button>
+                )
+              })}
+
+              <button
+                type="button"
+                className="menu-action-btn cancel"
+                onClick={() => setNotificationMenuOpen(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeProfileSheet && (
+        <div className="profile-overlay" onClick={closeProfileSheet}>
+          <div
+            className="profile-modal public-profile-detail-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="profile-modal-header">
+              {activeProfileSheet === "report" && reportStep === "reason" ? (
+                <button
+                  type="button"
+                  className="profile-sheet-back"
+                  onClick={() => setReportStep("topic")}
+                  aria-label="Back to report topics"
+                >
+                  <ChevronLeft size={20} />
+                </button>
+              ) : (
+                <span className="profile-sheet-header-spacer" />
+              )}
+
+              <h3>
+                {activeProfileSheet === "about"
+                  ? "About this account"
+                  : activeProfileSheet === "shared"
+                    ? "Shared activity"
+                    : reportStep === "reason"
+                      ? "Why are you reporting this profile?"
+                      : "What do you want to report?"}
+              </h3>
+
+              <button
+                type="button"
+                className="profile-modal-close"
+                onClick={closeProfileSheet}
+                aria-label="Close profile detail"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {activeProfileSheet === "about" ? (
+              <div className="profile-detail-content">
+                <div className="profile-about-card">
+                  <img
+                    src={profileAvatarUrl}
+                    alt={profileDisplayName}
+                    onError={(event) => {
+                      event.currentTarget.src = defaultAvatar
+                    }}
+                  />
+                  <div>
+                    <strong>{profileDisplayName}</strong>
+                    <span>{profileUsernameLabel}</span>
+                  </div>
+                </div>
+
+                <div className="profile-info-list">
+                  <div className="profile-info-row">
+                    <CalendarDays size={20} />
+                    <div>
+                      <span>Date joined VeroVite</span>
+                      <strong>{joinedDateLabel}</strong>
+                    </div>
+                  </div>
+                  <div className="profile-info-row">
+                    <Info size={20} />
+                    <div>
+                      <span>Based in</span>
+                      <strong>{locationLabel}</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {activeProfileSheet === "shared" ? (
+              <div className="profile-detail-content">
+                <div className="shared-activity-avatars">
+                  <img
+                    src={currentUserAvatarUrl}
+                    alt={currentUser?.name || currentUser?.username || "You"}
+                    onError={(event) => {
+                      event.currentTarget.src = defaultAvatar
+                    }}
+                  />
+                  <img
+                    src={profileAvatarUrl}
+                    alt={profileDisplayName}
+                    onError={(event) => {
+                      event.currentTarget.src = defaultAvatar
+                    }}
+                  />
+                </div>
+
+                <div className="shared-activity-section">
+                  <h4>Follow relationship</h4>
+                  <p>{isFollowingProfile ? `You follow ${profileUsernameLabel}.` : `You do not follow ${profileUsernameLabel}.`}</p>
+                  <p>Follower relationship from {profileUsernameLabel} to you is checked when removing follower.</p>
+                </div>
+
+                <div className="shared-activity-section">
+                  <h4>Likes</h4>
+                  <p>Posts from {profileUsernameLabel} that I liked: 0</p>
+                  <p>Posts from me that {profileUsernameLabel} liked: 0</p>
+                </div>
+
+                <div className="shared-activity-section">
+                  <h4>Comments</h4>
+                  <p>Comments I made on their posts: 0</p>
+                  <p>Comments they made on my posts: 0</p>
+                </div>
+
+                <div className="shared-activity-section">
+                  <h4>Tags</h4>
+                  <p>Tags involving me and {profileUsernameLabel}: 0</p>
+                </div>
+              </div>
+            ) : null}
+
+            {activeProfileSheet === "report" ? (
+              <div className="profile-detail-content">
+                {reportStep === "topic" ? (
+                  <>
+                    <p className="report-helper">
+                      Reports are kept private. If there is an immediate safety concern,
+                      contact local emergency services right away.
+                    </p>
+                    {[
+                      "A specific post",
+                      "A recent message they sent you",
+                      "Something about this account",
+                    ].map((label) => (
+                      <button
+                        type="button"
+                        className="profile-report-option"
+                        key={label}
+                        onClick={() => {
+                          if (label === "Something about this account") {
+                            setReportStep("reason")
+                            return
+                          }
+
+                          handleReportReason(label)
+                        }}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </>
+                ) : (
+                  [
+                    "They are pretending to be someone else",
+                    "They may be under the minimum age",
+                    "This account may have been hacked",
+                    "Something else",
+                  ].map((label) => (
+                    <button
+                      type="button"
+                      className="profile-report-option"
+                      key={label}
+                      onClick={() => handleReportReason(label)}
+                    >
+                      {label}
+                    </button>
+                  ))
+                )}
+              </div>
+            ) : null}
           </div>
         </div>
       )}

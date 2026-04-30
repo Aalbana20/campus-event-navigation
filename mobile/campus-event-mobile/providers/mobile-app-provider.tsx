@@ -2210,8 +2210,10 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
             name: cleanFullName,
             username: cleanUsername,
             email: cleanEmail,
+            email_verified: false,
             phone: cleanPhoneNumber,
             phone_number: cleanPhoneNumber,
+            phone_verified: false,
             interests: cleanInterests,
             categories: cleanCategories,
             bio: profileBio,
@@ -2259,26 +2261,41 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
         };
       }
 
+      let activeSession = data.session;
+      let activeUser = data.user;
+
+      if (!activeSession) {
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+          email: cleanEmail,
+          password: input.password,
+        });
+
+        if (!signInError && signInData.session) {
+          activeSession = signInData.session;
+          activeUser = signInData.user || activeUser;
+        }
+      }
+
       // The auth.users insert trigger has already populated every column on
       // the profiles row from the metadata above. No client-side upsert is
       // needed — attempting one when email confirmation is on would also fail
       // RLS because there is no session yet.
-      if (data.session) {
-        setSession(data.session);
-        sessionRef.current = data.session;
+      if (activeSession) {
+        setSession(activeSession);
+        sessionRef.current = activeSession;
         setIsReady(true);
-        void hydrateStartupCache(data.session.user.id);
-        void refreshData(data.session.user.id, data.session.user);
+        void hydrateStartupCache(activeSession.user.id);
+        void refreshData(activeSession.user.id, activeUser);
       } else {
         setIsReady(true);
       }
 
       return {
         ok: true,
-        message: data.session
+        message: activeSession
           ? 'Account created.'
-          : 'Account created. Check your email and then sign in.',
-        requiresEmailConfirmation: !data.session,
+          : 'Account created. Sign in with your new account.',
+        requiresEmailConfirmation: !activeSession,
       };
     },
     [hydrateStartupCache, refreshData]

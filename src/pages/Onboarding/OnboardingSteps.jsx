@@ -114,9 +114,7 @@ export function StepCollege({ data, update, goNext }) {
   )
 }
 
-/* ---------------- Step: School (optional) + required .edu verification ----
-   Final step before signup completes. The user can skip school entirely; if
-   they pick one, they MUST verify a matching .edu email before continuing. */
+/* ---------------- Step: School (optional, verification bypassed for testing) ---- */
 export function StepSchool({ data, update, onFinish, onSkip }) {
   const [query, setQuery] = useState(data.schoolLabel || "")
   const [showResults, setShowResults] = useState(false)
@@ -134,24 +132,10 @@ export function StepSchool({ data, update, onFinish, onSkip }) {
   const selectedSchool = US_SCHOOLS.find((s) => s.id === data.schoolId)
   const expectedDomain = selectedSchool?.domains?.[0]
 
-  const emailMatches =
-    !!expectedDomain &&
-    isValidEmail(data.eduEmail || "") &&
-    (data.eduEmail || "").trim().toLowerCase().endsWith(`@${expectedDomain}`)
-
   const handleVerify = () => {
-    if (!emailMatches) {
-      setError(`Use a ${expectedDomain} email to verify your school.`)
-      return
-    }
     setError("")
-    setPhase("sending")
-    // Verification placeholder. Real flow would call supabase.auth.signInWithOtp({ email })
-    // here and gate progression on the user clicking the magic link, then verifying server-side.
-    setTimeout(() => {
-      update({ schoolVerified: true })
-      setPhase("verified")
-    }, 1100)
+    update({ schoolVerified: false })
+    onFinish()
   }
 
   if (phase === "verified") {
@@ -184,7 +168,7 @@ export function StepSchool({ data, update, onFinish, onSkip }) {
   return (
     <>
       <h1 className="onb-title">Add your school</h1>
-      <p className="onb-subtitle">Stay in the loop with campus events. Optional — skip and you'll still see public ones.</p>
+      <p className="onb-subtitle">Stay in the loop with campus events. Optional — verification is off for testing.</p>
 
       <div className="onb-field">
         <div className="onb-input-wrap">
@@ -232,7 +216,7 @@ export function StepSchool({ data, update, onFinish, onSkip }) {
           autoComplete="email"
           value={data.eduEmail || ""}
           onChange={(e) => update({ eduEmail: e.target.value })}
-          helper={expectedDomain ? `Must end with @${expectedDomain}` : null}
+          helper={expectedDomain ? `Optional: ${expectedDomain} email` : null}
         />
       ) : null}
 
@@ -242,9 +226,9 @@ export function StepSchool({ data, update, onFinish, onSkip }) {
       <div className="onb-actions">
         <PrimaryButton
           onClick={handleVerify}
-          disabled={!data.schoolId || !data.eduEmail || phase === "sending"}
+          disabled={!data.schoolId}
         >
-          {phase === "sending" ? "Sending..." : "Verify school email"}
+          Continue
         </PrimaryButton>
         <button type="button" className="onb-skip-link" onClick={onSkip}>
           Skip — I'll add it later
@@ -493,7 +477,7 @@ export function StepPhone({ data, update, goNext }) {
   return (
     <>
       <h1 className="onb-title">Your phone number</h1>
-      <p className="onb-subtitle">We'll text a code to confirm it's you.</p>
+      <p className="onb-subtitle">For account recovery and important updates only.</p>
 
       <div className="onb-phone-row">
         <button type="button" className="onb-cc-btn">🇺🇸 +1</button>
@@ -509,7 +493,7 @@ export function StepPhone({ data, update, goNext }) {
 
       <div className="onb-spacer" />
       <div className="onb-actions">
-        <PrimaryButton onClick={goNext} disabled={!ready}>Send code</PrimaryButton>
+        <PrimaryButton onClick={goNext} disabled={!ready}>Next</PrimaryButton>
       </div>
     </>
   )

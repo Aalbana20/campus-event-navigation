@@ -1,10 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useIsFocused } from '@react-navigation/native';
+import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Animated,
+  Modal,
   PanResponder,
   Pressable,
   RefreshControl,
@@ -62,6 +64,61 @@ type DiscoverScreenProps = {
   initialMode?: 'events' | 'friends';
   embedded?: boolean;
 };
+
+type EventConflict = {
+  existingEvent: EventRecord;
+  attemptedEvent: EventRecord;
+};
+
+const normalizeDateKey = (event: EventRecord) => event.eventDate || event.date || '';
+
+const parseClockTime = (value: string) => {
+  const trimmed = value.trim();
+  const match = trimmed.match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?$/i);
+  if (!match) return null;
+
+  let hours = Number(match[1]);
+  const minutes = Number(match[2] || 0);
+  const period = match[3]?.toUpperCase();
+
+  if (period === 'PM' && hours < 12) hours += 12;
+  if (period === 'AM' && hours === 12) hours = 0;
+  if (hours > 23 || minutes > 59) return null;
+
+  return hours * 60 + minutes;
+};
+
+const parseEventInterval = (event: EventRecord) => {
+  const explicitStart = parseClockTime(event.startTime || '');
+  const explicitEnd = parseClockTime(event.endTime || '');
+  if (explicitStart !== null && explicitEnd !== null && explicitEnd > explicitStart) {
+    return { start: explicitStart, end: explicitEnd };
+  }
+
+  const [startLabel, endLabel] = (event.time || '').split(/\s*[-–]\s*/);
+  const start = parseClockTime(startLabel || '');
+  const end = parseClockTime(endLabel || '');
+  if (start === null || end === null || end <= start) return null;
+
+  return { start, end };
+};
+
+const eventsOverlap = (left: EventRecord, right: EventRecord) => {
+  if (!normalizeDateKey(left) || normalizeDateKey(left) !== normalizeDateKey(right)) {
+    return false;
+  }
+
+  const leftInterval = parseEventInterval(left);
+  const rightInterval = parseEventInterval(right);
+  if (!leftInterval || !rightInterval) return false;
+
+  return leftInterval.start < rightInterval.end && rightInterval.start < leftInterval.end;
+};
+
+const formatConflictTime = (event: EventRecord) =>
+  event.time ||
+  [event.startTime, event.endTime].filter(Boolean).join(' - ') ||
+  'Time TBA';
 
 export default function DiscoverScreen({
   hideModeSwitch = false,
@@ -123,6 +180,7 @@ export default function DiscoverScreen({
   const [mutualSheetProfiles, setMutualSheetProfiles] = useState<ProfileRecord[]>([]);
   const [storiesMeasuredHeight, setStoriesMeasuredHeight] = useState(112);
   const [isCreateMenuVisible, setIsCreateMenuVisible] = useState(false);
+  const [activeConflict, setActiveConflict] = useState<EventConflict | null>(null);
 
   const loadPosts = useCallback(async () => {
     const [nextPosts, nextLikedIds, nextSavedIds] = await Promise.all([
@@ -207,7 +265,8 @@ export default function DiscoverScreen({
   );
 
   const currentEvent = discoverEvents[0];
-  const cardHeight = Math.max(540, Math.min(height * 0.76, 760));
+  const nextEvent = discoverEvents[1];
+  const cardHeight = Math.max(520, Math.min(height * 0.735, 735));
   const isCurrentEventRsvped = Boolean(currentEvent && savedEventIds.includes(currentEvent.id));
   const savedEventIdSet = useMemo(() => new Set(savedEventIds), [savedEventIds]);
   const isCurrentEventSavedForLater = Boolean(
@@ -217,13 +276,54 @@ export default function DiscoverScreen({
   const activeComments = activeCommentEventId
     ? commentsByEventId[activeCommentEventId] || []
     : [];
+  const rsvpedEvents = useMemo(
+    () => events.filter((event) => savedEventIdSet.has(String(event.id))),
+    [events, savedEventIdSet]
+  );
+
+  const getEventConflict = useCallback(
+    (event: EventRecord) => {
+      const existingEvent = rsvpedEvents.find(
+        (candidate) => String(candidate.id) !== String(event.id) && eventsOverlap(candidate, event)
+      );
+
+      return existingEvent ? { existingEvent, attemptedEvent: event } : null;
+    },
+    [rsvpedEvents]
+  );
 
   useEffect(() => {
     translate.setValue({ x: 0, y: 0 });
   }, [currentEvent?.id, translate]);
 
-  const animateDismiss = useCallback((direction: 'left' | 'right') => {
+  const animateBlockedSwipe = useCallback((conflict: EventConflict) => {
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+
+    Animated.sequence([
+      Animated.timing(translate, {
+        toValue: { x: Math.min(width * 0.18, 64), y: 0 },
+        duration: 80,
+        useNativeDriver: false,
+      }),
+      Animated.spring(translate, {
+        toValue: { x: 0, y: 0 },
+        useNativeDriver: false,
+        friction: 6,
+        tension: 120,
+      }),
+    ]).start(() => setActiveConflict(conflict));
+  }, [translate, width]);
+
+  const animateDismiss = useCallback((direction: 'left' | 'right', options?: { ignoreConflict?: boolean }) => {
     if (!currentEvent) return;
+
+    if (direction === 'right' && !options?.ignoreConflict) {
+      const conflict = getEventConflict(currentEvent);
+      if (conflict) {
+        animateBlockedSwipe(conflict);
+        return;
+      }
+    }
 
     Animated.timing(translate, {
       toValue: { x: direction === 'right' ? width * 1.18 : -width * 1.18, y: 0 },
@@ -238,7 +338,15 @@ export default function DiscoverScreen({
 
       translate.setValue({ x: 0, y: 0 });
     });
-  }, [acceptDiscoverEvent, currentEvent, rejectDiscoverEvent, translate, width]);
+  }, [
+    acceptDiscoverEvent,
+    animateBlockedSwipe,
+    currentEvent,
+    getEventConflict,
+    rejectDiscoverEvent,
+    translate,
+    width,
+  ]);
 
   const handleCardRsvp = useCallback(
     (event: EventRecord) => {
@@ -247,6 +355,20 @@ export default function DiscoverScreen({
     },
     [animateDismiss, currentEvent]
   );
+
+  const handleCancelConflict = useCallback(() => {
+    setActiveConflict(null);
+  }, []);
+
+  const handleAddConflictAnyway = useCallback(() => {
+    if (!activeConflict || !currentEvent) {
+      setActiveConflict(null);
+      return;
+    }
+
+    setActiveConflict(null);
+    animateDismiss('right', { ignoreConflict: true });
+  }, [activeConflict, animateDismiss, currentEvent]);
 
   const handleCardSaveForLater = useCallback(
     (event: EventRecord) => {
@@ -704,25 +826,43 @@ export default function DiscoverScreen({
     outputRange: ['-8deg', '0deg', '8deg'],
   });
 
-  const storiesCollapseDistance = 78;
+  const storiesCollapseDistance = 28;
+  const collapsedCardLift = 42;
+  const scrollOffsetCompensationDistance = Math.max(height, 900);
+  const hiddenStoriesOffset = -Math.max(storiesMeasuredHeight, 112);
   const storySectionHeight = storiesScrollY.interpolate({
     inputRange: [-56, 0, storiesCollapseDistance],
-    outputRange: [storiesMeasuredHeight + 18, storiesMeasuredHeight, 0],
+    outputRange: [storiesMeasuredHeight + 18, storiesMeasuredHeight, storiesMeasuredHeight],
     extrapolate: 'clamp',
   });
   const storySectionTranslateY = storiesScrollY.interpolate({
     inputRange: [-56, 0, storiesCollapseDistance],
-    outputRange: [10, 0, -18],
+    outputRange: [10, 0, hiddenStoriesOffset],
     extrapolate: 'clamp',
   });
   const storySectionOpacity = storiesScrollY.interpolate({
-    inputRange: [0, storiesCollapseDistance * 0.58, storiesCollapseDistance],
-    outputRange: [1, 0.45, 0],
+    inputRange: [0, storiesCollapseDistance * 0.45, storiesCollapseDistance],
+    outputRange: [1, 0.2, 0],
     extrapolate: 'clamp',
   });
   const storySectionMarginBottom = storiesScrollY.interpolate({
     inputRange: [0, storiesCollapseDistance],
-    outputRange: [12, 0],
+    outputRange: [4, 0],
+    extrapolate: 'clamp',
+  });
+  const cardStageTranslateY = storiesScrollY.interpolate({
+    inputRange: [
+      0,
+      storiesCollapseDistance,
+      collapsedCardLift,
+      scrollOffsetCompensationDistance,
+    ],
+    outputRange: [
+      0,
+      storiesCollapseDistance - collapsedCardLift,
+      0,
+      scrollOffsetCompensationDistance - collapsedCardLift,
+    ],
     extrapolate: 'clamp',
   });
   const handleStoriesLayout = useCallback(({ nativeEvent }: { nativeEvent: { layout: { height: number } } }) => {
@@ -947,10 +1087,18 @@ export default function DiscoverScreen({
             </View>
           </Animated.View>
 
-          <View style={styles.cardStage}>
+          <Animated.View style={[styles.cardStage, { transform: [{ translateY: cardStageTranslateY }] }]}>
           {currentEvent ? (
             <View style={[styles.cardDeck, { minHeight: cardHeight + 22 }]}>
-              <View style={[styles.cardBackdrop, { height: cardHeight - 18 }]} />
+              {nextEvent ? (
+                <View
+                  pointerEvents="none"
+                  style={[styles.nextCardBehind, { height: cardHeight }]}>
+                  <EventStackCard event={nextEvent} height={cardHeight} />
+                </View>
+              ) : (
+                <View style={[styles.cardBackdrop, { height: cardHeight - 18 }]} />
+              )}
 
               <Animated.View
                 style={[
@@ -994,7 +1142,7 @@ export default function DiscoverScreen({
               </Pressable>
             </View>
           )}
-          </View>
+          </Animated.View>
 
         </Animated.ScrollView>
       ) : (
@@ -1047,6 +1195,39 @@ export default function DiscoverScreen({
           />
         </View>
       )}
+
+      <Modal
+        visible={Boolean(activeConflict)}
+        transparent
+        animationType="fade"
+        onRequestClose={handleCancelConflict}>
+        <View style={styles.conflictOverlay}>
+          <View style={styles.conflictCard}>
+            <View style={styles.conflictIcon}>
+              <Ionicons name="warning-outline" size={34} color={theme.danger} />
+            </View>
+            <Text style={styles.conflictTitle}>Time conflict detected</Text>
+            {activeConflict ? (
+              <Text style={styles.conflictMessage}>
+                Existing event: {activeConflict.existingEvent.title} (
+                {formatConflictTime(activeConflict.existingEvent)}){'\n'}
+                New event: {activeConflict.attemptedEvent.title} (
+                {formatConflictTime(activeConflict.attemptedEvent)})
+              </Text>
+            ) : null}
+            <View style={styles.conflictButtonRow}>
+              <Pressable style={styles.conflictButton} onPress={handleCancelConflict}>
+                <Text style={styles.conflictCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.conflictButton, styles.conflictButtonPrimary]}
+                onPress={handleAddConflictAnyway}>
+                <Text style={styles.conflictAddText}>Add anyway</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <EventCommentsSheet
         visible={Boolean(activeCommentEvent)}
@@ -1116,7 +1297,7 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       flexGrow: 1,
       paddingHorizontal: 16,
       paddingTop: 0,
-      paddingBottom: 12,
+      paddingBottom: 76,
       backgroundColor: theme.background,
     },
     headerBar: {
@@ -1139,9 +1320,9 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       borderRadius: 20,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: theme.surface,
-      borderWidth: 1,
-      borderColor: theme.border,
+      backgroundColor: 'transparent',
+      borderWidth: 0,
+      borderColor: 'transparent',
     },
     headerBadge: {
       position: 'absolute',
@@ -1160,18 +1341,26 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       zIndex: 100,
     },
     glassyIconButton: {
-      backgroundColor: 'rgba(255, 255, 255, 0.15)',
-      borderColor: 'rgba(255, 255, 255, 0.08)',
+      backgroundColor: 'transparent',
+      borderColor: 'transparent',
     },
     cardStage: {
       justifyContent: 'flex-start',
-      paddingTop: 10,
+      paddingTop: 0,
     },
     storiesReveal: {
       overflow: 'hidden',
     },
     cardDeck: {
       justifyContent: 'flex-start',
+    },
+    nextCardBehind: {
+      position: 'absolute',
+      left: 12,
+      right: 12,
+      top: 14,
+      opacity: 0.66,
+      transform: [{ scale: 0.955 }],
     },
     cardBackdrop: {
       position: 'absolute',
@@ -1187,6 +1376,77 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
     },
     animatedCard: {
       width: '100%',
+    },
+    conflictOverlay: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 28,
+      backgroundColor: 'rgba(0,0,0,0.56)',
+    },
+    conflictCard: {
+      width: '100%',
+      maxWidth: 390,
+      overflow: 'hidden',
+      borderRadius: 24,
+      backgroundColor: 'rgba(20, 22, 27, 0.96)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.14)',
+      alignItems: 'center',
+      paddingTop: 28,
+    },
+    conflictIcon: {
+      width: 52,
+      height: 52,
+      borderRadius: 26,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: theme.dangerSoft,
+      marginBottom: 10,
+    },
+    conflictTitle: {
+      color: '#ffffff',
+      fontSize: 20,
+      fontWeight: '900',
+      textAlign: 'center',
+      marginBottom: 12,
+      paddingHorizontal: 20,
+    },
+    conflictMessage: {
+      color: 'rgba(255,255,255,0.72)',
+      fontSize: 15,
+      fontWeight: '600',
+      lineHeight: 22,
+      textAlign: 'center',
+      paddingHorizontal: 24,
+      paddingBottom: 24,
+    },
+    conflictButtonRow: {
+      width: '100%',
+      flexDirection: 'row',
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: 'rgba(255,255,255,0.14)',
+    },
+    conflictButton: {
+      flex: 1,
+      minHeight: 58,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRightWidth: StyleSheet.hairlineWidth,
+      borderRightColor: 'rgba(255,255,255,0.14)',
+    },
+    conflictButtonPrimary: {
+      borderRightWidth: 0,
+    },
+    conflictCancelText: {
+      color: '#ffffff',
+      fontSize: 16,
+      fontWeight: '800',
+    },
+    conflictAddText: {
+      color: theme.success,
+      fontSize: 16,
+      fontWeight: '900',
     },
     endState: {
       padding: 24,

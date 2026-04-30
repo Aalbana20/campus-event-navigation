@@ -1,12 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard';
+import * as ExpoLinking from 'expo-linking';
 import { Redirect, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Image,
   Modal,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -53,6 +56,19 @@ type ActiveList = 'followers' | 'following' | 'created' | null;
 type ProfileContentCounts = {
   posts: number;
 };
+type ProfileActionItem = {
+  key: string;
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  tone?: 'danger';
+};
+type NotificationActionItem = {
+  key: string;
+  label: string;
+  subtitle?: string;
+  icon: keyof typeof Ionicons.glyphMap;
+};
+type ProfileSheet = 'about' | 'shared_activity' | 'report_topic' | 'report_reason' | null;
 type EditFormState = {
   name: string;
   username: string;
@@ -91,6 +107,51 @@ const parseEditEventTags = (value: string): string[] =>
     .split(',')
     .map((tag) => tag.trim().toLowerCase().replace(/^#/, '').replace(/\s+/g, '-'))
     .filter(Boolean);
+
+const profileActionItems: ProfileActionItem[] = [
+  { key: 'report', label: 'Report', icon: 'flag-outline', tone: 'danger' },
+  { key: 'mute', label: 'Mute', icon: 'volume-mute-outline' },
+  { key: 'block', label: 'Block', icon: 'ban-outline' },
+  { key: 'about', label: 'About this account', icon: 'information-circle-outline' },
+  { key: 'shared_activity', label: 'See shared activity', icon: 'people-outline' },
+  { key: 'hide_story', label: 'Hide your story', icon: 'eye-off-outline' },
+  { key: 'remove_follower', label: 'Remove follower', icon: 'person-remove-outline' },
+  { key: 'copy_url', label: 'Copy profile URL', icon: 'link-outline' },
+  { key: 'share_profile', label: 'Share this profile', icon: 'paper-plane-outline' },
+];
+
+const notificationCategoryItems: NotificationActionItem[] = [
+  { key: 'events', label: 'Events', subtitle: 'Most relevant', icon: 'calendar-outline' },
+  { key: 'stories', label: 'Stories', subtitle: 'Most relevant', icon: 'ellipse-outline' },
+  { key: 'posts', label: 'Posts', subtitle: 'Most relevant', icon: 'image-outline' },
+  { key: 'videos', label: 'Videos', subtitle: 'Most relevant', icon: 'videocam-outline' },
+  { key: 'live', label: 'Live', subtitle: 'Most relevant', icon: 'radio-outline' },
+];
+
+const reportTopicItems = [
+  'A specific post',
+  'A recent message they sent you',
+  'Something about this account',
+];
+
+const reportReasonItems = [
+  'They are pretending to be someone else',
+  'They may be under the minimum age',
+  'This account may have been hacked',
+  'Something else',
+];
+
+const formatProfileDate = (value?: string | null) => {
+  if (!value) return null;
+
+  const parsedDate = new Date(value);
+  if (Number.isNaN(parsedDate.getTime())) return null;
+
+  return parsedDate.toLocaleDateString('en-US', {
+    month: 'short',
+    year: 'numeric',
+  });
+};
 
 function StatButton({
   label,
@@ -132,6 +193,7 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
     isFollowingProfile,
     followProfile,
     unfollowProfile,
+    refreshData,
     updateEvent,
     updateProfile,
   } = useMobileApp();
@@ -165,6 +227,15 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
   const [editEventForm, setEditEventForm] = useState<EditEventFormState | null>(null);
   const [isSavingEvent, setIsSavingEvent] = useState(false);
   const [isCreateMenuVisible, setIsCreateMenuVisible] = useState(false);
+  const [isProfileActionsVisible, setIsProfileActionsVisible] = useState(false);
+  const [isNotificationSheetVisible, setIsNotificationSheetVisible] = useState(false);
+  const [activeProfileSheet, setActiveProfileSheet] = useState<ProfileSheet>(null);
+  const [selectedReportReason, setSelectedReportReason] = useState<string | null>(null);
+  const [mutedProfileIds, setMutedProfileIds] = useState<Set<string>>(new Set());
+  const [blockedProfileIds, setBlockedProfileIds] = useState<Set<string>>(new Set());
+  const [storyHiddenProfileIds, setStoryHiddenProfileIds] = useState<Set<string>>(new Set());
+  const [profileToast, setProfileToast] = useState<string | null>(null);
+  const profileToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [profileContentCounts, setProfileContentCounts] =
     useState<ProfileContentCounts>({ posts: 0 });
   const handleProfileContentCountsChange = useCallback(
@@ -182,6 +253,27 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
     ? currentUser
     : getProfileByUsername(username || '');
   const resolvedProfileId = resolvedProfile?.id || '';
+
+  const flashProfileToast = useCallback((message: string) => {
+    if (profileToastTimerRef.current) {
+      clearTimeout(profileToastTimerRef.current);
+    }
+
+    setProfileToast(message);
+    profileToastTimerRef.current = setTimeout(() => {
+      setProfileToast(null);
+      profileToastTimerRef.current = null;
+    }, 1600);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (profileToastTimerRef.current) {
+        clearTimeout(profileToastTimerRef.current);
+      }
+    },
+    []
+  );
 
   const refreshHighlights = useCallback(async () => {
     if (!resolvedProfileId) return;
@@ -217,7 +309,7 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
       });
     };
 
-    const useProviderFallback = (source: string) => {
+    const applyProviderFallback = (source: string) => {
       const providerMutuals = getMutualFollowersFor({
         profileId: resolvedProfileId,
         currentUserId: currentUser.id,
@@ -238,7 +330,7 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
     };
 
     if (!supabase) {
-      useProviderFallback('provider-no-supabase');
+      applyProviderFallback('provider-no-supabase');
       return;
     }
 
@@ -249,7 +341,7 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
 
     if (myFollowingError) {
       console.error('[mutuals:mobile] my-following query failed:', myFollowingError);
-      useProviderFallback('provider-after-my-following-error');
+      applyProviderFallback('provider-after-my-following-error');
       return;
     }
 
@@ -276,7 +368,7 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
 
     if (targetFollowerError) {
       console.error('[mutuals:mobile] target-followers query failed:', targetFollowerError);
-      useProviderFallback('provider-after-target-followers-error');
+      applyProviderFallback('provider-after-target-followers-error');
       return;
     }
 
@@ -430,6 +522,167 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
     profile.verificationStatus === 'verified' ||
     Boolean(profile.studentVerified) ||
     profile.accountType === 'organization';
+  const profileDisplayName = profile.username || profile.name || 'this account';
+  const profileUsernameLabel = profile.username || profile.id;
+  const profileUrl = ExpoLinking.createURL(`/profile/${profile.username || profile.id}`);
+  const profileDynamicFields = profile as ProfileRecord & {
+    createdAt?: string;
+    created_at?: string;
+    location?: string;
+    country?: string;
+  };
+  const joinedDateLabel =
+    formatProfileDate(profileDynamicFields.createdAt || profileDynamicFields.created_at) ||
+    'Joined date unavailable';
+  const locationLabel =
+    profileDynamicFields.country ||
+    profileDynamicFields.location ||
+    profile.school ||
+    'Location unavailable';
+  const followedYouAt =
+    formatProfileDate(
+      followRelationships.find(
+        (relationship) =>
+          relationship.followerId === profile.id &&
+          relationship.followingId === currentUser.id
+      )?.createdAt
+    ) || 'Date unavailable';
+  const youFollowAt =
+    formatProfileDate(
+      followRelationships.find(
+        (relationship) =>
+          relationship.followerId === currentUser.id &&
+          relationship.followingId === profile.id
+      )?.createdAt
+    ) || 'Date unavailable';
+  const isProfileMuted = mutedProfileIds.has(profile.id);
+  const isProfileBlocked = blockedProfileIds.has(profile.id);
+  const isStoryHiddenFromProfile = storyHiddenProfileIds.has(profile.id);
+
+  const handleProfileAction = async (actionKey: string) => {
+    if (actionKey === 'copy_url') {
+      await Clipboard.setStringAsync(profileUrl);
+      setIsProfileActionsVisible(false);
+      flashProfileToast('Profile URL copied');
+      return;
+    }
+
+    if (actionKey === 'share_profile') {
+      try {
+        await Share.share({
+          title: profileDisplayName,
+          message: `${profileDisplayName}\n${profileUrl}`,
+          url: profileUrl,
+        });
+      } catch (error) {
+        console.log('Profile share unavailable:', error);
+        flashProfileToast('Native share unavailable');
+      } finally {
+        setIsProfileActionsVisible(false);
+      }
+      return;
+    }
+
+    if (actionKey === 'report') {
+      setIsProfileActionsVisible(false);
+      setSelectedReportReason(null);
+      setActiveProfileSheet('report_topic');
+      return;
+    }
+
+    if (actionKey === 'about') {
+      setIsProfileActionsVisible(false);
+      setActiveProfileSheet('about');
+      return;
+    }
+
+    if (actionKey === 'shared_activity') {
+      setIsProfileActionsVisible(false);
+      setActiveProfileSheet('shared_activity');
+      return;
+    }
+
+    if (actionKey === 'mute') {
+      const nextMutedState = !isProfileMuted;
+      setMutedProfileIds((currentIds) => {
+        const nextIds = new Set(currentIds);
+        if (nextMutedState) {
+          nextIds.add(profile.id);
+        } else {
+          nextIds.delete(profile.id);
+        }
+        return nextIds;
+      });
+      setIsProfileActionsVisible(false);
+      flashProfileToast(
+        `${nextMutedState ? 'Muted' : 'Unmuted'} ${profileUsernameLabel}`
+      );
+      console.log('Mute placeholder toggled:', profile.id, nextMutedState);
+      return;
+    }
+
+    if (actionKey === 'block') {
+      const nextBlockedState = !isProfileBlocked;
+      setBlockedProfileIds((currentIds) => {
+        const nextIds = new Set(currentIds);
+        if (nextBlockedState) {
+          nextIds.add(profile.id);
+        } else {
+          nextIds.delete(profile.id);
+        }
+        return nextIds;
+      });
+      setIsProfileActionsVisible(false);
+      flashProfileToast(
+        `${nextBlockedState ? 'Blocked' : 'Unblocked'} ${profileUsernameLabel}`
+      );
+      console.log('Block placeholder toggled:', profile.id, nextBlockedState);
+      return;
+    }
+
+    if (actionKey === 'hide_story') {
+      setStoryHiddenProfileIds((currentIds) => new Set(currentIds).add(profile.id));
+      setIsProfileActionsVisible(false);
+      flashProfileToast(`Story hidden from ${profileUsernameLabel}`);
+      console.log('Hide story placeholder selected:', profile.id);
+      return;
+    }
+
+    if (actionKey === 'remove_follower') {
+      setIsProfileActionsVisible(false);
+
+      if (!supabase) {
+        console.log('Remove follower placeholder selected:', profile.id);
+        flashProfileToast('Remove follower ready for backend');
+        return;
+      }
+
+      const { error } = await supabase
+        .from('follows')
+        .delete()
+        .eq('follower_id', profile.id)
+        .eq('following_id', currentUser.id);
+
+      if (error) {
+        console.error('Unable to remove follower:', error);
+        flashProfileToast('Could not remove follower');
+        return;
+      }
+
+      await refreshData();
+      flashProfileToast(`Removed ${profileUsernameLabel} as a follower`);
+      return;
+    }
+
+    console.log('Profile action selected:', actionKey, profile.id);
+    setIsProfileActionsVisible(false);
+    flashProfileToast('Action ready for backend');
+  };
+
+  const handleNotificationAction = (actionKey: string) => {
+    console.log('Profile notification action selected:', actionKey, profile.id);
+    setIsNotificationSheetVisible(false);
+  };
 
   const handleOpenProfile = (targetUsername: string) => {
     if (targetUsername === currentUser.username) {
@@ -444,6 +697,16 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
   };
 
   const handleToggleFollow = () => {
+    if (isProfileBlocked) {
+      setBlockedProfileIds((currentIds) => {
+        const nextIds = new Set(currentIds);
+        nextIds.delete(profile.id);
+        return nextIds;
+      });
+      flashProfileToast(`Unblocked ${profileUsernameLabel}`);
+      return;
+    }
+
     if (isFollowingProfile(profile.id)) {
       unfollowProfile(profile.id);
       return;
@@ -615,17 +878,25 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
           {isOwnProfile ? (
             <Pressable
               style={styles.topBarIconButton}
-              onPress={() =>
-                Alert.alert(
-                  'Profile options',
-                  'Share profile, copy link, QR code, and account actions will live here soon.'
-                )
-              }
-              accessibilityLabel="Profile options">
+              onPress={() => router.push('/settings')}
+              accessibilityLabel="Open settings">
               <Ionicons name="ellipsis-horizontal" size={22} color={theme.text} />
             </Pressable>
           ) : (
-            <View style={styles.topBarIconButtonPlaceholder} />
+            <View style={styles.publicHeaderActions}>
+              <Pressable
+                style={styles.topBarIconButton}
+                onPress={() => setIsNotificationSheetVisible(true)}
+                accessibilityLabel={`Notification options for ${profileDisplayName}`}>
+                <Ionicons name="notifications-outline" size={21} color={theme.text} />
+              </Pressable>
+              <Pressable
+                style={styles.topBarIconButton}
+                onPress={() => setIsProfileActionsVisible(true)}
+                accessibilityLabel={`More options for ${profileDisplayName}`}>
+                <Ionicons name="ellipsis-horizontal" size={22} color={theme.text} />
+              </Pressable>
+            </View>
           )}
         </View>
 
@@ -683,31 +954,46 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
             {isOwnProfile ? (
               <>
                 <Pressable
-                  style={[styles.secondaryButton, styles.profileActionButton]}
+                  style={[
+                    styles.secondaryButton,
+                    styles.profileActionButton,
+                    styles.ownProfileActionButton,
+                  ]}
                   onPress={handleOpenEdit}>
                   <Ionicons name="pencil-outline" size={14} color={theme.accent} />
                   <Text style={styles.secondaryButtonText}>Edit Profile</Text>
                 </Pressable>
                 <Pressable
-                  style={[styles.secondaryButton, styles.profileActionButton]}
+                  style={[
+                    styles.secondaryButton,
+                    styles.profileActionButton,
+                    styles.ownProfileActionButton,
+                  ]}
                   onPress={() => router.push('/recaps')}>
                   <Ionicons name="chatbubbles-outline" size={14} color={theme.accent} />
                   <Text style={styles.secondaryButtonText}>Recaps</Text>
-                </Pressable>
-                <Pressable
-                  style={styles.actionSquareButton}
-                  onPress={() => router.push('/settings')}
-                  accessibilityLabel="Open settings">
-                  <Ionicons name="settings-outline" size={17} color={theme.accent} />
                 </Pressable>
               </>
             ) : (
               <>
                 <Pressable
-                  style={[styles.primaryButton, styles.profileActionButton, styles.publicActionButton]}
+                  style={[
+                    styles.primaryButton,
+                    styles.profileActionButton,
+                    styles.publicActionButton,
+                    isProfileBlocked && styles.blockedActionButton,
+                  ]}
                   onPress={handleToggleFollow}>
-                  <Text style={styles.profileActionButtonText}>
-                    {isFollowingProfile(profile.id) ? 'Following' : 'Follow'}
+                  <Text
+                    style={[
+                      styles.profileActionButtonText,
+                      isProfileBlocked && styles.blockedActionButtonText,
+                    ]}>
+                    {isProfileBlocked
+                      ? 'Blocked'
+                      : isFollowingProfile(profile.id)
+                        ? 'Following'
+                        : 'Follow'}
                   </Text>
                 </Pressable>
                 <Pressable
@@ -819,6 +1105,391 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
         onClose={() => setIsCreateMenuVisible(false)}
         onSelect={handleCreateOption}
       />
+
+      <Modal
+        visible={isProfileActionsVisible}
+        transparent
+        animationType="slide"
+        statusBarTranslucent
+        onRequestClose={() => setIsProfileActionsVisible(false)}>
+        <Pressable
+          style={styles.profileActionOverlay}
+          onPress={() => setIsProfileActionsVisible(false)}>
+          <Pressable style={styles.profileActionSheet} onPress={(eventPress) => eventPress.stopPropagation()}>
+            <View style={styles.profileActionHandle} />
+            <View style={styles.profileActionList}>
+              {profileActionItems.map((item, index) => (
+                <Pressable
+                  key={item.key}
+                  style={[
+                    styles.profileActionRow,
+                    index > 0 && styles.profileActionRowDivider,
+                  ]}
+                  accessibilityState={{
+                    selected:
+                      (item.key === 'mute' && isProfileMuted) ||
+                      (item.key === 'block' && isProfileBlocked) ||
+                      (item.key === 'hide_story' && isStoryHiddenFromProfile),
+                  }}
+                  onPress={() => void handleProfileAction(item.key)}>
+                  <View
+                    style={[
+                      styles.profileActionIconShell,
+                      item.tone === 'danger' && styles.profileActionDangerIconShell,
+                    ]}>
+                    <Ionicons
+                      name={item.icon}
+                      size={21}
+                      color={item.tone === 'danger' ? theme.danger : theme.text}
+                    />
+                  </View>
+                  <Text
+                    style={[
+                      styles.profileActionLabel,
+                      item.tone === 'danger' && styles.profileActionDangerLabel,
+                    ]}>
+                    {item.key === 'mute'
+                      ? `${isProfileMuted ? 'Unmute' : 'Mute'} ${profileUsernameLabel}`
+                      : item.key === 'block'
+                        ? `${isProfileBlocked ? 'Unblock' : 'Block'} ${profileUsernameLabel}`
+                        : item.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <Pressable
+              style={styles.profileActionCancel}
+              onPress={() => setIsProfileActionsVisible(false)}>
+              <Text style={styles.profileActionCancelText}>Cancel</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={activeProfileSheet !== null}
+        transparent
+        animationType="slide"
+        statusBarTranslucent
+        onRequestClose={() => setActiveProfileSheet(null)}>
+        <Pressable
+          style={styles.profileSheetOverlay}
+          onPress={() => setActiveProfileSheet(null)}>
+          <Pressable style={styles.profileDetailSheet} onPress={(eventPress) => eventPress.stopPropagation()}>
+            <View style={styles.profileActionHandle} />
+
+            {activeProfileSheet === 'about' ? (
+              <ScrollView
+                contentContainerStyle={styles.profileDetailContent}
+                showsVerticalScrollIndicator={false}>
+                <View style={styles.profileSheetHeaderRow}>
+                  <Text style={styles.profileSheetTitle}>About this account</Text>
+                  <Pressable
+                    style={styles.profileSheetCloseButton}
+                    onPress={() => setActiveProfileSheet(null)}
+                    accessibilityLabel="Close about this account">
+                    <Ionicons name="close" size={20} color="#ffffff" />
+                  </Pressable>
+                </View>
+
+                <View style={styles.aboutIdentityCard}>
+                  <Image source={getAvatarImageSource(profile.avatar)} style={styles.aboutAvatar} />
+                  <View style={styles.aboutIdentityCopy}>
+                    <Text style={styles.aboutName}>{profile.name || profileUsernameLabel}</Text>
+                    <Text style={styles.aboutUsername}>{profileUsernameLabel}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.profileInfoList}>
+                  <View style={styles.profileInfoRow}>
+                    <View style={styles.profileInfoIcon}>
+                      <Ionicons name="calendar-outline" size={20} color={theme.text} />
+                    </View>
+                    <View style={styles.profileInfoCopy}>
+                      <Text style={styles.profileInfoLabel}>Date joined VeroVite</Text>
+                      <Text style={styles.profileInfoValue}>{joinedDateLabel}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.profileInfoRow}>
+                    <View style={styles.profileInfoIcon}>
+                      <Ionicons name="location-outline" size={20} color={theme.text} />
+                    </View>
+                    <View style={styles.profileInfoCopy}>
+                      <Text style={styles.profileInfoLabel}>Based in</Text>
+                      <Text style={styles.profileInfoValue}>{locationLabel}</Text>
+                    </View>
+                  </View>
+                </View>
+              </ScrollView>
+            ) : null}
+
+            {activeProfileSheet === 'shared_activity' ? (
+              <ScrollView
+                contentContainerStyle={styles.sharedDetailContent}
+                showsVerticalScrollIndicator={false}>
+                <View style={styles.profileSheetHeaderRow}>
+                  <Pressable
+                    style={styles.profileSheetBackButton}
+                    onPress={() => setActiveProfileSheet(null)}
+                    accessibilityLabel="Close shared activity">
+                    <Ionicons name="chevron-back" size={22} color="#ffffff" />
+                  </Pressable>
+                  <Text style={styles.profileSheetTitle}>Shared activity</Text>
+                  <View style={styles.profileSheetHeaderSpacer} />
+                </View>
+
+                <View style={styles.sharedPeopleRow}>
+                  <View style={styles.sharedPerson}>
+                    <Image
+                      source={getAvatarImageSource(currentUser.avatar)}
+                      style={styles.sharedAvatar}
+                    />
+                    <Text style={styles.sharedName} numberOfLines={1}>
+                      {currentUser.name || currentUser.username}
+                    </Text>
+                    <Text style={styles.sharedUsername} numberOfLines={1}>
+                      {currentUser.username}
+                    </Text>
+                  </View>
+
+                  <View style={styles.sharedLinkBadge}>
+                    <Ionicons name="link-outline" size={24} color="#4d8dff" />
+                  </View>
+
+                  <View style={styles.sharedPerson}>
+                    <Image
+                      source={getAvatarImageSource(profile.avatar)}
+                      style={styles.sharedAvatar}
+                    />
+                    <Text style={styles.sharedName} numberOfLines={1}>
+                      {profile.name || profileUsernameLabel}
+                    </Text>
+                    <Text style={styles.sharedUsername} numberOfLines={1}>
+                      {profileUsernameLabel}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.sharedSection}>
+                  <View style={styles.sharedActivityCard}>
+                    <View style={styles.sharedActivityIconBlue}>
+                      <Ionicons name="person-add-outline" size={25} color="#4d8dff" />
+                    </View>
+                    <View style={styles.sharedActivityCopy}>
+                      <Text style={styles.sharedActivityTitle}>{profileUsernameLabel} followed you</Text>
+                      <Text style={styles.sharedActivitySubtitle}>
+                        {profileUsernameLabel} follows your profile.
+                      </Text>
+                    </View>
+                    <Text style={styles.sharedActivityDate}>{followedYouAt}</Text>
+                  </View>
+
+                  <View style={styles.sharedActivityCard}>
+                    <View style={styles.sharedActivityIconBlue}>
+                      <Ionicons name="checkmark-circle-outline" size={25} color="#4d8dff" />
+                    </View>
+                    <View style={styles.sharedActivityCopy}>
+                      <Text style={styles.sharedActivityTitle}>You follow {profileUsernameLabel}</Text>
+                      <Text style={styles.sharedActivitySubtitle}>
+                        You follow {profileUsernameLabel}.
+                      </Text>
+                    </View>
+                    <Text style={styles.sharedActivityDate}>{youFollowAt}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.sharedDivider} />
+
+                <View style={styles.sharedSection}>
+                  <View style={styles.sharedActivityCard}>
+                    <View style={styles.sharedActivityIconPink}>
+                      <Ionicons name="heart-outline" size={27} color="#ff4d78" />
+                    </View>
+                    <View style={styles.sharedActivityCopy}>
+                      <Text style={styles.sharedActivityTitle}>Likes</Text>
+                      <Text style={styles.sharedActivitySubtitle}>
+                        Posts from {profileUsernameLabel} that you liked: 0{'\n'}
+                        Posts from you that {profileUsernameLabel} liked: 0
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={20} color={theme.textMuted} />
+                  </View>
+
+                  <View style={styles.sharedActivityCard}>
+                    <View style={styles.sharedActivityIconPurple}>
+                      <Ionicons name="chatbubble-outline" size={25} color="#c678ff" />
+                    </View>
+                    <View style={styles.sharedActivityCopy}>
+                      <Text style={styles.sharedActivityTitle}>Comments</Text>
+                      <Text style={styles.sharedActivitySubtitle}>
+                        Comments you made on their posts: 0{'\n'}
+                        Comments they made on your posts: 0
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={20} color={theme.textMuted} />
+                  </View>
+
+                  <View style={styles.sharedActivityCard}>
+                    <View style={styles.sharedActivityIconGreen}>
+                      <Ionicons name="pricetag-outline" size={25} color="#36c77f" />
+                    </View>
+                    <View style={styles.sharedActivityCopy}>
+                      <Text style={styles.sharedActivityTitle}>Tags</Text>
+                      <Text style={styles.sharedActivitySubtitle}>
+                        Tags involving you and {profileUsernameLabel}: 0
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={20} color={theme.textMuted} />
+                  </View>
+                </View>
+
+                <Text style={styles.sharedFootnote}>
+                  These placeholders are ready for shared activity data when the backend is wired.
+                </Text>
+              </ScrollView>
+            ) : null}
+
+            {activeProfileSheet === 'report_topic' ? (
+              <View style={styles.profileDetailContent}>
+                <View style={styles.profileSheetHeaderRow}>
+                  <Text style={styles.profileSheetTitle}>What do you want to report?</Text>
+                  <Pressable
+                    style={styles.profileSheetCloseButton}
+                    onPress={() => setActiveProfileSheet(null)}
+                    accessibilityLabel="Close report flow">
+                    <Ionicons name="close" size={20} color="#ffffff" />
+                  </Pressable>
+                </View>
+                <Text style={styles.reportSafetyText}>
+                  Reports are kept private. If there is an immediate safety concern, contact local emergency services right away.
+                </Text>
+
+                <View style={styles.reportOptionList}>
+                  {reportTopicItems.map((item) => (
+                    <Pressable
+                      key={item}
+                      style={styles.reportOptionRow}
+                      onPress={() => {
+                        if (item === 'Something about this account') {
+                          setActiveProfileSheet('report_reason');
+                          return;
+                        }
+
+                        flashProfileToast('Report step ready for backend');
+                        console.log('Report topic placeholder selected:', item, profile.id);
+                      }}>
+                      <Text style={styles.reportOptionText}>{item}</Text>
+                      <Ionicons name="chevron-forward" size={19} color={theme.textMuted} />
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+            ) : null}
+
+            {activeProfileSheet === 'report_reason' ? (
+              <View style={styles.profileDetailContent}>
+                <View style={styles.profileSheetHeaderRow}>
+                  <Pressable
+                    style={styles.profileSheetBackButton}
+                    onPress={() => setActiveProfileSheet('report_topic')}
+                    accessibilityLabel="Back to report topics">
+                    <Ionicons name="chevron-back" size={22} color="#ffffff" />
+                  </Pressable>
+                  <Text style={styles.profileSheetTitle}>Why are you reporting this profile?</Text>
+                  <Pressable
+                    style={styles.profileSheetCloseButton}
+                    onPress={() => setActiveProfileSheet(null)}
+                    accessibilityLabel="Close report flow">
+                    <Ionicons name="close" size={20} color="#ffffff" />
+                  </Pressable>
+                </View>
+
+                <View style={styles.reportOptionList}>
+                  {reportReasonItems.map((item) => {
+                    const isSelected = selectedReportReason === item;
+
+                    return (
+                      <Pressable
+                        key={item}
+                        style={[
+                          styles.reportOptionRow,
+                          isSelected && styles.reportOptionRowSelected,
+                        ]}
+                        onPress={() => {
+                          setSelectedReportReason(item);
+                          flashProfileToast('Report reason selected');
+                          console.log('Report reason placeholder selected:', item, profile.id);
+                        }}>
+                        <Text style={styles.reportOptionText}>{item}</Text>
+                        {isSelected ? (
+                          <Ionicons name="checkmark-circle" size={20} color={theme.accent} />
+                        ) : null}
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            ) : null}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={isNotificationSheetVisible}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setIsNotificationSheetVisible(false)}>
+        <Pressable
+          style={styles.profileActionOverlay}
+          onPress={() => setIsNotificationSheetVisible(false)}>
+          <Pressable style={styles.notificationSheet} onPress={(eventPress) => eventPress.stopPropagation()}>
+            <Pressable
+              style={styles.notificationWideRow}
+              onPress={() => handleNotificationAction('all_following')}>
+              <View style={styles.profileActionIconShell}>
+                <Ionicons name="options-outline" size={21} color={theme.text} />
+              </View>
+              <Text style={styles.profileActionLabel}>All accounts you follow</Text>
+              <Ionicons name="chevron-forward" size={18} color={theme.textMuted} />
+            </Pressable>
+
+            <View style={styles.notificationDivider} />
+
+            {notificationCategoryItems.map((item) => (
+              <Pressable
+                key={item.key}
+                style={styles.notificationCategoryRow}
+                onPress={() => handleNotificationAction(item.key)}>
+                <View style={styles.notificationCategoryIcon}>
+                  <Ionicons name={item.icon} size={23} color={theme.text} />
+                </View>
+                <View style={styles.notificationCategoryCopy}>
+                  <Text style={styles.notificationCategoryLabel}>{item.label}</Text>
+                  {item.subtitle ? (
+                    <Text style={styles.notificationCategorySubtitle}>{item.subtitle}</Text>
+                  ) : null}
+                </View>
+                <Ionicons name="chevron-forward" size={19} color={theme.text} />
+              </Pressable>
+            ))}
+
+            <View style={styles.notificationDivider} />
+
+            <Pressable
+              style={styles.notificationWideRow}
+              onPress={() => handleNotificationAction('profile_notifications')}>
+              <View style={styles.profileActionIconShell}>
+                <Ionicons name="notifications-outline" size={21} color={theme.textMuted} />
+              </View>
+              <Text style={styles.profileActionLabel} numberOfLines={1}>
+                Notifications from {profileDisplayName}
+              </Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       <Modal visible={activeList !== null} transparent animationType="slide" onRequestClose={() => setActiveList(null)}>
         <Pressable style={styles.modalOverlay} onPress={() => setActiveList(null)}>
@@ -1157,6 +1828,12 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {profileToast ? (
+        <View pointerEvents="none" style={styles.profileToast}>
+          <Text style={styles.profileToastText}>{profileToast}</Text>
+        </View>
+      ) : null}
     </AppScreen>
   );
 }
@@ -1200,6 +1877,13 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) => {
     topBarIconButtonPlaceholder: {
       width: 42,
       height: 42,
+    },
+    publicHeaderActions: {
+      width: 92,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'flex-end',
+      gap: 8,
     },
     usernameMenuButton: {
       maxWidth: '68%',
@@ -1380,6 +2064,13 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) => {
       fontSize: 14,
       fontWeight: '800',
     },
+    ownProfileActionButton: {
+      flex: 1,
+      minWidth: 0,
+      paddingHorizontal: 10,
+      paddingVertical: 11,
+      borderRadius: 12,
+    },
     // Override min-width / fixed sizing so the three public-profile action
     // buttons (Following, Message, Recap) split the row evenly.
     publicActionButton: {
@@ -1388,6 +2079,13 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) => {
       paddingHorizontal: 8,
       paddingVertical: 11,
       borderRadius: 12,
+    },
+    blockedActionButton: {
+      backgroundColor: theme.dangerSoft,
+      borderColor: theme.danger,
+    },
+    blockedActionButtonText: {
+      color: theme.danger,
     },
     actionSquareButton: {
       width: 42,
@@ -1554,6 +2252,445 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) => {
     modalContent: {
       gap: 12,
       paddingBottom: 22,
+    },
+    profileActionOverlay: {
+      flex: 1,
+      justifyContent: 'flex-end',
+      paddingHorizontal: 16,
+      paddingBottom: 22,
+      backgroundColor: 'rgba(0, 0, 0, 0.62)',
+    },
+    profileActionSheet: {
+      gap: 10,
+    },
+    profileActionHandle: {
+      alignSelf: 'center',
+      width: 44,
+      height: 5,
+      borderRadius: 999,
+      backgroundColor: 'rgba(255,255,255,0.20)',
+      marginBottom: 2,
+    },
+    profileActionList: {
+      overflow: 'hidden',
+      borderRadius: 24,
+      backgroundColor: 'rgba(28, 31, 36, 0.96)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.10)',
+    },
+    profileActionRow: {
+      minHeight: 58,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 13,
+      paddingHorizontal: 18,
+      backgroundColor: 'rgba(255,255,255,0.015)',
+    },
+    profileActionRowDivider: {
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: 'rgba(255,255,255,0.10)',
+    },
+    profileActionIconShell: {
+      width: 28,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    profileActionDangerIconShell: {
+      shadowColor: theme.danger,
+      shadowOpacity: 0.28,
+      shadowRadius: 8,
+      shadowOffset: { width: 0, height: 0 },
+    },
+    profileActionLabel: {
+      flex: 1,
+      color: '#ffffff',
+      fontSize: 16,
+      fontWeight: '700',
+    },
+    profileActionDangerLabel: {
+      color: theme.danger,
+    },
+    profileActionCancel: {
+      minHeight: 58,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: 22,
+      backgroundColor: 'rgba(28, 31, 36, 0.98)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.10)',
+    },
+    profileActionCancelText: {
+      color: '#ffffff',
+      fontSize: 16,
+      fontWeight: '800',
+    },
+    notificationSheet: {
+      alignSelf: 'center',
+      width: '100%',
+      maxWidth: 430,
+      overflow: 'hidden',
+      borderRadius: 26,
+      backgroundColor: 'rgba(28, 31, 36, 0.96)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.11)',
+      paddingVertical: 8,
+      shadowColor: '#000000',
+      shadowOpacity: 0.36,
+      shadowRadius: 24,
+      shadowOffset: { width: 0, height: 12 },
+    },
+    notificationWideRow: {
+      minHeight: 58,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 13,
+      paddingHorizontal: 20,
+    },
+    notificationDivider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: 'rgba(255,255,255,0.14)',
+      marginVertical: 4,
+    },
+    notificationCategoryRow: {
+      minHeight: 68,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 14,
+      paddingHorizontal: 20,
+    },
+    notificationCategoryIcon: {
+      width: 34,
+      height: 34,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    notificationCategoryCopy: {
+      flex: 1,
+      gap: 2,
+    },
+    notificationCategoryLabel: {
+      color: '#ffffff',
+      fontSize: 17,
+      fontWeight: '800',
+    },
+    notificationCategorySubtitle: {
+      color: 'rgba(255,255,255,0.62)',
+      fontSize: 13,
+      fontWeight: '600',
+    },
+    profileSheetOverlay: {
+      flex: 1,
+      justifyContent: 'flex-end',
+      backgroundColor: 'rgba(0, 0, 0, 0.72)',
+    },
+    profileDetailSheet: {
+      maxHeight: '92%',
+      minHeight: '48%',
+      borderTopLeftRadius: 28,
+      borderTopRightRadius: 28,
+      backgroundColor: '#050506',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.10)',
+      paddingTop: 10,
+      paddingBottom: 22,
+    },
+    profileDetailContent: {
+      paddingHorizontal: 20,
+      paddingTop: 12,
+      paddingBottom: 28,
+      gap: 16,
+    },
+    sharedDetailContent: {
+      paddingHorizontal: 20,
+      paddingTop: 4,
+      paddingBottom: 18,
+      gap: 10,
+    },
+    profileSheetHeaderRow: {
+      minHeight: 44,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 10,
+    },
+    profileSheetTitle: {
+      flex: 1,
+      color: '#ffffff',
+      fontSize: 22,
+      fontWeight: '900',
+      textAlign: 'center',
+    },
+    profileSheetCloseButton: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: 'rgba(255,255,255,0.08)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.10)',
+    },
+    profileSheetBackButton: {
+      width: 42,
+      height: 42,
+      borderRadius: 21,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: 'rgba(255,255,255,0.08)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.10)',
+    },
+    profileSheetHeaderSpacer: {
+      width: 42,
+      height: 42,
+    },
+    aboutIdentityCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 14,
+      padding: 16,
+      borderRadius: 24,
+      backgroundColor: 'rgba(255,255,255,0.06)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.10)',
+    },
+    aboutAvatar: {
+      width: 72,
+      height: 72,
+      borderRadius: 36,
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.16)',
+    },
+    aboutIdentityCopy: {
+      flex: 1,
+      gap: 4,
+    },
+    aboutName: {
+      color: '#ffffff',
+      fontSize: 19,
+      fontWeight: '900',
+    },
+    aboutUsername: {
+      color: 'rgba(255,255,255,0.64)',
+      fontSize: 14,
+      fontWeight: '700',
+    },
+    profileInfoList: {
+      overflow: 'hidden',
+      borderRadius: 22,
+      backgroundColor: 'rgba(255,255,255,0.05)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.10)',
+    },
+    profileInfoRow: {
+      minHeight: 72,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 14,
+      paddingHorizontal: 16,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: 'rgba(255,255,255,0.10)',
+    },
+    profileInfoIcon: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: 'rgba(255,255,255,0.08)',
+    },
+    profileInfoCopy: {
+      flex: 1,
+      gap: 3,
+    },
+    profileInfoLabel: {
+      color: 'rgba(255,255,255,0.58)',
+      fontSize: 12,
+      fontWeight: '800',
+      textTransform: 'uppercase',
+    },
+    profileInfoValue: {
+      color: '#ffffff',
+      fontSize: 16,
+      fontWeight: '800',
+    },
+    sharedPeopleRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: 12,
+      paddingTop: 2,
+      paddingBottom: 4,
+    },
+    sharedPerson: {
+      flex: 1,
+      alignItems: 'center',
+      gap: 5,
+    },
+    sharedAvatar: {
+      width: 104,
+      height: 104,
+      borderRadius: 52,
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.16)',
+    },
+    sharedName: {
+      maxWidth: '100%',
+      color: '#ffffff',
+      fontSize: 18,
+      fontWeight: '900',
+    },
+    sharedUsername: {
+      maxWidth: '100%',
+      color: 'rgba(255,255,255,0.60)',
+      fontSize: 14,
+      fontWeight: '700',
+    },
+    sharedLinkBadge: {
+      width: 54,
+      height: 54,
+      borderRadius: 27,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: 25,
+      backgroundColor: 'rgba(255,255,255,0.08)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.12)',
+    },
+    sharedSection: {
+      gap: 8,
+    },
+    sharedActivityCard: {
+      minHeight: 78,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 11,
+      borderRadius: 20,
+      backgroundColor: 'rgba(255,255,255,0.055)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.10)',
+    },
+    sharedActivityIconBlue: {
+      width: 50,
+      height: 50,
+      borderRadius: 25,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: '#4d8dff',
+    },
+    sharedActivityIconPink: {
+      width: 50,
+      height: 50,
+      borderRadius: 25,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: '#ff4d78',
+    },
+    sharedActivityIconPurple: {
+      width: 50,
+      height: 50,
+      borderRadius: 25,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: '#c678ff',
+    },
+    sharedActivityIconGreen: {
+      width: 50,
+      height: 50,
+      borderRadius: 25,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: '#36c77f',
+    },
+    sharedActivityCopy: {
+      flex: 1,
+      gap: 2,
+    },
+    sharedActivityTitle: {
+      color: '#ffffff',
+      fontSize: 16,
+      fontWeight: '900',
+    },
+    sharedActivitySubtitle: {
+      color: 'rgba(255,255,255,0.62)',
+      fontSize: 13,
+      lineHeight: 18,
+      fontWeight: '600',
+    },
+    sharedActivityDate: {
+      color: '#4d8dff',
+      fontSize: 13,
+      fontWeight: '800',
+    },
+    sharedDivider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: 'rgba(255,255,255,0.14)',
+    },
+    sharedFootnote: {
+      color: 'rgba(255,255,255,0.52)',
+      fontSize: 13,
+      lineHeight: 19,
+      textAlign: 'center',
+      fontWeight: '600',
+    },
+    reportSafetyText: {
+      color: 'rgba(255,255,255,0.68)',
+      fontSize: 14,
+      lineHeight: 20,
+      fontWeight: '600',
+    },
+    reportOptionList: {
+      overflow: 'hidden',
+      borderRadius: 22,
+      backgroundColor: 'rgba(255,255,255,0.055)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.10)',
+    },
+    reportOptionRow: {
+      minHeight: 62,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+      paddingHorizontal: 16,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: 'rgba(255,255,255,0.10)',
+    },
+    reportOptionRowSelected: {
+      backgroundColor: 'rgba(255,255,255,0.08)',
+    },
+    reportOptionText: {
+      flex: 1,
+      color: '#ffffff',
+      fontSize: 15,
+      lineHeight: 20,
+      fontWeight: '800',
+    },
+    profileToast: {
+      position: 'absolute',
+      left: 24,
+      right: 24,
+      bottom: 34,
+      alignItems: 'center',
+    },
+    profileToastText: {
+      overflow: 'hidden',
+      paddingHorizontal: 16,
+      paddingVertical: 11,
+      borderRadius: 999,
+      backgroundColor: 'rgba(24, 26, 30, 0.96)',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.12)',
+      color: '#ffffff',
+      fontSize: 13,
+      fontWeight: '800',
+      textAlign: 'center',
     },
     avatarEditorCard: {
       flexDirection: 'row',

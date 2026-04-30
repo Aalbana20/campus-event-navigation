@@ -251,23 +251,11 @@ export function StepSchool({
 
   const selected = US_SCHOOLS.find((s) => s.id === data.schoolId);
   const expectedDomain = selected?.domains?.[0];
-  const emailMatches =
-    !!expectedDomain &&
-    isValidEmail(data.eduEmail) &&
-    data.eduEmail.trim().toLowerCase().endsWith(`@${expectedDomain}`);
 
   const handleVerify = () => {
-    if (!emailMatches) {
-      setError(`Use a ${expectedDomain} email to verify your school.`);
-      return;
-    }
     setError('');
-    setPhase('sending');
-    // Placeholder: real flow = supabase.auth.signInWithOtp({ email })
-    setTimeout(() => {
-      update({ schoolVerified: true });
-      setPhase('verified');
-    }, 1000);
+    update({ schoolVerified: false });
+    onFinish();
   };
 
   if (phase === 'verified') {
@@ -298,7 +286,7 @@ export function StepSchool({
   return (
     <>
       <OnbTitle>Add your school</OnbTitle>
-      <OnbSubtitle>Stay in the loop with campus events. Optional — skip and you'll still see public ones.</OnbSubtitle>
+      <OnbSubtitle>Stay in the loop with campus events. Optional — verification is off for testing.</OnbSubtitle>
 
       <OnbInput
         label="Search your school"
@@ -334,7 +322,7 @@ export function StepSchool({
           onChangeText={(t: string) => update({ eduEmail: t })}
           autoCapitalize="none"
           keyboardType="email-address"
-          helper={expectedDomain ? `Must end with @${expectedDomain}` : undefined}
+          helper={expectedDomain ? `Optional: ${expectedDomain} email` : undefined}
         />
       ) : null}
 
@@ -342,10 +330,10 @@ export function StepSchool({
 
       <View style={onbLayout.spacer} />
       <View style={onbLayout.actions}>
-        <OnbPrimaryButton onPress={handleVerify} disabled={!data.schoolId || !data.eduEmail || phase === 'sending'}>
-          {phase === 'sending' ? 'Sending...' : 'Verify school email'}
+        <OnbPrimaryButton onPress={handleVerify} disabled={!data.schoolId}>
+          Continue
         </OnbPrimaryButton>
-        <OnbGhostButton onPress={onSkip}>Skip — I'll add it later</OnbGhostButton>
+        <OnbGhostButton onPress={onSkip}>Skip — I will add it later</OnbGhostButton>
       </View>
     </>
   );
@@ -626,7 +614,7 @@ export function StepPhone({ data, update, goNext }: StepProps) {
   return (
     <>
       <OnbTitle>Your phone number</OnbTitle>
-      <OnbSubtitle>We'll text a code to confirm it's you.</OnbSubtitle>
+      <OnbSubtitle>For account recovery and important updates only.</OnbSubtitle>
       <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>
         <View style={phoneStyles.cc}>
           <Text style={{ color: onbColors.text, fontSize: 17, fontWeight: '500' }}>🇺🇸 +1</Text>
@@ -642,7 +630,7 @@ export function StepPhone({ data, update, goNext }: StepProps) {
       </View>
       <View style={onbLayout.spacer} />
       <View style={onbLayout.actions}>
-        <OnbPrimaryButton onPress={goNext} disabled={!ready}>Send code</OnbPrimaryButton>
+        <OnbPrimaryButton onPress={goNext} disabled={!ready}>Next</OnbPrimaryButton>
       </View>
     </>
   );

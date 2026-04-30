@@ -40,6 +40,16 @@ type ProfileRow = {
   avatar_url?: string | null;
 };
 
+const isRetryableAuthFetchError = (error: unknown) => {
+  if (!error || typeof error !== 'object') return false;
+
+  const { name, message } = error as { name?: unknown; message?: unknown };
+  return (
+    name === 'AuthRetryableFetchError' ||
+    (typeof message === 'string' && message.includes('Network request failed'))
+  );
+};
+
 export type MobileStoryStripItem = {
   id: string;
   profileId?: string;
@@ -346,17 +356,40 @@ export const recordStoryView = async ({
 export const loadAuthenticatedStoryUserId = async () => {
   if (!supabase) return '';
 
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
+  try {
+    const {
+      data: { session },
+      error: sessionError,
+    } = await supabase.auth.getSession();
 
-  if (error) {
-    console.error('Unable to resolve authenticated story user:', error);
+    if (session?.user?.id) return String(session.user.id);
+
+    if (sessionError) {
+      if (!isRetryableAuthFetchError(sessionError)) {
+        console.warn('Unable to read cached story session:', sessionError);
+      }
+      return '';
+    }
+
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
+
+    if (error) {
+      if (!isRetryableAuthFetchError(error)) {
+        console.warn('Unable to resolve authenticated story user:', error);
+      }
+      return '';
+    }
+
+    return user?.id ? String(user.id) : '';
+  } catch (error) {
+    if (!isRetryableAuthFetchError(error)) {
+      console.warn('Unable to resolve authenticated story user:', error);
+    }
     return '';
   }
-
-  return user?.id ? String(user.id) : '';
 };
 
 export const fetchStoryViewers = async ({

@@ -24,6 +24,7 @@ import { CreateEventInput, EventPrivacy, EventRecord } from '@/types/models';
 
 import { EventDetailView } from './EventDetailView';
 import { EventStackCard } from './EventStackCard';
+import { GeminiFlyerGenerator } from './GeminiFlyerGenerator';
 
 const BASE_TAGS = ['campus', 'community', 'students'];
 const DEFAULT_EVENT_IMAGE =
@@ -177,6 +178,7 @@ export function CreateEventComposer({
   const [activeEditPanel, setActiveEditPanel] = useState<EditPanel>(null);
   const [dateInput, setDateInput] = useState(formatUsDateInput(initialDate));
   const [previewDetailVisible, setPreviewDetailVisible] = useState(false);
+  const [geminiFlyerVisible, setGeminiFlyerVisible] = useState(false);
   const hostName = currentUser.name || currentUser.username || 'Campus Host';
   const { height: windowHeight } = useWindowDimensions();
 
@@ -286,6 +288,21 @@ export function CreateEventComposer({
     if (result.canceled || !result.assets.length) return;
 
     setSelectedFlyer(result.assets[0]);
+  };
+
+  const handleUseGeneratedFlyer = (
+    imageUri: string,
+    generatedAsset?: ImagePicker.ImagePickerAsset
+  ) => {
+    if (generatedAsset) {
+      setSelectedFlyerAsset(generatedAsset);
+      setImageUrls([]);
+    } else {
+      setSelectedFlyerAsset(null);
+      setImageUrls([imageUri]);
+    }
+    setSelectedFlyerUri(imageUri);
+    setGeminiFlyerVisible(false);
   };
 
   const suggestedTags = useMemo(() => {
@@ -570,7 +587,7 @@ export function CreateEventComposer({
             </Pressable>
             <Pressable
               style={styles.uploadButton}
-              onPress={() => Alert.alert('Generate', 'AI image generation is coming soon.')}>
+              onPress={() => setGeminiFlyerVisible(true)}>
               <Ionicons name="sparkles-outline" size={18} color={theme.text} />
               <Text style={styles.uploadButtonText}>Generate</Text>
             </Pressable>
@@ -740,6 +757,21 @@ export function CreateEventComposer({
           </Modal>
         </View>
       ) : null}
+
+      <Modal
+        visible={geminiFlyerVisible}
+        animationType="slide"
+        onRequestClose={() => setGeminiFlyerVisible(false)}>
+        <GeminiFlyerGenerator
+          eventTitle={title}
+          eventDescription={description}
+          eventDate={dateInput || formatDateLabel(date)}
+          eventTime={displayTime}
+          eventLocation={locationName || locationAddress}
+          onClose={() => setGeminiFlyerVisible(false)}
+          onSelectFlyer={handleUseGeneratedFlyer}
+        />
+      </Modal>
     </View>
   );
 }

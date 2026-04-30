@@ -28,9 +28,9 @@ export default function TabLayout() {
           borderTopWidth: 0,
           elevation: 0,
           shadowOpacity: 0,
-          height: 78,
-          paddingTop: 8,
-          paddingBottom: 10,
+          height: 90,
+          paddingTop: 22,
+          paddingBottom: 0,
         },
       }}>
       <Tabs.Screen name="index" options={{ href: null }} />

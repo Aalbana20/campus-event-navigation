@@ -4,7 +4,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
 
@@ -71,31 +70,8 @@ export function DiscoverStoriesRow({
                   />
                 </View>
 
-                <Text style={styles.storyLabel} numberOfLines={1}>
-                  {isCurrent ? 'Your Story' : item.username || item.name}
-                </Text>
-
-                <Text style={styles.storyMeta} numberOfLines={1}>
-                  {isCurrent && item.stories.length === 0
-                    ? 'Add'
-                    : item.meta || (isSuggested ? 'Suggested' : 'Story')}
-                </Text>
               </Pressable>
 
-              {isCurrent ? (
-                <Pressable
-                  hitSlop={8}
-                  style={[styles.storyBadge, styles.storyBadgeCurrent]}
-                  onPress={onOpenCreateStory}>
-                  <Text style={styles.storyBadgeText}>+</Text>
-                </Pressable>
-              ) : null}
-
-              {isSuggested ? (
-                <View style={[styles.storyBadge, styles.storyBadgeSuggested]}>
-                  <Text style={styles.storyBadgeText}>↗</Text>
-                </View>
-              ) : null}
             </View>
           );
         })}
@@ -107,21 +83,20 @@ export function DiscoverStoriesRow({
 const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
   StyleSheet.create({
     panel: {
-      paddingVertical: 8,
+      paddingTop: 2,
+      paddingBottom: 0,
       width: '100%',
     },
     track: {
-      gap: 12,
+      gap: 10,
       paddingHorizontal: 16,
     },
     storyItem: {
-      width: 60,
+      width: 56,
       alignItems: 'center',
-      gap: 4,
     },
     storyPressable: {
       alignItems: 'center',
-      gap: 4,
     },
     storyRing: {
       width: 54,
@@ -152,40 +127,5 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       backgroundColor: theme.surfaceAlt,
       borderWidth: 3,
       borderColor: theme.surface,
-    },
-    storyBadge: {
-      position: 'absolute',
-      right: 0,
-      top: 38,
-      width: 18,
-      height: 18,
-      borderRadius: 9,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderWidth: 2,
-      borderColor: theme.surface,
-    },
-    storyBadgeCurrent: {
-      backgroundColor: '#2563eb',
-    },
-    storyBadgeSuggested: {
-      backgroundColor: '#0f766e',
-    },
-    storyBadgeText: {
-      color: '#ffffff',
-      fontSize: 10,
-      fontWeight: '800',
-    },
-    storyLabel: {
-      color: theme.text,
-      fontSize: 10,
-      fontWeight: '700',
-      maxWidth: 62,
-    },
-    storyMeta: {
-      color: theme.textMuted,
-      fontSize: 9,
-      fontWeight: '600',
-      maxWidth: 62,
     },
   });
