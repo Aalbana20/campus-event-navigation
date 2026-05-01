@@ -315,103 +315,105 @@ export function StepUsername({ data, update, goNext }) {
   )
 }
 
-/* ---------------- Birthday wheel (Month/Day/Year) ---------------- */
-const ITEM_H = 44
+/* ---------------- Step: Email ---------------- */
+export function StepEmail({ data, update, goNext }) {
+  const email = data.email || ""
+  const cleanEmail = email.trim()
+  const valid = isValidEmail(cleanEmail)
 
+  return (
+    <>
+      <h1 className="onb-title">What's your email?</h1>
+      <p className="onb-subtitle">This creates your Supabase Auth account. Use an email you can access.</p>
+
+      <FloatingInput
+        label="Email"
+        type="email"
+        autoComplete="email"
+        autoFocus
+        value={email}
+        onChange={(e) => update({ email: e.target.value })}
+        state={cleanEmail && !valid ? "error" : valid ? "success" : null}
+        rightSlot={valid ? <StatusIcon status="success" /> : null}
+        helper={cleanEmail && !valid ? "Enter a valid email address." : "Required for sign in and account recovery."}
+        helperState={cleanEmail && !valid ? "error" : null}
+      />
+
+      <div className="onb-spacer" />
+      <div className="onb-actions">
+        <PrimaryButton onClick={goNext} disabled={!valid}>Next</PrimaryButton>
+      </div>
+    </>
+  )
+}
+
+/* ---------------- Birthday dropdowns (Month/Day/Year) ---------------- */
 function BirthdayWheel({ data, update }) {
   const years = useMemo(() => getBirthYearOptions(), [])
-  const monthIdx = data.birthMonth ? Number(data.birthMonth) - 1 : 4
-  const yearIdx = data.birthYear ? years.indexOf(String(data.birthYear)) : 5
-
   const days = useMemo(
     () => getBirthDayOptions(data.birthMonth || 5, data.birthYear || 2000),
     [data.birthMonth, data.birthYear],
   )
-  const dayIdx = data.birthDay
-    ? Math.min(Number(data.birthDay) - 1, days.length - 1)
-    : 0
 
-  const monthRef = useRef(null)
-  const dayRef = useRef(null)
-  const yearRef = useRef(null)
-
-  useEffect(() => {
-    if (monthRef.current) monthRef.current.scrollTop = monthIdx * ITEM_H
-    if (yearRef.current) yearRef.current.scrollTop = yearIdx * ITEM_H
-    if (dayRef.current) dayRef.current.scrollTop = dayIdx * ITEM_H
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  // If month/year shrinks the day range, clamp the selection.
   useEffect(() => {
     const max = getDaysInMonth(data.birthMonth, data.birthYear)
     if (data.birthDay && Number(data.birthDay) > max) {
       update({ birthDay: String(max) })
-      if (dayRef.current) dayRef.current.scrollTop = (max - 1) * ITEM_H
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data.birthMonth, data.birthYear])
 
-  const onMonthScroll = (e) => {
-    const idx = Math.round(e.currentTarget.scrollTop / ITEM_H)
-    const safe = Math.max(0, Math.min(BIRTH_MONTHS.length - 1, idx))
-    if (String(safe + 1) !== String(data.birthMonth)) {
-      update({ birthMonth: String(safe + 1) })
+  const updateBirthday = (patch) => {
+    const next = { ...data, ...patch }
+    const nextPatch = { ...patch }
+    const max = getDaysInMonth(next.birthMonth, next.birthYear)
+    if (next.birthDay && Number(next.birthDay) > max) {
+      nextPatch.birthDay = String(max)
     }
+    update(nextPatch)
   }
-  const onDayScroll = (e) => {
-    const idx = Math.round(e.currentTarget.scrollTop / ITEM_H)
-    const safe = Math.max(0, Math.min(days.length - 1, idx))
-    if (String(safe + 1) !== String(data.birthDay)) {
-      update({ birthDay: String(safe + 1) })
-    }
-  }
-  const onYearScroll = (e) => {
-    const idx = Math.round(e.currentTarget.scrollTop / ITEM_H)
-    const safe = Math.max(0, Math.min(years.length - 1, idx))
-    if (years[safe] !== String(data.birthYear)) {
-      update({ birthYear: years[safe] })
-    }
-  }
-
-  const monthLabel = BIRTH_MONTHS[monthIdx]?.label || "May"
-  const dayLabel = days[dayIdx] || ""
-  const yearLabel = years[yearIdx] || ""
 
   return (
-    <>
-      <div className="onb-wheel-display">
-        <div className="onb-wheel-display-label">Birthday</div>
-        <div className="onb-wheel-display-value">
-          {monthLabel} {dayLabel}, {yearLabel}
-        </div>
-      </div>
+    <div className="onb-birthday-grid">
+      <label className="onb-select-field">
+        <span>Month</span>
+        <select
+          value={data.birthMonth || ""}
+          onChange={(e) => updateBirthday({ birthMonth: e.target.value })}
+        >
+          <option value="">Month</option>
+          {BIRTH_MONTHS.map((month) => (
+            <option key={month.value} value={month.value}>{month.label}</option>
+          ))}
+        </select>
+      </label>
 
-      <div className="onb-wheel is-3">
-        <div className="onb-wheel-highlight" />
-        <div ref={monthRef} className="onb-wheel-col" onScroll={onMonthScroll}>
-          {BIRTH_MONTHS.map((m, i) => (
-            <div key={m.value} className={`onb-wheel-item ${i === monthIdx ? "is-active" : ""}`}>
-              {m.label}
-            </div>
+      <label className="onb-select-field">
+        <span>Day</span>
+        <select
+          value={data.birthDay || ""}
+          onChange={(e) => updateBirthday({ birthDay: e.target.value })}
+        >
+          <option value="">Day</option>
+          {days.map((day) => (
+            <option key={day} value={day}>{day}</option>
           ))}
-        </div>
-        <div ref={dayRef} className="onb-wheel-col" onScroll={onDayScroll}>
-          {days.map((d, i) => (
-            <div key={d} className={`onb-wheel-item ${i === dayIdx ? "is-active" : ""}`}>
-              {d}
-            </div>
+        </select>
+      </label>
+
+      <label className="onb-select-field">
+        <span>Year</span>
+        <select
+          value={data.birthYear || ""}
+          onChange={(e) => updateBirthday({ birthYear: e.target.value })}
+        >
+          <option value="">Year</option>
+          {years.map((year) => (
+            <option key={year} value={year}>{year}</option>
           ))}
-        </div>
-        <div ref={yearRef} className="onb-wheel-col" onScroll={onYearScroll}>
-          {years.map((y, i) => (
-            <div key={y} className={`onb-wheel-item ${i === yearIdx ? "is-active" : ""}`}>
-              {y}
-            </div>
-          ))}
-        </div>
-      </div>
-    </>
+        </select>
+      </label>
+    </div>
   )
 }
 
@@ -606,7 +608,7 @@ export function StepPassword({ data, update, goNext }) {
   const checks = getPasswordChecks(pw)
   const lvl = strengthLevel(pw)
   const matches = pw && pw === cf
-  const ready = checks.length && matches
+  const ready = Object.values(checks).every(Boolean) && matches
   return (
     <>
       <h1 className="onb-title">Create a password</h1>
@@ -638,6 +640,137 @@ export function StepPassword({ data, update, goNext }) {
       </div>
       <div className="onb-strength-label" style={{ marginBottom: 16 }}>
         {pw ? `${STRENGTH_LABELS[lvl]} password` : "Type to see strength"}
+      </div>
+
+      <FloatingInput
+        label="Confirm password"
+        type={show ? "text" : "password"}
+        autoComplete="new-password"
+        value={cf}
+        onChange={(e) => update({ confirmPassword: e.target.value })}
+        rightSlot={matches ? <StatusIcon status="success" /> : null}
+        helper={cf && !matches ? "Passwords don't match." : null}
+        helperState={cf && !matches ? "error" : null}
+      />
+
+      <div className="onb-spacer" />
+      <div className="onb-actions">
+        <PrimaryButton onClick={goNext} disabled={!ready}>Next</PrimaryButton>
+      </div>
+    </>
+  )
+}
+
+/* ---------------- Step: Username + Password ---------------- */
+export function StepUsernamePassword({ data, update, goNext }) {
+  const [status, setStatus] = useState("idle") // idle | checking | available | taken | invalid
+  const [show, setShow] = useState(false)
+  const username = data.username || ""
+  const normalized = normalizeUsername(username)
+  const validUsername = isValidUsername(normalized)
+  const pw = data.password || ""
+  const cf = data.confirmPassword || ""
+  const checks = getPasswordChecks(pw)
+  const lvl = strengthLevel(pw)
+  const matches = !!pw && pw === cf
+  const passwordReady = Object.values(checks).every(Boolean) && matches
+  const ready = status === "available" && passwordReady
+
+  useEffect(() => {
+    if (!normalized) {
+      setStatus("idle")
+      return
+    }
+    if (!validUsername) {
+      setStatus("invalid")
+      return
+    }
+    let active = true
+    const t = window.setTimeout(async () => {
+      setStatus("checking")
+      const { data: row, error } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("username", normalized)
+        .maybeSingle()
+      if (!active) return
+      if (error && error.code !== "PGRST116") {
+        setStatus("idle")
+        return
+      }
+      setStatus(row ? "taken" : "available")
+    }, 350)
+    return () => {
+      active = false
+      window.clearTimeout(t)
+    }
+  }, [normalized, validUsername])
+
+  const usernameHelper =
+    status === "invalid"
+      ? "3-20 characters. Letters, numbers, dots, underscores."
+      : status === "taken"
+      ? "That one's gone. Try another."
+      : status === "available"
+      ? "Looks good."
+      : "You can change this later."
+  const usernameHelperState =
+    status === "taken" || status === "invalid"
+      ? "error"
+      : status === "available"
+      ? "success"
+      : null
+
+  return (
+    <>
+      <h1 className="onb-title">Choose a username and password</h1>
+      <p className="onb-subtitle">Your username must be available, and your password must meet every rule.</p>
+
+      <FloatingInput
+        label="Username"
+        value={username}
+        onChange={(e) => update({ username: normalizeUsername(e.target.value) })}
+        autoComplete="username"
+        autoFocus
+        state={status === "available" ? "success" : status === "taken" || status === "invalid" ? "error" : null}
+        rightSlot={<StatusIcon status={status} />}
+        helper={usernameHelper}
+        helperState={usernameHelperState}
+      />
+
+      <FloatingInput
+        label="Password"
+        type={show ? "text" : "password"}
+        autoComplete="new-password"
+        value={pw}
+        onChange={(e) => update({ password: e.target.value })}
+        rightSlot={
+          <button
+            type="button"
+            className="onb-iconbtn"
+            style={{ width: 32, height: 32 }}
+            onClick={() => setShow((v) => !v)}
+            aria-label={show ? "Hide password" : "Show password"}
+          >
+            {show ? <EyeOff size={18} /> : <Eye size={18} />}
+          </button>
+        }
+      />
+
+      <div className="onb-strength" aria-hidden>
+        {[1, 2, 3, 4].map((seg) => (
+          <div key={seg} className={`onb-strength-seg ${seg <= lvl ? `lvl-${lvl}` : ""}`} />
+        ))}
+      </div>
+      <div className="onb-strength-label" style={{ marginBottom: 16 }}>
+        {pw ? `${STRENGTH_LABELS[lvl]} password` : "Type to see strength"}
+      </div>
+
+      <div className="signup-password-rules" style={{ marginTop: -8, marginBottom: 16 }}>
+        <span className={checks.length ? "met" : ""}>8+ characters</span>
+        <span className={checks.uppercase ? "met" : ""}>uppercase</span>
+        <span className={checks.lowercase ? "met" : ""}>lowercase</span>
+        <span className={checks.number ? "met" : ""}>number</span>
       </div>
 
       <FloatingInput
@@ -841,11 +974,12 @@ export function StepOrgName({ data, update, goNext }) {
 export function StepOrgInfo({ data, update, goNext }) {
   const type = data.orgType || ""
   const email = data.orgEmail || ""
-  const ready = !!type && isValidEmail(email)
+  const cleanEmail = email.trim()
+  const ready = !!type && (!cleanEmail || isValidEmail(cleanEmail))
   return (
     <>
       <h1 className="onb-title">Tell us about your business</h1>
-      <p className="onb-subtitle">Pick a category and add an email we can reach you at.</p>
+      <p className="onb-subtitle">Pick a category. Recovery email is optional for this test flow.</p>
 
       <p style={{
         fontSize: 13,
@@ -865,13 +999,13 @@ export function StepOrgInfo({ data, update, goNext }) {
       <div style={{ height: 16 }} />
 
       <FloatingInput
-        label="Business email"
+        label="Business email (optional)"
         type="email"
         autoComplete="email"
         value={email}
         onChange={(e) => update({ orgEmail: e.target.value })}
-        helper={email && !isValidEmail(email) ? "That doesn't look like a valid email." : "We'll use this for sign-in and recovery."}
-        helperState={email && !isValidEmail(email) ? "error" : null}
+        helper={cleanEmail && !isValidEmail(cleanEmail) ? "That doesn't look like a valid email." : "Optional recovery contact."}
+        helperState={cleanEmail && !isValidEmail(cleanEmail) ? "error" : null}
       />
 
       <div className="onb-spacer" />

@@ -20,36 +20,35 @@ import {
   OnboardingData,
   StepAccountType,
   StepAvatar,
+  StepEmail,
   StepEntry,
   StepInterests,
   StepNameBirth,
   StepOrgCategories,
   StepOrgInfo,
   StepOrgName,
-  StepPassword,
-  StepPhone,
   StepSchool,
   StepSubmitting,
   StepTerms,
-  StepUsername,
+  StepUsernamePassword,
   initialOnboardingData,
 } from '@/components/onboarding/onboarding-steps';
-import { US_SCHOOLS } from '@/lib/signup-data';
+import { US_SCHOOLS, isValidEmail } from '@/lib/signup-data';
 import { useMobileApp } from '@/providers/mobile-app-provider';
 
 type Stage = 'entry' | 'flow' | 'submitting' | 'done';
 
-// Personal: account-type → username → phone → password → name+birth →
+// Personal: account-type → email → username+password → name+birth →
 // avatar → interests → terms → school (optional). signUp fires at the end.
 const INDIVIDUAL_FLOW = [
-  'account-type', 'username', 'phone', 'password',
+  'account-type', 'email', 'credentials',
   'name-birth', 'avatar', 'interests', 'terms', 'school',
 ] as const;
 
-// Business: account-type → org-name → username → phone → password →
-// org-info (type + recovery email) → logo → categories → terms.
+// Business: account-type → email → username+password → org-name →
+// org-info → logo → categories → terms.
 const ORG_FLOW = [
-  'account-type', 'org-name', 'username', 'phone', 'password',
+  'account-type', 'email', 'credentials', 'org-name',
   'org-info', 'org-logo', 'org-categories', 'terms',
 ] as const;
 
@@ -106,17 +105,13 @@ export default function SignUpScreen() {
           ? 'student'
           : 'regular';
 
-      // Resolve auth email: verified .edu > org email > synthesized fallback.
+      const cleanEmail = data.email.trim().toLowerCase();
+      if (!isValidEmail(cleanEmail)) {
+        throw new Error('Enter a valid email address.');
+      }
+
       const eduEmail = data.eduEmail.trim().toLowerCase();
-      const orgEmail = data.orgEmail.trim().toLowerCase();
-      const phoneDigits = data.phone.replace(/\D/g, '');
       const usernameLower = data.username.trim().toLowerCase();
-      const fallbackHandle = usernameLower || phoneDigits || `user${Date.now()}`;
-      const cleanEmail = isOrg
-        ? orgEmail || `${fallbackHandle}@signup.campusevent.app`
-        : accountType === 'student'
-          ? eduEmail
-          : `${fallbackHandle}@signup.campusevent.app`;
 
       const result = await signUp({
         accountType,
@@ -129,7 +124,6 @@ export default function SignUpScreen() {
           usernameLower || (isOrg ? data.orgName.trim().toLowerCase().replace(/\s+/g, '') : ''),
         email: cleanEmail,
         password: data.password,
-        phoneNumber: data.phone,
         birthMonth: isOrg ? undefined : data.birthMonth,
         birthDay: isOrg ? undefined : data.birthDay,
         birthYear: isOrg ? undefined : data.birthYear,
@@ -184,14 +178,11 @@ export default function SignUpScreen() {
       case 'account-type':
         body = <StepAccountType data={data} update={update} goNext={goNext} />;
         break;
-      case 'username':
-        body = <StepUsername data={data} update={update} goNext={goNext} />;
+      case 'email':
+        body = <StepEmail data={data} update={update} goNext={goNext} />;
         break;
-      case 'phone':
-        body = <StepPhone data={data} update={update} goNext={goNext} />;
-        break;
-      case 'password':
-        body = <StepPassword data={data} update={update} goNext={goNext} />;
+      case 'credentials':
+        body = <StepUsernamePassword data={data} update={update} goNext={goNext} />;
         break;
       case 'name-birth':
         body = <StepNameBirth data={data} update={update} goNext={goNext} />;

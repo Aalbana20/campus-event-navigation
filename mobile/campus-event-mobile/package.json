@@ -53,6 +53,7 @@
     "react-native-url-polyfill": "^3.0.0",
     "react-native-web": "~0.21.0",
     "react-native-worklets": "0.5.1",
+    "undici": "^7.25.0",
     "wonka": "^6.3.6"
   },
   "devDependencies": {

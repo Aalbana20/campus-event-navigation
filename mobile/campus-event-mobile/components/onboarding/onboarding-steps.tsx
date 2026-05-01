@@ -760,7 +760,7 @@ export function StepPassword({ data, update, goNext }: StepProps) {
   const checks = getPasswordChecks(pw);
   const lvl = strengthLevel(pw);
   const matches = !!pw && pw === cf;
-  const ready = checks.length && matches;
+  const ready = Object.values(checks).every(Boolean) && matches;
   return (
     <>
       <OnbTitle>Create a password</OnbTitle>
@@ -810,6 +810,139 @@ export function StepPassword({ data, update, goNext }: StepProps) {
 const pwStyles = StyleSheet.create({
   bar: { flexDirection: 'row', gap: 4, height: 4, marginTop: 8, marginBottom: 4 },
   seg: { flex: 1, borderRadius: 2 },
+});
+
+/* -------------------- Step: Username + Password -------------------- */
+export function StepUsernamePassword({ data, update, goNext }: StepProps) {
+  const [status, setStatus] = useState<UsernameStatus>('idle');
+  const [show, setShow] = useState(false);
+  const value = data.username;
+  const normalized = normalizeUsername(value);
+  const validUsername = isValidUsername(normalized);
+  const pw = data.password;
+  const cf = data.confirmPassword;
+  const checks = getPasswordChecks(pw);
+  const lvl = strengthLevel(pw);
+  const matches = !!pw && pw === cf;
+  const passwordReady = Object.values(checks).every(Boolean) && matches;
+  const ready = status === 'available' && passwordReady;
+
+  useEffect(() => {
+    if (!normalized) {
+      setStatus('idle');
+      return;
+    }
+    if (!validUsername) {
+      setStatus('invalid');
+      return;
+    }
+    let active = true;
+    const t = setTimeout(async () => {
+      if (!supabase) return;
+      setStatus('checking');
+      const { data: row, error } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('username', normalized)
+        .maybeSingle();
+      if (!active) return;
+      if (error && error.code !== 'PGRST116') {
+        setStatus('idle');
+        return;
+      }
+      setStatus(row ? 'taken' : 'available');
+    }, 350);
+    return () => {
+      active = false;
+      clearTimeout(t);
+    };
+  }, [normalized, validUsername]);
+
+  const helper =
+    status === 'invalid'
+      ? '3-20 characters. Letters, numbers, dots, underscores.'
+      : status === 'taken'
+        ? "That one's gone. Try another."
+        : status === 'available'
+          ? 'Looks good.'
+          : 'You can change this later.';
+  const helperState = status === 'taken' || status === 'invalid' ? 'error' : status === 'available' ? 'success' : null;
+
+  return (
+    <>
+      <OnbTitle>Choose a username and password</OnbTitle>
+      <OnbSubtitle>Your username must be available, and your password must meet every rule.</OnbSubtitle>
+      <OnbInput
+        label="Username"
+        value={value}
+        onChangeText={(t: string) => update({ username: normalizeUsername(t) })}
+        autoCapitalize="none"
+        autoCorrect={false}
+        state={status === 'available' ? 'success' : status === 'taken' || status === 'invalid' ? 'error' : null}
+        rightSlot={<OnbStatusRing status={status} />}
+        helper={helper}
+        helperState={helperState as 'success' | 'error' | null}
+      />
+      <OnbInput
+        label="Password"
+        value={pw}
+        onChangeText={(t: string) => update({ password: t })}
+        secureTextEntry={!show}
+        autoCapitalize="none"
+        rightSlot={
+          <Pressable onPress={() => setShow((v) => !v)} hitSlop={8}>
+            <Text style={{ color: onbColors.textSecondary, fontSize: 13 }}>{show ? 'Hide' : 'Show'}</Text>
+          </Pressable>
+        }
+      />
+      <View style={pwStyles.bar}>
+        {[1, 2, 3, 4].map((seg) => (
+          <View
+            key={seg}
+            style={[
+              pwStyles.seg,
+              { backgroundColor: seg <= lvl ? STRENGTH_COLORS[lvl] : 'rgba(255,255,255,0.06)' },
+            ]}
+          />
+        ))}
+      </View>
+      <Text style={{ color: onbColors.textSecondary, fontSize: 12, marginBottom: 12 }}>
+        {pw ? `${STRENGTH_LABELS[lvl]} password` : 'Type to see strength'}
+      </Text>
+      <View style={credentialStyles.rules}>
+        <Text style={[credentialStyles.rule, checks.length ? credentialStyles.ruleMet : null]}>8+ characters</Text>
+        <Text style={[credentialStyles.rule, checks.uppercase ? credentialStyles.ruleMet : null]}>uppercase</Text>
+        <Text style={[credentialStyles.rule, checks.lowercase ? credentialStyles.ruleMet : null]}>lowercase</Text>
+        <Text style={[credentialStyles.rule, checks.number ? credentialStyles.ruleMet : null]}>number</Text>
+      </View>
+      <OnbInput
+        label="Confirm password"
+        value={cf}
+        onChangeText={(t: string) => update({ confirmPassword: t })}
+        secureTextEntry={!show}
+        autoCapitalize="none"
+        helper={cf && !matches ? "Passwords don't match." : undefined}
+        helperState={cf && !matches ? 'error' : null}
+      />
+      <View style={onbLayout.spacer} />
+      <View style={onbLayout.actions}>
+        <OnbPrimaryButton onPress={goNext} disabled={!ready}>Next</OnbPrimaryButton>
+      </View>
+    </>
+  );
+}
+const credentialStyles = StyleSheet.create({
+  rules: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
+  rule: {
+    color: onbColors.textSecondary,
+    borderColor: onbColors.border,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    fontSize: 12,
+  },
+  ruleMet: { color: onbColors.success, borderColor: onbColors.success },
 });
 
 /* -------------------- Step 9: Terms -------------------- */
@@ -1005,12 +1138,13 @@ export function StepOrgName({ data, update, goNext }: StepProps) {
 export function StepOrgInfo({ data, update, goNext }: StepProps) {
   const type = data.orgType || '';
   const email = data.orgEmail || '';
-  const emailValid = isValidEmail(email);
+  const cleanEmail = email.trim();
+  const emailValid = !cleanEmail || isValidEmail(cleanEmail);
   const ready = !!type && emailValid;
   return (
     <>
       <OnbTitle>Tell us about your business</OnbTitle>
-      <OnbSubtitle>Pick a category and add an email we can reach you at.</OnbSubtitle>
+      <OnbSubtitle>Pick a category. Recovery email is optional for this test flow.</OnbSubtitle>
 
       <Text style={{ color: onbColors.textSecondary, fontSize: 12, fontWeight: '500', marginTop: 4, marginBottom: 8, letterSpacing: 0.5 }}>
         CATEGORY
@@ -1024,13 +1158,13 @@ export function StepOrgInfo({ data, update, goNext }: StepProps) {
       <View style={{ height: 16 }} />
 
       <OnbInput
-        label="Business email"
+        label="Business email (optional)"
         value={email}
         onChangeText={(t: string) => update({ orgEmail: t })}
         autoCapitalize="none"
         keyboardType="email-address"
-        helper={email && !emailValid ? "That doesn't look like a valid email." : "We'll use this for sign-in and recovery."}
-        helperState={email && !emailValid ? 'error' : null}
+        helper={cleanEmail && !emailValid ? "That doesn't look like a valid email." : 'Optional recovery contact.'}
+        helperState={cleanEmail && !emailValid ? 'error' : null}
       />
 
       <View style={onbLayout.spacer} />

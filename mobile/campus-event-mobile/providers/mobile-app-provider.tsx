@@ -42,7 +42,7 @@ import {
 } from '@/lib/mobile-profile-image';
 import { sendPushToUser } from '@/lib/mobile-push';
 import { SUPABASE_CONFIG_ERROR, supabase } from '@/lib/supabase';
-import { buildProfileSummary, sanitizePhoneNumber } from '@/lib/signup-data';
+import { buildProfileSummary, isStrongPassword, isValidEmail, sanitizePhoneNumber } from '@/lib/signup-data';
 import {
   loadGridPostsForAuthor,
   setDiscoverPostGridVisibility,
@@ -2174,6 +2174,16 @@ export function MobileAppProvider({ children }: { children: React.ReactNode }) {
       if (!cleanUsername) {
         setIsReady(true);
         return { ok: false, error: 'Username is required.' };
+      }
+
+      if (!isValidEmail(cleanEmail)) {
+        setIsReady(true);
+        return { ok: false, error: 'Enter a valid email address.' };
+      }
+
+      if (!isStrongPassword(input.password)) {
+        setIsReady(true);
+        return { ok: false, error: 'Password does not meet every rule.' };
       }
 
       const { data: existingProfile, error: usernameLookupError } = await supabase

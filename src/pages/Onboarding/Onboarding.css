@@ -550,85 +550,62 @@
 .onb-search-row strong { font-size: 15px; font-weight: 500; }
 .onb-search-row span { font-size: 13px; color: var(--onb-text-secondary); }
 
-/* ---- Wheel picker ---- */
-.onb-wheel-display {
-  height: 88px;
-  border: 1px solid var(--onb-border);
-  border-radius: 14px;
-  padding: 14px 18px;
+/* ---- Birthday dropdowns ---- */
+.onb-birthday-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1.4fr;
+  gap: 10px;
+  margin: 4px 0 8px;
+}
+.onb-select-field {
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  margin-bottom: 24px;
-}
-.onb-wheel-display-label {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--onb-text-secondary);
-  margin-bottom: 4px;
-}
-.onb-wheel-display-value {
-  font-size: 22px;
-  font-weight: 500;
-}
-.onb-wheel {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
   gap: 8px;
-  height: 220px;
-  position: relative;
-  padding: 0 4px;
 }
-.onb-wheel.is-3 {
-  grid-template-columns: 2fr 1fr 1.4fr;
+.onb-select-field span {
+  color: var(--onb-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
-.onb-wheel::before,
-.onb-wheel::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  height: 88px;
-  pointer-events: none;
-  z-index: 2;
-}
-.onb-wheel::before { top: 0; background: linear-gradient(to bottom, var(--onb-bg), transparent); }
-.onb-wheel::after { bottom: 0; background: linear-gradient(to top, var(--onb-bg), transparent); }
-
-.onb-wheel-col {
-  scroll-snap-type: y mandatory;
-  overflow-y: scroll;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-  padding: 88px 0;
-  position: relative;
-}
-.onb-wheel-col::-webkit-scrollbar { display: none; }
-
-.onb-wheel-highlight {
-  position: absolute;
-  left: 4px;
-  right: 4px;
-  top: 88px;
-  height: 44px;
-  border-radius: 12px;
-  background: var(--onb-bg-elevated-2);
-  pointer-events: none;
-  z-index: 1;
-}
-.onb-wheel-item {
-  scroll-snap-align: center;
-  height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.onb-select-field select {
+  width: 100%;
+  min-width: 0;
+  height: 58px;
+  border: 1px solid var(--onb-border);
+  border-radius: 14px;
+  background: var(--onb-bg-input);
+  color: var(--onb-text);
+  font: inherit;
   font-size: 18px;
   font-weight: 500;
-  color: var(--onb-text-muted);
-  transition: color 150ms ease;
+  padding: 0 42px 0 14px;
+  outline: 0;
+  appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--onb-text-secondary) 50%),
+    linear-gradient(135deg, var(--onb-text-secondary) 50%, transparent 50%);
+  background-position:
+    calc(100% - 20px) 25px,
+    calc(100% - 14px) 25px;
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
   cursor: pointer;
 }
-.onb-wheel-item.is-active { color: var(--onb-text); font-size: 20px; }
+.onb-select-field select:focus {
+  border-color: var(--onb-accent);
+  box-shadow: 0 0 0 3px rgba(255, 122, 0, 0.16);
+}
+.onb-select-field option {
+  background: var(--onb-bg-elevated);
+  color: var(--onb-text);
+}
+
+@media (max-width: 520px) {
+  .onb-birthday-grid {
+    grid-template-columns: 1fr;
+  }
+}
 
 /* ---- OTP input ----
    Six equal cells, fixed-size, capped row width so it never stretches into

@@ -9,37 +9,34 @@ import {
 import {
   US_SCHOOLS,
   buildProfileSummary,
+  isStrongPassword,
   isValidEmail,
-  sanitizePhoneNumber,
 } from "../../signupData"
 import OnboardingShell from "./OnboardingShell"
 import {
   StepAccountType,
   StepAvatar,
   StepDone,
+  StepEmail,
   StepEntry,
   StepInterests,
   StepNameBirth,
   StepOrgCategories,
   StepOrgInfo,
   StepOrgName,
-  StepPassword,
-  StepPhone,
+  StepUsernamePassword,
   StepSchool,
   StepSubmitting,
   StepTerms,
-  StepUsername,
 } from "./OnboardingSteps"
 import "./Onboarding.css"
 
-// Personal flow per spec: account-type → username → phone → password →
+// Personal flow per spec: account-type → email → username+password →
 // name+birth → avatar → interests → terms → school (optional).
-// signUp fires at flow end.
 const INDIVIDUAL_FLOW = [
   "account-type",
-  "username",
-  "phone",
-  "password",
+  "email",
+  "credentials",
   "name-birth",
   "avatar",
   "interests",
@@ -47,14 +44,13 @@ const INDIVIDUAL_FLOW = [
   "school",
 ]
 
-// Business flow: account-type → org-name → username → phone → password →
-// org-info (type + recovery email) → logo → categories → terms. signUp at end.
+// Business flow: account-type → email → username+password → org-name →
+// org-info → logo → categories → terms.
 const ORG_FLOW = [
   "account-type",
+  "email",
+  "credentials",
   "org-name",
-  "username",
-  "phone",
-  "password",
   "org-info",
   "org-logo",
   "org-categories",
@@ -133,7 +129,6 @@ export default function Onboarding() {
     try {
       const isOrg = data.accountType === "organization"
       const cleanUsername = (data.username || "").trim().toLowerCase()
-      const cleanPhone = sanitizePhoneNumber(data.phone || "")
       const cleanOrgName = (data.orgName || "").trim()
       const cleanFirstName = (data.firstName || "").trim()
       const cleanLastName = (data.lastName || "").trim()
@@ -147,23 +142,15 @@ export default function Onboarding() {
         ? "student"
         : "regular"
 
-      // Resolve auth email: verified .edu > org email > synthesized fallback
-      // tied to the user's phone (no email step in the new flow).
+      // Auth must be a real user-supplied email/password signup.
+      const cleanEmail = (data.email || "").trim().toLowerCase()
       const eduEmail = (data.eduEmail || "").trim().toLowerCase()
-      const orgEmail = (data.orgEmail || "").trim().toLowerCase()
-      const phoneDigits = cleanPhone.replace(/\D/g, "")
-      const fallbackHandle = cleanUsername || phoneDigits || `user${Date.now()}`
-      const cleanEmail = isOrg
-        ? orgEmail || `${fallbackHandle}@signup.campusevent.app`
-        : accountType === "student"
-        ? eduEmail
-        : `${fallbackHandle}@signup.campusevent.app`
 
       if (!isValidEmail(cleanEmail)) {
-        throw new Error("We couldn't determine a valid email for this account.")
+        throw new Error("Enter a valid email address.")
       }
-      if (!data.password || data.password.length < 8) {
-        throw new Error("Password is too short.")
+      if (!isStrongPassword(data.password || "")) {
+        throw new Error("Password does not meet every rule.")
       }
 
       const personalDisplayName = [cleanFirstName, cleanLastName].filter(Boolean).join(" ")
@@ -183,15 +170,13 @@ export default function Onboarding() {
             })
 
       // Metadata keys map to profiles columns via handle_new_auth_user.
-      // Anything unmapped (phone, school_email, birth_day) still lives in
+      // Anything unmapped (school_email, birth_day) still lives in
       // auth.users.raw_user_meta_data.
       const metadata = {
         username: cleanUsername || cleanOrgName.toLowerCase().replace(/\s+/g, ""),
         name: fullName || cleanUsername,
         email: cleanEmail,
         email_verified: false,
-        phone: cleanPhone,
-        phone_number: cleanPhone,
         phone_verified: false,
         interests,
         categories: isOrg ? data.orgCategories || [] : [],
@@ -319,14 +304,11 @@ export default function Onboarding() {
     case "account-type":
       body = <StepAccountType data={data} update={update} goNext={goNext} />
       break
-    case "username":
-      body = <StepUsername data={data} update={update} goNext={goNext} />
+    case "email":
+      body = <StepEmail data={data} update={update} goNext={goNext} />
       break
-    case "phone":
-      body = <StepPhone data={data} update={update} goNext={goNext} />
-      break
-    case "password":
-      body = <StepPassword data={data} update={update} goNext={goNext} />
+    case "credentials":
+      body = <StepUsernamePassword data={data} update={update} goNext={goNext} />
       break
     case "name-birth":
       body = <StepNameBirth data={data} update={update} goNext={goNext} />
