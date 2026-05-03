@@ -14,8 +14,7 @@ type ProfileHighlightsRowProps = {
   onLongPressHighlight?: (highlight: StoryHighlightRecord) => void;
 };
 
-// Rounded squares — NOT circles — at roughly Instagram highlight size (~72pt).
-// Soft 18pt radius so corners read as "squircle" rather than sharp.
+// Rounded squares, matching the existing mobile story/highlight card treatment.
 const TILE_SIZE = 72;
 const TILE_RADIUS = 18;
 

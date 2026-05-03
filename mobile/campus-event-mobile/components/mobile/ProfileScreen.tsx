@@ -68,6 +68,10 @@ type NotificationActionItem = {
   subtitle?: string;
   icon: keyof typeof Ionicons.glyphMap;
 };
+type CommunityQuickAddItem = {
+  key: string;
+  label: string;
+};
 type ProfileSheet = 'about' | 'shared_activity' | 'report_topic' | 'report_reason' | null;
 type EditFormState = {
   name: string;
@@ -118,6 +122,12 @@ const profileActionItems: ProfileActionItem[] = [
   { key: 'remove_follower', label: 'Remove follower', icon: 'person-remove-outline' },
   { key: 'copy_url', label: 'Copy profile URL', icon: 'link-outline' },
   { key: 'share_profile', label: 'Share this profile', icon: 'paper-plane-outline' },
+];
+
+const communityQuickAddItems: CommunityQuickAddItem[] = [
+  { key: 'group', label: 'Add Group' },
+  { key: 'school', label: 'Add School' },
+  { key: 'work', label: 'Add Work' },
 ];
 
 const notificationCategoryItems: NotificationActionItem[] = [
@@ -830,6 +840,10 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
     }
   };
 
+  const handleCommunityQuickAdd = (item: CommunityQuickAddItem) => {
+    Alert.alert(item.label, `${item.label.replace('Add ', '')} affiliations are coming soon.`);
+  };
+
   const editAvatarSource = selectedAvatarImage
     ? { uri: selectedAvatarImage.uri }
     : getAvatarImageSource(editForm.avatarUrl || profile.avatar);
@@ -927,6 +941,36 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
           </View>
 
           {profile.bio ? <Text style={styles.bio}>{profile.bio}</Text> : null}
+
+          {isOwnProfile ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.communityQuickAddContent}
+              style={styles.communityQuickAddRow}>
+              {communityQuickAddItems.map((item) => (
+                <Pressable
+                  key={item.key}
+                  style={styles.communityQuickAddChip}
+                  onPress={() => handleCommunityQuickAdd(item)}
+                  accessibilityRole="button"
+                  accessibilityLabel={item.label}>
+                  <View style={styles.communityQuickAddIcon}>
+                    <Ionicons name="add" size={16} color={theme.accent} />
+                  </View>
+                  <Text style={styles.communityQuickAddText}>{item.label}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          ) : null}
+
+          <ProfileHighlightsRow
+            highlights={highlights}
+            isOwner={isOwnProfile}
+            onPressHighlight={handleOpenHighlight}
+            onPressNew={() => setIsHighlightPickerVisible(true)}
+            onLongPressHighlight={handleLongPressHighlight}
+          />
 
           {!isOwnProfile && mutualLabel ? (
             <Pressable
@@ -1034,14 +1078,6 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
             </Pressable>
           ) : null}
         </View>
-
-        <ProfileHighlightsRow
-          highlights={highlights}
-          isOwner={isOwnProfile}
-          onPressHighlight={handleOpenHighlight}
-          onPressNew={() => setIsHighlightPickerVisible(true)}
-          onLongPressHighlight={handleLongPressHighlight}
-        />
 
         <ProfileContentTabs
           profileId={resolvedProfileId}
@@ -1963,6 +1999,35 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) => {
       color: profileMutedText,
       fontSize: 14,
       lineHeight: 20,
+    },
+    communityQuickAddRow: {
+      marginTop: -6,
+      marginBottom: -7,
+    },
+    communityQuickAddContent: {
+      gap: 8,
+      paddingRight: 6,
+    },
+    communityQuickAddChip: {
+      minHeight: 28,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingLeft: 9,
+      paddingRight: 11,
+      borderRadius: 999,
+      backgroundColor: profileSurface,
+      borderWidth: 1,
+      borderColor: profileBorder,
+    },
+    communityQuickAddIcon: {
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    communityQuickAddText: {
+      color: profileText,
+      fontSize: 12,
+      fontWeight: '600',
     },
     mutualRow: {
       flexDirection: 'row',

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useLocation, useNavigate } from "react-router-dom"
 import { syncStoredUserFromSession } from "../profileMedia"
 import { supabase } from "../supabaseClient"
 import OnboardingShell from "./Onboarding/OnboardingShell"
@@ -14,6 +14,7 @@ import "./Onboarding/Onboarding.css"
 
 function Login() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
@@ -49,7 +50,11 @@ function Login() {
         return
       }
       await syncStoredUserFromSession(data?.session || { user })
-      navigate("/home", { replace: true })
+      const redirectTarget =
+        typeof location.state?.from === "string" && location.state.from.startsWith("/")
+          ? location.state.from
+          : "/home"
+      navigate(redirectTarget, { replace: true })
     } catch (err) {
       setErrorMessage(err.message || "Login failed.")
     } finally {
@@ -104,7 +109,7 @@ function Login() {
         <div style={{ display: "flex", justifyContent: "flex-end", marginTop: -4 }}>
           <button
             type="button"
-            onClick={() => setInfoMessage("Password reset is coming soon.")}
+            onClick={() => navigate("/forgot-password")}
             style={{
               background: "transparent",
               border: 0,

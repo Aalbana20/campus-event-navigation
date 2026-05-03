@@ -26,6 +26,16 @@ import { registerPushNotifications, unregisterPushNotifications } from "../pushN
 import ProfileContentTabs from "../components/ProfileContentTabs"
 import "./Profile.css"
 
+const communityQuickAddItems = [
+  { key: "group", label: "Add Group" },
+  { key: "school", label: "Add School" },
+  { key: "work", label: "Add Work" },
+]
+
+const profileHighlightItems = [
+  { key: "new", label: "New", tone: "new", symbol: "+" },
+]
+
 const createImage = (url) =>
   new Promise((resolve, reject) => {
     const image = new Image()
@@ -401,6 +411,19 @@ function Profile() {
     e.target.value = ""
   }
 
+  const handleCommunityQuickAdd = (item) => {
+    showToast(`${item.label.replace("Add ", "")} affiliations are coming soon.`, "info")
+  }
+
+  const handleProfileHighlight = (item) => {
+    if (item.key === "new") {
+      showToast("Highlight creation is coming soon.", "info")
+      return
+    }
+
+    showToast(`${item.label} highlights are coming soon.`, "info")
+  }
+
   const handleApplyCrop = async () => {
     if (!rawSelectedImage || !croppedAreaPixels) return
 
@@ -707,6 +730,36 @@ function Profile() {
             </div>
 
             <p className="bio">{bio}</p>
+
+            <div className="community-quick-add-row" aria-label="Community affiliations">
+              {communityQuickAddItems.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  className="community-quick-add-pill"
+                  onClick={() => handleCommunityQuickAdd(item)}
+                >
+                  <span className="community-quick-add-plus" aria-hidden="true">+</span>
+                  <span>{item.label}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="profile-highlights-row" aria-label="Profile highlights">
+              {profileHighlightItems.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  className={`profile-highlight-item profile-highlight-item--${item.tone}`}
+                  onClick={() => handleProfileHighlight(item)}
+                >
+                  <span className="profile-highlight-thumb" aria-hidden="true">
+                    <span>{item.symbol}</span>
+                  </span>
+                  <span className="profile-highlight-label">{item.label}</span>
+                </button>
+              ))}
+            </div>
 
             <div className="profile-action-row">
               <button

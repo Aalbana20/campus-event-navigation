@@ -37,8 +37,9 @@ function AppBootstrap() {
     if (!isReady) return;
 
     const inAuthFlow = segments[0] === 'auth';
+    const isResetPasswordRoute = segments[0] === 'reset-password';
 
-    if (!session && !inAuthFlow) {
+    if (!session && !inAuthFlow && !isResetPasswordRoute) {
       router.replace('/auth/sign-in');
       return;
     }
@@ -82,6 +83,8 @@ function AppBootstrap() {
       <Stack.Screen name="event/manage/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="auth/sign-in" options={{ headerShown: false }} />
       <Stack.Screen name="auth/sign-up" options={{ headerShown: false }} />
+      <Stack.Screen name="auth/forgot-password" options={{ headerShown: false }} />
+      <Stack.Screen name="reset-password" options={{ headerShown: false }} />
     </Stack>
   );
 }

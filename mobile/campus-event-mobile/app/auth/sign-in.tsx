@@ -90,7 +90,11 @@ export default function SignInScreen() {
             }
           />
 
-          <Pressable onPress={() => {}} hitSlop={6} style={styles.forgotRow}>
+          <Pressable
+            onPress={() => router.push('/auth/forgot-password')}
+            hitSlop={6}
+            style={styles.forgotRow}
+          >
             <Text style={styles.forgotLink}>Forgot password?</Text>
           </Pressable>
 

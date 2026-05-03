@@ -28,6 +28,8 @@ const Settings = lazy(() => import("./pages/Settings"))
 const EditProfile = lazy(() => import("./pages/EditProfile"))
 const SignUp = lazy(() => import("./pages/Onboarding/Onboarding"))
 const Login = lazy(() => import("./pages/Login"))
+const ForgotPassword = lazy(() => import("./pages/ForgotPassword"))
+const ResetPassword = lazy(() => import("./pages/ResetPassword"))
 const Logout = lazy(() => import("./pages/Logout"))
 import { useEvents } from "./context/EventContext"
 import { DEFAULT_AVATAR_URL, sanitizeAvatarUrl, syncStoredUserFromSession } from "./profileMedia"
@@ -1391,7 +1393,9 @@ function AuthLayout() {
 }
 
 function ProtectedRoute({ children, session }) {
-  return session ? children : <Navigate to="/auth/login" replace />
+  const location = useLocation()
+  const redirectPath = `${location.pathname}${location.search}${location.hash}`
+  return session ? children : <Navigate to="/auth/login" replace state={{ from: redirectPath }} />
 }
 
 function PublicRoute({ children, session }) {
@@ -1582,11 +1586,15 @@ function App() {
               </PublicRoute>
             }
           />
+          <Route path="forgot-password" element={<ForgotPassword />} />
+          <Route path="reset-password" element={<ResetPassword />} />
           <Route path="logout" element={<Logout />} />
         </Route>
 
         <Route path="/login" element={<Navigate to="/auth/login" replace />} />
         <Route path="/signup" element={<Navigate to="/auth/signup" replace />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/logout" element={<Navigate to="/auth/logout" replace />} />
 
         <Route path="*" element={<RootRedirect session={session} />} />
