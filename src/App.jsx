@@ -1539,7 +1539,7 @@ function App() {
   return (
     <div className="app">
       <AppErrorBoundary>
-      <Suspense fallback={<div className="app-page-loading" aria-label="Loading…" />}>
+      <Suspense fallback={<div className="app-page-loading" aria-label="Loading…">Loading...</div>}>
       <Routes>
         <Route path="/" element={<RootRedirect session={session} />} />
 

@@ -18,6 +18,7 @@ import { buildMutualGoingLabel } from '@/lib/mobile-mutuals';
 import { useMobileApp } from '@/providers/mobile-app-provider';
 import { EventRecord, ProfileRecord } from '@/types/models';
 import { EventGoingIcon } from './EventGoingIcon';
+import { ProfileAvatarLink } from './ProfileAvatarLink';
 
 type EventStackCardProps = {
   event: EventRecord;
@@ -166,7 +167,15 @@ export function EventStackCard({
           <View style={styles.topRow}>
             <View style={styles.creatorCluster}>
               <View style={styles.creatorIdentity}>
-                <Image source={getAvatarImageSource(event.creatorAvatar)} style={styles.creatorAvatar} />
+                <ProfileAvatarLink
+                  profile={{
+                    id: event.createdBy,
+                    username: event.creatorUsername,
+                    name: creatorLabel,
+                    avatar: event.creatorAvatar,
+                  }}
+                  style={styles.creatorAvatar}
+                />
                 <Text style={styles.creatorName} numberOfLines={1}>
                   {creatorFirstName}
                 </Text>

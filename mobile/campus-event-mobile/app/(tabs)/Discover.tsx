@@ -133,7 +133,6 @@ export default function DiscoverScreen({
   const {
     currentUser,
     followingProfiles,
-    profiles,
     events,
     savedEventIds,
     discoverDismissedIds,
@@ -246,12 +245,9 @@ export default function DiscoverScreen({
       buildMobileStoryStripItems({
         currentUser,
         storyRecords,
-        followingProfiles,
-        profiles,
-        events,
         seenStoryIds,
       }),
-    [currentUser, events, followingProfiles, profiles, seenStoryIds, storyRecords]
+    [currentUser, seenStoryIds, storyRecords]
   );
 
   const discoverEvents = useMemo(
@@ -1081,7 +1077,6 @@ export default function DiscoverScreen({
               <DiscoverStoriesRow
                 items={storyItems}
                 onOpenStory={handleOpenStory}
-                onOpenSuggestion={() => setActiveTab('friends')}
                 onOpenCreateStory={handleOpenCreateStory}
               />
             </View>

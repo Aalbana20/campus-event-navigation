@@ -1,7 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useMemo } from 'react';
 import {
-  Image,
   ImageBackground,
   Modal,
   Pressable,
@@ -13,11 +12,12 @@ import {
 
 import { useAppTheme } from '@/lib/app-theme';
 import { getEventCreatorLabel } from '@/lib/mobile-backend';
-import { getAvatarImageSource, getEventImageSource } from '@/lib/mobile-media';
+import { getEventImageSource } from '@/lib/mobile-media';
 import { EventRecord } from '@/types/models';
 
 import { EventActionTrigger } from './EventActionTrigger';
 import { EventGoingIcon } from './EventGoingIcon';
+import { ProfileAvatarLink } from './ProfileAvatarLink';
 
 type ExploreEventDetailModalProps = {
   event: EventRecord | null;
@@ -68,7 +68,15 @@ export function ExploreEventDetailModal({
 
             <View style={styles.statsRow}>
               <View style={styles.creatorPill}>
-                <Image source={getAvatarImageSource(event.creatorAvatar)} style={styles.creatorAvatar} />
+                <ProfileAvatarLink
+                  profile={{
+                    id: event.createdBy,
+                    username: event.creatorUsername,
+                    name: getEventCreatorLabel(event),
+                    avatar: event.creatorAvatar,
+                  }}
+                  style={styles.creatorAvatar}
+                />
                 <Text style={styles.creatorText} numberOfLines={1}>
                   {getEventCreatorLabel(event)}
                 </Text>

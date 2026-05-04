@@ -242,8 +242,6 @@ export const buildDiscoverStoryStripItems = ({
       seen: false,
     }
 
-  const suggestedItems = (baseItems || []).filter((item) => item?.kind === "suggested")
-
   const groupedStories = (storyRecords || []).reduce((collection, story) => {
     const authorId = String(story.authorId || "")
     if (!authorId) return collection
@@ -305,7 +303,7 @@ export const buildDiscoverStoryStripItems = ({
         new Date(right.latestStoryAt).getTime() - new Date(left.latestStoryAt).getTime()
     )
 
-  return [currentItem, ...otherItems, ...suggestedItems]
+  return [currentItem, ...otherItems]
 }
 
 export const uploadDiscoverStory = async ({

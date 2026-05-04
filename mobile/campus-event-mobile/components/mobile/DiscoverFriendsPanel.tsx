@@ -1,6 +1,5 @@
 import React, { useMemo } from 'react';
 import {
-  Image,
   Pressable,
   StyleSheet,
   Text,
@@ -9,7 +8,7 @@ import {
 
 import { useAppTheme } from '@/lib/app-theme';
 import type { MobileDiscoverFriendCard } from '@/lib/mobile-discover-social';
-import { getAvatarImageUri } from '@/lib/mobile-media';
+import { ProfileAvatarLink } from './ProfileAvatarLink';
 
 type DiscoverFriendsPanelProps = {
   items: MobileDiscoverFriendCard[];
@@ -17,9 +16,6 @@ type DiscoverFriendsPanelProps = {
   onOpenPerson: (person: MobileDiscoverFriendCard) => void;
   onToggleFollow: (person: MobileDiscoverFriendCard, isFollowing: boolean) => void;
 };
-
-const getFriendAvatarUri = (value: string) =>
-  value.startsWith('data:image/') ? value : getAvatarImageUri(value);
 
 export function DiscoverFriendsPanel({
   items,
@@ -57,8 +53,13 @@ export function DiscoverFriendsPanel({
                 disabled={!person.routeKey}>
                 <View style={styles.cardTop}>
                   <View style={styles.identity}>
-                    <Image
-                      source={{ uri: getFriendAvatarUri(person.avatar) }}
+                    <ProfileAvatarLink
+                      profile={{
+                        id: person.profileId,
+                        username: person.username,
+                        name: person.name,
+                        avatar: person.avatar,
+                      }}
                       style={styles.avatar}
                     />
 

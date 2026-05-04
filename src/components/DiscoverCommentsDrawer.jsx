@@ -1,7 +1,9 @@
 import React, { useMemo, useRef, useState } from "react"
+import { useNavigate } from "react-router-dom"
 
 import { DEFAULT_AVATAR_URL, sanitizeAvatarUrl } from "../profileMedia"
 import { useToast } from "../context/ToastContext"
+import { navigateToProfile } from "../profileNavigation"
 
 const formatCommentTime = (value) => {
   const parsedDate = new Date(value)
@@ -43,6 +45,7 @@ function DiscoverCommentsDrawer({
   onDeleteComment,
 }) {
   const { showToast } = useToast()
+  const navigate = useNavigate()
   const [replyingTo, setReplyingTo] = useState(null)
   const [expandedThreads, setExpandedThreads] = useState(() => new Set())
   const [contextMenu, setContextMenu] = useState(null)
@@ -203,14 +206,27 @@ function DiscoverCommentsDrawer({
         key={comment.id}
         {...touchHandlers}
       >
-        <img
-          className="discover-comment-avatar"
-          src={avatarSrc}
-          alt=""
-          onError={(imgEvent) => {
-            imgEvent.currentTarget.src = DEFAULT_AVATAR_URL
-          }}
-        />
+        <button
+          type="button"
+          className="discover-comment-avatar-button"
+          onClick={() =>
+            navigateToProfile(
+              navigate,
+              { id: comment.authorId, username: comment.authorUsername },
+              { id: currentUserId }
+            )
+          }
+          aria-label="Open profile"
+        >
+          <img
+            className="discover-comment-avatar"
+            src={avatarSrc}
+            alt=""
+            onError={(imgEvent) => {
+              imgEvent.currentTarget.src = DEFAULT_AVATAR_URL
+            }}
+          />
+        </button>
 
         <div className="discover-comment-bubble">
           <header className="discover-comment-head">

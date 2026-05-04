@@ -3,7 +3,6 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import React, { useMemo, useState } from 'react';
 import {
   FlatList,
-  Image,
   ImageBackground,
   Pressable,
   StyleSheet,
@@ -14,12 +13,12 @@ import {
 import { useAppTheme } from '@/lib/app-theme';
 import { getEventCreatorLabel } from '@/lib/mobile-backend';
 import {
-  getAvatarImageSource,
   getEventImageSource,
   getEventImageUri,
   isVideoMediaUrl,
 } from '@/lib/mobile-media';
 import type { EventRecord } from '@/types/models';
+import { ProfileAvatarLink } from './ProfileAvatarLink';
 
 type DiscoverVideoFeedProps = {
   events: EventRecord[];
@@ -143,21 +142,23 @@ function DiscoverVideoItem({
             nativeControls={false}
             allowsFullscreen={false}
             allowsPictureInPicture={false}
+            pointerEvents="none"
           />
-          <Pressable
-            accessibilityLabel={isManuallyPaused ? 'Play video' : 'Pause video'}
-            accessibilityRole="button"
-            disabled={!isActive}
-            onPress={handleTogglePlayback}
-            style={styles.playbackHitArea}
-          >
-            {isManuallyPaused ? (
-              <View style={styles.playbackCenterButton}>
-                <Ionicons name="play" size={34} color="rgba(255,255,255,0.9)" />
-              </View>
-            ) : null}
-          </Pressable>
-          <View style={styles.gradientOverlay} />
+          <View style={styles.playbackLayer} pointerEvents="box-none">
+            <Pressable
+              accessibilityLabel={isManuallyPaused ? 'Play video' : 'Pause video'}
+              accessibilityRole="button"
+              disabled={!isActive}
+              onPress={handleTogglePlayback}
+              style={styles.playbackHitArea}>
+              {isManuallyPaused ? (
+                <View style={styles.playbackCenterButton}>
+                  <Ionicons name="play" size={34} color="rgba(255,255,255,0.9)" />
+                </View>
+              ) : null}
+            </Pressable>
+          </View>
+          <View style={styles.gradientOverlay} pointerEvents="none" />
           <DiscoverVideoItemOverlay
             event={event}
             isSaved={isSaved}
@@ -165,10 +166,17 @@ function DiscoverVideoItem({
             onPressComment={onPressComment}
             onPressRepost={onPressRepost}
             onPressShare={onPressShare}
-            onPressCreator={onPressCreator}
-            styles={styles}
-          />
-        </View>
+          onPressCreator={onPressCreator}
+          styles={styles}
+        />
+        <Pressable
+          style={styles.shareHitTarget}
+          onPress={() => onPressShare(event)}
+          hitSlop={16}
+          accessibilityRole="button"
+          accessibilityLabel="Share video"
+        />
+      </View>
       ) : (
         <ImageBackground
           source={getEventImageSource(event.image)}
@@ -214,7 +222,7 @@ function DiscoverVideoItemOverlay({
   return (
     <>
       {/* Right Social Rail */}
-      <View style={styles.rightRail}>
+      <View style={styles.rightRail} pointerEvents="box-none">
         <Pressable style={styles.actionButton} onPress={() => onPressHeart(event)}>
           <Ionicons name={isSaved ? 'heart' : 'heart-outline'} size={32} color={isSaved ? '#ff3b30' : '#ffffff'} />
           <Text style={styles.actionText}>{isSaved ? '1' : '0'}</Text>
@@ -230,7 +238,12 @@ function DiscoverVideoItemOverlay({
           <Text style={styles.actionText}>0</Text>
         </Pressable>
 
-        <Pressable style={styles.actionButton} onPress={() => onPressShare(event)}>
+        <Pressable
+          style={styles.actionButton}
+          onPress={() => onPressShare(event)}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel="Share video">
           <Ionicons name="paper-plane-outline" size={30} color="#ffffff" />
           <Text style={styles.actionText}>Share</Text>
         </Pressable>
@@ -243,7 +256,15 @@ function DiscoverVideoItemOverlay({
           onPress={() => onPressCreator?.(event)}
         >
           <View style={styles.avatarContainer}>
-            <Image source={getAvatarImageSource(event.creatorAvatar)} style={styles.avatar} />
+            <ProfileAvatarLink
+              profile={{
+                id: event.createdBy,
+                username: event.creatorUsername,
+                name: getEventCreatorLabel(event),
+                avatar: event.creatorAvatar,
+              }}
+              style={styles.avatar}
+            />
             <View style={styles.followBadge}>
               <Ionicons name="add" size={12} color="#ffffff" />
             </View>
@@ -295,9 +316,13 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       ...StyleSheet.absoluteFillObject,
       backgroundColor: 'rgba(0,0,0,0.3)',
     },
-    playbackHitArea: {
+    playbackLayer: {
       ...StyleSheet.absoluteFillObject,
       zIndex: 5,
+      right: 92,
+    },
+    playbackHitArea: {
+      flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -316,10 +341,22 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       alignItems: 'center',
       gap: 22,
       zIndex: 10,
+      elevation: 10,
     },
     actionButton: {
       alignItems: 'center',
       gap: 4,
+      zIndex: 20,
+      elevation: 20,
+    },
+    shareHitTarget: {
+      position: 'absolute',
+      right: 0,
+      bottom: 120,
+      width: 116,
+      height: 156,
+      zIndex: 100,
+      elevation: 100,
     },
     actionText: {
       color: '#ffffff',

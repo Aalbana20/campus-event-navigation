@@ -27,6 +27,7 @@ import {
 } from "../discoverStories"
 import { buildDiscoverStoryItems } from "../discoverSocial"
 import { useToast } from "../context/ToastContext"
+import { navigateToProfile } from "../profileNavigation"
 
 function Discover({ hideModeSwitch = false, initialMode = "events" } = {}) {
   const SWIPE_TRIGGER_PX = 110
@@ -101,11 +102,8 @@ function Discover({ hideModeSwitch = false, initialMode = "events" } = {}) {
     () =>
       buildDiscoverStoryItems({
         currentUser,
-        followingList,
-        followersList,
-        allEvents,
       }),
-    [allEvents, currentUser, followersList, followingList]
+    [currentUser]
   )
   const storyItems = useMemo(
     () =>
@@ -1146,7 +1144,6 @@ function Discover({ hideModeSwitch = false, initialMode = "events" } = {}) {
             <DiscoverStoriesRow
               items={storyItems}
               onOpenStory={handleOpenStory}
-              onOpenSuggestion={handleOpenSuggestion}
               onOpenCreateStory={handleOpenStoryComposer}
             />
           </>
@@ -1355,9 +1352,11 @@ function Discover({ hideModeSwitch = false, initialMode = "events" } = {}) {
             currentUserId={currentUser?.id || ""}
             onDeletePost={handleDeleteDiscoverPost}
             onPressCreator={(post) => {
-              const handle = post?.authorUsername || post?.authorId
-              if (!handle) return
-              navigate(`/profile/${handle}`)
+              navigateToProfile(
+                navigate,
+                { id: post?.authorId, username: post?.authorUsername },
+                currentUser
+              )
             }}
             onPressCreate={() => handleOpenCreateComposer("post")}
             onPostLikeToggled={(postId, liked, likeCount) => {
@@ -1988,7 +1987,11 @@ function Discover({ hideModeSwitch = false, initialMode = "events" } = {}) {
                         <div
                           onClick={() => {
                             handleCloseStory();
-                            navigate(`/profile/${viewer.username || viewer.viewerId}`);
+                            navigateToProfile(
+                              navigate,
+                              { id: viewer.viewerId, username: viewer.username },
+                              currentUser
+                            );
                           }}
                           style={{
                             display: "flex",

@@ -3,10 +3,11 @@ import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useAppTheme } from '@/lib/app-theme';
 import { getEventCreatorLabel } from '@/lib/mobile-backend';
-import { getAvatarImageSource, getEventImageSource } from '@/lib/mobile-media';
+import { getEventImageSource } from '@/lib/mobile-media';
 import { EventRecord } from '@/types/models';
 
 import { EventActionTrigger } from './EventActionTrigger';
+import { ProfileAvatarLink } from './ProfileAvatarLink';
 
 type ActionTone = 'accent' | 'success' | 'danger' | 'muted';
 
@@ -77,7 +78,15 @@ export function EventListCard({
 
         <View style={styles.copy}>
           <View style={styles.creatorRow}>
-            <Image source={getAvatarImageSource(event.creatorAvatar)} style={styles.creatorAvatar} />
+            <ProfileAvatarLink
+              profile={{
+                id: event.createdBy,
+                username: event.creatorUsername,
+                name: getEventCreatorLabel(event),
+                avatar: event.creatorAvatar,
+              }}
+              style={styles.creatorAvatar}
+            />
             <Text style={styles.creatorName} numberOfLines={1}>
               {getEventCreatorLabel(event)}
             </Text>

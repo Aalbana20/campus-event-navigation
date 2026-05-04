@@ -13,8 +13,9 @@ import {
 } from 'react-native';
 
 import { AppScreen } from '@/components/mobile/AppScreen';
+import { ProfileAvatarLink } from '@/components/mobile/ProfileAvatarLink';
 import { useAppTheme } from '@/lib/app-theme';
-import { getAvatarImageSource, getEventImageSource } from '@/lib/mobile-media';
+import { getEventImageSource } from '@/lib/mobile-media';
 import { useMobileApp } from '@/providers/mobile-app-provider';
 import type { CreateEventInput, ProfileRecord } from '@/types/models';
 
@@ -219,7 +220,7 @@ export default function ManageEventScreen() {
               ) : registrations && registrations.length > 0 ? (
                 registrations.map((profile) => (
                   <View key={profile.id} style={styles.attendeeRow}>
-                    <Image source={getAvatarImageSource(profile.avatar)} style={styles.attendeeAvatar} />
+                    <ProfileAvatarLink profile={profile} style={styles.attendeeAvatar} />
                     <View style={styles.attendeeText}>
                       <Text style={styles.attendeeName} numberOfLines={1}>
                         {profile.name || profile.username}
@@ -241,7 +242,7 @@ export default function ManageEventScreen() {
                   <Text style={styles.inviteesHeader}>Invited ({invitees.length})</Text>
                   {invitees.map((profile) => (
                     <View key={profile.id} style={styles.attendeeRow}>
-                      <Image source={getAvatarImageSource(profile.avatar)} style={styles.attendeeAvatar} />
+                      <ProfileAvatarLink profile={profile} style={styles.attendeeAvatar} />
                       <View style={styles.attendeeText}>
                         <Text style={styles.attendeeName} numberOfLines={1}>
                           {profile.name || profile.username}

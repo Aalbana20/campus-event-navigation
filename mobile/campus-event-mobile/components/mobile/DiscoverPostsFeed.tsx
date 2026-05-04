@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import React, { useMemo } from 'react';
 import {
@@ -10,15 +11,20 @@ import {
 
 import { useAppTheme } from '@/lib/app-theme';
 import { formatRelativeTime } from '@/lib/mobile-backend';
-import { getAvatarImageSource } from '@/lib/mobile-media';
 import type { DiscoverPostRecord } from '@/lib/mobile-discover-posts';
+import { ProfileAvatarLink } from './ProfileAvatarLink';
 
 type DiscoverPostsFeedProps = {
   posts: DiscoverPostRecord[];
   onPressAuthor: (post: DiscoverPostRecord) => void;
+  onPressShare?: (post: DiscoverPostRecord) => void;
 };
 
-export function DiscoverPostsFeed({ posts, onPressAuthor }: DiscoverPostsFeedProps) {
+export function DiscoverPostsFeed({
+  posts,
+  onPressAuthor,
+  onPressShare,
+}: DiscoverPostsFeedProps) {
   const theme = useAppTheme();
   const styles = useMemo(() => buildStyles(theme), [theme]);
 
@@ -45,6 +51,7 @@ export function DiscoverPostsFeed({ posts, onPressAuthor }: DiscoverPostsFeedPro
           key={post.id}
           post={post}
           onPressAuthor={onPressAuthor}
+          onPressShare={onPressShare}
           styles={styles}
         />
       ))}
@@ -55,10 +62,12 @@ export function DiscoverPostsFeed({ posts, onPressAuthor }: DiscoverPostsFeedPro
 function DiscoverPostCard({
   post,
   onPressAuthor,
+  onPressShare,
   styles,
 }: {
   post: DiscoverPostRecord;
   onPressAuthor: (post: DiscoverPostRecord) => void;
+  onPressShare?: (post: DiscoverPostRecord) => void;
   styles: ReturnType<typeof buildStyles>;
 }) {
   const isVideo = post.mediaType === 'video';
@@ -68,13 +77,20 @@ function DiscoverPostCard({
     instance.play();
   });
 
-  const avatarSource = getAvatarImageSource(post.authorAvatar);
   const relativeTime = formatRelativeTime(post.createdAt);
 
   return (
     <View style={styles.postCard}>
       <Pressable style={styles.authorRow} onPress={() => onPressAuthor(post)}>
-        <Image source={avatarSource} style={styles.authorAvatar} />
+        <ProfileAvatarLink
+          profile={{
+            id: post.authorId,
+            username: post.authorUsername,
+            name: post.authorName,
+            avatar: post.authorAvatar,
+          }}
+          style={styles.authorAvatar}
+        />
         <View style={styles.authorCopy}>
           <Text style={styles.authorName} numberOfLines={1}>
             {post.authorName}
@@ -113,6 +129,19 @@ function DiscoverPostCard({
         <Text style={styles.caption} numberOfLines={3}>
           {post.caption}
         </Text>
+      ) : null}
+
+      {onPressShare ? (
+        <View style={styles.actionRow}>
+          <Pressable
+            style={styles.shareButton}
+            onPress={() => onPressShare(post)}
+            accessibilityRole="button"
+            accessibilityLabel="Share post">
+            <Ionicons name="paper-plane-outline" size={18} color="#ffffff" />
+            <Text style={styles.shareButtonText}>Share</Text>
+          </Pressable>
+        </View>
       ) : null}
     </View>
   );
@@ -181,6 +210,28 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       color: theme.text,
       fontSize: 14,
       lineHeight: 20,
+    },
+    actionRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'flex-end',
+    },
+    shareButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 7,
+      minHeight: 38,
+      paddingHorizontal: 14,
+      borderRadius: 19,
+      backgroundColor: theme.surfaceAlt,
+      borderWidth: 1,
+      borderColor: theme.border,
+    },
+    shareButtonText: {
+      color: theme.text,
+      fontSize: 13,
+      fontWeight: '800',
     },
     emptyCard: {
       marginTop: 18,

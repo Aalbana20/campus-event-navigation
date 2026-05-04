@@ -1,16 +1,17 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useIsFocused } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image as ExpoImage } from 'expo-image';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
+  Animated,
   Dimensions,
   FlatList,
   Modal,
   Pressable,
   ScrollView,
-  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -23,7 +24,9 @@ import {
 
 import { AppScreen } from '@/components/mobile/AppScreen';
 import { DiscoverPostsImmersiveFeed } from '@/components/mobile/DiscoverPostsImmersiveFeed';
+import { EventListCard } from '@/components/mobile/EventListCard';
 import { ExploreEventDetailModal } from '@/components/mobile/ExploreEventDetailModal';
+import { ProfileAvatarLink } from '@/components/mobile/ProfileAvatarLink';
 import {
   loadDiscoverPosts,
   togglePostLike,
@@ -38,12 +41,13 @@ import {
 import { getEventImageSource } from '@/lib/mobile-media';
 import { useMobileApp } from '@/providers/mobile-app-provider';
 import { useShareSheet } from '@/providers/mobile-share-provider';
-import type { EventRecord } from '@/types/models';
+import type { EventRecord, ProfileRecord } from '@/types/models';
 
 type ExploreTab = 'forYou' | 'media' | 'events';
 type MediaFilter = 'all' | 'videos' | 'pictures';
 type EventScope = 'nearby' | 'state' | 'country';
 type OpenDropdown = 'media' | 'events' | null;
+type SearchResultsTab = 'for-you' | 'profiles' | 'events' | 'places';
 
 type ExploreItem =
   | {
@@ -178,20 +182,79 @@ const buildMockDiscoverRecord = (
 const TILE_GAP = 2;
 // Target density — tiles keep cycling until we hit this many rows (3 cols).
 const MIN_GRID_ITEMS = 30;
+const RECENT_SEARCHES_KEY = 'discover-search:recent';
+const SEARCH_RESULT_TABS: { id: SearchResultsTab; label: string }[] = [
+  { id: 'for-you', label: 'For You' },
+  { id: 'profiles', label: 'Profiles' },
+  { id: 'events', label: 'Events' },
+  { id: 'places', label: 'Places' },
+];
+
+const normalizeSearchValue = (value: string) => value.trim().toLowerCase();
+
+const includesSearchQuery = (values: (string | null | undefined)[], query: string) => {
+  const normalizedQuery = normalizeSearchValue(query);
+  if (!normalizedQuery) return false;
+  return values.filter(Boolean).some((value) =>
+    normalizeSearchValue(String(value)).includes(normalizedQuery)
+  );
+};
+
+const profileMatchesSearch = (profile: ProfileRecord, query: string) =>
+  includesSearchQuery(
+    [profile.username, profile.name, profile.bio, profile.school, profile.organizationName],
+    query
+  );
+
+const eventMatchesSearch = (event: EventRecord, query: string) =>
+  includesSearchQuery(
+    [
+      event.title,
+      event.description,
+      event.locationName,
+      event.location,
+      event.host,
+      event.organizer,
+      ...(event.tags || []),
+    ],
+    query
+  );
+
+const exploreItemMatchesSearch = (item: ExploreItem, query: string) => {
+  if (item.kind === 'event') return eventMatchesSearch(item.raw, query);
+  return includesSearchQuery(
+    [item.raw.caption, item.raw.authorName, item.raw.authorUsername],
+    query
+  );
+};
+
+const getProfileSubtitle = (profile: ProfileRecord) =>
+  profile.school || profile.organizationName || profile.bio || '';
 
 export default function ExploreScreen() {
   const router = useRouter();
   const isScreenFocused = useIsFocused();
-  const { events: allEvents = [], currentUser, savedEventIds, toggleSaveEvent } = useMobileApp();
+  const {
+    events: allEvents = [],
+    currentUser,
+    profiles,
+    savedEventIds,
+    toggleSaveEvent,
+  } = useMobileApp();
   const { openShareSheet } = useShareSheet();
 
   const [primaryTab, setPrimaryTab] = useState<ExploreTab>('forYou');
   const [openDropdown, setOpenDropdown] = useState<OpenDropdown>(null);
   const [mediaFilter, setMediaFilter] = useState<MediaFilter>('all');
   const [eventScope, setEventScope] = useState<EventScope>('nearby');
-  const [searchText, setSearchText] = useState('');
   const [posts, setPosts] = useState<DiscoverPostRecord[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<EventRecord | null>(null);
+  const [searchOverlayVisible, setSearchOverlayVisible] = useState(false);
+  const [overlayQuery, setOverlayQuery] = useState('');
+  const [submittedSearchQuery, setSubmittedSearchQuery] = useState('');
+  const [searchResultsTab, setSearchResultsTab] = useState<SearchResultsTab>('for-you');
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const searchOverlayProgress = useRef(new Animated.Value(0)).current;
 
   // In-page media viewer (opens when a media tile is tapped).
   const [viewerPosts, setViewerPosts] = useState<DiscoverPostRecord[]>([]);
@@ -228,6 +291,24 @@ export default function ExploreScreen() {
       });
     return () => {
       cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    void AsyncStorage.getItem(RECENT_SEARCHES_KEY).then((stored) => {
+      if (!mounted || !stored) return;
+      try {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          setRecentSearches(parsed.filter((item) => typeof item === 'string').slice(0, 8));
+        }
+      } catch {
+        setRecentSearches([]);
+      }
+    });
+    return () => {
+      mounted = false;
     };
   }, []);
 
@@ -356,20 +437,8 @@ export default function ExploreScreen() {
   }, [eventItems, mediaFilter, mockItems, padToDensity, pictureItems, primaryTab, videoItems]);
 
   const filteredItems = useMemo(() => {
-    const query = searchText.trim().toLowerCase();
-    if (!query) return gridItems;
-    return gridItems.filter((item) => {
-      if (item.kind === 'event') {
-        return (
-          item.title.toLowerCase().includes(query) ||
-          String(item.raw.location || '').toLowerCase().includes(query)
-        );
-      }
-      return String((item.raw as DiscoverPostRecord).caption || '')
-        .toLowerCase()
-        .includes(query);
-    });
-  }, [gridItems, searchText]);
+    return gridItems;
+  }, [gridItems]);
 
   // All media records currently visible in the grid (used to seed the viewer
   // feed when a user taps a tile, so they can swipe to adjacent posts).
@@ -495,6 +564,112 @@ export default function ExploreScreen() {
     mediaFilter === 'videos' ? 'Videos' : mediaFilter === 'pictures' ? 'Pictures' : 'Media';
   const activeEventLabel =
     eventScope === 'state' ? 'State' : eventScope === 'country' ? 'Country' : 'Nearby';
+  const cleanOverlayQuery = overlayQuery.trim();
+  const activeSearchQuery = submittedSearchQuery || cleanOverlayQuery;
+  const isShowingSubmittedResults = Boolean(submittedSearchQuery);
+  const suggestedSearches = useMemo(() => {
+    const tags = allEvents.flatMap((event) => event.tags || []);
+    const locations = allEvents.map((event) => event.locationName || event.location).filter(Boolean);
+    return [...new Set([...tags, ...locations])]
+      .map((item) => String(item).trim())
+      .filter(Boolean)
+      .slice(0, 6);
+  }, [allEvents]);
+  const liveProfileMatches = useMemo(
+    () =>
+      profiles
+        .filter((profile) => profileMatchesSearch(profile, cleanOverlayQuery))
+        .filter((profile) => profile.id !== currentUser?.id)
+        .slice(0, 10),
+    [cleanOverlayQuery, currentUser?.id, profiles]
+  );
+  const resultProfiles = useMemo(
+    () =>
+      profiles
+        .filter((profile) => profileMatchesSearch(profile, activeSearchQuery))
+        .filter((profile) => profile.id !== currentUser?.id),
+    [activeSearchQuery, currentUser?.id, profiles]
+  );
+  const resultEvents = useMemo(
+    () => allEvents.filter((event) => eventMatchesSearch(event, activeSearchQuery)),
+    [activeSearchQuery, allEvents]
+  );
+  const resultGridItems = useMemo(
+    () => gridItems.filter((item) => exploreItemMatchesSearch(item, activeSearchQuery)),
+    [activeSearchQuery, gridItems]
+  );
+  const resultPlaces = useMemo(
+    () =>
+      [...new Set(resultEvents.map((event) => event.locationName || event.location).filter(Boolean))]
+        .slice(0, 10),
+    [resultEvents]
+  );
+
+  const openSearchOverlay = () => {
+    setOpenDropdown(null);
+    setOverlayQuery('');
+    setSubmittedSearchQuery('');
+    setSearchResultsTab('for-you');
+    setSearchOverlayVisible(true);
+    searchOverlayProgress.setValue(0);
+    Animated.timing(searchOverlayProgress, {
+      toValue: 1,
+      duration: 180,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const closeSearchOverlay = () => {
+    Animated.timing(searchOverlayProgress, {
+      toValue: 0,
+      duration: 130,
+      useNativeDriver: true,
+    }).start(() => {
+      setSearchOverlayVisible(false);
+      setOverlayQuery('');
+      setSubmittedSearchQuery('');
+      setSearchResultsTab('for-you');
+    });
+  };
+
+  const saveRecentSearch = (term: string) => {
+    const cleanTerm = term.trim();
+    if (!cleanTerm) return;
+    setRecentSearches((current) => {
+      const next = [cleanTerm, ...current.filter((item) =>
+        normalizeSearchValue(item) !== normalizeSearchValue(cleanTerm)
+      )].slice(0, 8);
+      void AsyncStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const removeRecentSearch = (term: string) => {
+    setRecentSearches((current) => {
+      const next = current.filter((item) => item !== term);
+      void AsyncStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const submitOverlaySearch = (term = cleanOverlayQuery) => {
+    const cleanTerm = term.trim();
+    if (!cleanTerm) return;
+    saveRecentSearch(cleanTerm);
+    setOverlayQuery(cleanTerm);
+    setSubmittedSearchQuery(cleanTerm);
+    setSearchResultsTab('for-you');
+  };
+
+  const openSearchProfile = (profile: ProfileRecord) => {
+    if (!profile.username) return;
+    closeSearchOverlay();
+    if (profile.username === currentUser?.username) {
+      router.push('/(tabs)/profile');
+      return;
+    }
+    router.push({ pathname: '/profile/[username]', params: { username: profile.username } });
+  };
 
   const handleChipLayout = useCallback(
     (key: 'media' | 'events') => (event: LayoutChangeEvent) => {
@@ -536,7 +711,8 @@ export default function ExploreScreen() {
       const currentlyLiked = likedPostIds.has(postId);
       setLikedPostIds((prev) => {
         const next = new Set(prev);
-        currentlyLiked ? next.delete(postId) : next.add(postId);
+        if (currentlyLiked) next.delete(postId);
+        else next.add(postId);
         return next;
       });
       setViewerPosts((prev) =>
@@ -559,7 +735,8 @@ export default function ExploreScreen() {
       const currentlySaved = savedPostIds.has(postId);
       setSavedPostIds((prev) => {
         const next = new Set(prev);
-        currentlySaved ? next.delete(postId) : next.add(postId);
+        if (currentlySaved) next.delete(postId);
+        else next.add(postId);
         return next;
       });
       if (isMock || !currentUser?.id) return;
@@ -570,13 +747,6 @@ export default function ExploreScreen() {
 
   const handleViewerShare = useCallback(
     (post: DiscoverPostRecord) => {
-      const postId = String(post.id);
-      if (postId.startsWith('mock-')) {
-        void Share.share({
-          message: [post.caption, post.mediaUrl].filter(Boolean).join('\n'),
-        });
-        return;
-      }
       openShareSheet({
         kind: post.mediaType === 'video' ? 'video' : 'post',
         post,
@@ -601,16 +771,14 @@ export default function ExploreScreen() {
     <AppScreen style={styles.screen}>
       <View style={styles.stickyHeader}>
         <View style={styles.searchRow}>
-          <View style={styles.searchField}>
+          <Pressable
+            style={styles.searchField}
+            onPress={openSearchOverlay}
+            accessibilityRole="button"
+            accessibilityLabel="Open search">
             <Ionicons name="search" size={16} color="rgba(255,255,255,0.55)" />
-            <TextInput
-              value={searchText}
-              onChangeText={setSearchText}
-              placeholder="Search events or people"
-              placeholderTextColor="rgba(255,255,255,0.55)"
-              style={styles.searchInput}
-            />
-          </View>
+            <Text style={styles.searchPlaceholder}>Search events or people</Text>
+          </Pressable>
           <Pressable
             style={styles.searchAdjust}
             onPress={() => setOpenDropdown(null)}
@@ -727,6 +895,309 @@ export default function ExploreScreen() {
           🌍
         </Text>
       </Pressable>
+
+      <Modal
+        visible={searchOverlayVisible}
+        animationType="none"
+        transparent
+        onRequestClose={closeSearchOverlay}>
+        <Animated.View
+          style={[
+            styles.searchOverlayScreen,
+            {
+              opacity: searchOverlayProgress,
+              transform: [
+                {
+                  translateY: searchOverlayProgress.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [-36, 0],
+                  }),
+                },
+              ],
+            },
+          ]}>
+          <View style={styles.searchOverlayHeader}>
+            <Pressable
+              style={styles.searchOverlayBack}
+              onPress={closeSearchOverlay}
+              accessibilityLabel="Close search"
+              accessibilityRole="button">
+              <Ionicons name="chevron-back" size={30} color="#ffffff" />
+            </Pressable>
+            <View style={styles.searchOverlayInputWrap}>
+              <Ionicons name="search" size={18} color="rgba(255,255,255,0.55)" />
+              <TextInput
+                autoFocus
+                value={overlayQuery}
+                onChangeText={(value) => {
+                  setOverlayQuery(value);
+                  setSubmittedSearchQuery('');
+                }}
+                onSubmitEditing={() => submitOverlaySearch()}
+                returnKeyType="search"
+                placeholder="Search events or people"
+                placeholderTextColor="rgba(255,255,255,0.5)"
+                selectionColor="#32d74b"
+                style={styles.searchOverlayInput}
+              />
+              {cleanOverlayQuery ? (
+                <Pressable
+                  style={styles.searchOverlayClear}
+                  onPress={() => {
+                    setOverlayQuery('');
+                    setSubmittedSearchQuery('');
+                  }}
+                  accessibilityLabel="Clear search"
+                  accessibilityRole="button">
+                  <Ionicons name="close-circle" size={18} color="rgba(255,255,255,0.58)" />
+                </Pressable>
+              ) : null}
+            </View>
+          </View>
+
+          {!cleanOverlayQuery && !isShowingSubmittedResults ? (
+            <ScrollView
+              contentContainerStyle={styles.searchOverlayContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}>
+              <View style={styles.searchOverlaySection}>
+                <Text style={styles.searchOverlaySectionTitle}>Recent</Text>
+                {recentSearches.length > 0 ? (
+                  recentSearches.map((term) => (
+                    <Pressable
+                      key={term}
+                      style={styles.compactSearchRow}
+                      onPress={() => submitOverlaySearch(term)}
+                      accessibilityRole="button">
+                      <View style={styles.compactSearchIcon}>
+                        <Ionicons name="time-outline" size={18} color="#ffffff" />
+                      </View>
+                      <Text style={styles.compactSearchTitle} numberOfLines={1}>
+                        {term}
+                      </Text>
+                      <Pressable
+                        style={styles.compactRemoveButton}
+                        onPress={(event) => {
+                          event.stopPropagation();
+                          removeRecentSearch(term);
+                        }}
+                        accessibilityLabel={`Remove ${term} from recent searches`}
+                        accessibilityRole="button">
+                        <Ionicons name="close-outline" size={20} color="rgba(255,255,255,0.55)" />
+                      </Pressable>
+                    </Pressable>
+                  ))
+                ) : (
+                  <Text style={styles.compactEmptyText}>No recent searches yet.</Text>
+                )}
+              </View>
+
+              <View style={styles.searchOverlaySection}>
+                <Text style={styles.searchOverlaySectionTitle}>Suggested</Text>
+                {suggestedSearches.length > 0 ? (
+                  suggestedSearches.map((suggestion) => (
+                    <Pressable
+                      key={suggestion}
+                      style={styles.compactSearchRow}
+                      onPress={() => submitOverlaySearch(suggestion)}
+                      accessibilityRole="button">
+                      <View style={styles.compactSearchIcon}>
+                        <Ionicons name="search-outline" size={18} color="#ffffff" />
+                      </View>
+                      <Text style={styles.compactSearchTitle} numberOfLines={1}>
+                        {suggestion}
+                      </Text>
+                    </Pressable>
+                  ))
+                ) : (
+                  <Text style={styles.compactEmptyText}>Suggested searches will appear here.</Text>
+                )}
+              </View>
+            </ScrollView>
+          ) : null}
+
+          {cleanOverlayQuery && !isShowingSubmittedResults ? (
+            <ScrollView
+              contentContainerStyle={styles.searchOverlayContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}>
+              {cleanOverlayQuery.length >= 3 ? (
+                <Pressable
+                  style={styles.compactSearchRow}
+                  onPress={() => submitOverlaySearch()}
+                  accessibilityRole="button">
+                  <View style={styles.compactSearchIcon}>
+                    <Ionicons name="search-outline" size={18} color="#ffffff" />
+                  </View>
+                  <View style={styles.compactRowCopy}>
+                    <Text style={styles.compactSearchTitle} numberOfLines={1}>
+                      {cleanOverlayQuery}
+                    </Text>
+                    <Text style={styles.compactSearchSubtitle}>Search topic</Text>
+                  </View>
+                </Pressable>
+              ) : null}
+
+              {liveProfileMatches.length > 0 ? (
+                liveProfileMatches.map((profile) => (
+                  <Pressable
+                    key={profile.id}
+                    style={styles.compactSearchRow}
+                    onPress={() => openSearchProfile(profile)}
+                    accessibilityRole="button">
+                    <ProfileAvatarLink profile={profile} style={styles.compactAvatar} />
+                    <View style={styles.compactRowCopy}>
+                      <Text style={styles.compactSearchTitle} numberOfLines={1}>
+                        {profile.username || profile.name}
+                      </Text>
+                      {getProfileSubtitle(profile) ? (
+                        <Text style={styles.compactSearchSubtitle} numberOfLines={1}>
+                          {getProfileSubtitle(profile)}
+                        </Text>
+                      ) : null}
+                    </View>
+                  </Pressable>
+                ))
+              ) : (
+                <Text style={styles.compactEmptyText}>No matching profiles yet.</Text>
+              )}
+            </ScrollView>
+          ) : null}
+
+          {isShowingSubmittedResults ? (
+            <>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.searchResultsTabs}>
+                {SEARCH_RESULT_TABS.map((tab) => {
+                  const isActive = searchResultsTab === tab.id;
+                  return (
+                    <Pressable
+                      key={tab.id}
+                      style={styles.searchResultTab}
+                      onPress={() => setSearchResultsTab(tab.id)}
+                      accessibilityRole="tab"
+                      accessibilityState={{ selected: isActive }}>
+                      <Text style={[styles.searchResultTabText, isActive && styles.searchResultTabTextActive]}>
+                        {tab.label}
+                      </Text>
+                      <View style={[styles.searchResultUnderline, isActive && styles.searchResultUnderlineActive]} />
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+
+              <ScrollView contentContainerStyle={styles.searchResultsContent} showsVerticalScrollIndicator={false}>
+                {searchResultsTab === 'for-you' ? (
+                  <View style={styles.overlayResultGrid}>
+                    {resultGridItems.length > 0 ? (
+                      resultGridItems.map((item, index) => {
+                        const source =
+                          item.kind === 'event'
+                            ? getEventImageSource(item.image)
+                            : { uri: (item.kind === 'video' && item.thumbnailUrl) || item.mediaUrl };
+                        return (
+                          <Pressable
+                            key={`${item.kind}-${item.id}-${index}`}
+                            style={styles.overlayResultTile}
+                            onPress={() => {
+                              closeSearchOverlay();
+                              handleOpenItem(item);
+                            }}
+                            accessibilityRole="button">
+                            <ExpoImage source={source} style={StyleSheet.absoluteFill} contentFit="cover" />
+                            <View style={styles.overlayTileBadge}>
+                              <Ionicons
+                                name={item.kind === 'video' ? 'play' : item.kind === 'event' ? 'location-sharp' : 'copy-outline'}
+                                size={11}
+                                color="#ffffff"
+                              />
+                            </View>
+                            {item.kind === 'event' ? (
+                              <Text style={styles.overlayTileTitle} numberOfLines={1}>
+                                {item.title}
+                              </Text>
+                            ) : null}
+                          </Pressable>
+                        );
+                      })
+                    ) : (
+                      <Text style={styles.compactEmptyText}>Results will appear here.</Text>
+                    )}
+                  </View>
+                ) : null}
+
+                {searchResultsTab === 'profiles' ? (
+                  <View style={styles.searchOverlaySection}>
+                    {resultProfiles.length > 0 ? (
+                      resultProfiles.map((profile) => (
+                        <Pressable
+                          key={profile.id}
+                          style={styles.compactSearchRow}
+                          onPress={() => openSearchProfile(profile)}
+                          accessibilityRole="button">
+                          <ProfileAvatarLink profile={profile} style={styles.compactAvatar} />
+                          <View style={styles.compactRowCopy}>
+                            <Text style={styles.compactSearchTitle} numberOfLines={1}>
+                              {profile.username || profile.name}
+                            </Text>
+                            {getProfileSubtitle(profile) ? (
+                              <Text style={styles.compactSearchSubtitle} numberOfLines={1}>
+                                {getProfileSubtitle(profile)}
+                              </Text>
+                            ) : null}
+                          </View>
+                        </Pressable>
+                      ))
+                    ) : (
+                      <Text style={styles.compactEmptyText}>Profiles matching this search will appear here.</Text>
+                    )}
+                  </View>
+                ) : null}
+
+                {searchResultsTab === 'events' ? (
+                  <View style={styles.overlayEventsList}>
+                    {resultEvents.length > 0 ? (
+                      resultEvents.map((event) => (
+                        <EventListCard
+                          key={event.id}
+                          event={event}
+                          onPress={() => {
+                            closeSearchOverlay();
+                            setSelectedEvent(event);
+                          }}
+                        />
+                      ))
+                    ) : (
+                      <Text style={styles.compactEmptyText}>Events matching this search will appear here.</Text>
+                    )}
+                  </View>
+                ) : null}
+
+                {searchResultsTab === 'places' ? (
+                  <View style={styles.searchOverlaySection}>
+                    {resultPlaces.length > 0 ? (
+                      resultPlaces.map((place) => (
+                        <View key={place} style={styles.compactSearchRow}>
+                          <View style={styles.compactSearchIcon}>
+                            <Ionicons name="location-outline" size={18} color="#ffffff" />
+                          </View>
+                          <Text style={styles.compactSearchTitle} numberOfLines={1}>
+                            {place}
+                          </Text>
+                        </View>
+                      ))
+                    ) : (
+                      <Text style={styles.compactEmptyText}>Places related to this search will appear here.</Text>
+                    )}
+                  </View>
+                ) : null}
+              </ScrollView>
+            </>
+          ) : null}
+        </Animated.View>
+      </Modal>
 
       <ExploreEventDetailModal
         visible={Boolean(selectedEvent)}
@@ -869,6 +1340,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     paddingVertical: 0,
+  },
+  searchPlaceholder: {
+    flex: 1,
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: 14,
+    fontWeight: '500',
   },
   searchAdjust: {
     width: 40,
@@ -1035,6 +1512,185 @@ const styles = StyleSheet.create({
     lineHeight: 66,
     textAlign: 'center',
     includeFontPadding: false,
+  },
+  searchOverlayScreen: {
+    flex: 1,
+    backgroundColor: '#05080c',
+  },
+  searchOverlayHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingTop: 54,
+    paddingHorizontal: 10,
+    paddingBottom: 10,
+  },
+  searchOverlayBack: {
+    width: 38,
+    height: 42,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  searchOverlayInputWrap: {
+    flex: 1,
+    minHeight: 42,
+    borderRadius: 999,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 13,
+    backgroundColor: '#242930',
+  },
+  searchOverlayInput: {
+    flex: 1,
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '500',
+    paddingVertical: 0,
+  },
+  searchOverlayClear: {
+    width: 26,
+    height: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  searchOverlayContent: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 42,
+    gap: 22,
+  },
+  searchOverlaySection: {
+    gap: 8,
+  },
+  searchOverlaySectionTitle: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '800',
+    marginBottom: 2,
+  },
+  compactSearchRow: {
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 11,
+  },
+  compactSearchIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  compactAvatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#1a1a1c',
+  },
+  compactRowCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  compactSearchTitle: {
+    flex: 1,
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  compactSearchSubtitle: {
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: 1,
+  },
+  compactRemoveButton: {
+    width: 30,
+    height: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  compactEmptyText: {
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '600',
+    paddingVertical: 4,
+  },
+  searchResultsTabs: {
+    minHeight: 44,
+    alignItems: 'flex-end',
+    gap: 26,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.08)',
+  },
+  searchResultTab: {
+    minHeight: 40,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 7,
+  },
+  searchResultTabText: {
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  searchResultTabTextActive: {
+    color: '#ffffff',
+  },
+  searchResultUnderline: {
+    width: '100%',
+    height: 2,
+    borderRadius: 999,
+    backgroundColor: 'transparent',
+  },
+  searchResultUnderlineActive: {
+    backgroundColor: '#32d74b',
+  },
+  searchResultsContent: {
+    paddingBottom: 50,
+  },
+  overlayResultGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 2,
+  },
+  overlayResultTile: {
+    width: '33%',
+    aspectRatio: 0.78,
+    overflow: 'hidden',
+    backgroundColor: '#101012',
+  },
+  overlayTileBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  overlayTileTitle: {
+    position: 'absolute',
+    left: 6,
+    right: 6,
+    bottom: 6,
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '800',
+    textShadowColor: 'rgba(0,0,0,0.7)',
+    textShadowRadius: 3,
+  },
+  overlayEventsList: {
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingTop: 12,
   },
   viewerScreen: {
     flex: 1,

@@ -3,19 +3,12 @@ import React from "react"
 function DiscoverStoryItem({
   item,
   onOpenStory,
-  onOpenSuggestion,
   onOpenCreateStory,
 }) {
   const isCurrent = item.kind === "current"
-  const isSuggested = item.kind === "suggested"
   const hasStories = Array.isArray(item.stories) && item.stories.length > 0
 
   const handleClick = () => {
-    if (isSuggested) {
-      if (onOpenSuggestion) onOpenSuggestion(item)
-      return
-    }
-
     if (isCurrent) {
       if (hasStories) {
         if (onOpenStory) onOpenStory(item)
@@ -64,11 +57,6 @@ function DiscoverStoryItem({
           </span>
         ) : null}
 
-        {isSuggested ? (
-          <span className="discover-story-badge suggested" aria-hidden="true">
-            ↗
-          </span>
-        ) : null}
       </div>
 
       <span className="discover-story-label">
@@ -81,7 +69,6 @@ function DiscoverStoryItem({
 function DiscoverStoriesRow({
   items,
   onOpenStory,
-  onOpenSuggestion,
   onOpenCreateStory,
 }) {
   return (
@@ -92,7 +79,6 @@ function DiscoverStoriesRow({
             key={item.id}
             item={item}
             onOpenStory={onOpenStory}
-            onOpenSuggestion={onOpenSuggestion}
             onOpenCreateStory={onOpenCreateStory}
           />
         ))}

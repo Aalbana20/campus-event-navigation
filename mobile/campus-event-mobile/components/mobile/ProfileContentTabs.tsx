@@ -28,7 +28,7 @@ import {
   type DiscoverPostRecord,
 } from '@/lib/mobile-discover-posts';
 import type { EventMemoryRecord } from '@/lib/mobile-event-memories';
-import { getAvatarImageSource, getEventImageSource } from '@/lib/mobile-media';
+import { getEventImageSource } from '@/lib/mobile-media';
 import { loadRepostsForUser, type RepostRecord } from '@/lib/mobile-profile-reposts';
 import {
   loadRecapPostsForUser,
@@ -38,6 +38,7 @@ import {
 import { useMobileApp } from '@/providers/mobile-app-provider';
 import { useShareSheet } from '@/providers/mobile-share-provider';
 import type { EventRecord } from '@/types/models';
+import { ProfileAvatarLink } from './ProfileAvatarLink';
 
 type ProfileContentTabsProps = {
   profileId: string;
@@ -1022,8 +1023,13 @@ export function ProfileContentTabs({
     return (
       <View style={styles.viewerPost}>
         <View style={styles.viewerAuthorRow}>
-          <Image
-            source={getAvatarImageSource(post.authorAvatar)}
+          <ProfileAvatarLink
+            profile={{
+              id: post.authorId,
+              username: post.authorUsername,
+              name: post.authorName,
+              avatar: post.authorAvatar,
+            }}
             style={styles.viewerAvatar}
           />
           <View style={styles.viewerAuthorCopy}>
@@ -1095,8 +1101,13 @@ export function ProfileContentTabs({
     return (
       <View style={styles.viewerPost}>
         <View style={styles.viewerAuthorRow}>
-          <Image
-            source={getAvatarImageSource(memory.authorAvatar)}
+          <ProfileAvatarLink
+            profile={{
+              id: memory.authorId,
+              username: memory.authorUsername,
+              name: memory.authorName,
+              avatar: memory.authorAvatar,
+            }}
             style={styles.viewerAvatar}
           />
           <View style={styles.viewerAuthorCopy}>
@@ -1169,8 +1180,13 @@ export function ProfileContentTabs({
     return (
       <View style={styles.viewerPost}>
         <View style={styles.viewerAuthorRow}>
-          <Image
-            source={getAvatarImageSource(post.authorAvatar)}
+          <ProfileAvatarLink
+            profile={{
+              id: post.authorId,
+              username: post.authorUsername,
+              name: post.authorName,
+              avatar: post.authorAvatar,
+            }}
             style={styles.viewerAvatar}
           />
           <View style={styles.viewerAuthorCopy}>

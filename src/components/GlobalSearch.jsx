@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom"
 import { supabase } from "../supabaseClient"
 import { sanitizeAvatarUrl, DEFAULT_AVATAR_URL } from "../profileMedia"
 import { useEvents } from "../context/EventContext"
+import { navigateToProfile } from "../profileNavigation"
 
 const DEBOUNCE_MS = 280
 const MAX_RESULTS = 8
@@ -46,7 +47,7 @@ function useDebounce(value, delay) {
 // State starts fresh on each mount because React unmounts/remounts the component.
 export default function GlobalSearch({ onClose }) {
   const navigate = useNavigate()
-  const { allEvents } = useEvents()
+  const { allEvents, currentUser } = useEvents()
   const inputRef = useRef(null)
   const [query, setQuery] = useState("")
   const [profiles, setProfiles] = useState([])
@@ -126,9 +127,9 @@ export default function GlobalSearch({ onClose }) {
   }, [navigate, onClose])
 
   const handleSelectProfile = useCallback((profile) => {
-    navigate(`/profile/${profile.username || profile.id}`)
+    navigateToProfile(navigate, { id: profile.id, username: profile.username }, currentUser)
     onClose()
-  }, [navigate, onClose])
+  }, [currentUser, navigate, onClose])
 
   const displayedProfiles = debouncedQuery ? profiles : []
   const hasResults = matchedEvents.length > 0 || displayedProfiles.length > 0

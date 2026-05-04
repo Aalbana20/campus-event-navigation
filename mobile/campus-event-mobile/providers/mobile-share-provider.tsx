@@ -12,7 +12,13 @@ import React, {
 import { Alert, Share } from 'react-native';
 
 import { recordDiscoverPostShare, type DiscoverPostRecord } from '@/lib/mobile-discover-posts';
+import {
+  createDmEventAttachmentPayload,
+  createDmPostAttachmentPayload,
+  createDmRecapAttachmentPayload,
+} from '@/lib/mobile-dm-content';
 import { buildEventShareMessage } from '@/lib/mobile-event-share';
+import { toggleRecapRepost, type BackendRecapPost } from '@/lib/mobile-recaps-backend';
 import type { EventRecord, ProfileRecord } from '@/types/models';
 import { useMobileApp } from '@/providers/mobile-app-provider';
 import { useMobileInbox } from '@/providers/mobile-inbox-provider';
@@ -26,7 +32,8 @@ import {
 export type SharePayload =
   | { kind: 'post'; post: DiscoverPostRecord }
   | { kind: 'video'; post: DiscoverPostRecord }
-  | { kind: 'event'; event: EventRecord };
+  | { kind: 'event'; event: EventRecord }
+  | { kind: 'recap'; recap: BackendRecapPost };
 
 type MobileShareContextValue = {
   openShareSheet: (payload: SharePayload) => void;
@@ -50,6 +57,23 @@ const buildPostShareMessage = (post: DiscoverPostRecord) => {
     .join('\n');
 
   return { body, link: postLink };
+};
+
+const buildRecapShareMessage = (recap: BackendRecapPost) => {
+  const recapLink = ExpoLinking.createURL(`/recap/${recap.id}`);
+  const byline = recap.creatorUsername
+    ? `@${recap.creatorUsername}`
+    : recap.creatorName || 'Campus';
+  const caption = (recap.caption || '').trim();
+  const body = [
+    `Check out this recap from ${byline}`,
+    caption,
+    recapLink,
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  return { body, link: recapLink };
 };
 
 export function MobileShareSheetProvider({ children }: { children: React.ReactNode }) {
@@ -122,6 +146,23 @@ export function MobileShareSheetProvider({ children }: { children: React.ReactNo
       };
     }
 
+    if (payload.kind === 'recap') {
+      const recap = payload.recap;
+      const byline = recap.creatorUsername
+        ? `@${recap.creatorUsername}`
+        : recap.creatorName || 'Campus';
+      const firstPhoto = recap.photos[0];
+      return {
+        title: recap.caption?.trim() || 'Recap',
+        subtitle: `Recap • ${byline}`,
+        image:
+          firstPhoto?.thumbnailUrl ||
+          firstPhoto?.uri ||
+          recap.taggedEvent?.image ||
+          undefined,
+      };
+    }
+
     const post = payload.post;
     const byline = post.authorUsername
       ? `@${post.authorUsername}`
@@ -136,6 +177,7 @@ export function MobileShareSheetProvider({ children }: { children: React.ReactNo
   const sheetTitle = useMemo(() => {
     if (!payload) return 'Share';
     if (payload.kind === 'event') return 'Share event';
+    if (payload.kind === 'recap') return 'Share recap';
     if (payload.kind === 'video') return 'Share video';
     return 'Share post';
   }, [payload]);
@@ -146,8 +188,73 @@ export function MobileShareSheetProvider({ children }: { children: React.ReactNo
       const built = buildEventShareMessage(payload.event);
       return { body: built.body, link: built.eventLink };
     }
+    if (payload.kind === 'recap') return buildRecapShareMessage(payload.recap);
     return buildPostShareMessage(payload.post);
   }, [payload]);
+
+  const buildDmAttachmentBody = useCallback(
+    (customMessage: string) => {
+      if (!payload) return '';
+      const trimmedCustom = customMessage.trim();
+
+      if (payload.kind === 'event') {
+        const event = payload.event;
+        return createDmEventAttachmentPayload({
+          text: trimmedCustom,
+          event: {
+            id: String(event.id),
+            title: event.title,
+            image: event.image,
+            date: event.date,
+            time: event.time,
+            location: event.locationName || event.location || event.locationAddress,
+          },
+        });
+      }
+
+      if (payload.kind === 'recap') {
+        const recap = payload.recap;
+        const firstPhoto = recap.photos[0];
+        return createDmRecapAttachmentPayload({
+          text: trimmedCustom,
+          recap: {
+            id: String(recap.id),
+            caption: recap.caption,
+            mediaUrl: firstPhoto?.uri,
+            thumbnailUrl: firstPhoto?.thumbnailUrl,
+            mediaType: firstPhoto?.mediaType === 'video' ? 'video' : 'image',
+            authorId: recap.creatorId,
+            authorName: recap.creatorName,
+            authorUsername: recap.creatorUsername,
+            authorAvatar: recap.creatorAvatar,
+            eventId: recap.taggedEvent?.id,
+            eventTitle: recap.taggedEvent?.title,
+            eventImage: recap.taggedEvent?.image,
+          },
+        });
+      }
+
+      const post = payload.post;
+      return createDmPostAttachmentPayload({
+        text: trimmedCustom,
+        post: {
+          id: String(post.id),
+          mediaType: payload.kind === 'video' ? 'video' : 'image',
+          mediaUrl: post.mediaUrl,
+          thumbnailUrl: post.thumbnailUrl,
+          caption: post.caption,
+          durationSeconds: post.durationSeconds,
+          mediaWidth: post.mediaWidth,
+          mediaHeight: post.mediaHeight,
+          authorId: post.authorId,
+          authorName: post.authorName,
+          authorUsername: post.authorUsername,
+          authorAvatar: post.authorAvatar,
+        },
+      });
+    },
+    [payload]
+  );
 
   const handleSendToRecipients = useCallback(
     async (
@@ -164,9 +271,8 @@ export function MobileShareSheetProvider({ children }: { children: React.ReactNo
         return;
       }
 
-      const { body } = buildMessageForPayload();
-      const trimmedCustom = customMessage.trim();
-      const composedBody = trimmedCustom ? `${trimmedCustom}\n\n${body}` : body;
+      const composedBody = buildDmAttachmentBody(customMessage);
+      if (!composedBody) return;
 
       try {
         await Promise.all(
@@ -175,7 +281,10 @@ export function MobileShareSheetProvider({ children }: { children: React.ReactNo
           )
         );
 
-        if (payload.kind === 'post' || payload.kind === 'video') {
+        if (
+          (payload.kind === 'post' || payload.kind === 'video') &&
+          !String(payload.post.id).startsWith('mock-')
+        ) {
           void recordDiscoverPostShare({
             postId: payload.post.id,
             userId: currentUser.id,
@@ -199,11 +308,16 @@ export function MobileShareSheetProvider({ children }: { children: React.ReactNo
         Alert.alert('Share', 'Could not send that right now.');
       }
     },
-    [buildMessageForPayload, closeShareSheet, currentUser.id, flashToast, payload, sendDmMessage]
+    [buildDmAttachmentBody, closeShareSheet, currentUser.id, flashToast, payload, sendDmMessage]
   );
 
   const handleAddToStory = useCallback(() => {
     if (!payload) return;
+
+    if (payload.kind === 'recap') {
+      flashToast('Recap stories — coming soon');
+      return;
+    }
 
     closeShareSheet();
 
@@ -230,7 +344,7 @@ export function MobileShareSheetProvider({ children }: { children: React.ReactNo
         sharedAspectRatio: aspectRatio ? String(aspectRatio) : undefined,
       },
     });
-  }, [closeShareSheet, payload]);
+  }, [closeShareSheet, flashToast, payload]);
 
   const handleRepost = useCallback(async () => {
     if (!payload) return;
@@ -239,6 +353,13 @@ export function MobileShareSheetProvider({ children }: { children: React.ReactNo
       if (payload.kind === 'event') {
         await repostEvent(String(payload.event.id));
         flashToast('Reposted to your profile');
+      } else if (payload.kind === 'recap') {
+        const ok = await toggleRecapRepost({
+          recapId: payload.recap.id,
+          userId: currentUser.id,
+          isReposted: payload.recap.repostedByMe,
+        });
+        flashToast(ok ? 'Reposted to your profile' : 'Repost saved for now');
       } else {
         await repostPost(String(payload.post.id));
         flashToast('Reposted to your profile');
@@ -246,7 +367,7 @@ export function MobileShareSheetProvider({ children }: { children: React.ReactNo
     } catch {
       Alert.alert('Repost', 'Could not repost right now.');
     }
-  }, [flashToast, payload, repostEvent, repostPost]);
+  }, [currentUser.id, flashToast, payload, repostEvent, repostPost]);
 
   const handleCopyLink = useCallback(async () => {
     if (!payload) return;
@@ -259,7 +380,10 @@ export function MobileShareSheetProvider({ children }: { children: React.ReactNo
 
     try {
       await Clipboard.setStringAsync(link);
-      if (payload.kind === 'post' || payload.kind === 'video') {
+      if (
+        (payload.kind === 'post' || payload.kind === 'video') &&
+        !String(payload.post.id).startsWith('mock-')
+      ) {
         void recordDiscoverPostShare({
           postId: payload.post.id,
           userId: currentUser.id,
@@ -276,11 +400,19 @@ export function MobileShareSheetProvider({ children }: { children: React.ReactNo
     if (!payload) return;
 
     const { body, link } = buildMessageForPayload();
-    const title = payload.kind === 'event' ? payload.event.title : 'Share';
+    const title =
+      payload.kind === 'event'
+        ? payload.event.title
+        : payload.kind === 'recap'
+          ? 'Share recap'
+          : 'Share';
 
     try {
       await Share.share({ title, message: body, url: link });
-      if (payload.kind === 'post' || payload.kind === 'video') {
+      if (
+        (payload.kind === 'post' || payload.kind === 'video') &&
+        !String(payload.post.id).startsWith('mock-')
+      ) {
         void recordDiscoverPostShare({
           postId: payload.post.id,
           userId: currentUser.id,

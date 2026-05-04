@@ -1,7 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useMemo } from 'react';
 import {
-  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -11,8 +10,8 @@ import {
 } from 'react-native';
 
 import { useAppTheme } from '@/lib/app-theme';
-import { getAvatarImageSource } from '@/lib/mobile-media';
 import type { ProfileRecord } from '@/types/models';
+import { ProfileAvatarLink } from './ProfileAvatarLink';
 
 type EventMutualsSheetProps = {
   visible: boolean;
@@ -60,7 +59,7 @@ export function EventMutualsSheet({
             {profiles.length > 0 ? (
               profiles.map((profile) => (
                 <View key={profile.id} style={styles.row}>
-                  <Image source={getAvatarImageSource(profile.avatar)} style={styles.avatar} />
+                  <ProfileAvatarLink profile={profile} style={styles.avatar} />
                   <View style={styles.identity}>
                     <Text style={styles.name} numberOfLines={1}>
                       {profile.name || profile.username || 'Campus User'}

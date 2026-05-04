@@ -25,7 +25,12 @@ import {
   createDmEventAttachmentPayload,
   parseDmEventAttachmentPayload,
   parseDmMessageForEventShare,
+  parseDmMessageForPostShare,
+  parseDmPostAttachmentPayload,
+  parseDmRecapAttachmentPayload,
   type DmEventAttachmentPayload,
+  type DmPostAttachmentPayload,
+  type DmRecapAttachmentPayload,
 } from '@/lib/mobile-dm-content';
 import { supabase } from '@/lib/supabase';
 import { getAvatarImageSource, getEventImageSource } from '@/lib/mobile-media';
@@ -42,7 +47,10 @@ import type { EventRecord, ProfileRecord } from '@/types/models';
 
 import { AppScreen } from './AppScreen';
 import { DmEventPreviewCard } from './DmEventPreviewCard';
+import { DmPostPreviewCard } from './DmPostPreviewCard';
+import { DmRecapPreviewCard } from './DmRecapPreviewCard';
 import { ExploreEventDetailModal } from './ExploreEventDetailModal';
+import { ProfileAvatarLink } from './ProfileAvatarLink';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 
 const QUICK_REACTIONS = ['❤️', '😂', '😮', '😢', '😡', '👍', '＋'];
@@ -361,7 +369,15 @@ function InboxThreadRow({
 
             onPress();
           }}>
-          <Image source={getAvatarImageSource(thread.image)} style={styles.threadAvatarImage} />
+          <ProfileAvatarLink
+            profile={{
+              id: thread.id,
+              username: thread.username,
+              name: thread.name,
+              avatar: thread.image,
+            }}
+            style={styles.threadAvatarImage}
+          />
           <View style={styles.threadCopy}>
             <Text style={styles.threadName} numberOfLines={1}>
               {thread.name}
@@ -418,7 +434,15 @@ function NotificationAvatar({
 
   return (
     <View style={[styles.feedAvatarShell, hasActiveStory && styles.feedAvatarRing]}>
-      <Image source={getAvatarImageSource(notification.image)} style={styles.feedAvatarImage} />
+      <ProfileAvatarLink
+        profile={{
+          id: notification.actorId,
+          username: notification.username,
+          name: notification.username || notification.text,
+          avatar: notification.image,
+        }}
+        style={styles.feedAvatarImage}
+      />
     </View>
   );
 }
@@ -583,7 +607,7 @@ function SuggestedProfileRow({
   return (
     <View style={styles.suggestionRow}>
       <View style={[styles.suggestionAvatarShell, hasActiveStory && styles.suggestionAvatarRing]}>
-        <Image source={getAvatarImageSource(profile.avatar)} style={styles.suggestionAvatar} />
+        <ProfileAvatarLink profile={profile} style={styles.suggestionAvatar} />
       </View>
       <View style={styles.suggestionCopy}>
         <Text style={styles.suggestionName} numberOfLines={1}>
@@ -1445,8 +1469,13 @@ export function InboxScreen({
               <Pressable style={styles.chatHeaderBack} onPress={() => setActiveThreadId(null)}>
                 <Ionicons name="chevron-back" size={28} color={theme.text} />
               </Pressable>
-              <Image
-                source={getAvatarImageSource(activeThread.image)}
+              <ProfileAvatarLink
+                profile={{
+                  id: activeThread.id,
+                  username: activeThread.username,
+                  name: activeThread.name,
+                  avatar: activeThread.image,
+                }}
                 style={styles.chatHeaderAvatar}
               />
               <Text style={styles.chatHeaderName} numberOfLines={1}>
@@ -1462,21 +1491,43 @@ export function InboxScreen({
               showsVerticalScrollIndicator={false}>
               {(messagesByThread[activeThread.id] || []).map((message) => {
                 const eventAttachment = parseDmEventAttachmentPayload(message.text);
-                const legacyEventShare = eventAttachment
+                const postAttachment: DmPostAttachmentPayload | null = eventAttachment
                   ? null
-                  : parseDmMessageForEventShare(message.text);
+                  : parseDmPostAttachmentPayload(message.text);
+                const recapAttachment: DmRecapAttachmentPayload | null =
+                  eventAttachment || postAttachment
+                    ? null
+                    : parseDmRecapAttachmentPayload(message.text);
+                const legacyEventShare =
+                  eventAttachment || postAttachment || recapAttachment
+                    ? null
+                    : parseDmMessageForEventShare(message.text);
+                const legacyPostShare =
+                  eventAttachment || postAttachment || recapAttachment || legacyEventShare
+                    ? null
+                    : parseDmMessageForPostShare(message.text);
                 const eventId = eventAttachment?.event.id || legacyEventShare?.eventId || '';
+                const postId = postAttachment?.post.id || legacyPostShare?.postId || '';
                 const localEvent = eventId ? getEventById(eventId) : undefined;
                 const sharedEvent = eventAttachment
                   ? buildEventAttachmentRecord(eventAttachment.event, localEvent)
                   : localEvent;
                 const showEventPreview = Boolean(sharedEvent && (eventAttachment || legacyEventShare));
+                const showPostPreview = Boolean(postAttachment);
+                const showRecapPreview = Boolean(recapAttachment);
                 const textToRender = eventAttachment
                   ? (eventAttachment.text || '').trim()
-                  : showEventPreview
-                    ? (legacyEventShare?.trimmedBody || '').trim()
-                    : message.text;
-                const isEventCardOnly = showEventPreview && !textToRender;
+                  : postAttachment
+                    ? (postAttachment.text || '').trim()
+                    : recapAttachment
+                      ? (recapAttachment.text || '').trim()
+                      : showEventPreview
+                        ? (legacyEventShare?.trimmedBody || '').trim()
+                        : legacyPostShare
+                          ? (legacyPostShare.trimmedBody || '').trim()
+                          : message.text;
+                const isCardOnly =
+                  (showEventPreview || showPostPreview || showRecapPreview) && !textToRender;
 
                 return (
                   <Pressable
@@ -1484,15 +1535,17 @@ export function InboxScreen({
                     delayLongPress={360}
                     onLongPress={(event) => openMessageMenu(message, event)}
                     style={[
-                      isEventCardOnly ? styles.chatEventCardPressable : styles.chatBubble,
-                      isEventCardOnly
+                      isCardOnly ? styles.chatEventCardPressable : styles.chatBubble,
+                      isCardOnly
                         ? message.sender === 'me'
                           ? styles.chatEventCardMe
                           : styles.chatEventCardThem
                         : message.sender === 'me'
                           ? styles.chatBubbleMe
                           : styles.chatBubbleThem,
-                      showEventPreview && !isEventCardOnly && styles.chatBubbleWithPreview,
+                      (showEventPreview || showPostPreview || showRecapPreview) &&
+                        !isCardOnly &&
+                        styles.chatBubbleWithPreview,
                     ]}>
                     {showEventPreview && sharedEvent ? (
                       <DmEventPreviewCard
@@ -1506,12 +1559,41 @@ export function InboxScreen({
                       />
                     ) : null}
 
+                    {showPostPreview && postAttachment ? (
+                      <DmPostPreviewCard
+                        post={postAttachment.post}
+                        onPress={() => {
+                          if (!postId) return;
+                          router.push({
+                            pathname: '/post/[id]',
+                            params: { id: postId },
+                          });
+                        }}
+                      />
+                    ) : null}
+
+                    {showRecapPreview && recapAttachment ? (
+                      <DmRecapPreviewCard
+                        recap={recapAttachment.recap}
+                        onPress={() => {
+                          const authorId = recapAttachment.recap.authorId;
+                          if (!authorId) return;
+                          router.push({
+                            pathname: '/recap-profile/[userId]',
+                            params: { userId: authorId },
+                          });
+                        }}
+                      />
+                    ) : null}
+
                     {textToRender ? (
                       <Text
                         style={[
                           styles.chatBubbleText,
                           message.sender === 'me' && styles.chatBubbleTextMe,
-                          showEventPreview && !isEventCardOnly && styles.chatBubbleTextWithPreview,
+                          (showEventPreview || showPostPreview || showRecapPreview) &&
+                            !isCardOnly &&
+                            styles.chatBubbleTextWithPreview,
                         ]}>
                         {textToRender}
                       </Text>
@@ -1846,7 +1928,7 @@ export function InboxScreen({
                         styles.accountModalAvatarShell,
                         activeStoryAuthorIds.has(String(profile.id)) && styles.accountModalAvatarRing,
                       ]}>
-                      <Image source={getAvatarImageSource(profile.avatar)} style={styles.accountModalAvatar} />
+                      <ProfileAvatarLink profile={profile} style={styles.accountModalAvatar} />
                     </View>
                     <View style={styles.accountModalCopy}>
                       <Text style={styles.accountModalName} numberOfLines={1}>
@@ -1910,8 +1992,13 @@ export function InboxScreen({
               <Pressable style={styles.threadMenuCard} onPress={(event) => event.stopPropagation()}>
                 <View style={styles.threadMenuHandle} />
                 <View style={styles.threadMenuHeader}>
-                  <Image
-                    source={getAvatarImageSource(activeThreadMenu.image)}
+                  <ProfileAvatarLink
+                    profile={{
+                      id: activeThreadMenu.id,
+                      username: activeThreadMenu.username,
+                      name: activeThreadMenu.name,
+                      avatar: activeThreadMenu.image,
+                    }}
                     style={styles.threadMenuAvatar}
                   />
                   <View style={styles.threadMenuCopy}>

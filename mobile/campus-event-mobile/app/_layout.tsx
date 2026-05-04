@@ -8,6 +8,8 @@ import 'react-native-reanimated';
 
 import { MobileAppProvider, useMobileApp } from '@/providers/mobile-app-provider';
 import { MobileInboxProvider } from '@/providers/mobile-inbox-provider';
+import { MobileLocalRecapsProvider } from '@/providers/mobile-local-recaps-provider';
+import { RecapComposerProvider } from '@/providers/mobile-recap-composer';
 import { MobileSettingsProvider, useMobileSettings } from '@/providers/mobile-settings-provider';
 import { MobileShareSheetProvider } from '@/providers/mobile-share-provider';
 
@@ -78,9 +80,21 @@ function AppBootstrap() {
       />
       <Stack.Screen name="recaps/index" options={{ headerShown: false }} />
       <Stack.Screen name="recaps/[eventId]" options={{ headerShown: false }} />
+      <Stack.Screen
+        name="recaps/create"
+        options={{ headerShown: false, presentation: 'fullScreenModal' }}
+      />
+      <Stack.Screen
+        name="recaps/preview"
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen name="search/index" options={{ headerShown: false }} />
+      <Stack.Screen name="search/results" options={{ headerShown: false }} />
       <Stack.Screen name="profile/[username]" options={{ headerShown: false }} />
       <Stack.Screen name="event/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="event/manage/[id]" options={{ headerShown: false }} />
+      <Stack.Screen name="post/[id]" options={{ headerShown: false }} />
+      <Stack.Screen name="recap-profile/[userId]" options={{ headerShown: false }} />
       <Stack.Screen name="auth/sign-in" options={{ headerShown: false }} />
       <Stack.Screen name="auth/sign-up" options={{ headerShown: false }} />
       <Stack.Screen name="auth/forgot-password" options={{ headerShown: false }} />
@@ -107,7 +121,11 @@ export default function RootLayout() {
       <MobileAppProvider>
         <MobileInboxProvider>
           <MobileShareSheetProvider>
-            <RootNavigator />
+            <MobileLocalRecapsProvider>
+              <RecapComposerProvider>
+                <RootNavigator />
+              </RecapComposerProvider>
+            </MobileLocalRecapsProvider>
           </MobileShareSheetProvider>
         </MobileInboxProvider>
       </MobileAppProvider>

@@ -4,8 +4,8 @@ import React, { useMemo, useState } from 'react';
 import { Alert, FlatList, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useAppTheme } from '@/lib/app-theme';
-import { getAvatarImageSource } from '@/lib/mobile-media';
 import type { DiscoverPostRecord } from '@/lib/mobile-discover-posts';
+import { ProfileAvatarLink } from './ProfileAvatarLink';
 
 type DiscoverPostsImmersiveFeedProps = {
   posts: DiscoverPostRecord[];
@@ -170,21 +170,23 @@ function DiscoverPostItem({
                 style={StyleSheet.absoluteFill}
                 contentFit="cover"
                 nativeControls={false}
+                pointerEvents="none"
               />
             ) : null}
-            <Pressable
-              accessibilityLabel={isManuallyPaused ? 'Play video' : 'Pause video'}
-              accessibilityRole="button"
-              disabled={!isActive}
-              onPress={handleTogglePlayback}
-              style={styles.playbackHitArea}
-            >
-              {isManuallyPaused ? (
-                <View style={styles.playbackCenterButton}>
-                  <Ionicons name="play" size={34} color="rgba(255,255,255,0.9)" />
-                </View>
-              ) : null}
-            </Pressable>
+            <View style={styles.playbackLayer} pointerEvents="box-none">
+              <Pressable
+                accessibilityLabel={isManuallyPaused ? 'Play video' : 'Pause video'}
+                accessibilityRole="button"
+                disabled={!isActive}
+                onPress={handleTogglePlayback}
+                style={styles.playbackHitArea}>
+                {isManuallyPaused ? (
+                  <View style={styles.playbackCenterButton}>
+                    <Ionicons name="play" size={34} color="rgba(255,255,255,0.9)" />
+                  </View>
+                ) : null}
+              </Pressable>
+            </View>
           </>
         ) : (
           <Image
@@ -193,7 +195,7 @@ function DiscoverPostItem({
             resizeMode="cover"
           />
         )}
-        <View style={styles.gradientOverlay} />
+        <View style={styles.gradientOverlay} pointerEvents="none" />
         <DiscoverPostItemOverlay
           post={post}
           onPressLike={onPressLike}
@@ -207,6 +209,13 @@ function DiscoverPostItem({
           isLiked={isLiked}
           isSaved={isSaved}
           styles={styles}
+        />
+        <Pressable
+          style={styles.shareHitTarget}
+          onPress={() => onPressShare(post)}
+          hitSlop={16}
+          accessibilityRole="button"
+          accessibilityLabel="Share video or post"
         />
       </View>
     </View>
@@ -270,7 +279,7 @@ function DiscoverPostItemOverlay({
   return (
     <>
       {/* Right Social Rail */}
-      <View style={styles.rightRail}>
+      <View style={styles.rightRail} pointerEvents="box-none">
         <Pressable style={styles.actionButton} onPress={() => onPressLike(post)}>
           <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={32} color={isLiked ? '#ff3b30' : '#ffffff'} />
           <Text style={styles.actionText}>{post.likeCount}</Text>
@@ -288,7 +297,12 @@ function DiscoverPostItemOverlay({
           </Text>
         </Pressable>
 
-        <Pressable style={styles.actionButton} onPress={handlePressShare}>
+        <Pressable
+          style={styles.actionButton}
+          onPress={handlePressShare}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel="Share video or post">
           <Ionicons name="paper-plane-outline" size={30} color="#ffffff" />
           <Text style={styles.actionText}>Share</Text>
         </Pressable>
@@ -309,7 +323,15 @@ function DiscoverPostItemOverlay({
           style={styles.profileRow}
           onPress={() => onPressCreator?.(post)}
         >
-          <Image source={getAvatarImageSource(post.authorAvatar)} style={styles.avatar} />
+          <ProfileAvatarLink
+            profile={{
+              id: post.authorId,
+              username: post.authorUsername,
+              name: post.authorName,
+              avatar: post.authorAvatar,
+            }}
+            style={styles.avatar}
+          />
           <Text style={styles.creatorName}>{post.authorName}</Text>
         </Pressable>
 
@@ -353,9 +375,13 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       ...StyleSheet.absoluteFillObject,
       backgroundColor: 'rgba(0,0,0,0.3)',
     },
-    playbackHitArea: {
+    playbackLayer: {
       ...StyleSheet.absoluteFillObject,
       zIndex: 5,
+      right: 92,
+    },
+    playbackHitArea: {
+      flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -374,10 +400,22 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       alignItems: 'center',
       gap: 22,
       zIndex: 10,
+      elevation: 10,
+    },
+    shareHitTarget: {
+      position: 'absolute',
+      right: 0,
+      bottom: 120,
+      width: 116,
+      height: 156,
+      zIndex: 100,
+      elevation: 100,
     },
     actionButton: {
       alignItems: 'center',
       gap: 4,
+      zIndex: 20,
+      elevation: 20,
     },
     actionText: {
       color: '#ffffff',

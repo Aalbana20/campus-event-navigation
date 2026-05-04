@@ -1,6 +1,5 @@
 import { DEFAULT_AVATAR_URL, sanitizeAvatarUrl } from "./profileMedia"
 
-const STORY_MIN_ITEMS = 15
 const FRIEND_CARD_MIN_ITEMS = 6
 const PLACEHOLDER_PEOPLE = [
   {
@@ -284,34 +283,7 @@ const dedupePeople = (items) => {
 
 export const buildDiscoverStoryItems = ({
   currentUser,
-  followingList,
-  followersList,
-  allEvents,
 }) => {
-  const stats = buildCreatorStatMap(allEvents)
-  const socialPeople = new Map()
-  const currentKey = String(currentUser?.id || currentUser?.username || "")
-
-  ;(followingList || []).forEach((person) => upsertPerson(socialPeople, person, "following", stats))
-  ;(followersList || []).forEach((person) => upsertPerson(socialPeople, person, "follower", stats))
-  ;(allEvents || []).forEach((event) =>
-    upsertPerson(
-      socialPeople,
-      {
-        id: event?.createdBy,
-        username: event?.creatorUsername,
-        name: event?.creatorName,
-        image: event?.creatorAvatar,
-      },
-      "creator",
-      stats
-    )
-  )
-
-  const socialItems = dedupePeople([...socialPeople.values()]).filter(
-    (person) => getStoryKey(person) !== currentKey
-  )
-
   const currentStory = {
     ...createBasePerson(
       {
@@ -327,31 +299,7 @@ export const buildDiscoverStoryItems = ({
     meta: "Share",
   }
 
-  const realStories = socialItems.slice(0, STORY_MIN_ITEMS - 1).map((person, index) => ({
-    ...person,
-    kind: "story",
-    seen: index > 1,
-    meta:
-      person.relation === "mutual"
-        ? "Circle"
-        : person.relation === "following"
-          ? "Following"
-          : person.relation === "follower"
-            ? "Follows you"
-            : "Host",
-  }))
-
-  const placeholderStories = buildPlaceholderPeople(
-    Math.max(STORY_MIN_ITEMS - (1 + realStories.length), 0),
-    socialItems.length + 1
-  ).map((person) => ({
-    ...person,
-    kind: "suggested",
-    seen: false,
-    meta: "Suggested",
-  }))
-
-  return [currentStory, ...realStories, ...placeholderStories]
+  return [currentStory]
 }
 
 export const buildDiscoverFriendCards = ({

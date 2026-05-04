@@ -1,8 +1,10 @@
 import React, { useEffect, useRef, useState } from "react"
+import { useNavigate } from "react-router-dom"
 import { useEvents } from "../context/EventContext"
 import { applyEventImageFallback, getEventImageSrc } from "../eventImages"
 import { DEFAULT_AVATAR_URL, sanitizeAvatarUrl } from "../profileMedia"
 import { buildMutualGoingLabel } from "../mutuals"
+import { navigateToProfile } from "../profileNavigation"
 import EventCreatorBadge from "./EventCreatorBadge"
 
 const usersMatch = (a, b) => {
@@ -58,6 +60,7 @@ function EventCard({
   onRevealRewind,
   commentCount = 0,
 }) {
+  const navigate = useNavigate()
   const {
     addEvent,
     cancelRSVP,
@@ -603,17 +606,24 @@ function EventCard({
                     className="event-mutuals-item"
                     key={person.id || person.username || index}
                   >
-                    <img
-                      src={sanitizeAvatarUrl(
-                        person.image || person.avatar,
-                        DEFAULT_AVATAR_URL
-                      )}
-                      alt={person.name || person.username || "Attendee"}
-                      className="event-mutuals-item-avatar"
-                      onError={(eventClick) => {
-                        eventClick.currentTarget.src = DEFAULT_AVATAR_URL
-                      }}
-                    />
+                    <button
+                      type="button"
+                      className="event-mutuals-item-avatar-button"
+                      onClick={() => navigateToProfile(navigate, person, currentUser)}
+                      aria-label="Open profile"
+                    >
+                      <img
+                        src={sanitizeAvatarUrl(
+                          person.image || person.avatar,
+                          DEFAULT_AVATAR_URL
+                        )}
+                        alt={person.name || person.username || "Attendee"}
+                        className="event-mutuals-item-avatar"
+                        onError={(eventClick) => {
+                          eventClick.currentTarget.src = DEFAULT_AVATAR_URL
+                        }}
+                      />
+                    </button>
                     <span className="event-mutuals-item-name">
                       {person.name || person.username || "Unknown attendee"}
                     </span>

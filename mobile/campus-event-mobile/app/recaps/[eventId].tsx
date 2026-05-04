@@ -23,9 +23,10 @@ import {
 import { useVideoPlayer, VideoView } from 'expo-video';
 
 import { AppScreen } from '@/components/mobile/AppScreen';
+import { ProfileAvatarLink } from '@/components/mobile/ProfileAvatarLink';
 import { useAppTheme } from '@/lib/app-theme';
 import { getEventCreatorLabel } from '@/lib/mobile-backend';
-import { getAvatarImageSource, getEventImageSource } from '@/lib/mobile-media';
+import { getEventImageSource } from '@/lib/mobile-media';
 import {
   createRecapPost,
   loadRecapPostsForEvent,
@@ -263,8 +264,13 @@ function RecapPostCard({
     <View style={styles.postCard}>
       <View style={styles.postUserRow}>
         <Pressable style={styles.postAuthorTapArea} onPress={() => onPressAuthor(post)}>
-          <Image
-            source={getAvatarImageSource(post.authorAvatar)}
+          <ProfileAvatarLink
+            profile={{
+              id: post.authorId,
+              username: post.authorUsername,
+              name: post.authorName,
+              avatar: post.authorAvatar,
+            }}
             style={styles.postAvatar}
           />
           <View style={styles.postUserCopy}>
@@ -649,8 +655,13 @@ export default function EventRecapFeedScreen() {
               'Host and event rating will live here in the next Recaps pass.'
             )
           }>
-          <Image
-            source={getAvatarImageSource(hostProfile?.avatar || event.creatorAvatar)}
+          <ProfileAvatarLink
+            profile={{
+              id: hostProfile?.id || event.createdBy,
+              username: hostProfile?.username || event.creatorUsername,
+              name: hostProfile?.name || getEventCreatorLabel(event),
+              avatar: hostProfile?.avatar || event.creatorAvatar,
+            }}
             style={styles.hostAvatar}
           />
           <View style={styles.hostCopy}>

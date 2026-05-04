@@ -13,6 +13,7 @@ import {
 
 import { useAppTheme } from '@/lib/app-theme';
 import { getAvatarImageSource } from '@/lib/mobile-media';
+import { openMobileProfile } from '@/lib/mobile-profile-navigation';
 import {
   MobileNotification,
   useMobileInbox,
@@ -120,7 +121,11 @@ export function NotificationsScreen() {
       return;
     }
     if (n.username) {
-      router.push({ pathname: '/profile/[username]', params: { username: n.username } });
+      openMobileProfile({
+        router,
+        currentUser,
+        profile: { username: n.username, name: n.username },
+      });
       return;
     }
   };
@@ -208,7 +213,7 @@ export function NotificationsScreen() {
             <View style={styles.emptyGlyphRing}>
               <Text style={styles.emptyGlyph}>🔔</Text>
             </View>
-            <Text style={styles.emptyTitle}>You're all caught up</Text>
+            <Text style={styles.emptyTitle}>You&apos;re all caught up</Text>
             <Text style={styles.emptyBody}>
               Likes, follows, comments, and event updates will live here.
             </Text>

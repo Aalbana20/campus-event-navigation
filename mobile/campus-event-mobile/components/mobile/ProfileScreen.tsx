@@ -743,6 +743,10 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
     }
   };
 
+  const handleOpenStoryShortcut = () => {
+    router.push({ pathname: '/story/create', params: { mode: 'story' } });
+  };
+
   const handleOpenEdit = () => {
     setEditForm({
       name: profile.name,
@@ -916,7 +920,18 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
 
         <View style={styles.headerCard}>
           <View style={styles.headerTopRow}>
-            <Image source={getAvatarImageSource(profile.avatar)} style={styles.avatar} />
+            <View style={styles.avatarWrap}>
+              <Image source={getAvatarImageSource(profile.avatar)} style={styles.avatar} />
+              {isOwnProfile ? (
+                <Pressable
+                  style={styles.avatarStoryAddButton}
+                  onPress={handleOpenStoryShortcut}
+                  accessibilityRole="button"
+                  accessibilityLabel="Create a story">
+                  <Ionicons name="add" size={17} color="#ffffff" />
+                </Pressable>
+              ) : null}
+            </View>
 
             <View style={styles.headerCopy}>
               <View style={styles.nameRow}>
@@ -1013,7 +1028,12 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
                     styles.profileActionButton,
                     styles.ownProfileActionButton,
                   ]}
-                  onPress={() => router.push('/recaps')}>
+                  onPress={() =>
+                    router.push({
+                      pathname: '/(tabs)/video-posts',
+                      params: { view: 'recaps', recapCategory: 'for-you' },
+                    })
+                  }>
                   <Ionicons name="chatbubbles-outline" size={14} color={theme.accent} />
                   <Text style={styles.secondaryButtonText}>Recaps</Text>
                 </Pressable>
@@ -1052,9 +1072,12 @@ export function ProfileScreen({ username }: ProfileScreenProps) {
                 </Pressable>
                 <Pressable
                   style={[styles.secondaryButton, styles.profileActionButton, styles.publicActionButton]}
-                  onPress={() => {
-                    console.log('Recap coming soon.');
-                  }}>
+                  onPress={() =>
+                    router.push({
+                      pathname: '/recap-profile/[userId]',
+                      params: { userId: profile.id },
+                    })
+                  }>
                   <Text style={styles.secondaryButtonText}>Recap</Text>
                 </Pressable>
               </>
@@ -1948,12 +1971,36 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) => {
       alignItems: 'flex-end',
       gap: 16,
     },
+    avatarWrap: {
+      position: 'relative',
+      width: 88,
+      height: 88,
+      overflow: 'visible',
+    },
     avatar: {
       width: 88,
       height: 88,
       borderRadius: 999,
       borderWidth: isDark ? 1 : 0,
       borderColor: profileBorder,
+    },
+    avatarStoryAddButton: {
+      position: 'absolute',
+      right: -3,
+      bottom: -3,
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: theme.accent,
+      borderWidth: 3,
+      borderColor: screenBackground,
+      shadowColor: theme.shadow,
+      shadowOpacity: isDark ? 0 : 0.14,
+      shadowRadius: 6,
+      shadowOffset: { width: 0, height: 3 },
+      elevation: 3,
     },
     headerCopy: {
       flex: 1,

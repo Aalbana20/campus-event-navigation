@@ -4,8 +4,10 @@ import {
   Animated,
   Dimensions,
   Image,
+  KeyboardAvoidingView,
   Modal,
   PanResponder,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,6 +15,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { getAvatarImageSource } from '@/lib/mobile-media';
 import type { ProfileRecord } from '@/types/models';
@@ -81,6 +84,7 @@ export function MobileShareSheet({
   onPressAction,
   onPressNewGroup,
 }: MobileShareSheetProps) {
+  const insets = useSafeAreaInsets();
   const translateY = useRef(new Animated.Value(WINDOW_HEIGHT)).current;
   const dragY = useRef(new Animated.Value(0)).current;
   const [query, setQuery] = useState('');
@@ -163,6 +167,8 @@ export function MobileShareSheet({
     [selectedIds, uniquePeople]
   );
   const selectionCount = selectedProfiles.length;
+  const bottomInset = Math.max(insets.bottom, 16);
+  const bottomLift = bottomInset + 112;
 
   const toggleSelection = (profile: ProfileRecord) => {
     setSelectedIds((prev) => {
@@ -189,7 +195,9 @@ export function MobileShareSheet({
       animationType="none"
       statusBarTranslucent
       onRequestClose={dismiss}>
-      <View style={styles.overlayRoot}>
+      <KeyboardAvoidingView
+        style={styles.overlayRoot}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <Pressable style={styles.backdrop} onPress={dismiss} />
         <Animated.View
           style={[
@@ -244,6 +252,7 @@ export function MobileShareSheet({
           <ScrollView
             style={styles.peopleScroll}
             contentContainerStyle={styles.peopleGrid}
+            keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}>
             {filteredPeople.length > 0 ? (
               filteredPeople.map((profile) => {
@@ -286,7 +295,7 @@ export function MobileShareSheet({
           </ScrollView>
 
           {selectionCount > 0 ? (
-            <View style={styles.composeBar}>
+            <View style={[styles.composeBar, { paddingBottom: bottomLift }]}>
               <TextInput
                 value={messageDraft}
                 onChangeText={setMessageDraft}
@@ -330,7 +339,11 @@ export function MobileShareSheet({
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.actionsRow}>
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={[
+                styles.actionsRow,
+                { paddingBottom: bottomLift },
+              ]}>
               {actions.map((action) => {
                 const disabled = !action.available;
                 return (
@@ -361,7 +374,7 @@ export function MobileShareSheet({
             </View>
           ) : null}
         </Animated.View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -377,7 +390,6 @@ const styles = StyleSheet.create({
   },
   sheet: {
     maxHeight: '82%',
-    paddingBottom: 28,
     borderTopLeftRadius: 26,
     borderTopRightRadius: 26,
     backgroundColor: '#0b0b0d',
@@ -525,7 +537,6 @@ const styles = StyleSheet.create({
   composeBar: {
     paddingHorizontal: 14,
     paddingTop: 10,
-    paddingBottom: 4,
     gap: 10,
     borderTopWidth: 1,
     borderColor: 'rgba(255,255,255,0.04)',
@@ -601,6 +612,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingHorizontal: 16,
     paddingTop: 14,
+    paddingBottom: 28,
     gap: 22,
     borderTopWidth: 1,
     borderColor: 'rgba(255,255,255,0.04)',

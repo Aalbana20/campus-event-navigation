@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { useEvents } from "../context/EventContext"
 import { DEFAULT_AVATAR_URL, sanitizeAvatarUrl } from "../profileMedia"
+import { navigateToProfile } from "../profileNavigation"
 import { supabase } from "../supabaseClient"
 import {
   createRecapPost,
@@ -380,7 +381,13 @@ export default function RecapDetail() {
                     <button
                       type="button"
                       className="recap-author-button"
-                      onClick={() => navigate(`/profile/${post.authorUsername || post.authorId}`)}
+                      onClick={() =>
+                        navigateToProfile(
+                          navigate,
+                          { id: post.authorId, username: post.authorUsername },
+                          currentUser
+                        )
+                      }
                     >
                       <img
                         className="recap-post-avatar"

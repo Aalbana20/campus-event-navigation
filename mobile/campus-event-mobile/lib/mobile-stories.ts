@@ -1,5 +1,4 @@
 import { formatRelativeTime, DEFAULT_AVATAR } from '@/lib/mobile-backend';
-import { buildMobileDiscoverStoryItems } from '@/lib/mobile-discover-social';
 import { resolveStoryMediaUrl } from '@/lib/mobile-story-composer';
 import {
   normalizeStoryStickers,
@@ -7,7 +6,6 @@ import {
 } from '@/lib/mobile-story-stickers';
 import { supabase } from '@/lib/supabase';
 import type {
-  EventRecord,
   ProfileRecord,
   StoryRecord,
   StoryViewerRecord,
@@ -57,7 +55,7 @@ export type MobileStoryStripItem = {
   name: string;
   username: string;
   avatar: string;
-  kind: 'current' | 'story' | 'suggested';
+  kind: 'current' | 'story';
   meta: string;
   seen: boolean;
   isPlaceholder: boolean;
@@ -209,16 +207,10 @@ export const loadReactedStoryIds = async ({
 export const buildMobileStoryStripItems = ({
   currentUser,
   storyRecords,
-  followingProfiles,
-  profiles,
-  events,
   seenStoryIds,
 }: {
   currentUser: ProfileRecord;
   storyRecords: StoryRecord[];
-  followingProfiles: ProfileRecord[];
-  profiles: ProfileRecord[];
-  events: EventRecord[];
   seenStoryIds: Set<string>;
 }): MobileStoryStripItem[] => {
   const groupedByAuthor = storyRecords.reduce<Map<string, StoryRecord[]>>((collection, story) => {
@@ -281,29 +273,7 @@ export const buildMobileStoryStripItems = ({
       return rightTime - leftTime;
     });
 
-  const fallbackSuggestions = buildMobileDiscoverStoryItems({
-    currentUser,
-    followingProfiles,
-    profiles,
-    events,
-  })
-    .filter((item) => item.kind === 'suggested')
-    .map((item) => ({
-      id: item.id,
-      profileId: item.profileId,
-      routeKey: item.routeKey,
-      name: item.name,
-      username: item.username,
-      avatar: item.avatar,
-      kind: item.kind,
-      meta: item.meta,
-      seen: item.seen,
-      isPlaceholder: item.isPlaceholder,
-      stories: [],
-      latestStoryAt: undefined,
-    }));
-
-  return [currentUserItem, ...actualItems, ...fallbackSuggestions];
+  return [currentUserItem, ...actualItems];
 };
 
 export const recordStoryView = async ({

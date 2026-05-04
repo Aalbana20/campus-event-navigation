@@ -23,7 +23,9 @@ import {
 } from "../theme"
 import { useToast } from "../context/ToastContext"
 import { registerPushNotifications, unregisterPushNotifications } from "../pushNotifications"
+import { navigateToProfile } from "../profileNavigation"
 import ProfileContentTabs from "../components/ProfileContentTabs"
+import { loadStoryHighlightsForUser } from "../storyHighlights"
 import "./Profile.css"
 
 const communityQuickAddItems = [
@@ -33,7 +35,7 @@ const communityQuickAddItems = [
 ]
 
 const profileHighlightItems = [
-  { key: "new", label: "New", tone: "new", symbol: "+" },
+  { key: "new", label: "Add Highlight", tone: "new", symbol: "+" },
 ]
 
 const createImage = (url) =>
@@ -145,6 +147,7 @@ function Profile() {
     tags: "",
   })
   const [isSavingEditEvent, setIsSavingEditEvent] = useState(false)
+  const [highlights, setHighlights] = useState([])
 
   const defaultAvatar = DEFAULT_AVATAR_URL
   const storedUser = JSON.parse(localStorage.getItem("user") || "{}")
@@ -424,6 +427,22 @@ function Profile() {
     showToast(`${item.label} highlights are coming soon.`, "info")
   }
 
+  const handleOpenStoryShortcut = () => {
+    navigate("/home?create=story")
+  }
+
+  useEffect(() => {
+    let isActive = true
+
+    loadStoryHighlightsForUser(ownerId).then(({ highlights: nextHighlights }) => {
+      if (isActive) setHighlights(nextHighlights)
+    })
+
+    return () => {
+      isActive = false
+    }
+  }, [ownerId])
+
   const handleApplyCrop = async () => {
     if (!rawSelectedImage || !croppedAreaPixels) return
 
@@ -681,6 +700,14 @@ function Profile() {
                 e.currentTarget.src = defaultAvatar
               }}
             />
+            <button
+              type="button"
+              className="profile-avatar-story-add"
+              onClick={handleOpenStoryShortcut}
+              aria-label="Create a story"
+            >
+              +
+            </button>
           </div>
 
           <div className="profile-info">
@@ -759,6 +786,23 @@ function Profile() {
                   <span className="profile-highlight-label">{item.label}</span>
                 </button>
               ))}
+              {highlights.map((highlight) => (
+                <button
+                  key={highlight.id}
+                  type="button"
+                  className="profile-highlight-item"
+                  onClick={() => handleProfileHighlight(highlight)}
+                >
+                  <span className="profile-highlight-thumb" aria-hidden="true">
+                    {highlight.coverUrl ? (
+                      <img src={highlight.coverUrl} alt="" />
+                    ) : (
+                      <span>□</span>
+                    )}
+                  </span>
+                  <span className="profile-highlight-label">{highlight.title}</span>
+                </button>
+              ))}
             </div>
 
             <div className="profile-action-row">
@@ -825,7 +869,7 @@ function Profile() {
                         <button
                           type="button"
                           className="profile-list-identity-btn"
-                          onClick={() => { closePanel(); navigate(`/profile/${person.username || person.id}`) }}
+                          onClick={() => { closePanel(); navigateToProfile(navigate, person, currentUser) }}
                         >
                           <img
                             className="profile-list-avatar"
@@ -858,7 +902,7 @@ function Profile() {
                         <button
                           type="button"
                           className="profile-list-identity-btn"
-                          onClick={() => { closePanel(); navigate(`/profile/${person.username || person.id}`) }}
+                          onClick={() => { closePanel(); navigateToProfile(navigate, person, currentUser) }}
                         >
                           <img
                             className="profile-list-avatar"

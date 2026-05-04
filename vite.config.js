@@ -4,8 +4,7 @@ import react from "@vitejs/plugin-react"
 export default defineConfig({
   plugins: [react()],
   optimizeDeps: {
-    entries: ["index.html", "src/**/*.{js,jsx,ts,tsx}"],
-    force: true,
+    exclude: ["@supabase/supabase-js", "@supabase/realtime-js"],
   },
   server: {
     hmr: false,

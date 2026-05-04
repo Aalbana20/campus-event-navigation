@@ -1,7 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useMemo } from 'react';
 import {
-  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -11,26 +10,41 @@ import {
 } from 'react-native';
 
 import { useAppTheme } from '@/lib/app-theme';
-import { getAvatarImageSource } from '@/lib/mobile-media';
 import type { ProfileRecord } from '@/types/models';
+import { ProfileAvatarLink } from './ProfileAvatarLink';
 
 type ProfileMutualsSheetProps = {
   visible: boolean;
   profiles: ProfileRecord[];
+  title?: string;
+  emptyTitle?: string;
+  emptyCopy?: string;
+  currentUserId?: string;
   onClose: () => void;
   onPressProfile?: (profile: ProfileRecord) => void;
   onPressMessage?: (profile: ProfileRecord) => void;
+  isFollowingProfile?: (profileId: string) => boolean;
+  onPressFollow?: (profile: ProfileRecord) => void;
+  onPressUnfollow?: (profile: ProfileRecord) => void;
 };
 
 export function ProfileMutualsSheet({
   visible,
   profiles,
+  title,
+  emptyTitle = 'No mutual followers yet.',
+  emptyCopy = "Once you both follow people in common, they'll show up here.",
+  currentUserId,
   onClose,
   onPressProfile,
   onPressMessage,
+  isFollowingProfile,
+  onPressFollow,
+  onPressUnfollow,
 }: ProfileMutualsSheetProps) {
   const theme = useAppTheme();
   const styles = useMemo(() => buildStyles(theme), [theme]);
+  const resolvedTitle = title || (profiles.length === 1 ? 'Mutual' : 'Mutuals');
 
   return (
     <Modal
@@ -44,9 +58,7 @@ export function ProfileMutualsSheet({
           <View style={styles.handle} />
 
           <View style={styles.headerRow}>
-            <Text style={styles.headerTitle}>
-              {profiles.length === 1 ? 'Mutual' : 'Mutuals'}
-            </Text>
+            <Text style={styles.headerTitle}>{resolvedTitle}</Text>
             <Pressable style={styles.closeButton} onPress={onClose}>
               <Ionicons name="close" size={20} color={theme.text} />
             </Pressable>
@@ -57,41 +69,66 @@ export function ProfileMutualsSheet({
             contentContainerStyle={styles.listContent}
             showsVerticalScrollIndicator={false}>
             {profiles.length > 0 ? (
-              profiles.map((profile) => (
-                <View key={profile.id} style={styles.row}>
-                  <Pressable
-                    style={styles.identityButton}
-                    onPress={() => onPressProfile?.(profile)}>
-                    <Image
-                      source={getAvatarImageSource(profile.avatar)}
-                      style={styles.avatar}
-                    />
-                    <View style={styles.identity}>
-                      <Text style={styles.name} numberOfLines={1}>
-                        {profile.name || profile.username || 'Campus User'}
-                      </Text>
-                      <Text style={styles.username} numberOfLines={1}>
-                        {profile.username
-                          ? `@${profile.username}`
-                          : 'Campus Friend'}
-                      </Text>
-                    </View>
-                  </Pressable>
-                  {onPressMessage ? (
+              profiles.map((profile) => {
+                const profileId = String(profile.id);
+                const canShowFollowAction =
+                  Boolean(isFollowingProfile && onPressFollow && onPressUnfollow) &&
+                  profileId !== String(currentUserId || '');
+                const isFollowing =
+                  canShowFollowAction && isFollowingProfile
+                    ? isFollowingProfile(profileId)
+                    : false;
+
+                return (
+                  <View key={profile.id} style={styles.row}>
                     <Pressable
-                      style={styles.messageButton}
-                      onPress={() => onPressMessage(profile)}>
-                      <Text style={styles.messageButtonText}>Message</Text>
+                      style={styles.identityButton}
+                      onPress={() => onPressProfile?.(profile)}>
+                      <ProfileAvatarLink profile={profile} style={styles.avatar} />
+                      <View style={styles.identity}>
+                        <Text style={styles.name} numberOfLines={1}>
+                          {profile.name || profile.username || 'Campus User'}
+                        </Text>
+                        <Text style={styles.username} numberOfLines={1}>
+                          {profile.username
+                            ? `@${profile.username}`
+                            : 'Campus Friend'}
+                        </Text>
+                      </View>
                     </Pressable>
-                  ) : null}
-                </View>
-              ))
+                    {canShowFollowAction ? (
+                      <Pressable
+                        style={[
+                          styles.messageButton,
+                          isFollowing && styles.followingButton,
+                        ]}
+                        onPress={() =>
+                          isFollowing
+                            ? onPressUnfollow?.(profile)
+                            : onPressFollow?.(profile)
+                        }>
+                        <Text
+                          style={[
+                            styles.messageButtonText,
+                            !isFollowing && styles.followButtonText,
+                          ]}>
+                          {isFollowing ? 'Following' : 'Follow'}
+                        </Text>
+                      </Pressable>
+                    ) : onPressMessage ? (
+                      <Pressable
+                        style={styles.messageButton}
+                        onPress={() => onPressMessage(profile)}>
+                        <Text style={styles.messageButtonText}>Message</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                );
+              })
             ) : (
               <View style={styles.emptyState}>
-                <Text style={styles.emptyTitle}>No mutual followers yet.</Text>
-                <Text style={styles.emptyCopy}>
-                  Once you both follow people in common, they&apos;ll show up here.
-                </Text>
+                <Text style={styles.emptyTitle}>{emptyTitle}</Text>
+                <Text style={styles.emptyCopy}>{emptyCopy}</Text>
               </View>
             )}
           </ScrollView>
@@ -211,6 +248,12 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       color: theme.text,
       fontSize: 12,
       fontWeight: '700',
+    },
+    followingButton: {
+      backgroundColor: theme.surface,
+    },
+    followButtonText: {
+      color: theme.accent,
     },
     emptyState: {
       paddingVertical: 26,

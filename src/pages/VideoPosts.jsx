@@ -10,6 +10,7 @@ import {
 } from "../discoverPosts"
 import { useEvents } from "../context/EventContext"
 import { useToast } from "../context/ToastContext"
+import { navigateToProfile } from "../profileNavigation"
 
 // Unified table: videos and image posts stay in discover_posts and split by
 // mediaType/metadata in the UI.
@@ -71,9 +72,11 @@ function VideoPosts() {
   }
 
   const handleOpenCreator = (post) => {
-    const handle = post?.authorUsername || post?.authorId
-    if (!handle) return
-    navigate(`/profile/${handle}`)
+    navigateToProfile(
+      navigate,
+      { id: post?.authorId, username: post?.authorUsername },
+      currentUser
+    )
   }
 
   const handleOpenComposer = (mode = "post") => {

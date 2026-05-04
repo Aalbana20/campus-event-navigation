@@ -3,7 +3,6 @@ import * as Clipboard from 'expo-clipboard';
 import React, { useMemo, useState } from 'react';
 import {
   Alert,
-  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -17,8 +16,8 @@ import {
 } from 'react-native';
 
 import { useAppTheme } from '@/lib/app-theme';
-import { getAvatarImageSource } from '@/lib/mobile-media';
 import type { EventRecord } from '@/types/models';
+import { ProfileAvatarLink } from './ProfileAvatarLink';
 
 export type EventCommentRecord = {
   id: string;
@@ -190,8 +189,13 @@ export function EventCommentsSheet({
         style={[styles.commentRow, isReply && styles.replyRow]}
         onLongPress={() => setActionSheetComment(comment)}
         delayLongPress={220}>
-        <Image
-          source={getAvatarImageSource(comment.authorAvatar)}
+        <ProfileAvatarLink
+          profile={{
+            id: comment.authorId,
+            username: comment.authorUsername,
+            name: comment.authorName,
+            avatar: comment.authorAvatar,
+          }}
           style={isReply ? styles.replyAvatar : styles.commentAvatar}
         />
         <View style={styles.commentBubble}>

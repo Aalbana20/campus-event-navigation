@@ -13,6 +13,7 @@ import {
   recordContentView,
 } from "../contentViews"
 import { supabase } from "../supabaseClient"
+import { navigateToProfile } from "../profileNavigation"
 
 const MEDIA_OPTIONS = [
   { id: "all", label: "All" },
@@ -560,13 +561,14 @@ export default function Explore() {
         void recordContentView({ contentType: type, contentId: item.id })
         // Posts don't have a dedicated detail route yet — navigate to the
         // author profile as the closest existing surface.
-        const username = item.raw?.authorUsername
-        if (username) {
-          navigate(`/profile/${username}`)
-        }
+        navigateToProfile(
+          navigate,
+          { id: item.raw?.authorId, username: item.raw?.authorUsername },
+          currentUser
+        )
       }
     },
-    [navigate]
+    [currentUser, navigate]
   )
 
   const activeMediaLabel =

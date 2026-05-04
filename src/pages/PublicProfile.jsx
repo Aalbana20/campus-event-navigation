@@ -21,6 +21,7 @@ import {
 import { Navigate, useNavigate, useParams } from "react-router-dom"
 import { useEvents } from "../context/EventContext"
 import { DEFAULT_AVATAR_URL, sanitizeAvatarUrl } from "../profileMedia"
+import { navigateToProfile } from "../profileNavigation"
 import ProfileContentTabs from "../components/ProfileContentTabs"
 import { supabase } from "../supabaseClient"
 import "./Profile.css"
@@ -642,7 +643,7 @@ function PublicProfile() {
 
   const handleNavigateToUser = (person) => {
     closePanel()
-    navigate(`/profile/${person.username || person.id}`)
+    navigateToProfile(navigate, person, currentUser)
   }
 
   const handleProfileContentCountsChange = useCallback((counts) => {
@@ -951,7 +952,7 @@ function PublicProfile() {
                         className="profile-list-identity-btn"
                         onClick={() => {
                           setIsMutualsListOpen(false)
-                          navigate(`/profile/${person.username || person.id}`)
+                          navigateToProfile(navigate, person, currentUser)
                         }}
                       >
                         <img

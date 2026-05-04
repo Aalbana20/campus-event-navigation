@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import {
   Image,
+  Text,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,7 +15,6 @@ import type { MobileStoryStripItem } from '@/lib/mobile-stories';
 type DiscoverStoriesRowProps = {
   items: MobileStoryStripItem[];
   onOpenStory?: (item: MobileStoryStripItem) => void;
-  onOpenSuggestion?: (item: MobileStoryStripItem) => void;
   onOpenCreateStory?: () => void;
 };
 
@@ -24,7 +24,6 @@ const getStoryAvatarUri = (value: string) =>
 export function DiscoverStoriesRow({
   items,
   onOpenStory,
-  onOpenSuggestion,
   onOpenCreateStory,
 }: DiscoverStoriesRowProps) {
   const theme = useAppTheme();
@@ -38,18 +37,12 @@ export function DiscoverStoriesRow({
         contentContainerStyle={styles.track}>
         {items.map((item) => {
           const isCurrent = item.kind === 'current';
-          const isSuggested = item.kind === 'suggested';
 
           return (
             <View key={item.id} style={styles.storyItem}>
               <Pressable
                 style={styles.storyPressable}
                 onPress={() => {
-                  if (isSuggested) {
-                    onOpenSuggestion?.(item);
-                    return;
-                  }
-
                   if (isCurrent && item.stories.length === 0) {
                     onOpenCreateStory?.();
                     return;
@@ -59,15 +52,19 @@ export function DiscoverStoriesRow({
                 }}>
                 <View
                   style={[
-                    styles.storyRing,
-                    item.seen && styles.storyRingSeen,
-                    isSuggested && styles.storyRingSuggested,
-                    isCurrent && styles.storyRingCurrent,
+                    styles.storyTile,
+                    item.seen && styles.storyTileSeen,
+                    isCurrent && styles.storyTileCurrent,
                   ]}>
                   <Image
                     source={{ uri: getStoryAvatarUri(item.avatar) }}
-                    style={styles.storyAvatar}
+                    style={styles.storyImage}
                   />
+                  {isCurrent && item.stories.length === 0 ? (
+                    <View style={styles.storyPlusBadge}>
+                      <Text style={styles.storyPlusText}>+</Text>
+                    </View>
+                  ) : null}
                 </View>
 
               </Pressable>
@@ -88,44 +85,64 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       width: '100%',
     },
     track: {
-      gap: 10,
+      gap: 11,
       paddingHorizontal: 16,
     },
     storyItem: {
-      width: 56,
+      width: 58,
       alignItems: 'center',
     },
     storyPressable: {
       alignItems: 'center',
     },
-    storyRing: {
-      width: 54,
-      height: 54,
-      borderRadius: 27,
-      padding: 3,
-      backgroundColor: '#2563eb',
+    storyTile: {
+      width: 56,
+      height: 56,
+      borderRadius: 15,
+      padding: 2,
+      backgroundColor: theme.accent,
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.18)',
       shadowColor: theme.shadow,
       shadowOpacity: 0.08,
       shadowRadius: 7,
       shadowOffset: { width: 0, height: 4 },
       elevation: 2,
     },
-    storyRingSeen: {
-      backgroundColor: '#98a2b3',
+    storyTileSeen: {
+      backgroundColor: theme.surfaceAlt,
+      borderColor: theme.border,
       shadowOpacity: 0,
     },
-    storyRingSuggested: {
-      backgroundColor: '#0f766e',
+    storyTileCurrent: {
+      backgroundColor: theme.surface,
+      borderColor: theme.accent,
     },
-    storyRingCurrent: {
-      backgroundColor: theme.text,
-    },
-    storyAvatar: {
+    storyImage: {
       width: '100%',
       height: '100%',
-      borderRadius: 999,
+      borderRadius: 12,
       backgroundColor: theme.surfaceAlt,
-      borderWidth: 3,
+      borderWidth: 1,
       borderColor: theme.surface,
+    },
+    storyPlusBadge: {
+      position: 'absolute',
+      right: -4,
+      bottom: -4,
+      width: 20,
+      height: 20,
+      borderRadius: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: theme.accent,
+      borderWidth: 2,
+      borderColor: theme.background,
+    },
+    storyPlusText: {
+      color: '#ffffff',
+      fontSize: 16,
+      fontWeight: '900',
+      lineHeight: 17,
     },
   });

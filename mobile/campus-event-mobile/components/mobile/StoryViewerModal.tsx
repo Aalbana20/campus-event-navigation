@@ -20,6 +20,7 @@ import {
 } from 'react-native';
 
 import { EventCardSticker } from '@/components/mobile/EventCardSticker';
+import { ProfileAvatarLink } from '@/components/mobile/ProfileAvatarLink';
 import { SharedMediaStorySticker } from '@/components/mobile/SharedMediaStorySticker';
 import { useAppTheme } from '@/lib/app-theme';
 import {
@@ -30,12 +31,14 @@ import {
   findMediaStickerInStory,
   MEDIA_STICKER_WIDTH_FRACTION,
 } from '@/lib/mobile-story-stickers';
-import { useMobileApp } from '@/providers/mobile-app-provider';
-const WINDOW_HEIGHT = Dimensions.get('window').height;
 import { formatRelativeTime } from '@/lib/mobile-backend';
 import { getAvatarImageSource } from '@/lib/mobile-media';
+import { openMobileProfile } from '@/lib/mobile-profile-navigation';
 import type { MobileStoryStripItem } from '@/lib/mobile-stories';
+import { useMobileApp } from '@/providers/mobile-app-provider';
 import type { ProfileRecord, StoryRecord, StoryViewerRecord } from '@/types/models';
+
+const WINDOW_HEIGHT = Dimensions.get('window').height;
 
 type StoryViewerModalProps = {
   visible: boolean;
@@ -88,7 +91,7 @@ export function StoryViewerModal({
   const router = useRouter();
   const theme = useAppTheme();
   const styles = useMemo(() => buildStyles(theme), [theme]);
-  const { getEventById } = useMobileApp();
+  const { currentUser, getEventById } = useMobileApp();
   const [mediaStageSize, setMediaStageSize] = useState({ width: 0, height: 0 });
   const [isGoToEventRevealed, setIsGoToEventRevealed] = useState(false);
   const [groupIndex, setGroupIndex] = useState(0);
@@ -490,16 +493,25 @@ export function StoryViewerModal({
                 style={styles.identityBlock}
                 onPress={() => {
                   onClose();
-                  router.push({
-                    pathname: '/profile/[username]',
-                    params: {
-                      username: currentStory.authorUsername || currentStory.authorId,
+                  openMobileProfile({
+                    router,
+                    currentUser,
+                    profile: {
+                      id: currentStory.authorId,
+                      username: currentStory.authorUsername,
+                      name: currentStory.authorName,
+                      avatar: currentStory.authorAvatar,
                     },
                   });
                 }}
               >
-                <Image
-                  source={getAvatarImageSource(currentStory.authorAvatar)}
+                <ProfileAvatarLink
+                  profile={{
+                    id: currentStory.authorId,
+                    username: currentStory.authorUsername,
+                    name: currentStory.authorName,
+                    avatar: currentStory.authorAvatar,
+                  }}
                   style={styles.identityAvatar}
                 />
                 <View style={styles.identityCopy}>
@@ -804,14 +816,25 @@ export function StoryViewerModal({
                         style={styles.viewerIdentityPressable}
                         onPress={() => {
                           onClose();
-                          router.push({
-                            pathname: '/profile/[username]',
-                            params: { username: viewer.username || viewer.viewerId },
+                          openMobileProfile({
+                            router,
+                            currentUser,
+                            profile: {
+                              id: viewer.viewerId,
+                              username: viewer.username,
+                              name: viewer.name,
+                              avatar: viewer.avatar,
+                            },
                           });
                         }}
                       >
-                        <Image
-                          source={getAvatarImageSource(viewer.avatar)}
+                        <ProfileAvatarLink
+                          profile={{
+                            id: viewer.viewerId,
+                            username: viewer.username,
+                            name: viewer.name,
+                            avatar: viewer.avatar,
+                          }}
                           style={styles.viewerAvatar}
                         />
                         <View style={styles.viewerCopy}>

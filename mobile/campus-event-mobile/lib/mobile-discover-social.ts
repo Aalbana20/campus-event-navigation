@@ -30,7 +30,6 @@ export type MobileDiscoverFriendCard = {
   isPlaceholder: boolean;
 };
 
-const STORY_MIN_ITEMS = 15;
 const FRIEND_CARD_MIN_ITEMS = 6;
 
 const PLACEHOLDER_PEOPLE = [
@@ -450,22 +449,9 @@ const buildSocialPeople = ({
 
 export const buildMobileDiscoverStoryItems = ({
   currentUser,
-  followingProfiles,
-  profiles,
-  events,
 }: {
   currentUser: ProfileRecord;
-  followingProfiles: ProfileRecord[];
-  profiles: ProfileRecord[];
-  events: EventRecord[];
 }): MobileDiscoverStoryItem[] => {
-  const socialPeople = buildSocialPeople({
-    currentUser,
-    followingProfiles,
-    profiles,
-    events,
-  });
-
   const currentStory: MobileDiscoverStoryItem = {
     id: currentUser.id || 'current-user',
     profileId: currentUser.id,
@@ -479,41 +465,7 @@ export const buildMobileDiscoverStoryItems = ({
     isPlaceholder: false,
   };
 
-  const realStories = socialPeople.slice(0, STORY_MIN_ITEMS - 1).map((person, index) => ({
-    id: person.id,
-    profileId: person.profileId,
-    routeKey: person.routeKey,
-    name: person.name,
-    username: person.username,
-    avatar: person.avatar,
-    kind: 'story' as const,
-    meta:
-      person.relation === 'following'
-        ? 'Following'
-        : person.relation === 'creator'
-          ? 'Hosting'
-          : 'Campus',
-    seen: index > 1,
-    isPlaceholder: false,
-  }));
-
-  const placeholderStories = buildPlaceholderPeople(
-    Math.max(STORY_MIN_ITEMS - (1 + realStories.length), 0),
-    socialPeople.length + 1
-  ).map((person) => ({
-    id: person.id,
-    profileId: person.profileId,
-    routeKey: person.routeKey,
-    name: person.name,
-    username: person.username,
-    avatar: person.avatar,
-    kind: 'suggested' as const,
-    meta: 'Suggested',
-    seen: false,
-    isPlaceholder: true,
-  }));
-
-  return [currentStory, ...realStories, ...placeholderStories];
+  return [currentStory];
 };
 
 export const buildMobileDiscoverFriendCards = ({

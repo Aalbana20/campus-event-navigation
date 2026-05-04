@@ -15,8 +15,8 @@ type ProfileHighlightsRowProps = {
 };
 
 // Rounded squares, matching the existing mobile story/highlight card treatment.
-const TILE_SIZE = 72;
-const TILE_RADIUS = 18;
+const TILE_SIZE = 64;
+const TILE_RADIUS = 15;
 
 export function ProfileHighlightsRow({
   highlights,
@@ -45,10 +45,10 @@ export function ProfileHighlightsRow({
           onPress={onPressNew}
           accessibilityLabel="Create a new highlight">
           <View style={[styles.tile, styles.newTile]}>
-            <Ionicons name="add" size={30} color={theme.text} />
+            <Ionicons name="add" size={27} color={theme.text} />
           </View>
           <Text style={styles.label} numberOfLines={1}>
-            New
+            Add Highlight
           </Text>
         </Pressable>
       ) : null}
@@ -94,7 +94,7 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) => {
       marginHorizontal: -18,
     },
     row: {
-      gap: 14,
+      gap: 12,
       paddingVertical: 4,
       paddingHorizontal: 18,
     },

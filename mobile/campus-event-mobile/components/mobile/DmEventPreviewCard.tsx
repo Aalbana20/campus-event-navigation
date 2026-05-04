@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import { Image, ImageBackground, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ImageBackground, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { getEventCreatorLabel } from '@/lib/mobile-backend';
-import { getAvatarImageSource, getEventImageSource } from '@/lib/mobile-media';
+import { getEventImageSource } from '@/lib/mobile-media';
 import type { EventRecord } from '@/types/models';
+import { ProfileAvatarLink } from './ProfileAvatarLink';
 
 type DmEventPreviewCardProps = {
   event: EventRecord;
@@ -28,8 +29,13 @@ export function DmEventPreviewCard({ event, onPress }: DmEventPreviewCardProps) 
 
         <View style={styles.topContent}>
           <View style={styles.creatorPill}>
-            <Image
-              source={getAvatarImageSource(event.creatorAvatar)}
+            <ProfileAvatarLink
+              profile={{
+                id: event.createdBy,
+                username: event.creatorUsername,
+                name: creatorLabel,
+                avatar: event.creatorAvatar,
+              }}
               style={styles.creatorAvatar}
             />
             <Text style={styles.creatorName} numberOfLines={1}>

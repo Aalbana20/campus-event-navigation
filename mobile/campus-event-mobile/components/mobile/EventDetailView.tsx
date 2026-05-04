@@ -6,10 +6,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppScreen } from '@/components/mobile/AppScreen';
 import { EventActionTrigger } from '@/components/mobile/EventActionTrigger';
 import { EventGoingIcon } from '@/components/mobile/EventGoingIcon';
+import { ProfileAvatarLink } from '@/components/mobile/ProfileAvatarLink';
 import { useAppTheme } from '@/lib/app-theme';
 import { getEventCreatorLabel } from '@/lib/mobile-backend';
 import type { EventMemoryRecord } from '@/lib/mobile-event-memories';
-import { getAvatarImageSource, getEventImageSource } from '@/lib/mobile-media';
+import { getEventImageSource } from '@/lib/mobile-media';
 import type { EventRecord } from '@/types/models';
 
 type EventDetailViewProps = {
@@ -83,7 +84,15 @@ export function EventDetailView({
               </Text>
               <View style={styles.creatorCard}>
                 <View style={styles.creatorRow}>
-                  <Image source={getAvatarImageSource(event.creatorAvatar)} style={styles.creatorAvatar} />
+                  <ProfileAvatarLink
+                    profile={{
+                      id: event.createdBy,
+                      username: event.creatorUsername,
+                      name: getEventCreatorLabel(event),
+                      avatar: event.creatorAvatar,
+                    }}
+                    style={styles.creatorAvatar}
+                  />
                   <View style={styles.creatorTextWrap}>
                     <Text style={styles.creatorLabel}>Hosted by</Text>
                     <Text style={styles.creatorName} numberOfLines={1}>
