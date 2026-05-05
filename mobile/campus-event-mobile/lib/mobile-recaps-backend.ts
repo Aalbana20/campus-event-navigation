@@ -582,8 +582,18 @@ const uploadRecapMedia = async ({
     });
 
   if (error) {
-    console.error('Could not upload recap media:', error);
-    throw new Error('Could not upload recap media.');
+    console.error('Could not upload recap media:', {
+      error,
+      storagePath,
+      mediaType: getRecapMediaType(photo),
+      mimeType: photo.mimeType,
+      fileSize: photo.fileSize,
+    });
+    const detail =
+      (error as { message?: string }).message ||
+      (typeof error === 'string' ? error : '') ||
+      'unknown error';
+    throw new Error(`Could not upload recap media: ${detail}`);
   }
 
   return storagePath;
@@ -613,6 +623,12 @@ export const createBackendRecap = async ({
   if (!trimmedCaption && selectedPhotos.length === 0) {
     throw new Error('Add text or media to create a recap.');
   }
+
+  console.info('[mobile-recaps] createBackendRecap insert', {
+    sessionUserId: userId,
+    authorId,
+    mediaCount: selectedPhotos.length,
+  });
 
   const { data: post, error: postError } = await supabase
     .from('recap_posts')
@@ -645,6 +661,7 @@ export const createBackendRecap = async ({
       uploadedPaths.push(mediaUrl);
       mediaRows.push({
         recap_post_id: recapId,
+        user_id: userId,
         media_url: mediaUrl,
         media_type: getRecapMediaType(photo),
         sort_order: index,
@@ -655,7 +672,18 @@ export const createBackendRecap = async ({
       const { error: mediaError } = await supabase
         .from('recap_media')
         .insert(mediaRows);
-      if (mediaError) throw mediaError;
+      if (mediaError) {
+        const missingUserIdColumn =
+          mediaError.code === 'PGRST204' &&
+          mediaError.message.toLowerCase().includes('user_id');
+        if (!missingUserIdColumn) throw mediaError;
+
+        const legacyMediaRows = mediaRows.map(({ user_id, ...row }) => row);
+        const { error: legacyMediaError } = await supabase
+          .from('recap_media')
+          .insert(legacyMediaRows);
+        if (legacyMediaError) throw legacyMediaError;
+      }
     }
 
     return recapId;
