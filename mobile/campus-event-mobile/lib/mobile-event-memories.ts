@@ -89,6 +89,28 @@ const normalizeStoragePath = (value: string) => {
   return trimmed;
 };
 
+const warnedMissingMemoryPaths = new Set<string>();
+
+const warnMemoryMediaFallback = ({
+  storagePath,
+  message,
+  statusCode,
+}: {
+  storagePath: string;
+  message?: string;
+  statusCode?: string | number;
+}) => {
+  const warningKey = `${storagePath}:${message || ''}:${statusCode || ''}`;
+  if (warnedMissingMemoryPaths.has(warningKey)) return;
+  warnedMissingMemoryPaths.add(warningKey);
+  console.warn('[event-memories] Skipping unavailable media object', {
+    bucket: EVENT_MEMORY_BUCKET,
+    path: storagePath,
+    statusCode,
+    message,
+  });
+};
+
 export const resolveEventMemoryMediaUrl = async (
   value: string | null | undefined,
   fallback = ''
@@ -108,12 +130,19 @@ export const resolveEventMemoryMediaUrl = async (
   if (!supabase) return fallback;
 
   const storagePath = normalizeStoragePath(trimmed);
+  if (!storagePath) return fallback;
+
   const { data, error } = await supabase.storage
     .from(EVENT_MEMORY_BUCKET)
     .createSignedUrl(storagePath, 60 * 60);
 
   if (error) {
-    console.error('Unable to sign event memory media URL:', error);
+    const storageError = error as { message?: string; statusCode?: string | number };
+    warnMemoryMediaFallback({
+      storagePath,
+      message: storageError.message || 'Could not sign media URL',
+      statusCode: storageError.statusCode,
+    });
     return fallback;
   }
 
@@ -194,11 +223,12 @@ export const loadEventMemoriesForEvent = async (
   ];
   const profileLookup = await loadAuthorProfiles(authorIds);
 
-  return Promise.all(
+  const memories = await Promise.all(
     rows.map((row) =>
       normalizeMemoryRow(row, profileLookup.get(String(row.author_id || '')))
     )
   );
+  return memories.filter((memory) => Boolean(memory.mediaUrl));
 };
 
 export const loadEventMemoriesForUser = async (
@@ -220,9 +250,10 @@ export const loadEventMemoriesForUser = async (
   const rows = (data || []) as EventMemoryRow[];
   const profileLookup = await loadAuthorProfiles([userId]);
 
-  return Promise.all(
+  const memories = await Promise.all(
     rows.map((row) => normalizeMemoryRow(row, profileLookup.get(String(userId))))
   );
+  return memories.filter((memory) => Boolean(memory.mediaUrl));
 };
 
 export const userAttendedEvent = async ({

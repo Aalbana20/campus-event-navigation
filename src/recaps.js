@@ -261,18 +261,24 @@ export const loadRecapCommentPosts = async ({ eventId, viewerId }) => {
 
 const buildRecapMediaByPostId = async (mediaRows = []) => {
   const resolvedMedia = await Promise.all(
-    mediaRows.map(async (media) => ({
-      postId: String(media.recap_post_id),
-      item: {
-        id: String(media.id),
-        url: await resolveEventMemoryMediaUrl(media.media_url),
-        mediaType: media.media_type === "video" ? "video" : "image",
-        sortOrder: Number(media.sort_order || 0),
-      },
-    }))
+    mediaRows.map(async (media) => {
+      const url = await resolveEventMemoryMediaUrl(media.media_url)
+      if (!url) return null
+      return {
+        postId: String(media.recap_post_id),
+        item: {
+          id: String(media.id),
+          url,
+          mediaType: media.media_type === "video" ? "video" : "image",
+          sortOrder: Number(media.sort_order || 0),
+        },
+      }
+    })
   )
 
-  return resolvedMedia.reduce((mediaByPostId, { postId, item }) => {
+  return resolvedMedia.reduce((mediaByPostId, resolved) => {
+    if (!resolved) return mediaByPostId
+    const { postId, item } = resolved
     const nextMedia = [...(mediaByPostId.get(postId) || []), item].sort(
       (left, right) => left.sortOrder - right.sortOrder
     )

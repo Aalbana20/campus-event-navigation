@@ -660,17 +660,16 @@ const buildStyles = (theme: ReturnType<typeof useAppTheme>) =>
       height: 26,
     },
     textOnlyBubble: {
-      minHeight: 128,
-      justifyContent: 'center',
+      alignSelf: 'stretch',
       backgroundColor: 'rgba(255,255,255,0.06)',
-      borderRadius: 16,
-      paddingVertical: 18,
-      paddingHorizontal: 14,
+      borderRadius: 14,
+      paddingVertical: 8,
+      paddingHorizontal: 12,
     },
     textOnlyCaption: {
       color: theme.text,
       fontSize: 16,
-      lineHeight: 23,
+      lineHeight: 21,
     },
     fullscreenBackdrop: {
       backgroundColor: '#000000',

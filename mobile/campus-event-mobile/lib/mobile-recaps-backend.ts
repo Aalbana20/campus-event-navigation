@@ -361,6 +361,7 @@ const buildMediaByRecapId = async (mediaRows: RecapMediaRow[]) => {
       const mediaType = media.media_type === 'video' ? 'video' : 'image';
       const mediaUrl = await resolveRecapMediaUrl(media.media_url);
       const thumbnailUrl = await resolveRecapMediaUrl(media.thumbnail_url, '');
+      if (!mediaUrl && !thumbnailUrl) return null;
       return {
         recapId: String(media.recap_post_id),
         item: {
@@ -377,7 +378,9 @@ const buildMediaByRecapId = async (mediaRows: RecapMediaRow[]) => {
     })
   );
 
-  return resolved.reduce((lookup, { recapId, item }) => {
+  return resolved.reduce((lookup, resolvedItem) => {
+    if (!resolvedItem) return lookup;
+    const { recapId, item } = resolvedItem;
     const next = [...(lookup.get(recapId) || []), item].sort(
       (left, right) => Number(left.sortOrder || 0) - Number(right.sortOrder || 0)
     );

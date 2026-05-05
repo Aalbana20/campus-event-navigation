@@ -40,6 +40,20 @@ const normalizeMemoryStoragePath = (value) => {
   return trimmed
 }
 
+const warnedMissingMemoryPaths = new Set()
+
+const warnMemoryMediaFallback = ({ storagePath, message, statusCode }) => {
+  const warningKey = `${storagePath}:${message || ""}:${statusCode || ""}`
+  if (warnedMissingMemoryPaths.has(warningKey)) return
+  warnedMissingMemoryPaths.add(warningKey)
+  console.warn("[event-memories] Skipping unavailable media object", {
+    bucket: MEMORY_BUCKET,
+    path: storagePath,
+    statusCode,
+    message,
+  })
+}
+
 export const resolveEventMemoryMediaUrl = async (value, fallback = "") => {
   const trimmed = toTrimmedString(value)
   if (!trimmed) return fallback
@@ -54,12 +68,18 @@ export const resolveEventMemoryMediaUrl = async (value, fallback = "") => {
   }
 
   const storagePath = normalizeMemoryStoragePath(trimmed)
+  if (!storagePath) return fallback
+
   const { data, error } = await supabase.storage
     .from(MEMORY_BUCKET)
     .createSignedUrl(storagePath, 60 * 60)
 
   if (error) {
-    console.error("Unable to sign event memory media URL:", error)
+    warnMemoryMediaFallback({
+      storagePath,
+      message: error?.message || "Could not sign media URL",
+      statusCode: error?.statusCode,
+    })
     return fallback
   }
 
@@ -120,7 +140,7 @@ export const loadEventMemoriesForEvent = async (eventId) => {
   ]
   const profileLookup = await loadAuthorProfiles(authorIds)
 
-  return Promise.all(
+  const memories = await Promise.all(
     (data || []).map((row) =>
       normalizeMemoryRecord({
         row,
@@ -128,6 +148,7 @@ export const loadEventMemoriesForEvent = async (eventId) => {
       })
     )
   )
+  return memories.filter((memory) => Boolean(memory.mediaUrl))
 }
 
 export const loadEventMemoriesForUser = async (userId) => {
@@ -146,7 +167,7 @@ export const loadEventMemoriesForUser = async (userId) => {
 
   const profileLookup = await loadAuthorProfiles([userId])
 
-  return Promise.all(
+  const memories = await Promise.all(
     (data || []).map((row) =>
       normalizeMemoryRecord({
         row,
@@ -154,6 +175,7 @@ export const loadEventMemoriesForUser = async (userId) => {
       })
     )
   )
+  return memories.filter((memory) => Boolean(memory.mediaUrl))
 }
 
 export const userAttendedEvent = async ({ userId, eventId }) => {
